@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tasks | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+{% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="page-header">
+        <div>
+            <h1>Tasks</h1>
+            <p>Plan, track and review company work</p>
+        </div>
+
+        <div class="top-actions">
+            {% include "partials/notification_widget.html" %}
+            {% if has_permission(current_user, "manage_tasks") %}
+                <a href="{{ url_for('tasks.add_task') }}" class="btn">
+                    + Add Task
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert {{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="stats-grid">
+        <div class="metric-card">
+            <span>Total Tasks</span>
+            <strong>{{ total_tasks }}</strong>
+        </div>
+        <div class="metric-card">
+            <span>In Review</span>
+            <strong>{{ review_tasks }}</strong>
+        </div>
+        <div class="metric-card">
+            <span>Completed</span>
+            <strong>{{ completed_tasks }}</strong>
+        </div>
+        <div class="metric-card warning">
+            <span>Overdue</span>
+            <strong>{{ overdue_tasks }}</strong>
+        </div>
+    </div>
+
+    <form method="GET" class="filter-bar">
+        <input
+            type="text"
+            name="q"
+            value="{{ search }}"
+            placeholder="Search tasks"
+        >
+
+        <select name="status">
+            <option value="">All Statuses</option>
+            {% for status in statuses %}
+                <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>
+                    {{ status }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <select name="priority">
+            <option value="">All Priorities</option>
+            {% for priority in priorities %}
+                <option value="{{ priority }}" {% if selected_priority == priority %}selected{% endif %}>
+                    {{ priority }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">Filter</button>
+        <a href="{{ url_for('tasks.list_tasks') }}" class="mini-link">Reset</a>
+    </form>
+
+    <div class="board-shell">
+        {% for status, column_tasks in board_columns.items() %}
+            <section class="board-column">
+                <div class="board-column-header">
+                    <h2>{{ status }}</h2>
+                    <span>{{ column_tasks|length }}</span>
+                </div>
+
+                {% for task in column_tasks %}
+                    <article class="task-card">
+                        <div class="task-card-top">
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                                {{ task.title }}
+                            </a>
+                            <span class="priority-dot {{ task.priority|lower }}">
+                                {{ task.priority }}
+                            </span>
+                        </div>
+
+                        <p>{{ task.client.client_name }} - {{ task.deliverable.deliverable_name }}</p>
+
+                        <div class="task-card-meta">
+                            <span>{{ task.assigned_to.name if task.assigned_to else "Unassigned" }}</span>
+                            <span>
+                                {% if task.deadline %}
+                                    {{ task.deadline.strftime("%d %b") }}
+                                {% else %}
+                                    No deadline
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        {% if task.status == "Pending" and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
+                            <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                <button type="submit" class="mini-action">Start</button>
+                            </form>
+                        {% endif %}
+                    </article>
+                {% else %}
+                    <div class="empty-column">No tasks here.</div>
+                {% endfor %}
+            </section>
+        {% endfor %}
+    </div>
+
+    <div class="table-card">
+        <div class="section-heading">
+            <h2>Task List</h2>
+            <p>Detailed view for review and follow-up</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Client</th>
+                    <th>Service</th>
+                    <th>Deliverable</th>
+                    <th>Assigned To</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for task in tasks %}
+                    <tr>
+                        <td>
+                            <a
+                                href="{{ url_for('tasks.task_detail', task_id=task.id) }}"
+                                class="table-link"
+                            >
+                                {{ task.title }}
+                            </a>
+                        </td>
+
+                        <td>{{ task.client.client_name }}</td>
+
+                        <td>{{ task.deliverable.service_name }}</td>
+
+                        <td>{{ task.deliverable.deliverable_name }}</td>
+
+                        <td>
+                            {{ task.assigned_to.name if task.assigned_to else "-" }}
+                        </td>
+
+                        <td>
+                            {% if task.deadline %}
+                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <span class="status-pill">
+                                {{ task.status }}
+                            </span>
+                        </td>
+
+                        <td>
+                            <div class="table-actions">
+                                <a
+                                    href="{{ url_for('tasks.task_detail', task_id=task.id) }}"
+                                    class="mini-link"
+                                >
+                                    View
+                                </a>
+
+                                {% if task.status == "Pending" and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
+                                    <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                        <button type="submit" class="mini-action">
+                                            Start
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="8">No tasks found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+
+</html>

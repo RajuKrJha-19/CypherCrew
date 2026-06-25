@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit User | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+    <main class="main">
+
+        <div class="form-card">
+            <h1>Edit User</h1>
+            <p>Update user details and access status</p>
+
+            <form method="POST">
+
+                <label>Name</label>
+                <input type="text" name="name" value="{{ user.name }}" required>
+
+                <label>Email</label>
+                <input type="email" value="{{ user.email }}" disabled>
+
+                <label>Phone</label>
+                <input type="text" name="phone" value="{{ user.phone or '' }}">
+
+                <label>New Password</label>
+                <input type="password" name="password" placeholder="Leave blank to keep old password">
+
+                {% if current_user.role == "super_admin" %}
+                    <label>Role</label>
+                    <select name="role" required>
+                        <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin</option>
+                        <option value="employee" {% if user.role == "employee" %}selected{% endif %}>Employee</option>
+                    </select>
+                {% endif %}
+
+                <label>Designation</label>
+                <input type="text" name="designation" value="{{ user.designation or '' }}">
+
+                <label>Status</label>
+                <select name="status">
+                    <option value="active" {% if user.status == "active" %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if user.status == "inactive" %}selected{% endif %}>Inactive</option>
+                </select>
+
+                <button type="submit">Update User</button>
+
+            </form>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

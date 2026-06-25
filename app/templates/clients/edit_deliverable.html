@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Edit Deliverable</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="form-card">
+
+            <h1>Edit Deliverable</h1>
+
+            <form method="POST">
+
+                <label>Service</label>
+                <input
+                    type="text"
+                    name="service_name"
+                    value="{{ deliverable.service_name }}"
+                    required
+                >
+
+                <label>Deliverable</label>
+                <input
+                    type="text"
+                    name="deliverable_name"
+                    value="{{ deliverable.deliverable_name }}"
+                    required
+                >
+
+                <label>Completed Count</label>
+                <input
+                    type="number"
+                    name="completed_count"
+                    value="{{ deliverable.completed_count }}"
+                    required
+                >
+
+                <label>Target Count</label>
+                <input
+                    type="number"
+                    name="target_count"
+                    value="{{ deliverable.target_count }}"
+                    required
+                >
+
+                <button type="submit">
+                    Update Deliverable
+                </button>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

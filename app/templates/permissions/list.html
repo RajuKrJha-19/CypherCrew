@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Permissions</title>
+    <link rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+<main class="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert {{ category }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="page-header">
+
+    <div>
+        <h1>User Permissions</h1>
+        <p>Grant custom access controls</p>
+    </div>
+
+    <div class="top-actions">
+        {% include "partials/notification_widget.html" %}
+    </div>
+
+</div>
+
+<div class="table-card">
+
+<table>
+
+<thead>
+<tr>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Role</th>
+    <th>Permissions</th>
+    <th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for user in users %}
+
+<tr>
+
+<td>{{ user.name }}</td>
+
+<td>{{ user.email }}</td>
+
+<td>{{ user.role }}</td>
+<td>
+    {% for item in user.permissions %}
+        <span class="tag">{{ item.permission.name }}</span>
+    {% else %}
+        -
+    {% endfor %}
+</td>
+
+<td>
+
+<a
+class="table-link"
+href="{{ url_for('permissions.user_permissions', user_id=user.id) }}"
+>
+Manage
+</a>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</main>
+
+</div>
+
+</body>
+</html>

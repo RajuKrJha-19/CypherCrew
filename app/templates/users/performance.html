@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Performance | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+            <div>
+                <h1>{{ user.name }}</h1>
+                <p>
+                    {{ user.designation or "Team Member" }}
+                    •
+                    {{ user.role.replace("_", " ")|title }}
+                </p>
+            </div>
+
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+                <a href="{{ url_for('users.list_users') }}" class="btn">← Back</a>
+            </div>
+        </div>
+
+        <form method="GET" class="performance-filter">
+            <input type="number" name="month" min="1" max="12" value="{{ selected_month }}">
+            <input type="number" name="year" value="{{ selected_year }}">
+            <button type="submit">Filter</button>
+        </form>
+
+        <div class="performance-hero">
+            <div>
+                <span>Completion Rate</span>
+                <strong>{{ completion_rate }}%</strong>
+                <p>Formula: Core Review / Total Assigned × 100</p>
+            </div>
+        </div>
+
+        <div class="performance-grid">
+            <div class="performance-card">
+                <span>Total Assigned</span>
+                <strong>{{ total_assigned }}</strong>
+            </div>
+
+            <div class="performance-card success">
+                <span>Completed</span>
+                <strong>{{ completed_tasks }}</strong>
+                <p>Core Review</p>
+            </div>
+
+            <div class="performance-card">
+                <span>Pending</span>
+                <strong>{{ pending_tasks }}</strong>
+            </div>
+
+            <div class="performance-card">
+                <span>In Progress</span>
+                <strong>{{ in_progress_tasks }}</strong>
+            </div>
+
+            <div class="performance-card">
+                <span>In Review</span>
+                <strong>{{ in_review_tasks }}</strong>
+                <p>Client Review</p>
+            </div>
+
+            <div class="performance-card">
+                <span>Published</span>
+                <strong>{{ published_tasks }}</strong>
+            </div>
+
+            <div class="performance-card danger">
+                <span>Overdue</span>
+                <strong>{{ overdue_tasks }}</strong>
+                <p>Pending/In Progress after deadline</p>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Recent Tasks</h2>
+                    <p>Tasks assigned to {{ user.name }} in selected month</p>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Client</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Deadline</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for task in recent_tasks %}
+                    <tr>
+                        <td>{{ task.title }}</td>
+                        <td>{{ task.client.client_name if task.client else "-" }}</td>
+                        <td>
+                            <span class="status-pill">
+                                {{ task.status }}
+                            </span>
+                        </td>
+                        <td>{{ task.priority }}</td>
+                        <td>
+                            {% if task.deadline %}
+                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5">No tasks found for this month.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

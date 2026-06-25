@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Super Admin | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="layout">
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+        <div class="page-header">
+            <div>
+                <h1>Super Admin Dashboard</h1>
+                <p>Welcome, {{ current_user.name }}</p>
+            </div>
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+                <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Open Tasks</a>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="metric-card">
+                <span>Total Tasks</span>
+                <strong>{{ stats.total }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>In Review</span>
+                <strong>{{ stats.in_review }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Published</span>
+                <strong>{{ stats.published }}</strong>
+            </div>
+            <div class="metric-card warning">
+                <span>Overdue</span>
+                <strong>{{ stats.overdue }}</strong>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="table-card">
+                <h2 class="card-title">Workflow</h2>
+                {% for status in stats.status_order %}
+                    <div class="stat-line">
+                        <span>{{ status }}</span>
+                        <strong>{{ stats.status_counts.get(status, 0) }}</strong>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="table-card">
+                <h2 class="card-title">Recent Tasks</h2>
+                {% for task in stats.recent_tasks %}
+                    <div class="activity-row">
+                        <div>
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                            <span>{{ task.client.client_name }} - {{ task.status }}</span>
+                        </div>
+                        <span class="status-pill">{{ task.priority }}</span>
+                    </div>
+                {% else %}
+                    <p>No tasks yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="table-card workload-card">
+            <div class="section-head">
+                <div>
+                    <h2>Team Workload</h2>
+                    <p>Active tasks assigned to each employee</p>
+                </div>
+            </div>
+
+            <div class="workload-list">
+                {% for member in workload %}
+                    <div class="workload-row">
+    <div>
+        <h4>{{ member.name }}</h4>
+        <p>{{ member.designation or "Team Member" }}</p>
+    </div>
+
+    <strong class="workload-hours">
+        {{ member.remaining_hours }} hrs
+    </strong>
+</div>
+                {% else %}
+                    <p class="empty-text">No active employees found.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

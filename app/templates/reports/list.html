@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Reports | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+{% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="page-header">
+        <div>
+            <h1>Reports</h1>
+            <p>Track daily work updates</p>
+        </div>
+
+        <div class="top-actions">
+            {% include "partials/notification_widget.html" %}
+            <a href="{{ url_for('reports.add_report') }}" class="btn">
+                + Add Report
+            </a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert {{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Employee</th>
+                    <th>Task</th>
+                    <th>Client</th>
+                    <th>Hours</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for report in reports %}
+                    <tr>
+                        <td>{{ report.report_date.strftime("%d %b %Y") }}</td>
+                        <td>{{ report.employee.name }}</td>
+                        <td>{{ report.task.title }}</td>
+                        <td>{{ report.task.client.client_name }}</td>
+                        <td>{{ report.hours_worked }}</td>
+                        <td>
+    <a
+        href="{{ url_for('reports.view_report',
+        report_id=report.id) }}"
+        class="action-btn edit-btn"
+    >
+        View
+    </a>
+</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6">No reports found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Report Details | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+{% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="page-header">
+        <div>
+            <h1>Daily Report</h1>
+            <p>{{ report.report_date.strftime("%d %b %Y") }}</p>
+        </div>
+
+        <div class="top-actions">
+            {% include "partials/notification_widget.html" %}
+            <a href="{{ url_for('reports.list_reports') }}" class="btn">
+                Back
+            </a>
+        </div>
+    </div>
+
+    <div class="task-detail-grid">
+
+        <div class="table-card">
+            <h2 class="card-title">Report Info</h2>
+
+            <div class="detail-row">
+                <span>Employee</span>
+                <strong>{{ report.employee.name }}</strong>
+            </div>
+
+            <div class="detail-row">
+                <span>Task</span>
+                <strong>{{ report.task.title }}</strong>
+            </div>
+
+            <div class="detail-row">
+                <span>Client</span>
+                <strong>{{ report.task.client.client_name }}</strong>
+            </div>
+
+            <div class="detail-row">
+                <span>Service</span>
+                <strong>{{ report.task.deliverable.service_name }}</strong>
+            </div>
+
+            <div class="detail-row">
+                <span>Hours Worked</span>
+                <strong>{{ report.hours_worked }}</strong>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <h2 class="card-title">Work Update</h2>
+
+            <h3 class="report-section-title">Completed Work</h3>
+            <p class="report-text">{{ report.completed_work }}</p>
+
+            <h3 class="report-section-title">In Progress Work</h3>
+            <p class="report-text">{{ report.in_progress_work or "-" }}</p>
+
+            <h3 class="report-section-title">Issues / Blockers</h3>
+            <p class="report-text">{{ report.issues or "-" }}</p>
+
+            <h3 class="report-section-title">Tomorrow Plan</h3>
+            <p class="report-text">{{ report.tomorrow_plan or "-" }}</p>
+        </div>
+
+    </div>
+
+</main>
+
+</div>
+
+</body>
+
+</html>

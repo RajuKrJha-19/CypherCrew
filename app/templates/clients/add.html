@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Client | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="form-card">
+        <h1>Add Client</h1>
+        <p>Create internal client profile</p>
+
+        <form method="POST">
+
+            <label>Client Name</label>
+            <input type="text" name="client_name" required>
+
+            <label>Company Name</label>
+            <input type="text" name="company_name">
+
+            <label>Phone</label>
+            <input type="text" name="phone">
+
+            <label>Email</label>
+            <input type="email" name="email">
+
+            <label>Industry</label>
+            <input type="text" name="industry" placeholder="Real Estate, Education, Healthcare">
+
+            <label>Assigned Manager</label>
+            <select name="assigned_manager_id">
+                <option value="">Select Manager</option>
+                {% for manager in managers %}
+                    <option value="{{ manager.id }}">{{ manager.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Status</label>
+            <select name="status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+
+            <button type="submit">Save Client</button>
+
+        </form>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+</html>

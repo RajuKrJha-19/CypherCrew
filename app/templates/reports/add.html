@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Add Report | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+{% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="form-card add-task-card">
+        <h1>Add Daily Report</h1>
+        <p>Submit your work update for today</p>
+
+        <form method="POST">
+
+            <label>Task</label>
+            <select name="task_id" required>
+                <option value="">Select Task</option>
+                {% for task in tasks %}
+                    <option value="{{ task.id }}">
+                        {{ task.client.client_name }} - {{ task.title }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label>Work Done</label>
+            <textarea
+                name="completed_work"
+                rows="4"
+                placeholder="Write what you completed today"
+                required
+            ></textarea>
+
+            <label>Hours Worked</label>
+            <input
+                type="number"
+                step="0.5"
+                name="hours_worked"
+                value="0"
+            >
+
+            <label>In Progress Work</label>
+            <textarea
+                name="in_progress_work"
+                rows="3"
+                placeholder="What is still in progress?"
+            ></textarea>
+
+            <label>Issues / Blockers</label>
+            <textarea
+                name="issues"
+                rows="3"
+                placeholder="Any issue or blocker?"
+            ></textarea>
+
+            <label>Tomorrow Plan</label>
+            <textarea
+                name="tomorrow_plan"
+                rows="3"
+                placeholder="Plan for tomorrow"
+            ></textarea>
+
+            <button type="submit">
+                Submit Report
+            </button>
+
+        </form>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+
+</html>

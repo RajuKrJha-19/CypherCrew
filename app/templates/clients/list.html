@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clients | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+<main class="main">
+
+    <div class="page-header">
+        <div>
+            <h1>Clients</h1>
+            <p>View and manage company clients</p>
+        </div>
+
+        <div class="top-actions">
+            {% include "partials/notification_widget.html" %}
+            <a href="{{ url_for('clients.add_client') }}" class="btn">+ Add Client</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Company</th>
+                    <th>Manager</th>
+                    <th>Industry</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for client in clients %}
+                <tr>
+                    <td>
+                        <a class="table-link" href="{{ url_for('clients.client_detail', client_id=client.id) }}">
+                            {{ client.client_name }}
+                        </a>
+                    </td>
+                    <td>{{ client.company_name or "-" }}</td>
+                    <td>{{ client.assigned_manager.name if client.assigned_manager else "-" }}</td>
+                    <td>{{ client.industry or "-" }}</td>
+                    <td><span class="badge {{ client.status }}">{{ client.status|title }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">No clients found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+</html>

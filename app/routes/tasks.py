@@ -1,0 +1,541 @@
+import os
+from werkzeug.utils import secure_filename
+
+from datetime import datetime
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+
+from app.extensions import db
+from app.models import Task, Client, ClientDeliverable, User, TaskFeedback
+from app.utils.permissions import has_permission
+from app.utils.notifications import create_notification
+
+
+tasks_bp = Blueprint("tasks", __name__, url_prefix="/tasks")
+
+
+def pause_timer(task):
+    if task.timer_started_at:
+        elapsed = datetime.utcnow() - task.timer_started_at
+        task.worked_seconds = (task.worked_seconds or 0) + int(elapsed.total_seconds())
+        task.timer_started_at = None
+
+
+def start_timer(task):
+    now = datetime.utcnow()
+
+    if not task.started_at:
+        task.started_at = now
+
+    task.timer_started_at = now
+
+
+def record_status_time(task, new_status):
+    now = datetime.utcnow()
+
+    if not task.status_started_at:
+        task.status_started_at = now
+        task.status = new_status
+        return
+
+    elapsed = int((now - task.status_started_at).total_seconds())
+
+    if task.status == "Pending":
+        task.pending_seconds = (task.pending_seconds or 0) + elapsed
+
+    elif task.status == "In Progress":
+        task.in_progress_seconds = (task.in_progress_seconds or 0) + elapsed
+
+    elif task.status == "Core Review":
+        task.core_review_seconds = (task.core_review_seconds or 0) + elapsed
+
+    elif task.status == "Client Review":
+        task.client_review_seconds = (task.client_review_seconds or 0) + elapsed
+
+    elif task.status == "Published":
+        task.published_seconds = (task.published_seconds or 0) + elapsed
+
+    task.status = new_status
+    task.status_started_at = now
+
+
+def format_seconds(seconds):
+    seconds = seconds or 0
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    return f"{hours} hr {minutes} min"
+
+
+def get_live_worked_seconds(task):
+    total = task.worked_seconds or 0
+
+    if task.timer_started_at:
+        total += int((datetime.utcnow() - task.timer_started_at).total_seconds())
+
+    return total
+
+
+@tasks_bp.route("/")
+@login_required
+def list_tasks():
+
+    selected_status = request.args.get("status", "").strip()
+    selected_priority = request.args.get("priority", "").strip()
+    search = request.args.get("q", "").strip()
+
+    if has_permission(current_user, "manage_tasks"):
+        query = Task.query
+    else:
+        query = Task.query.filter(
+            db.or_(
+                Task.assigned_to_id == current_user.id,
+                Task.visible_to.any(User.id == current_user.id)
+            )
+        )
+
+    if selected_status:
+        query = query.filter(Task.status == selected_status)
+
+    if selected_priority:
+        query = query.filter(Task.priority == selected_priority)
+
+    if search:
+        query = query.filter(Task.title.ilike(f"%{search}%"))
+
+    tasks = query.order_by(Task.id.desc()).all()
+
+    statuses = [
+        "Pending",
+        "In Progress",
+        "Core Review",
+        "Client Review",
+        "Published"
+    ]
+
+    priorities = [
+        "Low",
+        "Medium",
+        "High",
+        "Urgent"
+    ]
+
+    board_columns = {status: [] for status in statuses}
+
+    for task in tasks:
+        board_columns.setdefault(task.status, []).append(task)
+
+    total_tasks = len(tasks)
+
+    completed_tasks = len([
+        task for task in tasks
+        if task.status == "Published"
+    ])
+
+    review_tasks = len([
+        task for task in tasks
+        if task.status in ["Core Review", "Client Review"]
+    ])
+
+    overdue_tasks = len([
+        task for task in tasks
+        if task.deadline and task.deadline < datetime.utcnow() and task.status != "Published"
+    ])
+
+    return render_template(
+        "tasks/list.html",
+        tasks=tasks,
+        board_columns=board_columns,
+        statuses=statuses,
+        priorities=priorities,
+        selected_status=selected_status,
+        selected_priority=selected_priority,
+        search=search,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        review_tasks=review_tasks,
+        overdue_tasks=overdue_tasks
+    )
+
+
+@tasks_bp.route("/add", methods=["GET", "POST"])
+@login_required
+def add_task():
+
+    if not has_permission(current_user, "manage_tasks"):
+        return redirect(url_for("dashboard.index"))
+
+    clients = Client.query.filter_by(status="active").order_by(Client.client_name.asc()).all()
+    deliverables = ClientDeliverable.query.order_by(ClientDeliverable.id.desc()).all()
+
+    employees = User.query.filter(
+        User.status == "active",
+        User.role.in_(["super_admin", "admin", "employee"])
+    ).order_by(User.name.asc()).all()
+
+    if request.method == "POST":
+
+        deadline = None
+        deadline_value = request.form.get("deadline")
+
+        if deadline_value:
+            deadline = datetime.strptime(deadline_value, "%Y-%m-%dT%H:%M")
+
+        try:
+            client_id = int(request.form.get("client_id"))
+            deliverable_id = int(request.form.get("deliverable_id"))
+            assigned_to_id = int(request.form.get("assigned_to_id"))
+        except (TypeError, ValueError):
+            flash("Please fill all required task fields correctly.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        try:
+            quantity = float(request.form.get("quantity") or 1)
+            estimated_time = float(request.form.get("estimated_time") or 1)
+        except (TypeError, ValueError):
+            flash("Quantity and estimated time must be valid numbers.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        if quantity <= 0 or estimated_time <= 0:
+            flash("Quantity and estimated time must be greater than zero.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        deliverable = ClientDeliverable.query.get(deliverable_id)
+
+        if not deliverable:
+            flash("Invalid deliverable selected.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        if not deliverable.monthly_target:
+            flash("Selected deliverable has no monthly target.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        if deliverable.monthly_target.client_id != client_id:
+            flash("Selected deliverable does not belong to selected client.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        assigned_user = User.query.filter_by(
+            id=assigned_to_id,
+            status="active"
+        ).first()
+
+        if not assigned_user:
+            flash("Selected employee is invalid.", "error")
+            return redirect(url_for("tasks.add_task"))
+
+        task = Task(
+            title=request.form.get("title"),
+            description=request.form.get("description"),
+            client_id=client_id,
+            deliverable_id=deliverable_id,
+            assigned_to_id=assigned_to_id,
+            priority=request.form.get("priority"),
+            deadline=deadline,
+            status="Pending",
+            quantity=quantity,
+            estimated_time=estimated_time,
+            status_started_at=datetime.utcnow(),
+            created_by_id=current_user.id
+        )
+
+        visibility_ids = request.form.getlist("visibility_ids")
+
+        for user_id in visibility_ids:
+            try:
+                user_id = int(user_id)
+            except (TypeError, ValueError):
+                continue
+
+            user = User.query.filter(
+                User.id == user_id,
+                User.status == "active",
+                User.role.in_(["super_admin", "admin", "employee"])
+            ).first()
+
+            if user and user not in task.visible_to:
+                task.visible_to.append(user)
+
+        db.session.add(task)
+        db.session.flush()
+
+        create_notification(
+            user_id=assigned_to_id,
+            title="New task assigned",
+            message=f"{current_user.name} assigned you: {task.title}",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+        for user in task.visible_to:
+            if user.id != assigned_to_id:
+                create_notification(
+                    user_id=user.id,
+                    title="Task shared with you",
+                    message=f"{current_user.name} shared: {task.title}",
+                    link=url_for("tasks.task_detail", task_id=task.id),
+                    actor_id=current_user.id,
+                    task_id=task.id
+                )
+
+        db.session.commit()
+
+        flash("Task created successfully.", "success")
+        return redirect(url_for("tasks.list_tasks"))
+
+    return render_template(
+        "tasks/add.html",
+        clients=clients,
+        deliverables=deliverables,
+        employees=employees
+    )
+
+
+@tasks_bp.route("/<int:task_id>/start", methods=["POST"])
+@login_required
+def start_task(task_id):
+
+    task = Task.query.get_or_404(task_id)
+    can_manage = has_permission(current_user, "manage_tasks")
+
+    if not can_manage and task.assigned_to_id != current_user.id:
+        flash("You are not allowed to update this task.", "error")
+        return redirect(url_for("tasks.list_tasks"))
+
+    running_task = Task.query.filter(
+        Task.assigned_to_id == task.assigned_to_id,
+        Task.id != task.id,
+        Task.timer_started_at.isnot(None),
+        Task.status == "In Progress"
+    ).first()
+
+    if running_task:
+        pause_timer(running_task)
+
+    if task.status == "Pending":
+        record_status_time(task, "In Progress")
+
+    if task.status == "In Progress":
+        start_timer(task)
+        flash("Task timer started.", "success")
+    else:
+        flash("Only pending or in-progress tasks can be started.", "error")
+
+    db.session.commit()
+
+    return redirect(request.referrer or url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/<int:task_id>/pause", methods=["POST"])
+@login_required
+def pause_task(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    if task.assigned_to_id != current_user.id and not has_permission(current_user, "manage_tasks"):
+        flash("You are not allowed to pause this task.", "error")
+        return redirect(url_for("tasks.list_tasks"))
+
+    pause_timer(task)
+
+    db.session.commit()
+    flash("Task paused.", "success")
+
+    return redirect(request.referrer or url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/<int:task_id>/submit-review", methods=["POST"])
+@login_required
+def submit_review(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    if task.assigned_to_id != current_user.id:
+        flash("You are not assigned to this task.", "error")
+        return redirect(url_for("tasks.list_tasks"))
+
+    if task.status in ["Pending", "In Progress"]:
+        pause_timer(task)
+        record_status_time(task, "Core Review")
+
+        reviewers = [
+            user for user in User.query.filter_by(status="active").all()
+            if has_permission(user, "approve_tasks")
+        ]
+
+        for reviewer in reviewers:
+            create_notification(
+                user_id=reviewer.id,
+                title="Review requested",
+                message=f"{current_user.name} submitted: {task.title}",
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id
+            )
+
+        db.session.commit()
+        flash("Task submitted for core review.", "success")
+
+    return redirect(url_for("tasks.list_tasks"))
+
+
+@tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
+@login_required
+def approve_task(task_id):
+
+    if not has_permission(current_user, "approve_tasks"):
+        return redirect(url_for("dashboard.index"))
+
+    task = Task.query.get_or_404(task_id)
+    status_changed = False
+
+    if task.status == "Core Review":
+        record_status_time(task, "Client Review")
+        status_changed = True
+        flash("Task moved to client review.", "success")
+
+    elif task.status == "Client Review":
+
+        if not task.deliverable:
+            flash("Task deliverable not found.", "error")
+            return redirect(url_for("tasks.list_tasks"))
+
+        if task.deliverable.client_id != task.client_id:
+            flash("Task deliverable does not belong to this task client.", "error")
+            return redirect(url_for("tasks.list_tasks"))
+
+        record_status_time(task, "Published")
+        task.completed_at = datetime.utcnow()
+        status_changed = True
+        task.deliverable.completed_count += 1
+
+        flash("Task published successfully.", "success")
+
+    else:
+        flash("This task is not ready for approval.", "error")
+
+    if status_changed:
+        create_notification(
+            user_id=task.assigned_to_id,
+            title="Task status updated",
+            message=f"{current_user.name} moved {task.title} to {task.status}",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+    return redirect(url_for("tasks.list_tasks"))
+
+
+@tasks_bp.route("/<int:task_id>/reject", methods=["POST"])
+@login_required
+def reject_task(task_id):
+
+    if not has_permission(current_user, "approve_tasks"):
+        return redirect(url_for("dashboard.index"))
+
+    task = Task.query.get_or_404(task_id)
+
+    if task.status not in ["Core Review", "Client Review"]:
+        flash("This task cannot be rejected now.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    message = request.form.get("message", "").strip()
+    reference_file = request.files.get("reference_file")
+
+    if not message:
+        flash("Rejection reason is required.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    file_name = None
+    file_path = None
+    file_type = None
+
+    if reference_file and reference_file.filename:
+
+        upload_folder = os.path.join(
+            "app",
+            "static",
+            "uploads",
+            "task_feedbacks"
+        )
+
+        os.makedirs(upload_folder, exist_ok=True)
+
+        safe_name = secure_filename(reference_file.filename)
+        file_name = f"task_{task.id}_{safe_name}"
+
+        save_path = os.path.join(upload_folder, file_name)
+        reference_file.save(save_path)
+
+        file_path = f"uploads/task_feedbacks/{file_name}"
+        file_type = reference_file.content_type
+
+    feedback = TaskFeedback(
+        task_id=task.id,
+        sender_id=current_user.id,
+        receiver_id=task.assigned_to_id,
+        message=message,
+        file_name=file_name,
+        file_path=file_path,
+        file_type=file_type
+    )
+
+    record_status_time(task, "In Progress")
+
+    db.session.add(feedback)
+
+    create_notification(
+        user_id=task.assigned_to_id,
+        title="Revision required",
+        message=message,
+        link=url_for("tasks.task_detail", task_id=task.id),
+        actor_id=current_user.id,
+        task_id=task.id
+    )
+
+    db.session.commit()
+
+    flash("Task rejected and reassigned to employee.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/<int:task_id>")
+@login_required
+def task_detail(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    if not has_permission(current_user, "manage_tasks"):
+        can_view = (
+            task.assigned_to_id == current_user.id
+            or current_user in task.visible_to
+        )
+
+        if not can_view:
+            return redirect(url_for("tasks.list_tasks"))
+
+    current_status_seconds = 0
+
+    if task.status_started_at and task.status != "Published":
+        current_status_seconds = int(
+            (datetime.utcnow() - task.status_started_at).total_seconds()
+        )
+
+    live_seconds = get_live_worked_seconds(task)
+
+    return render_template(
+        "tasks/detail.html",
+        task=task,
+        feedbacks=task.feedbacks,
+        worked_time=format_seconds(live_seconds),
+        live_seconds=live_seconds,
+        pending_time=format_seconds(task.pending_seconds),
+        in_progress_time=format_seconds(task.in_progress_seconds),
+        core_review_time=format_seconds(task.core_review_seconds),
+        client_review_time=format_seconds(task.client_review_seconds),
+        current_status_seconds=current_status_seconds,
+        current_status=task.status
+    )

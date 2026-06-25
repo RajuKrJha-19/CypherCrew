@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ client.client_name }} | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+            <div>
+                <h1>{{ client.client_name }}</h1>
+                <p>
+                    Assigned Manager:
+                    {{ client.assigned_manager.name if client.assigned_manager else "-" }}
+                </p>
+            </div>
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="table-card client-stats-card">
+
+            <div class="month-header">
+                <h2>
+                     {{ month_name }} {{ selected_year }}  
+                </h2>
+
+                <form method="GET" class="month-form">
+                    <input
+                        type="number"
+                        name="month"
+                        min="1"
+                        max="12"
+                        value="{{ selected_month }}"
+                    >
+
+                    <input
+                        type="number"
+                        name="year"
+                        value="{{ selected_year }}"
+                    >
+
+                    <button type="submit">
+                        View
+                    </button>
+                </form>
+            </div>
+
+            {% if grouped_stats %}
+
+                <div class="client-stats-table">
+
+                    <div class="client-stats-head">
+                        <div>Service</div>
+                        <div>Deliverable</div>
+                        <div>Target</div>
+                        <div>Action</div>
+                    </div>
+
+                    {% for service, items in grouped_stats.items() %}
+                        {% for item in items %}
+
+                            <div class="client-stats-row">
+
+                                <div class="service-name">
+                                    {{ service }}
+                                </div>
+
+                                <div class="deliverable-name">
+                                    {{ item.deliverable_name }}
+                                </div>
+
+                                <div class="target-count">
+                                    <span>
+                                        {{ item.completed_count }}/{{ item.target_count }}
+                                    </span>
+                                </div>
+
+                                <div class="action-cell">
+                                    {% if has_permission(current_user, "edit_monthly_targets") %}
+                                        <a
+                                            href="{{ url_for('clients.edit_deliverable', deliverable_id=item.id) }}"
+                                            class="edit-pill"
+                                        >
+                                            Edit
+                                        </a>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+
+                            </div>
+
+                        {% endfor %}
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+                <p>No stats added for this month.</p>
+            {% endif %}
+
+        </div>
+
+        {% if has_permission(current_user, "edit_monthly_targets") %}
+            <div class="form-card add-deliverable-card">
+                <h1>Add Deliverable</h1>
+                <p>Add monthly target for {{ month_name }} {{ selected_year }}</p>
+
+                <form
+                    method="POST"
+                    action="{{ url_for('clients.add_deliverable', client_id=client.id) }}"
+                >
+
+                    <input type="hidden" name="month" value="{{ selected_month }}">
+                    <input type="hidden" name="year" value="{{ selected_year }}">
+
+                    <label>Service</label>
+                    <input
+                        type="text"
+                        name="service_name"
+                        placeholder="Social Media"
+                        required
+                    >
+
+                    <label>Deliverable</label>
+                    <input
+                        type="text"
+                        name="deliverable_name"
+                        placeholder="Meta Reel"
+                        required
+                    >
+
+                    <label>Completed Count</label>
+                    <input
+                        type="number"
+                        name="completed_count"
+                        value="0"
+                    >
+
+                    <label>Target Count</label>
+                    <input
+                        type="number"
+                        name="target_count"
+                        required
+                    >
+
+                    <button type="submit">
+                        Add Deliverable
+                    </button>
+
+                </form>
+            </div>
+        {% endif %}
+
+    </main>
+
+</div>
+
+</body>
+
+</html>

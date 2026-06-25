@@ -1,0 +1,27 @@
+<div class="notification-widget">
+    <button id="notificationBtn" class="notification-btn top-notification-btn" type="button" aria-label="Notifications">
+        🔔
+        <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </button>
+</div>
+
+<div id="notificationPanel" class="notification-panel">
+    <div class="notification-panel-head notification-header">
+        <strong>Notifications</strong>
+        <button id="markNotificationsRead" type="button">Mark read</button>
+    </div>
+
+    <div id="notificationList" class="notification-list">
+        <p class="notification-empty">No notifications</p>
+    </div>
+</div>
+
+<audio id="notificationSound" preload="auto">
+    <source src="{{ url_for('static', filename='audio/notification.mp3') }}" type="audio/mpeg">
+</audio>
+
+<script>
+    window.CYPHER_NOTIFICATION_API = "{{ url_for('notifications.api_notifications') }}";
+    window.CYPHER_NOTIFICATION_MARK_READ = "{{ url_for('notifications.mark_read') }}";
+</script>
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>

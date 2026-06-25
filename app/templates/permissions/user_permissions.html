@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Permissions</title>
+
+    <link rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+<main class="main">
+
+<div class="form-card">
+
+<h1>{{ user.name }}</h1>
+
+<p>Manage user permissions</p>
+
+<form method="POST">
+
+{% for permission in permissions %}
+
+<label class="check-item">
+
+<input
+type="checkbox"
+name="permissions"
+value="{{ permission.id }}"
+{% if permission.id in assigned %}checked{% endif %}
+>
+
+<span>
+{{ permission.name }}
+</span>
+
+</label>
+
+<br>
+
+{% endfor %}
+
+<br>
+
+<button type="submit">
+
+Save Permissions
+
+</button>
+
+</form>
+
+</div>
+
+</main>
+
+</div>
+
+</body>
+</html>

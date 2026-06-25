@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add User | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="form-card">
+            <h1>Add User</h1>
+            <p>Create admin or employee account</p>
+
+            <form method="POST">
+
+                <label>Name</label>
+                <input type="text" name="name" required>
+
+                <label>Email</label>
+                <input type="email" name="email" required>
+
+                <label>Phone</label>
+                <input type="text" name="phone">
+
+                <label>Password</label>
+                <input type="password" name="password" required>
+
+                <label>Role</label>
+                <select name="role" required>
+                    {% if current_user.role == "super_admin" %}
+                        <option value="admin">Admin</option>
+                    {% endif %}
+                    <option value="employee">Employee</option>
+                </select>
+
+                <label>Designation</label>
+                <input type="text" name="designation" placeholder="SEO Executive, Designer, Developer">
+
+                <label>Status</label>
+                <select name="status">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+
+                <button type="submit">Save User</button>
+
+            </form>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

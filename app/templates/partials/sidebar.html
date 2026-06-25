@@ -1,0 +1,61 @@
+<aside class="sidebar">
+
+    <h2>CypherCrew</h2>
+
+    <a href="{{ url_for('dashboard.index') }}">
+        Dashboard
+    </a>
+
+    {% if has_permission(current_user,"manage_users") %}
+    <a href="{{ url_for('users.list_users') }}">
+        Users
+    </a>
+    {% endif %}
+
+    {% if has_permission(current_user,"manage_permissions") %}
+    <a href="{{ url_for('permissions.list_permissions') }}">
+        Permissions
+    </a>
+    {% endif %}
+
+    {% if has_permission(current_user,"manage_clients") %}
+    <a href="{{ url_for('clients.list_clients') }}">
+        Clients
+    </a>
+    {% endif %}
+
+    {% if has_permission(current_user,"manage_tasks") %}
+    <a href="{{ url_for('tasks.list_tasks') }}">
+        Tasks
+    </a>
+    {% endif %}
+
+    <!-- {% if has_permission(current_user,"approve_tasks") %}
+    <a href="{{ url_for('tasks.list_tasks') }}">
+        Reviews
+    </a>
+    {% endif %} -->
+
+    {% if has_permission(current_user,"view_reports") %}
+    <a href="{{ url_for('reports.list_reports') }}">
+        Reports
+    </a>
+    {% endif %}
+
+    {% if current_user.role == "employee" %}
+
+    <a href="{{ url_for('tasks.list_tasks') }}">
+        My Tasks
+    </a>
+
+    <a href="{{ url_for('reports.list_reports') }}">
+        My Reports
+    </a>
+
+    {% endif %}
+
+    <a href="{{ url_for('auth.logout') }}">
+        Logout
+    </a>
+
+</aside>
