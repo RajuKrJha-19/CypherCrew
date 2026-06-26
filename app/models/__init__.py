@@ -21,3 +21,5 @@ from app.models.daily_report import (
 )
 from app.models.task_feedback import TaskFeedback
 from app.models.notification import Notification
+
+from app.models.task_activity import TaskActivity

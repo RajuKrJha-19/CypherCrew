@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Task, Client, ClientDeliverable, User, TaskFeedback
+from app.models import Task, Client, ClientDeliverable, User, TaskFeedback, TaskActivity
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
 
@@ -33,11 +33,12 @@ def start_timer(task):
 
 def record_status_time(task, new_status):
     now = datetime.utcnow()
+    old_status = task.status
 
     if not task.status_started_at:
         task.status_started_at = now
         task.status = new_status
-        return
+        return old_status
 
     elapsed = int((now - task.status_started_at).total_seconds())
 
@@ -59,6 +60,8 @@ def record_status_time(task, new_status):
     task.status = new_status
     task.status_started_at = now
 
+    return old_status
+
 
 def format_seconds(seconds):
     seconds = seconds or 0
@@ -74,6 +77,20 @@ def get_live_worked_seconds(task):
         total += int((datetime.utcnow() - task.timer_started_at).total_seconds())
 
     return total
+
+
+def add_activity(task, action, message=None, old_status=None, new_status=None):
+    activity = TaskActivity(
+        task_id=task.id,
+        actor_id=current_user.id,
+        action=action,
+        message=message,
+        old_status=old_status,
+        new_status=new_status,
+        created_at=datetime.utcnow()
+    )
+
+    db.session.add(activity)
 
 
 @tasks_bp.route("/")
@@ -165,13 +182,22 @@ def add_task():
     if not has_permission(current_user, "manage_tasks"):
         return redirect(url_for("dashboard.index"))
 
-    clients = Client.query.filter_by(status="active").order_by(Client.client_name.asc()).all()
-    deliverables = ClientDeliverable.query.order_by(ClientDeliverable.id.desc()).all()
+    clients = Client.query.filter_by(
+        status="active"
+    ).order_by(
+        Client.client_name.asc()
+    ).all()
+
+    deliverables = ClientDeliverable.query.order_by(
+        ClientDeliverable.id.desc()
+    ).all()
 
     employees = User.query.filter(
         User.status == "active",
         User.role.in_(["super_admin", "admin", "employee"])
-    ).order_by(User.name.asc()).all()
+    ).order_by(
+        User.name.asc()
+    ).all()
 
     if request.method == "POST":
 
@@ -179,7 +205,10 @@ def add_task():
         deadline_value = request.form.get("deadline")
 
         if deadline_value:
-            deadline = datetime.strptime(deadline_value, "%Y-%m-%dT%H:%M")
+            deadline = datetime.strptime(
+                deadline_value,
+                "%Y-%m-%dT%H:%M"
+            )
 
         try:
             client_id = int(request.form.get("client_id"))
@@ -258,6 +287,14 @@ def add_task():
         db.session.add(task)
         db.session.flush()
 
+        add_activity(
+            task,
+            action="created",
+            message=f"Created by {current_user.name}",
+            old_status=None,
+            new_status="Pending"
+        )
+
         create_notification(
             user_id=assigned_to_id,
             title="New task assigned",
@@ -312,8 +349,33 @@ def start_task(task_id):
     if running_task:
         pause_timer(running_task)
 
+        add_activity(
+            running_task,
+            action="auto_paused",
+            message=f"Auto paused because {current_user.name} started another task: {task.title}",
+            old_status="In Progress",
+            new_status="In Progress"
+        )
+
     if task.status == "Pending":
-        record_status_time(task, "In Progress")
+        old_status = record_status_time(task, "In Progress")
+
+        add_activity(
+            task,
+            action="started",
+            message=f"Started by {current_user.name}",
+            old_status=old_status,
+            new_status="In Progress"
+        )
+
+    elif task.status == "In Progress" and not task.timer_started_at:
+        add_activity(
+            task,
+            action="resumed",
+            message=f"Resumed by {current_user.name}",
+            old_status="In Progress",
+            new_status="In Progress"
+        )
 
     if task.status == "In Progress":
         start_timer(task)
@@ -338,6 +400,14 @@ def pause_task(task_id):
 
     pause_timer(task)
 
+    add_activity(
+        task,
+        action="paused",
+        message=f"Paused by {current_user.name}",
+        old_status=task.status,
+        new_status=task.status
+    )
+
     db.session.commit()
     flash("Task paused.", "success")
 
@@ -356,7 +426,15 @@ def submit_review(task_id):
 
     if task.status in ["Pending", "In Progress"]:
         pause_timer(task)
-        record_status_time(task, "Core Review")
+        old_status = record_status_time(task, "Core Review")
+
+        add_activity(
+            task,
+            action="submitted_review",
+            message=f"Submitted for Core Review by {current_user.name}",
+            old_status=old_status,
+            new_status="Core Review"
+        )
 
         reviewers = [
             user for user in User.query.filter_by(status="active").all()
@@ -390,7 +468,17 @@ def approve_task(task_id):
     status_changed = False
 
     if task.status == "Core Review":
-        record_status_time(task, "Client Review")
+
+        old_status = record_status_time(task, "Client Review")
+
+        add_activity(
+            task,
+            action="approved_core_review",
+            message=f"Core Review approved by {current_user.name}",
+            old_status=old_status,
+            new_status="Client Review"
+        )
+
         status_changed = True
         flash("Task moved to client review.", "success")
 
@@ -400,11 +488,16 @@ def approve_task(task_id):
             flash("Task deliverable not found.", "error")
             return redirect(url_for("tasks.list_tasks"))
 
-        if task.deliverable.client_id != task.client_id:
-            flash("Task deliverable does not belong to this task client.", "error")
-            return redirect(url_for("tasks.list_tasks"))
+        old_status = record_status_time(task, "Published")
 
-        record_status_time(task, "Published")
+        add_activity(
+            task,
+            action="published",
+            message=f"Published by {current_user.name}",
+            old_status=old_status,
+            new_status="Published"
+        )
+
         task.completed_at = datetime.utcnow()
         status_changed = True
         task.deliverable.completed_count += 1
@@ -482,7 +575,15 @@ def reject_task(task_id):
         file_type=file_type
     )
 
-    record_status_time(task, "In Progress")
+    old_status = record_status_time(task, "In Progress")
+
+    add_activity(
+        task,
+        action="rejected",
+        message=f"Rejected by {current_user.name}: {message}",
+        old_status=old_status,
+        new_status="In Progress"
+    )
 
     db.session.add(feedback)
 
@@ -526,9 +627,16 @@ def task_detail(task_id):
 
     live_seconds = get_live_worked_seconds(task)
 
+    activities = TaskActivity.query.filter_by(
+        task_id=task.id
+    ).order_by(
+        TaskActivity.created_at.desc()
+    ).all()
+
     return render_template(
         "tasks/detail.html",
         task=task,
+        activities=activities,
         feedbacks=task.feedbacks,
         worked_time=format_seconds(live_seconds),
         live_seconds=live_seconds,
