@@ -79,14 +79,24 @@ def admin():
         for item in current_user.permissions
     ]
 
-    stats = build_task_stats(Task.query.all())
+    tasks = Task.query.all()
+
+    stats = build_task_stats(tasks)
     workload = build_workload()
+    overview = build_overview()
+    today_snapshot = build_today_snapshot()
+    status_chart = build_status_chart(stats)
+    month_chart = build_month_chart()
 
     return render_template(
         "dashboard/admin.html",
         user_permissions=user_permissions,
         stats=stats,
-        workload=workload
+        workload=workload,
+        overview=overview,
+        today_snapshot=today_snapshot,
+        status_chart=status_chart,
+        month_chart=month_chart
     )
 
 

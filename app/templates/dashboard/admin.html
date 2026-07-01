@@ -1,48 +1,142 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Admin | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
 <div class="layout">
+
     {% include "partials/sidebar.html" %}
 
     <main class="main">
+
         <div class="page-header">
             <div>
                 <h1>Admin Dashboard</h1>
                 <p>Welcome, {{ current_user.name }}</p>
             </div>
+
             <div class="top-actions">
                 {% include "partials/notification_widget.html" %}
-                <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Open Tasks</a>
+                <a href="{{ url_for('tasks.list_tasks') }}" class="btn">
+                    Open Tasks
+                </a>
             </div>
         </div>
 
-        <div class="stats-grid">
-            <div class="metric-card">
-                <span>Total Tasks</span>
-                <strong>{{ stats.total }}</strong>
+        <div class="dashboard-kpi-grid">
+
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-icon">☑</div>
+                <div class="kpi-content">
+                    <span>Total Tasks</span>
+                    <h2>{{ overview.total_tasks }}</h2>
+                    <p class="{{ overview.task_growth.class }}">
+                        {{ overview.task_growth.arrow }} {{ overview.task_growth.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card">
-                <span>In Review</span>
-                <strong>{{ stats.in_review }}</strong>
+
+            <div class="kpi-card kpi-green">
+                <div class="kpi-icon">✓</div>
+                <div class="kpi-content">
+                    <span>Completed Tasks</span>
+                    <h2>{{ overview.completed_tasks }}</h2>
+                    <p class="{{ overview.completed_growth.class }}">
+                        {{ overview.completed_growth.arrow }} {{ overview.completed_growth.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card">
-                <span>Published</span>
-                <strong>{{ stats.published }}</strong>
+
+            <div class="kpi-card kpi-purple">
+                <div class="kpi-icon">⌛</div>
+                <div class="kpi-content">
+                    <span>Pending Tasks</span>
+                    <h2>{{ overview.pending_tasks }}</h2>
+                    <p class="{{ overview.pending_note.class }}">
+                        {{ overview.pending_note.arrow }} {{ overview.pending_note.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card warning">
-                <span>Overdue</span>
-                <strong>{{ stats.overdue }}</strong>
+
+            <div class="kpi-card kpi-orange">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <span>Active Clients</span>
+                    <h2>{{ overview.active_clients }}</h2>
+                    <p class="{{ overview.client_note.class }}">
+                        {{ overview.client_note.arrow }} {{ overview.client_note.text }}
+                    </p>
+                </div>
             </div>
+
+            <div class="kpi-card kpi-sky">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <span>Active Employees</span>
+                    <h2>{{ overview.active_employees }}</h2>
+                    <p class="{{ overview.employee_note.class }}">
+                        {{ overview.employee_note.arrow }} {{ overview.employee_note.text }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="kpi-card kpi-red">
+                <div class="kpi-icon">▣</div>
+                <div class="kpi-content">
+                    <span>Meetings Today</span>
+                    <h2>{{ overview.meetings_today }}</h2>
+                    <p>
+                        <a href="{{ url_for('calendar.index') }}">
+                            View calendar
+                        </a>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="dashboard-middle">
+
+            <div class="chart-card status-chart-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Tasks by Status</h3>
+                        <p>Overall workflow status</p>
+                    </div>
+                </div>
+
+                <div class="status-chart-layout">
+                    <div class="status-chart-box">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+
+                    <div class="status-chart-legend" id="statusLegend"></div>
+                </div>
+            </div>
+
+            <div class="chart-card trend-chart-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Task Trend</h3>
+                        <p>Created vs Completed</p>
+                    </div>
+                </div>
+
+                <canvas id="taskTrendChart"></canvas>
+            </div>
+
         </div>
 
         <div class="dashboard-grid">
+
             <div class="table-card">
                 <h2 class="card-title">Workflow</h2>
+
                 {% for status in stats.status_order %}
                     <div class="stat-line">
                         <span>{{ status }}</span>
@@ -53,22 +147,74 @@
 
             <div class="table-card">
                 <h2 class="card-title">Recent Tasks</h2>
+
                 {% for task in stats.recent_tasks %}
                     <div class="activity-row">
                         <div>
-                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                                {{ task.title }}
+                            </a>
                             <span>{{ task.client.client_name }} - {{ task.status }}</span>
                         </div>
-                        <span class="status-pill">{{ task.priority }}</span>
+
+                        <span class="status-pill">
+                            {{ task.priority }}
+                        </span>
                     </div>
                 {% else %}
                     <p>No tasks yet.</p>
                 {% endfor %}
             </div>
+
         </div>
 
+        <div class="snapshot-card">
+
+            <div class="card-header">
+                <div>
+                    <h3>Today's Snapshot</h3>
+                    <p>Everything happening today</p>
+                </div>
+            </div>
+
+            <div class="snapshot-grid">
+
+                <div>
+                    <span>Working</span>
+                    <h2>{{ today_snapshot.working_employees }}</h2>
+                </div>
+
+                <div>
+                    <span>Leave</span>
+                    <h2>{{ today_snapshot.employees_on_leave }}</h2>
+                </div>
+
+                <div>
+                    <span>Meetings</span>
+                    <h2>{{ today_snapshot.meetings_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Due Today</span>
+                    <h2>{{ today_snapshot.tasks_due_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Completed</span>
+                    <h2>{{ today_snapshot.completed_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Holiday</span>
+                    <h2>{{ today_snapshot.holidays_today }}</h2>
+                </div>
+
+            </div>
+
+        </div>
 
         <div class="table-card workload-card">
+
             <div class="section-head">
                 <div>
                     <h2>Team Workload</h2>
@@ -77,38 +223,217 @@
             </div>
 
             <div class="workload-list">
+
                 {% for member in workload %}
                     <div class="workload-row">
-    <div>
-        <h4>{{ member.name }}</h4>
-        <p>{{ member.designation or "Team Member" }}</p>
-    </div>
+                        <div>
+                            <h4>{{ member.name }}</h4>
+                            <p>{{ member.designation or "Team Member" }}</p>
+                        </div>
 
-    <strong class="workload-hours">
-        {{ member.remaining_hours }} hrs
-    </strong>
-</div>
+                        <strong class="workload-hours">
+                            {{ member.remaining_hours }} hrs
+                        </strong>
+                    </div>
                 {% else %}
                     <p class="empty-text">No active employees found.</p>
                 {% endfor %}
+
             </div>
+
         </div>
 
         <div class="table-card" style="margin-top:18px;">
-    <h2 style="font-size:18px; margin-bottom:10px;">My Permissions</h2>
+            <h2 style="font-size:18px; margin-bottom:10px;">My Permissions</h2>
 
-    {% if user_permissions %}
-        <p style="margin-bottom:10px;">You can:</p>
+            {% if user_permissions %}
+                <p style="margin-bottom:10px;">You can:</p>
 
-        {% for permission in user_permissions %}
-            <span class="tag">{{ permission }}</span>
-        {% endfor %}
-    {% else %}
-        <p>No extra permissions assigned.</p>
-    {% endif %}
-</div>
+                {% for permission in user_permissions %}
+                    <span class="tag">{{ permission }}</span>
+                {% endfor %}
+            {% else %}
+                <p>No extra permissions assigned.</p>
+            {% endif %}
+        </div>
+
     </main>
+
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const statusLabels = {{ status_chart["labels"]|tojson }};
+const statusValues = {{ status_chart["values"]|tojson }};
+const statusTotal = statusValues.reduce((a, b) => a + b, 0);
+
+const statusColors = [
+    "#2563EB",
+    "#EC4899",
+    "#FB923C",
+    "#FACC15",
+    "#14B8A6"
+];
+
+const centerTextPlugin = {
+    id: "centerText",
+    beforeDraw(chart) {
+        const { width, height, ctx } = chart;
+
+        ctx.save();
+
+        ctx.font = "700 26px Arial";
+        ctx.fillStyle = "#0F172A";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(statusTotal, width / 2, height / 2 - 8);
+
+        ctx.font = "400 13px Arial";
+        ctx.fillStyle = "#64748B";
+        ctx.fillText("Total", width / 2, height / 2 + 18);
+
+        ctx.restore();
+    }
+};
+
+const statusCtx = document.getElementById("statusChart");
+
+if (statusCtx) {
+    new Chart(statusCtx, {
+        type: "doughnut",
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusValues,
+                backgroundColor: statusColors,
+                borderColor: "#ffffff",
+                borderWidth: 4,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "58%",
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw || 0;
+                            const percent = statusTotal
+                                ? Math.round((value / statusTotal) * 100)
+                                : 0;
+
+                            return context.label + ": " + value + " (" + percent + "%)";
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [centerTextPlugin]
+    });
+}
+
+const statusLegend = document.getElementById("statusLegend");
+
+if (statusLegend) {
+    statusLegend.innerHTML = statusLabels.map(function(label, index) {
+        const value = statusValues[index] || 0;
+        const percent = statusTotal
+            ? Math.round((value / statusTotal) * 100)
+            : 0;
+
+        return `
+            <div class="status-legend-row">
+                <div class="status-legend-left">
+                    <span style="background:${statusColors[index]}"></span>
+                    <p>${label}</p>
+                </div>
+
+                <strong>
+                    ${value}
+                    <em>(${percent}%)</em>
+                </strong>
+            </div>
+        `;
+    }).join("");
+}
+
+const trendCtx = document.getElementById("taskTrendChart");
+
+if (trendCtx) {
+    new Chart(trendCtx, {
+        type: "line",
+        data: {
+            labels: {{ month_chart.labels|tojson }},
+            datasets: [
+                {
+                    label: "Created",
+                    data: {{ month_chart.created|tojson }},
+                    borderColor: "#2563EB",
+                    backgroundColor: "rgba(37, 99, 235, 0.12)",
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                },
+                {
+                    label: "Completed",
+                    data: {{ month_chart.completed|tojson }},
+                    borderColor: "#22C55E",
+                    backgroundColor: "rgba(34, 197, 94, 0.12)",
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: "#64748B",
+                        maxTicksLimit: 7
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                        color: "#64748B"
+                    },
+                    grid: {
+                        color: "#EEF2F7"
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
 
 </body>
+
 </html>
