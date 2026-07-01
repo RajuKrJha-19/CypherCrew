@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Holidays | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+            <div>
+                <h1>Manage Holidays</h1>
+                <p>Add company holidays for planning calendar</p>
+            </div>
+
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+                <a href="{{ url_for('calendar.index') }}" class="btn">
+                    Back to Calendar
+                </a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="dashboard-grid">
+
+            <div class="form-card">
+                <h1>Add Holiday</h1>
+                <p>Create a company holiday entry</p>
+
+                <form method="POST">
+
+                    <label>Holiday Title</label>
+                    <input
+                        type="text"
+                        name="title"
+                        placeholder="Example: Independence Day"
+                        required
+                    >
+
+                    <label>Date</label>
+                    <input
+                        type="date"
+                        name="holiday_date"
+                        required
+                    >
+
+                    <label>Description</label>
+                    <textarea
+                        name="description"
+                        rows="4"
+                        placeholder="Optional note"
+                    ></textarea>
+
+                    <button type="submit">
+                        Add Holiday
+                    </button>
+
+                </form>
+            </div>
+
+            <div class="table-card">
+                <div class="section-heading">
+                    <div>
+                        <h2>Holiday List</h2>
+                        <p>Dates visible in operations calendar</p>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Holiday</th>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for holiday in holidays %}
+                            <tr>
+                                <td>{{ holiday.title }}</td>
+                                <td>{{ holiday.holiday_date.strftime("%d %b %Y") }}</td>
+                                <td>{{ holiday.description or "-" }}</td>
+                                <td>
+                                    <form
+                                        method="POST"
+                                        action="{{ url_for('holidays.delete_holiday', holiday_id=holiday.id) }}"
+                                        onsubmit="return confirm('Delete this holiday?');"
+                                    >
+                                        <button type="submit" class="mini-action danger">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4">
+                                    No holidays added yet.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+
+</html>

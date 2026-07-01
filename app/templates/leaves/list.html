@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Leaves | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+
+            <div>
+                <h1>Employee Leaves</h1>
+                <p>Manage planned employee leaves</p>
+            </div>
+
+            <div class="top-actions">
+
+                {% include "partials/notification_widget.html" %}
+
+                <a href="{{ url_for('calendar.index') }}" class="btn">
+                    Back to Calendar
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="dashboard-grid">
+
+            <div class="form-card">
+
+                <h1>Add Leave</h1>
+
+                <p>Create employee leave</p>
+
+                <form method="POST">
+
+                    <label>Employee</label>
+
+                    <select name="user_id" required>
+
+                        <option value="">
+                            Select Employee
+                        </option>
+
+                        {% for user in users %}
+
+                        <option value="{{ user.id }}">
+                            {{ user.name }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                    <label>Start Date</label>
+
+                    <input
+                        type="date"
+                        name="start_date"
+                        required
+                    >
+
+                    <label>End Date</label>
+
+                    <input
+                        type="date"
+                        name="end_date"
+                        required
+                    >
+
+                    <label>Reason</label>
+
+                    <textarea
+                        name="reason"
+                        rows="5"
+                    ></textarea>
+
+                    <button type="submit">
+                        Add Leave
+                    </button>
+
+                </form>
+
+            </div>
+
+            <div class="table-card">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <h2>Upcoming Leaves</h2>
+
+                        <p>All approved employee leaves</p>
+
+                    </div>
+
+                </div>
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Employee</th>
+
+                            <th>Start</th>
+
+                            <th>End</th>
+
+                            <th>Reason</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        {% for leave in leaves %}
+
+                        <tr>
+
+                            <td>
+                                {{ leave.user.name }}
+                            </td>
+
+                            <td>
+                                {{ leave.start_date.strftime("%d %b %Y") }}
+                            </td>
+
+                            <td>
+                                {{ leave.end_date.strftime("%d %b %Y") }}
+                            </td>
+
+                            <td>
+                                {{ leave.reason or "-" }}
+                            </td>
+
+                            <td>
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for('leaves.delete_leave', leave_id=leave.id) }}"
+                                    onsubmit="return confirm('Delete leave?')"
+                                >
+
+                                    <button
+                                        class="mini-action danger"
+                                        type="submit"
+                                    >
+                                        Delete
+                                    </button>
+
+                                </form>
+
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+
+                            <td colspan="5">
+
+                                No leaves added.
+
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+
+</html>

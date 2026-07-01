@@ -319,12 +319,13 @@ def add_task():
 
         flash("Task created successfully.", "success")
         return redirect(url_for("tasks.list_tasks"))
-
+    deadline_default = request.args.get("deadline", "")
     return render_template(
         "tasks/add.html",
         clients=clients,
         deliverables=deliverables,
-        employees=employees
+        employees=employees,
+        deadline_default=deadline_default
     )
 
 
@@ -425,7 +426,14 @@ def submit_review(task_id):
         return redirect(url_for("tasks.list_tasks"))
 
     if task.status in ["Pending", "In Progress"]:
+
         pause_timer(task)
+
+        
+        if not task.employee_completed:
+            task.employee_completed = True
+            task.employee_completed_at = datetime.utcnow()
+
         old_status = record_status_time(task, "Core Review")
 
         add_activity(
@@ -452,10 +460,10 @@ def submit_review(task_id):
             )
 
         db.session.commit()
+
         flash("Task submitted for core review.", "success")
 
     return redirect(url_for("tasks.list_tasks"))
-
 
 @tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
 @login_required

@@ -62,8 +62,9 @@ def user_performance(user_id):
 
     total_assigned = base_query.count()
 
+    # Employee Completed means task was submitted for review at least once.
     completed_tasks = base_query.filter(
-        Task.status == "Core Review"
+        Task.employee_completed == True
     ).count()
 
     pending_tasks = base_query.filter(
@@ -75,7 +76,7 @@ def user_performance(user_id):
     ).count()
 
     in_review_tasks = base_query.filter(
-        Task.status == "Client Review"
+        Task.status.in_(["Core Review", "Client Review"])
     ).count()
 
     published_tasks = base_query.filter(

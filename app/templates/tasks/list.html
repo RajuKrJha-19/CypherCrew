@@ -91,14 +91,18 @@
 
     <div class="board-shell">
         {% for status, column_tasks in board_columns.items() %}
-            <section class="board-column">
+            <section class="board-column" data-status="{{ status }}">
                 <div class="board-column-header">
                     <h2>{{ status }}</h2>
                     <span>{{ column_tasks|length }}</span>
                 </div>
 
                 {% for task in column_tasks %}
-                    <article class="task-card">
+                    <article
+                        class="task-card"
+                        data-task-id="{{ task.id }}"
+                        data-task-status="{{ task.status }}"
+                    >
                         <div class="task-card-top">
                             <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
                                 {{ task.title }}
@@ -156,7 +160,7 @@
 
             <tbody>
                 {% for task in tasks %}
-                    <tr>
+                    <tr data-task-id="{{ task.id }}">
                         <td>
                             <a
                                 href="{{ url_for('tasks.task_detail', task_id=task.id) }}"
@@ -167,9 +171,7 @@
                         </td>
 
                         <td>{{ task.client.client_name }}</td>
-
                         <td>{{ task.deliverable.service_name }}</td>
-
                         <td>{{ task.deliverable.deliverable_name }}</td>
 
                         <td>
@@ -221,6 +223,55 @@
 </main>
 
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const cards = document.querySelectorAll(".task-card");
+
+    cards.forEach(function (card, index) {
+        card.style.animationDelay = (index * 35) + "ms";
+        card.classList.add("kanban-card-enter");
+    });
+
+    const movedTaskId = sessionStorage.getItem("moved_task_id");
+
+    if (movedTaskId) {
+        const movedCard = document.querySelector('.task-card[data-task-id="' + movedTaskId + '"]');
+
+        if (movedCard) {
+            movedCard.classList.remove("kanban-card-enter");
+            movedCard.classList.add("kanban-card-moved");
+
+            movedCard.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+                inline: "center"
+            });
+        }
+
+        sessionStorage.removeItem("moved_task_id");
+    }
+});
+
+document.addEventListener("submit", function (event) {
+    const form = event.target;
+
+    if (!form.action) return;
+
+    if (
+        form.action.includes("/start") ||
+        form.action.includes("/submit-review") ||
+        form.action.includes("/approve") ||
+        form.action.includes("/reject")
+    ) {
+        const match = form.action.match(/tasks\/(\d+)/);
+
+        if (match && match[1]) {
+            sessionStorage.setItem("moved_task_id", match[1]);
+        }
+    }
+});
+</script>
 
 </body>
 

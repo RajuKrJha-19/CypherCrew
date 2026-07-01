@@ -23,3 +23,7 @@ from app.models.task_feedback import TaskFeedback
 from app.models.notification import Notification
 
 from app.models.task_activity import TaskActivity
+
+from .holiday import Holiday
+from .meeting import Meeting
+from .leave import Leave

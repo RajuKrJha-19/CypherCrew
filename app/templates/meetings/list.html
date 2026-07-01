@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Meetings | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+
+            <div>
+                <h1>Meetings</h1>
+                <p>Schedule client and internal meetings</p>
+            </div>
+
+            <div class="top-actions">
+
+                {% include "partials/notification_widget.html" %}
+
+                <a href="{{ url_for('calendar.index') }}" class="btn">
+                    Back to Calendar
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="dashboard-grid">
+
+            <div class="form-card">
+
+                <h1>Add Meeting</h1>
+
+                <p>Create a meeting schedule</p>
+
+                <form method="POST">
+
+                    <label>Meeting Title</label>
+
+                    <input
+                        type="text"
+                        name="title"
+                        required
+                    >
+
+                    <label>Client</label>
+
+                    <select name="client_id">
+
+                        <option value="">
+                            Internal Meeting
+                        </option>
+
+                        {% for client in clients %}
+
+                        <option value="{{ client.id }}">
+                            {{ client.client_name }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                    <label>Date & Time</label>
+
+                    <input
+                        type="datetime-local"
+                        name="meeting_date"
+                        required
+                    >
+
+                    <label>Agenda</label>
+
+                    <textarea
+                        name="agenda"
+                        rows="5"
+                    ></textarea>
+
+                    <button type="submit">
+                        Schedule Meeting
+                    </button>
+
+                </form>
+
+            </div>
+
+            <div class="table-card">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <h2>Upcoming Meetings</h2>
+
+                        <p>All scheduled meetings</p>
+
+                    </div>
+
+                </div>
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Title</th>
+
+                            <th>Client</th>
+
+                            <th>Date</th>
+
+                            <th>Agenda</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        {% for meeting in meetings %}
+
+                        <tr>
+
+                            <td>{{ meeting.title }}</td>
+
+                            <td>
+
+                                {% if meeting.client %}
+
+                                    {{ meeting.client.client_name }}
+
+                                {% else %}
+
+                                    Internal
+
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+
+                                {{ meeting.meeting_date.strftime("%d %b %Y %I:%M %p") }}
+
+                            </td>
+
+                            <td>
+
+                                {{ meeting.agenda or "-" }}
+
+                            </td>
+
+                            <td>
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for('meetings.delete_meeting', meeting_id=meeting.id) }}"
+                                    onsubmit="return confirm('Delete meeting?')"
+                                >
+
+                                    <button
+                                        class="mini-action danger"
+                                        type="submit"
+                                    >
+                                        Delete
+                                    </button>
+
+                                </form>
+
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+
+                            <td colspan="5">
+
+                                No meetings scheduled.
+
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+
+</html>

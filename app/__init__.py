@@ -22,6 +22,11 @@ def create_app():
     from app.routes.tasks import tasks_bp
     from app.routes.reports import reports_bp
     from app.routes.notifications import notifications_bp
+    from app.routes.calendar import calendar_bp
+    from app.routes.holidays import holidays_bp
+    from app.routes.meetings import meetings_bp
+    from app.routes.leaves import leaves_bp
+
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -31,6 +36,10 @@ def create_app():
     app.register_blueprint(tasks_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(calendar_bp)
+    app.register_blueprint(holidays_bp)
+    app.register_blueprint(meetings_bp)
+    app.register_blueprint(leaves_bp)
 
     with app.app_context():
         db.create_all()

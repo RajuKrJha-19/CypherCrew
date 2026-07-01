@@ -28,13 +28,14 @@
     <a href="{{ url_for('tasks.list_tasks') }}">
         Tasks
     </a>
-    {% endif %}
 
-    <!-- {% if has_permission(current_user,"approve_tasks") %}
-    <a href="{{ url_for('tasks.list_tasks') }}">
-        Reviews
+    <a href="{{ url_for('calendar.index') }}">
+        Calendar
     </a>
-    {% endif %} -->
+    <a href="{{ url_for('holidays.list_holidays') }}">
+        Holidays
+    </a>
+    {% endif %}
 
     {% if has_permission(current_user,"view_reports") %}
     <a href="{{ url_for('reports.list_reports') }}">
@@ -46,6 +47,10 @@
 
     <a href="{{ url_for('tasks.list_tasks') }}">
         My Tasks
+    </a>
+
+    <a href="{{ url_for('calendar.index') }}">
+        Calendar
     </a>
 
     <a href="{{ url_for('reports.list_reports') }}">

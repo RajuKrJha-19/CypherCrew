@@ -85,16 +85,16 @@
                     </div>
 
                     <div class="work-estimate-row">
-    <div class="work-estimate-field">
-        <label>Quantity</label>
-        <input type="number" name="quantity" min="0.1" step="0.1" value="1" required>
-    </div>
+                        <div class="work-estimate-field">
+                            <label>Quantity</label>
+                            <input type="number" name="quantity" min="0.1" step="0.1" value="1" required>
+                        </div>
 
-    <div class="work-estimate-field">
-        <label>Est. Time / Quantity (hrs)</label>
-        <input type="number" name="estimated_time" min="0.1" step="0.1" value="1" required>
-    </div>
-</div>
+                        <div class="work-estimate-field">
+                            <label>Est. Time / Quantity (hrs)</label>
+                            <input type="number" name="estimated_time" min="0.1" step="0.1" value="1" required>
+                        </div>
+                    </div>
 
                     <label>Priority</label>
                     <select name="priority">
@@ -105,7 +105,7 @@
                     </select>
 
                     <label>Deadline</label>
-                    <input type="datetime-local" name="deadline">
+                    <input type="datetime-local" name="deadline" value="{{ deadline_default }}">
 
                     <button type="submit">Create Task</button>
 

@@ -1,48 +1,136 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Super Admin | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
 <div class="layout">
+
     {% include "partials/sidebar.html" %}
 
     <main class="main">
+
         <div class="page-header">
             <div>
                 <h1>Super Admin Dashboard</h1>
                 <p>Welcome, {{ current_user.name }}</p>
             </div>
+
             <div class="top-actions">
                 {% include "partials/notification_widget.html" %}
                 <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Open Tasks</a>
             </div>
         </div>
 
-        <div class="stats-grid">
-            <div class="metric-card">
-                <span>Total Tasks</span>
-                <strong>{{ stats.total }}</strong>
+        <div class="dashboard-kpi-grid">
+
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-icon">☑</div>
+                <div class="kpi-content">
+                    <span>Total Tasks</span>
+                    <h2>{{ overview.total_tasks }}</h2>
+                    <p class="{{ overview.task_growth.class }}">
+                        {{ overview.task_growth.arrow }} {{ overview.task_growth.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card">
-                <span>In Review</span>
-                <strong>{{ stats.in_review }}</strong>
+
+            <div class="kpi-card kpi-green">
+                <div class="kpi-icon">✓</div>
+                <div class="kpi-content">
+                    <span>Completed Tasks</span>
+                    <h2>{{ overview.completed_tasks }}</h2>
+                    <p class="{{ overview.completed_growth.class }}">
+                        {{ overview.completed_growth.arrow }} {{ overview.completed_growth.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card">
-                <span>Published</span>
-                <strong>{{ stats.published }}</strong>
+
+            <div class="kpi-card kpi-purple">
+                <div class="kpi-icon">⌛</div>
+                <div class="kpi-content">
+                    <span>Pending Tasks</span>
+                    <h2>{{ overview.pending_tasks }}</h2>
+                    <p class="{{ overview.pending_note.class }}">
+                        {{ overview.pending_note.arrow }} {{ overview.pending_note.text }}
+                    </p>
+                </div>
             </div>
-            <div class="metric-card warning">
-                <span>Overdue</span>
-                <strong>{{ stats.overdue }}</strong>
+
+            <div class="kpi-card kpi-orange">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <span>Active Clients</span>
+                    <h2>{{ overview.active_clients }}</h2>
+                    <p class="{{ overview.client_note.class }}">
+                        {{ overview.client_note.arrow }} {{ overview.client_note.text }}
+                    </p>
+                </div>
             </div>
+
+            <div class="kpi-card kpi-sky">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <span>Active Employees</span>
+                    <h2>{{ overview.active_employees }}</h2>
+                    <p class="{{ overview.employee_note.class }}">
+                        {{ overview.employee_note.arrow }} {{ overview.employee_note.text }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="kpi-card kpi-red">
+                <div class="kpi-icon">▣</div>
+                <div class="kpi-content">
+                    <span>Meetings Today</span>
+                    <h2>{{ overview.meetings_today }}</h2>
+                    <p><a href="{{ url_for('calendar.index') }}">View calendar</a></p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="dashboard-middle">
+
+            <div class="chart-card status-chart-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Tasks by Status</h3>
+                        <p>Overall workflow status</p>
+                    </div>
+                </div>
+
+                <div class="status-chart-layout">
+                    <div class="status-chart-box">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+
+                    <div class="status-chart-legend" id="statusLegend"></div>
+                </div>
+            </div>
+
+            <div class="chart-card trend-chart-card">
+                <div class="card-header">
+                    <div>
+                        <h3>Task Trend</h3>
+                        <p>Created vs Completed</p>
+                    </div>
+                </div>
+
+                <canvas id="taskTrendChart"></canvas>
+            </div>
+
         </div>
 
         <div class="dashboard-grid">
+
             <div class="table-card">
                 <h2 class="card-title">Workflow</h2>
+
                 {% for status in stats.status_order %}
                     <div class="stat-line">
                         <span>{{ status }}</span>
@@ -53,21 +141,243 @@
 
             <div class="table-card">
                 <h2 class="card-title">Recent Tasks</h2>
+
                 {% for task in stats.recent_tasks %}
                     <div class="activity-row">
                         <div>
-                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                                {{ task.title }}
+                            </a>
                             <span>{{ task.client.client_name }} - {{ task.status }}</span>
                         </div>
+
                         <span class="status-pill">{{ task.priority }}</span>
                     </div>
                 {% else %}
                     <p>No tasks yet.</p>
                 {% endfor %}
             </div>
+
+        </div>
+
+        <div class="snapshot-card">
+
+            <div class="card-header">
+                <div>
+                    <h3>Today's Snapshot</h3>
+                    <p>Everything happening today</p>
+                </div>
+            </div>
+
+            <div class="snapshot-grid">
+
+                <div>
+                    <span>Working</span>
+                    <h2>{{ today_snapshot.working_employees }}</h2>
+                </div>
+
+                <div>
+                    <span>Leave</span>
+                    <h2>{{ today_snapshot.employees_on_leave }}</h2>
+                </div>
+
+                <div>
+                    <span>Meetings</span>
+                    <h2>{{ today_snapshot.meetings_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Due Today</span>
+                    <h2>{{ today_snapshot.tasks_due_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Completed</span>
+                    <h2>{{ today_snapshot.completed_today }}</h2>
+                </div>
+
+                <div>
+                    <span>Holiday</span>
+                    <h2>{{ today_snapshot.holidays_today }}</h2>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="table-card operations-card">
+
+            <div class="section-head">
+                <div>
+                    <h2>Live Employees</h2>
+                    <p>Current working status of all employees</p>
+                </div>
+            </div>
+
+            <div class="live-employee-grid">
+
+                {% for employee in live_employees %}
+                    <div class="live-card {{ employee.state }} {% if employee.over_estimate %}over-estimate{% endif %}">
+
+                        <div class="live-card-header">
+                            <h3>{{ employee.employee_name }}</h3>
+
+                            <span class="live-state">
+                                {% if employee.state == "working" %}
+                                    🟢 Working
+                                {% elif employee.state == "paused" %}
+                                    🟡 Paused
+                                {% else %}
+                                    ⚪ Idle
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <p class="live-task">{{ employee.task_title }}</p>
+
+                        <div class="live-meta">
+
+                            {% if employee.state == "idle" %}
+
+                                <div style="grid-column:1/-1;">
+                                    <small>Status</small>
+                                    <strong>No active task assigned</strong>
+                                </div>
+
+                            {% else %}
+
+                                <div>
+                                    <small>Elapsed</small>
+                                    <strong
+                                        class="{% if employee.state == 'working' %}live-time{% endif %}"
+                                        data-start="{{ employee.live_seconds }}"
+                                    >
+                                        {{ employee.live_time }}
+                                    </strong>
+                                </div>
+
+                                <div>
+                                    <small>Estimated</small>
+                                    <strong>{{ employee.estimated_time }}</strong>
+                                </div>
+
+                                <div>
+                                    <small>Remaining</small>
+                                    <strong
+                                        class="remaining-time {% if employee.over_estimate %}danger-time{% endif %}"
+                                        data-remaining="{{ employee.remaining_seconds }}"
+                                    >
+                                        {{ employee.remaining_time }}
+                                    </strong>
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+        <div class="table-card operations-card">
+
+            <div class="section-head">
+                <div>
+                    <h2>Running Tasks</h2>
+                    <p>Currently active tasks with live progress</p>
+                </div>
+            </div>
+
+            <div class="running-task-list">
+
+                {% for task in running_tasks %}
+
+                    {% set progress = ((task.live_seconds / task.estimated_seconds) * 100) if task.estimated_seconds else 0 %}
+                    {% set progress_width = 100 if progress > 100 else progress %}
+
+                    <div class="running-task-row {% if task.over_estimate %}over-estimate{% endif %}">
+
+                        <div class="running-main">
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.task_id) }}">
+                                {{ task.task_title }}
+                            </a>
+                            <span>{{ task.client_name }} • {{ task.employee_name }}</span>
+                        </div>
+
+                        <div class="running-time">
+                            <small>Elapsed</small>
+                            <strong class="live-time" data-start="{{ task.live_seconds }}">
+                                {{ task.live_time }}
+                            </strong>
+                        </div>
+
+                        <div class="running-time">
+                            <small>Estimated</small>
+                            <strong>{{ task.estimated_time }}</strong>
+                        </div>
+
+                        <div class="running-time">
+                            <small>Remaining</small>
+                            <strong
+                                class="remaining-time {% if task.over_estimate %}danger-time{% endif %}"
+                                data-remaining="{{ task.remaining_seconds }}"
+                            >
+                                {{ task.remaining_time }}
+                            </strong>
+                        </div>
+
+                        <div class="running-progress">
+                            <div class="progress-line">
+                                <span style="width: {{ progress_width }}%;"></span>
+                            </div>
+
+                            <small>{{ progress|round(1) }}%</small>
+                        </div>
+
+                    </div>
+
+                {% else %}
+                    <div class="empty-state">
+                        <strong>No running tasks</strong>
+                        <p>No employee is actively working right now.</p>
+                    </div>
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+        <div class="table-card operations-card">
+
+            <div class="section-head">
+                <div>
+                    <h2>Recent Activity</h2>
+                    <p>Latest actions across the company</p>
+                </div>
+            </div>
+
+            <div class="activity-feed">
+
+                {% for activity in recent_activities %}
+                    <div class="activity-row">
+                        <div>
+                            <strong>{{ activity.message }}</strong>
+                            <span>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="empty-text">No recent activity.</p>
+                {% endfor %}
+
+            </div>
+
         </div>
 
         <div class="table-card workload-card">
+
             <div class="section-head">
                 <div>
                     <h2>Team Workload</h2>
@@ -76,25 +386,243 @@
             </div>
 
             <div class="workload-list">
+
                 {% for member in workload %}
                     <div class="workload-row">
-    <div>
-        <h4>{{ member.name }}</h4>
-        <p>{{ member.designation or "Team Member" }}</p>
-    </div>
+                        <div>
+                            <h4>{{ member.name }}</h4>
+                            <p>{{ member.designation or "Team Member" }}</p>
+                        </div>
 
-    <strong class="workload-hours">
-        {{ member.remaining_hours }} hrs
-    </strong>
-</div>
+                        <strong class="workload-hours">{{ member.remaining_hours }} hrs</strong>
+                    </div>
                 {% else %}
                     <p class="empty-text">No active employees found.</p>
                 {% endfor %}
+
             </div>
+
         </div>
 
     </main>
+
 </div>
 
+<script>
+function formatHMS(seconds) {
+    seconds = Number(seconds || 0);
+
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+
+    return (
+        String(h).padStart(2, "0") + ":" +
+        String(m).padStart(2, "0") + ":" +
+        String(s).padStart(2, "0")
+    );
+}
+
+function updateLiveDashboardTimers() {
+    document.querySelectorAll(".live-time").forEach(function (el) {
+        let seconds = Number(el.dataset.start || 0);
+        seconds += 1;
+        el.dataset.start = seconds;
+        el.textContent = formatHMS(seconds);
+    });
+
+    document.querySelectorAll(".live-card.working .remaining-time, .running-task-row .remaining-time").forEach(function (el) {
+        let seconds = Number(el.dataset.remaining || 0);
+
+        if (seconds > 0) {
+            seconds -= 1;
+            el.dataset.remaining = seconds;
+            el.textContent = formatHMS(seconds);
+        }
+
+        if (seconds <= 0) {
+            el.dataset.remaining = 0;
+            el.textContent = "00:00:00";
+            el.classList.add("danger-time");
+
+            const card = el.closest(".live-card");
+            if (card) card.classList.add("over-estimate");
+
+            const row = el.closest(".running-task-row");
+            if (row) row.classList.add("over-estimate");
+        }
+    });
+}
+
+setInterval(updateLiveDashboardTimers, 1000);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const statusLabels = {{ status_chart["labels"]|tojson }};
+const statusValues = {{ status_chart["values"]|tojson }};
+const statusTotal = statusValues.reduce((a, b) => a + b, 0);
+
+const statusColors = [
+    "#2563EB",
+    "#EC4899",
+    "#FB923C",
+    "#FACC15",
+    "#14B8A6"
+];
+
+const centerTextPlugin = {
+    id: "centerText",
+    beforeDraw(chart) {
+        const { width, height, ctx } = chart;
+
+        ctx.save();
+        ctx.font = "700 26px Arial";
+        ctx.fillStyle = "#0F172A";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(statusTotal, width / 2, height / 2 - 8);
+
+        ctx.font = "400 13px Arial";
+        ctx.fillStyle = "#64748B";
+        ctx.fillText("Total", width / 2, height / 2 + 18);
+        ctx.restore();
+    }
+};
+
+const statusCtx = document.getElementById("statusChart");
+
+if (statusCtx) {
+    new Chart(statusCtx, {
+        type: "doughnut",
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusValues,
+                backgroundColor: statusColors,
+                borderColor: "#ffffff",
+                borderWidth: 4,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "58%",
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw || 0;
+                            const percent = statusTotal ? Math.round((value / statusTotal) * 100) : 0;
+                            return context.label + ": " + value + " (" + percent + "%)";
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [centerTextPlugin]
+    });
+}
+
+const statusLegend = document.getElementById("statusLegend");
+
+if (statusLegend) {
+    statusLegend.innerHTML = statusLabels.map(function(label, index) {
+        const value = statusValues[index] || 0;
+        const percent = statusTotal ? Math.round((value / statusTotal) * 100) : 0;
+
+        return `
+            <div class="status-legend-row">
+                <div class="status-legend-left">
+                    <span style="background:${statusColors[index]}"></span>
+                    <p>${label}</p>
+                </div>
+
+                <strong>
+                    ${value}
+                    <em>(${percent}%)</em>
+                </strong>
+            </div>
+        `;
+    }).join("");
+}
+
+const trendCtx = document.getElementById("taskTrendChart");
+
+if (trendCtx) {
+    new Chart(trendCtx, {
+        type: "line",
+        data: {
+            labels: {{ month_chart.labels|tojson }},
+            datasets: [
+                {
+                    label: "Created",
+                    data: {{ month_chart.created|tojson }},
+                    borderColor: "#2563EB",
+                    backgroundColor: "rgba(37, 99, 235, 0.12)",
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                },
+                {
+                    label: "Completed",
+                    data: {{ month_chart.completed|tojson }},
+                    borderColor: "#22C55E",
+                    backgroundColor: "rgba(34, 197, 94, 0.12)",
+                    tension: 0.35,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: "#64748B",
+                        maxTicksLimit: 7
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                        color: "#64748B"
+                    },
+                    grid: {
+                        color: "#EEF2F7"
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
+
 </body>
+
 </html>
