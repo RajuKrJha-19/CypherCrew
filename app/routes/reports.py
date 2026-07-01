@@ -65,9 +65,14 @@ def add_report():
 
     if request.method == "POST":
 
+        task_id = request.form.get("task_id")
+
+        if task_id == "general":
+            task_id = None
+
         report = DailyReport(
             employee_id=current_user.id,
-            task_id=request.form.get("task_id"),
+            task_id=task_id,
             report_date=date.today(),
             completed_work=request.form.get("completed_work"),
             hours_worked=float(

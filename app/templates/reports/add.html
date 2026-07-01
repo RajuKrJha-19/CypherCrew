@@ -23,6 +23,7 @@
             <label>Task</label>
             <select name="task_id" required>
                 <option value="">Select Task</option>
+                <option value="general">General Work / Other</option>
                 {% for task in tasks %}
                     <option value="{{ task.id }}">
                         {{ task.client.client_name }} - {{ task.title }}
