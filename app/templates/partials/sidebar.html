@@ -63,4 +63,26 @@
         Logout
     </a>
 
+    <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn">
+        ←
+    </button>
+    <script>
+        const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
+
+        if (sidebarCollapseBtn) {
+            sidebarCollapseBtn.addEventListener("click", function () {
+                document.body.classList.toggle("sidebar-collapsed");
+
+                if (document.body.classList.contains("sidebar-collapsed")) {
+                    localStorage.setItem("sidebar_collapsed", "yes");
+                } else {
+                    localStorage.setItem("sidebar_collapsed", "no");
+                }
+            });
+
+            if (localStorage.getItem("sidebar_collapsed") === "yes") {
+                document.body.classList.add("sidebar-collapsed");
+            }
+        }
+    </script>
 </aside>

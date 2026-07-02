@@ -782,6 +782,7 @@ def build_task_stats(tasks):
     status_order = [
         "Pending",
         "In Progress",
+        "Hold",
         "Core Review",
         "Client Review",
         "Published"

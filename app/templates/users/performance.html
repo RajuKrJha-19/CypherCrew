@@ -8,209 +8,199 @@
 
 <body>
 
-<div class="layout">
+    <div class="layout">
 
-    {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" %}
 
-    <main class="main">
+        <main class="main">
 
-        <div class="page-header">
-            <div>
-                <h1>{{ user.name }}</h1>
-                <p>
-                    {{ user.designation or "Team Member" }}
-                    •
-                    {{ user.role.replace("_", " ")|title }}
-                </p>
-            </div>
-
-            <div class="top-actions">
-                {% include "partials/notification_widget.html" %}
-                <a href="{{ url_for('users.list_users') }}" class="btn">
-                    ← Back
-                </a>
-            </div>
-        </div>
-
-        <form method="GET" class="performance-filter">
-            <input
-                type="number"
-                name="month"
-                min="1"
-                max="12"
-                value="{{ selected_month }}"
-            >
-
-            <input
-                type="number"
-                name="year"
-                value="{{ selected_year }}"
-            >
-
-            <button type="submit">
-                Filter
-            </button>
-        </form>
-
-        <div class="performance-hero">
-            <div>
-                <span>Employee Completion Rate</span>
-
-                <strong>
-                    {{ completion_rate }}%
-                </strong>
-
-                <p>
-                    Formula:
-                    Employee Completed / Total Assigned × 100
-                </p>
-            </div>
-        </div>
-
-        <div class="performance-grid">
-
-            <div class="performance-card">
-                <span>Total Assigned</span>
-                <strong>{{ total_assigned }}</strong>
-            </div>
-
-            <div class="performance-card success">
-                <span>Employee Completed</span>
-                <strong>{{ completed_tasks }}</strong>
-                <p>Submitted For Review</p>
-            </div>
-
-            <div class="performance-card">
-                <span>Pending</span>
-                <strong>{{ pending_tasks }}</strong>
-            </div>
-
-            <div class="performance-card">
-                <span>In Progress</span>
-                <strong>{{ in_progress_tasks }}</strong>
-            </div>
-
-            <div class="performance-card">
-                <span>In Review</span>
-                <strong>{{ in_review_tasks }}</strong>
-                <p>Core + Client Review</p>
-            </div>
-
-            <div class="performance-card">
-                <span>Published</span>
-                <strong>{{ published_tasks }}</strong>
-            </div>
-
-            <div class="performance-card danger">
-                <span>Overdue</span>
-                <strong>{{ overdue_tasks }}</strong>
-                <p>Pending/In Progress after deadline</p>
-            </div>
-
-        </div>
-
-        <div class="table-card">
-
-            <div class="section-heading">
+            <div class="page-header">
                 <div>
-                    <h2>Recent Tasks</h2>
+                    <h1>{{ user.name }}</h1>
                     <p>
-                        Tasks assigned to {{ user.name }}
-                        in selected month
+                        {{ user.designation or "Team Member" }}
+                        •
+                        {{ user.role.replace("_", " ")|title }}
+                    </p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                    <a href="{{ url_for('users.list_users') }}" class="btn">
+                        ← Back
+                    </a>
+                </div>
+            </div>
+
+            <form method="GET" class="performance-filter">
+                <input type="number" name="month" min="1" max="12" value="{{ selected_month }}">
+
+                <input type="number" name="year" value="{{ selected_year }}">
+
+                <button type="submit">
+                    Filter
+                </button>
+            </form>
+
+            <div class="performance-hero">
+                <div>
+                    <span>Employee Completion Rate</span>
+
+                    <strong>
+                        {{ completion_rate }}%
+                    </strong>
+
+                    <p>
+                        Formula:
+                        Employee Completed / Total Assigned × 100
                     </p>
                 </div>
             </div>
 
-            <table>
+            <div class="performance-grid">
 
-                <thead>
-                    <tr>
-                        <th>Task</th>
-                        <th>Client</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>Employee Completed</th>
-                        <th>Deadline</th>
-                    </tr>
-                </thead>
+                <div class="performance-card">
+                    <span>Total Assigned</span>
+                    <strong>{{ total_assigned }}</strong>
+                </div>
 
-                <tbody>
+                <div class="performance-card success">
+                    <span>Employee Completed</span>
+                    <strong>{{ completed_tasks }}</strong>
+                    <p>Submitted For Review</p>
+                </div>
 
-                    {% for task in recent_tasks %}
+                <div class="performance-card">
+                    <span>Pending</span>
+                    <strong>{{ pending_tasks }}</strong>
+                </div>
 
-                    <tr>
+                <div class="performance-card">
+                    <span>In Progress</span>
+                    <strong>{{ in_progress_tasks }}</strong>
+                </div>
 
-                        <td>{{ task.title }}</td>
+                <div class="performance-card">
+                    <span>In Review</span>
+                    <strong>{{ in_review_tasks }}</strong>
+                    <p>Core + Client Review</p>
+                </div>
 
-                        <td>
-                            {{ task.client.client_name if task.client else "-" }}
-                        </td>
+                <div class="performance-card">
+                    <span>Published</span>
+                    <strong>{{ published_tasks }}</strong>
+                </div>
 
-                        <td>
-                            <span class="status-pill">
-                                {{ task.status }}
-                            </span>
-                        </td>
+                <div class="performance-card danger">
+                    <span>Overdue</span>
+                    <strong>{{ overdue_tasks }}</strong>
+                    <p>Pending/In Progress after deadline</p>
+                </div>
 
-                        <td>
-                            {{ task.priority }}
-                        </td>
+            </div>
 
-                        <td>
+            <div class="table-card">
 
-                            {% if task.employee_completed %}
+                <div class="section-heading">
+                    <div>
+                        <h2>Recent Tasks</h2>
+                        <p>
+                            Tasks assigned to {{ user.name }}
+                            in selected month
+                        </p>
+                    </div>
+                </div>
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Client</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Employee Completed</th>
+                            <th>Deadline</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for task in recent_tasks %}
+
+                        <tr>
+
+                            <td>{{ task.title }}</td>
+
+                            <td>
+                                {{ task.client.client_name if task.client else "-" }}
+                            </td>
+
+                            <td>
+                                <span class="status-pill">
+                                    {{ task.status }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {{ task.priority }}
+                            </td>
+
+                            <td>
+
+                                {% if task.employee_completed %}
 
                                 <span style="color:#16a34a;font-weight:600;">
                                     ✓ Yes
                                 </span>
 
-                            {% else %}
+                                {% else %}
 
                                 <span style="color:#dc2626;font-weight:600;">
                                     No
                                 </span>
 
-                            {% endif %}
+                                {% endif %}
 
-                        </td>
+                            </td>
 
-                        <td>
+                            <td>
 
-                            {% if task.deadline %}
+                                {% if task.deadline %}
 
                                 {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
 
-                            {% else %}
+                                {% else %}
 
                                 -
 
-                            {% endif %}
+                                {% endif %}
 
-                        </td>
+                            </td>
 
-                    </tr>
+                        </tr>
 
-                    {% else %}
+                        {% else %}
 
-                    <tr>
+                        <tr>
 
-                        <td colspan="6">
-                            No tasks found for this month.
-                        </td>
+                            <td colspan="6">
+                                No tasks found for this month.
+                            </td>
 
-                    </tr>
+                        </tr>
 
-                    {% endfor %}
+                        {% endfor %}
 
-                </tbody>
+                    </tbody>
 
-            </table>
+                </table>
 
-        </div>
+            </div>
 
-    </main>
+        </main>
 
-</div>
+    </div>
 
 </body>
 

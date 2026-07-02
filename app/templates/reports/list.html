@@ -56,18 +56,33 @@
                     <tr>
                         <td>{{ report.report_date.strftime("%d %b %Y") }}</td>
                         <td>{{ report.employee.name }}</td>
-                        <td>{{ report.task.title }}</td>
-                        <td>{{ report.task.client.client_name }}</td>
-                        <td>{{ report.hours_worked }}</td>
+
                         <td>
-    <a
-        href="{{ url_for('reports.view_report',
-        report_id=report.id) }}"
-        class="action-btn edit-btn"
-    >
-        View
-    </a>
-</td>
+                            {% if report.task %}
+                                {{ report.task.title }}
+                            {% else %}
+                                General Work / Other
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if report.task and report.task.client %}
+                                {{ report.task.client.client_name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+                        <td>{{ report.hours_worked }}</td>
+
+                        <td>
+                            <a
+                                href="{{ url_for('reports.view_report', report_id=report.id) }}"
+                                class="action-btn edit-btn"
+                            >
+                                View
+                            </a>
+                        </td>
                     </tr>
                 {% else %}
                     <tr>

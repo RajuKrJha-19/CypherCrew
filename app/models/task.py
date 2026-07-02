@@ -13,6 +13,11 @@ class Task(db.Model):
     __tablename__ = "tasks"
 
     id = db.Column(db.Integer, primary_key=True)
+    task_code = db.Column(
+    db.Integer,
+    unique=True,
+    nullable=True
+)
 
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
@@ -135,6 +140,11 @@ class Task(db.Model):
     )
 
     in_progress_seconds = db.Column(
+        db.Integer,
+        default=0
+    )
+
+    hold_seconds = db.Column(
         db.Integer,
         default=0
     )

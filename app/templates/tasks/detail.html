@@ -2,115 +2,145 @@
 <html>
 
 <head>
-    <title>{{ task.title }} | CypherCrew</title>
+    <title>#{{ task.task_code }} - {{ task.title }} | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
 <body>
 
-<div class="layout">
+    <div class="layout">
 
-    {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" %}
 
-    <main class="main">
+        <main class="main">
 
-        <div class="page-header">
-            <div>
-                <h1>{{ task.title }}</h1>
-                <p>
-                    {{ task.client.client_name }}
-                    -
-                    {{ task.deliverable.service_name }}
-                    -
-                    {{ task.deliverable.deliverable_name }}
-                </p>
+            <div class="page-header">
+                <div>
+                    <div class="task-header-block">
+
+                        <span class="task-detail-id">
+                            #{{ task.task_code }}
+                        </span>
+
+                        <h1>{{ task.title }}</h1>
+
+                    </div>
+                    <p>
+                        {{ task.client.client_name }}
+                        -
+                        {{ task.deliverable.service_name }}
+                        -
+                        {{ task.deliverable.deliverable_name }}
+                    </p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Back</a>
+                </div>
             </div>
 
-            <div class="top-actions">
-                {% include "partials/notification_widget.html" %}
-                <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Back</a>
-            </div>
-        </div>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert {{ category }}">{{ message }}</div>
-                {% endfor %}
+            {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+            {% endfor %}
             {% endif %}
-        {% endwith %}
+            {% endwith %}
 
-        <div class="task-detail-layout">
+            <div class="task-detail-layout">
 
-            <div class="task-detail-left">
+                <div class="task-detail-left">
 
-                <div class="table-card">
-                    <h2 class="card-title">Task Details</h2>
+                    <div class="table-card">
+                        <h2 class="card-title">
+                            Task Details
+                            <span class="task-detail-inline-id">
+                                #{{ task.task_code }}
+                            </span>
+                        </h2>
 
-                    <div class="progress-track">
-                        {% for item in ["Pending", "In Progress", "Core Review", "Client Review", "Published"] %}
+                        <div class="progress-track">
+                            {% for item in ["Pending", "In Progress", "Hold", "Core Review", "Client Review",
+                            "Published"] %}
                             <span class="{% if item == task.status %}active{% endif %}">
                                 {{ item }}
                             </span>
-                        {% endfor %}
-                    </div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="detail-row"><span>Client</span><strong>{{ task.client.client_name }}</strong></div>
-                    <div class="detail-row"><span>Service</span><strong>{{ task.deliverable.service_name }}</strong></div>
-                    <div class="detail-row"><span>Deliverable</span><strong>{{ task.deliverable.deliverable_name }}</strong></div>
-                    <div class="detail-row"><span>Assigned To</span><strong>{{ task.assigned_to.name if task.assigned_to else "-" }}</strong></div>
-                    <div class="detail-row"><span>Priority</span><strong>{{ task.priority }}</strong></div>
-                    <div class="detail-row"><span>Quantity</span><strong>{{ task.quantity or 1 }}</strong></div>
-                    <div class="detail-row"><span>Estimated / Quantity</span><strong>{{ task.estimated_time or 1 }} hrs</strong></div>
+                        <div class="detail-row">
+                            <span>Task ID</span>
+                            <strong>#{{ task.task_code }}</strong>
+                        </div>
+                        <div class="detail-row"><span>Client</span><strong>{{ task.client.client_name }}</strong></div>
+                        <div class="detail-row"><span>Service</span><strong>{{ task.deliverable.service_name }}</strong>
+                        </div>
+                        <div class="detail-row"><span>Deliverable</span><strong>{{ task.deliverable.deliverable_name
+                                }}</strong></div>
+                        <div class="detail-row"><span>Assigned To</span><strong>{{ task.assigned_to.name if
+                                task.assigned_to else "-" }}</strong></div>
+                        <div class="detail-row"><span>Priority</span><strong>{{ task.priority }}</strong></div>
+                        <div class="detail-row"><span>Quantity</span><strong>{{ task.quantity or 1 }}</strong></div>
+                        <div class="detail-row"><span>Estimated / Quantity</span><strong>{{ task.estimated_time or 1 }}
+                                hrs</strong></div>
 
-                    <div class="detail-row">
-                        <span>Total Estimated</span>
-                        <strong>{{ ((task.quantity or 1) * (task.estimated_time or 1))|round(2) }} hrs</strong>
-                    </div>
+                        <div class="detail-row">
+                            <span>Total Estimated</span>
+                            <strong>{{ ((task.quantity or 1) * (task.estimated_time or 1))|round(2) }} hrs</strong>
+                        </div>
 
-                    <div class="detail-row">
-                        <span>Deadline</span>
-                        <strong>
-                            {% if task.deadline %}
+                        <div class="detail-row">
+                            <span>Deadline</span>
+                            <strong>
+                                {% if task.deadline %}
                                 {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
-                            {% else %}
+                                {% else %}
                                 -
-                            {% endif %}
-                        </strong>
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div class="detail-row"><span>Status</span><strong>{{ task.status }}</strong></div>
                     </div>
 
-                    <div class="detail-row"><span>Status</span><strong>{{ task.status }}</strong></div>
-                </div>
+                    <div class="table-card task-description-card">
 
-                <div class="table-card">
-                    <h2 class="card-title">Description</h2>
+                        <div class="description-card-head">
+                            <h2 class="card-title">Description</h2>
 
-                    <p class="task-description">
-                        {{ task.description or "No description provided." }}
-                    </p>
+                            <button type="button" class="copy-description-btn" id="copyDescriptionBtn">
+                                Copy
+                            </button>
+                        </div>
 
-                    {% if feedbacks %}
+                        <pre class="task-description"
+                            id="taskDescriptionText">{{ task.description or "No description provided." }}</pre>
+
+                        {% if feedbacks %}
                         <div class="feedback-list">
                             <h3>Feedback / Rejection Notes</h3>
 
                             {% for feedback in feedbacks|reverse %}
-                                <div class="feedback-card">
-                                    <strong>{{ feedback.sender.name }}</strong>
-                                    <p>{{ feedback.message }}</p>
+                            <div class="feedback-card">
+                                <strong>{{ feedback.sender.name }}</strong>
+                                <p>{{ feedback.message }}</p>
 
-                                    {% if feedback.file_path %}
-                                        <a href="{{ url_for('static', filename=feedback.file_path) }}" target="_blank" class="table-link">
-                                            View Reference File
-                                        </a>
-                                    {% endif %}
+                                {% if feedback.file_path %}
+                                <a href="{{ url_for('static', filename=feedback.file_path) }}" target="_blank"
+                                    class="table-link">
+                                    View Reference File
+                                </a>
+                                {% endif %}
 
-                                    <small>{{ feedback.created_at.strftime("%d %b %Y, %I:%M %p") }}</small>
-                                </div>
+                                <small>{{ feedback.created_at.strftime("%d %b %Y, %I:%M %p") }}</small>
+                            </div>
                             {% endfor %}
                         </div>
-                    {% endif %}
+                        {% endif %}
 
-                    {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
+                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client
+                        Review"] %}
                         <div class="task-actions-box">
                             <div class="review-actions">
 
@@ -118,7 +148,8 @@
                                     <button type="submit" class="review-btn approve-btn">Approve</button>
                                 </form>
 
-                                <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}" enctype="multipart/form-data" class="reject-form">
+                                <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
+                                    enctype="multipart/form-data" class="reject-form">
                                     <button type="button" class="review-btn reject-btn reject-toggle-btn">
                                         Reject
                                     </button>
@@ -126,20 +157,13 @@
                                     <div class="reject-box">
                                         <label>Rejection Message</label>
 
-                                        <textarea
-                                            name="message"
-                                            rows="4"
-                                            placeholder="Write reason or changes needed..."
-                                            required
-                                        ></textarea>
+                                        <textarea name="message" rows="4"
+                                            placeholder="Write reason or changes needed..." required></textarea>
 
                                         <label>Reference File</label>
 
-                                        <input
-                                            type="file"
-                                            name="reference_file"
-                                            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                        >
+                                        <input type="file" name="reference_file"
+                                            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
 
                                         <button type="submit" class="reject-submit-btn">
                                             Send & Reassign
@@ -149,226 +173,251 @@
 
                             </div>
                         </div>
-                    {% endif %}
-                </div>
-
-            </div>
-
-            <div class="task-detail-right">
-
-                <div class="table-card">
-                    <h2 class="card-title">Time Tracking</h2>
-
-                    <div class="timer-grid">
-                        <div>
-                            <span>Worked Time</span>
-                            <strong id="workedTime">{{ worked_time }}</strong>
-                        </div>
-
-                        <div>
-                            <span>Timer Status</span>
-                            {% if task.timer_started_at %}
-                                <strong class="running" id="timerStatus">Running</strong>
-                            {% else %}
-                                <strong class="paused" id="timerStatus">Paused</strong>
-                            {% endif %}
-                        </div>
+                        {% endif %}
                     </div>
 
-                    <div class="task-actions-box">
+                </div>
 
-                        {% if task.status in ["Pending", "In Progress"] and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
+                <div class="task-detail-right">
+
+                    <div class="table-card">
+                        <h2 class="card-title">Time Tracking</h2>
+
+                        <div class="timer-grid">
+                            <div>
+                                <span>Worked Time</span>
+                                <strong id="workedTime">{{ worked_time }}</strong>
+                            </div>
+
+                            <div>
+                                <span>Timer Status</span>
+                                {% if task.timer_started_at %}
+                                <strong class="running" id="timerStatus">Running</strong>
+                                {% else %}
+                                <strong class="paused" id="timerStatus">Paused</strong>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="task-actions-box">
+
+                            {% if task.status in ["Pending", "In Progress", "Hold"] and (has_permission(current_user,
+                            "manage_tasks") or task.assigned_to_id == current_user.id) %}
 
                             {% if task.timer_started_at %}
-                                <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
-                                    <button type="submit">Pause</button>
-                                </form>
+                            <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
+                                <button type="submit">Pause</button>
+                            </form>
                             {% else %}
-                                <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
-                                    <button type="submit">
-                                        {% if task.status == "Pending" %}
-                                            Start Task
-                                        {% else %}
-                                            Resume Task
-                                        {% endif %}
-                                    </button>
-                                </form>
+                            <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                <button type="submit">
+                                    {% if task.status == "Pending" %}
+                                    Start Task
+                                    {% else %}
+                                    Resume Task
+                                    {% endif %}
+                                </button>
+                            </form>
                             {% endif %}
 
-                        {% endif %}
+                            {% endif %}
 
-                        {% if task.assigned_to_id == current_user.id and task.status in ["Pending", "In Progress"] %}
+                            {% if task.assigned_to_id == current_user.id and task.status in ["Pending", "In Progress"]
+                            %}
                             <form method="POST" action="{{ url_for('tasks.submit_review', task_id=task.id) }}">
                                 <button type="submit">Submit For Review</button>
                             </form>
-                        {% endif %}
+                            {% endif %}
 
-                    </div>
+                        </div>
 
-                    <div class="status-duration-box">
-                        <h3>Status Duration</h3>
+                        <div class="status-duration-box">
+                            <h3>Status Duration</h3>
 
-                        <div class="status-time-list">
-                            <p><span>Pending</span><strong id="pendingDuration">{{ pending_time }}</strong></p>
-                            <p><span>In Progress</span><strong id="inProgressDuration">{{ in_progress_time }}</strong></p>
-                            <p><span>Core Review</span><strong id="coreReviewDuration">{{ core_review_time }}</strong></p>
-                            <p><span>Client Review</span><strong id="clientReviewDuration">{{ client_review_time }}</strong></p>
+                            <div class="status-time-list">
+                                <p><span>Pending</span><strong id="pendingDuration">{{ pending_time }}</strong></p>
+                                <p><span>In Progress</span><strong id="inProgressDuration">{{ in_progress_time
+                                        }}</strong></p>
+                                <p><span>Hold</span><strong id="holdDuration">{{ hold_time }}</strong></p>
+                                <p><span>Core Review</span><strong id="coreReviewDuration">{{ core_review_time
+                                        }}</strong></p>
+                                <p><span>Client Review</span><strong id="clientReviewDuration">{{ client_review_time
+                                        }}</strong></p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="table-card activity-card">
-                    <h2 class="card-title">Activity Timeline</h2>
+                    <div class="table-card activity-card">
+                        <h2 class="card-title">Activity Timeline</h2>
 
-                    <div class="activity-list">
+                        <div class="activity-list">
 
-                        {% for activity in activities %}
+                            {% for activity in activities %}
                             <div class="activity-item activity-{{ activity.action }}">
                                 <div class="activity-icon">
                                     {% if activity.action == "created" %}
-                                        🟢
+                                    🟢
                                     {% elif activity.action == "started" %}
-                                        ▶
+                                    ▶
                                     {% elif activity.action == "resumed" %}
-                                        ▶
+                                    ▶
                                     {% elif activity.action == "paused" %}
-                                        ⏸
+                                    ⏸
                                     {% elif activity.action == "auto_paused" %}
-                                        🟡
+                                    🟡
                                     {% elif activity.action == "submitted_review" %}
-                                        📤
+                                    📤
                                     {% elif activity.action == "approved_core_review" %}
-                                        🟣
+                                    🟣
                                     {% elif activity.action == "rejected" %}
-                                        ❌
+                                    ❌
                                     {% elif activity.action == "published" %}
-                                        ✅
+                                    ✅
                                     {% else %}
-                                        ●
+                                    ●
                                     {% endif %}
                                 </div>
 
                                 <div class="activity-content">
                                     <strong>
                                         {% if activity.action == "created" %}
-                                            Task Created
+                                        Task Created
                                         {% elif activity.action == "started" %}
-                                            Task Started
+                                        Task Started
                                         {% elif activity.action == "resumed" %}
-                                            Task Resumed
+                                        Task Resumed
                                         {% elif activity.action == "paused" %}
-                                            Task Paused
+                                        Task Paused
                                         {% elif activity.action == "auto_paused" %}
-                                            Auto Paused
+                                        Auto Paused
                                         {% elif activity.action == "submitted_review" %}
-                                            Submitted for Core Review
+                                        Submitted for Core Review
                                         {% elif activity.action == "approved_core_review" %}
-                                            Core Review Approved
+                                        Core Review Approved
                                         {% elif activity.action == "rejected" %}
-                                            Task Rejected
+                                        Task Rejected
                                         {% elif activity.action == "published" %}
-                                            Task Published
+                                        Task Published
                                         {% else %}
-                                            {{ activity.action|replace("_", " ")|title }}
+                                        {{ activity.action|replace("_", " ")|title }}
                                         {% endif %}
                                     </strong>
 
                                     {% if activity.message %}
-                                        <p>{{ activity.message }}</p>
+                                    <p>{{ activity.message }}</p>
                                     {% endif %}
 
-                                    {% if activity.old_status and activity.new_status and activity.old_status != activity.new_status %}
-                                        <div class="activity-status-change">
-                                            <span>{{ activity.old_status }}</span>
-                                            <b>→</b>
-                                            <span>{{ activity.new_status }}</span>
-                                        </div>
+                                    {% if activity.old_status and activity.new_status and activity.old_status !=
+                                    activity.new_status %}
+                                    <div class="activity-status-change">
+                                        <span>{{ activity.old_status }}</span>
+                                        <b>→</b>
+                                        <span>{{ activity.new_status }}</span>
+                                    </div>
                                     {% endif %}
 
                                     <small>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</small>
                                 </div>
                             </div>
-                        {% else %}
+                            {% else %}
                             <p class="notification-empty">No activity recorded yet.</p>
-                        {% endfor %}
+                            {% endfor %}
 
+                        </div>
                     </div>
+
                 </div>
 
             </div>
 
-        </div>
+        </main>
 
-    </main>
+    </div>
 
-</div>
+    <script>
+        const rejectToggleBtn = document.querySelector(".reject-toggle-btn");
+        const rejectBox = document.querySelector(".reject-box");
 
-<script>
-const rejectToggleBtn = document.querySelector(".reject-toggle-btn");
-const rejectBox = document.querySelector(".reject-box");
+        if (rejectToggleBtn && rejectBox) {
+            rejectToggleBtn.addEventListener("click", function () {
+                rejectBox.classList.toggle("show");
+            });
+        }
+    </script>
 
-if (rejectToggleBtn && rejectBox) {
-    rejectToggleBtn.addEventListener("click", function () {
-        rejectBox.classList.toggle("show");
-    });
-}
-</script>
+    <script>
+        const workedTime = document.getElementById("workedTime");
 
-<script>
-const workedTime = document.getElementById("workedTime");
+        function formatDuration(seconds) {
+            let hrs = Math.floor(seconds / 3600);
+            let mins = Math.floor((seconds % 3600) / 60);
+            let secs = seconds % 60;
 
-function formatDuration(seconds) {
-    let hrs = Math.floor(seconds / 3600);
-    let mins = Math.floor((seconds % 3600) / 60);
-    let secs = seconds % 60;
+            return hrs + " hr " + mins + " min " + secs + " sec";
+        }
 
-    return hrs + " hr " + mins + " min " + secs + " sec";
-}
+        {% if task.timer_started_at %}
+        let workedSeconds = {{ live_seconds }};
 
-{% if task.timer_started_at %}
-let workedSeconds = {{ live_seconds }};
+        function updateWorkedTimer() {
+            workedSeconds++;
 
-function updateWorkedTimer() {
-    workedSeconds++;
+            if (workedTime) {
+                workedTime.innerHTML = formatDuration(workedSeconds);
+            }
+        }
 
-    if (workedTime) {
-        workedTime.innerHTML = formatDuration(workedSeconds);
-    }
-}
+        setInterval(updateWorkedTimer, 1000);
+        {% endif %}
+    </script>
 
-setInterval(updateWorkedTimer, 1000);
-{% endif %}
-</script>
+    <script>
+        let currentStatus = "{{ current_status }}";
+        let currentStatusSeconds = {{ current_status_seconds }};
 
-<script>
-let currentStatus = "{{ current_status }}";
-let currentStatusSeconds = {{ current_status_seconds }};
+        let statusMap = {
+            "Pending": "pendingDuration",
+            "In Progress": "inProgressDuration",
+            "Hold": "holdDuration",
+            "Core Review": "coreReviewDuration",
+            "Client Review": "clientReviewDuration"
+        };
 
-let statusMap = {
-    "Pending": "pendingDuration",
-    "In Progress": "inProgressDuration",
-    "Core Review": "coreReviewDuration",
-    "Client Review": "clientReviewDuration"
-};
+        function updateStatusDuration() {
+            let elementId = statusMap[currentStatus];
 
-function updateStatusDuration() {
-    let elementId = statusMap[currentStatus];
+            if (!elementId) return;
 
-    if (!elementId) return;
+            let element = document.getElementById(elementId);
 
-    let element = document.getElementById(elementId);
+            if (!element) return;
 
-    if (!element) return;
+            currentStatusSeconds++;
+            element.innerHTML = formatDuration(currentStatusSeconds);
+        }
 
-    currentStatusSeconds++;
-    element.innerHTML = formatDuration(currentStatusSeconds);
-}
+        {% if task.status != "Published" %}
+        setInterval(updateStatusDuration, 1000);
+        {% endif %}
+    </script>
+    <script>
+        const copyDescriptionBtn = document.getElementById("copyDescriptionBtn");
+        const taskDescriptionText = document.getElementById("taskDescriptionText");
 
-{% if task.status != "Published" %}
-setInterval(updateStatusDuration, 1000);
-{% endif %}
-</script>
+        if (copyDescriptionBtn && taskDescriptionText) {
+            copyDescriptionBtn.addEventListener("click", function () {
+                const text = taskDescriptionText.innerText;
 
+                navigator.clipboard.writeText(text).then(function () {
+                    copyDescriptionBtn.textContent = "Copied";
+
+                    setTimeout(function () {
+                        copyDescriptionBtn.textContent = "Copy";
+                    }, 1200);
+                });
+            });
+        }
+    </script>
 </body>
 
 </html>

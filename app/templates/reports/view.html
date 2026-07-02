@@ -40,17 +40,35 @@
 
             <div class="detail-row">
                 <span>Task</span>
-                <strong>{{ report.task.title }}</strong>
+                <strong>
+                    {% if report.task %}
+                        {{ report.task.title }}
+                    {% else %}
+                        General Work / Other
+                    {% endif %}
+                </strong>
             </div>
 
             <div class="detail-row">
                 <span>Client</span>
-                <strong>{{ report.task.client.client_name }}</strong>
+                <strong>
+                    {% if report.task and report.task.client %}
+                        {{ report.task.client.client_name }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </strong>
             </div>
 
             <div class="detail-row">
                 <span>Service</span>
-                <strong>{{ report.task.deliverable.service_name }}</strong>
+                <strong>
+                    {% if report.task and report.task.deliverable %}
+                        {{ report.task.deliverable.service_name }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </strong>
             </div>
 
             <div class="detail-row">

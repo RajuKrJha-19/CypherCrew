@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Users | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -7,77 +8,79 @@
 
 <body>
 
-<div class="layout">
+    <div class="layout">
 
-    {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" %}
 
-    <main class="main">
+        <main class="main">
 
-        <div class="page-header">
-            <div>
-                <h1>Users</h1>
-                <p>Manage team members and roles</p>
+            <div class="page-header">
+                <div>
+                    <h1>Users</h1>
+                    <p>Manage team members and roles</p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                    <a href="{{ url_for('users.add_user') }}" class="btn">+ Add User</a>
+                </div>
             </div>
 
-            <div class="top-actions">
-                {% include "partials/notification_widget.html" %}
-                <a href="{{ url_for('users.add_user') }}" class="btn">+ Add User</a>
-            </div>
-        </div>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert {{ category }}">{{ message }}</div>
-                {% endfor %}
+            {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+            {% endfor %}
             {% endif %}
-        {% endwith %}
+            {% endwith %}
 
-        <div class="table-card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Role</th>
-                        <th>Designation</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
+            <div class="table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Designation</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
 
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td>
-    <a href="{{ url_for('users.user_performance', user_id=user.id) }}" class="table-link">
-        {{ user.name }}
-    </a>
-</td>
-                        <td>{{ user.email }}</td>
-                        <td>{{ user.phone or "-" }}</td>
-                        <td>{{ user.role.replace("_", " ")|title }}</td>
-                        <td>{{ user.designation or "-" }}</td>
-                        <td>
-                            <span class="badge {{ user.status }}">
-                                {{ user.status|title }}
-                            </span>
-                        </td>
-                        <td><a href="{{ url_for('users.edit_user', user_id=user.id) }}" class="table-link">Edit</a></td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7">No users found.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('users.user_performance', user_id=user.id) }}" class="table-link">
+                                    {{ user.name }}
+                                </a>
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.phone or "-" }}</td>
+                            <td>{{ user.role.replace("_", " ")|title }}</td>
+                            <td>{{ user.designation or "-" }}</td>
+                            <td>
+                                <span class="badge {{ user.status }}">
+                                    {{ user.status|title }}
+                                </span>
+                            </td>
+                            <td><a href="{{ url_for('users.edit_user', user_id=user.id) }}" class="table-link">Edit</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7">No users found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
-    </main>
+        </main>
 
-</div>
+    </div>
 
 </body>
+
 </html>

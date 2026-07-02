@@ -202,12 +202,13 @@ def index():
     ).all()
 
     statuses = [
-        "Pending",
-        "In Progress",
-        "Core Review",
-        "Client Review",
-        "Published"
-    ]
+    "Pending",
+    "In Progress",
+    "Hold",
+    "Core Review",
+    "Client Review",
+    "Published"
+]
 
     month_name = calendar.month_name[month]
 
