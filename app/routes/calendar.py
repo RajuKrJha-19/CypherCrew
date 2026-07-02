@@ -127,19 +127,23 @@ def index():
 
         holiday_events[key].append(holiday)
 
-        meetings = Meeting.query.order_by(
-                Meeting.meeting_date.asc()
-            ).all()
+    # -------------------------
+    # Meetings
+    # -------------------------
 
-        meeting_events = {}
+    meetings = Meeting.query.order_by(
+        Meeting.meeting_date.asc()
+    ).all()
 
-        for meeting in meetings:
-            key = meeting.meeting_date.date()
+    meeting_events = {}
 
-            if key not in meeting_events:
-                meeting_events[key] = []
+    for meeting in meetings:
+        key = meeting.meeting_date.date()
 
-            meeting_events[key].append(meeting)
+        if key not in meeting_events:
+            meeting_events[key] = []
+
+        meeting_events[key].append(meeting)
 
     
     selected_date = None
