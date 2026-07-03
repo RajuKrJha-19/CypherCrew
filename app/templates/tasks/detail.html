@@ -36,6 +36,12 @@
 
                 <div class="top-actions">
                     {% include "partials/notification_widget.html" %}
+                    {% if has_permission(current_user, "manage_tasks") %}
+                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn">
+                        Manage Task
+                    </a>
+                    {% endif %}
+                    
                     <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Back</a>
                 </div>
             </div>
@@ -304,7 +310,7 @@
                                     </strong>
 
                                     {% if activity.message %}
-                                    <p>{{ activity.message }}</p>
+                                    <pre class="activity-message">{{ activity.message }}</pre>
                                     {% endif %}
 
                                     {% if activity.old_status and activity.new_status and activity.old_status !=
@@ -316,7 +322,8 @@
                                     </div>
                                     {% endif %}
 
-                                    <small>{{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}</small>
+                                    <small>{{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y
+                                        • %I:%M %p") }}</small>
                                 </div>
                             </div>
                             {% else %}

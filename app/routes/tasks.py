@@ -151,6 +151,17 @@ def get_live_worked_seconds(task):
 
     return total
 
+def build_task_update_message(changes):
+
+    if not changes:
+        return f"Task updated by {current_user.name}"
+
+    message = f"Task updated by {current_user.name}\n\nChanges:\n"
+
+    for label, old_value, new_value in changes:
+        message += f"\n{label}\n{old_value or '-'} → {new_value or '-'}\n"
+
+    return message
 
 def add_activity(
     task,
@@ -563,6 +574,378 @@ def add_task():
         deadline_default=deadline_default
     )
 
+@tasks_bp.route("/<int:task_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_task(task_id):
+
+    if not has_permission(current_user, "manage_tasks"):
+        return redirect(url_for("dashboard.index"))
+
+    task = Task.query.get_or_404(task_id)
+
+    clients = Client.query.filter_by(
+        status="active"
+    ).order_by(
+        Client.client_name.asc()
+    ).all()
+
+    deliverables = ClientDeliverable.query.order_by(
+        ClientDeliverable.id.desc()
+    ).all()
+
+    employees = User.query.filter(
+        User.status == "active",
+        User.role.in_(["super_admin", "admin", "employee"])
+    ).order_by(
+        User.name.asc()
+    ).all()
+
+    if request.method == "POST":
+
+        old_status = task.status
+        old_assigned_to_id = task.assigned_to_id
+
+        old_title = task.title
+        old_description = task.description or ""
+        old_client = task.client.client_name if task.client else "-"
+        old_deliverable = task.deliverable.deliverable_name if task.deliverable else "-"
+        old_assigned_to = task.assigned_to.name if task.assigned_to else "-"
+        old_priority = task.priority
+        old_deadline = (
+            task.deadline.strftime("%d %b %Y %I:%M %p")
+            if task.deadline else "-"
+        )
+        old_quantity = task.quantity or 1
+        old_estimated_time = task.estimated_time or 1
+        old_visibility_names = sorted(
+            [user.name for user in task.visible_to]
+        )
+
+        changes = []
+
+        deadline = None
+
+        if request.form.get("deadline"):
+            deadline = datetime.strptime(
+                request.form.get("deadline"),
+                "%Y-%m-%dT%H:%M"
+            )
+
+        try:
+            client_id = int(request.form.get("client_id"))
+            deliverable_id = int(request.form.get("deliverable_id"))
+            assigned_to_id = int(request.form.get("assigned_to_id"))
+            quantity = float(request.form.get("quantity") or 1)
+            estimated_time = float(request.form.get("estimated_time") or 1)
+
+        except (TypeError, ValueError):
+            flash(
+                "Please fill all required task fields correctly.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        if quantity <= 0 or estimated_time <= 0:
+            flash(
+                "Quantity and estimated time must be greater than zero.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        deliverable = ClientDeliverable.query.get(deliverable_id)
+
+        if not deliverable:
+            flash(
+                "Invalid deliverable selected.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        if not deliverable.monthly_target:
+            flash(
+                "Selected deliverable has no monthly target.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        if deliverable.monthly_target.client_id != client_id:
+            flash(
+                "Selected deliverable does not belong to selected client.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        assigned_user = User.query.filter_by(
+            id=assigned_to_id,
+            status="active"
+        ).first()
+
+        if not assigned_user:
+            flash(
+                "Selected employee is invalid.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        new_title = request.form.get("title", "").strip()
+        new_description = request.form.get("description", "").strip()
+        new_priority = request.form.get("priority")
+        new_status = request.form.get("status")
+
+        allowed_statuses = [
+            "Pending",
+            "In Progress",
+            "Hold",
+            "Core Review",
+            "Client Review",
+            "Published"
+        ]
+
+        if new_status not in allowed_statuses:
+            flash(
+                "Invalid task status selected.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        if not new_title:
+            flash(
+                "Task title is required.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        task.title = new_title
+        task.description = new_description
+        task.client_id = client_id
+        task.deliverable_id = deliverable_id
+        task.assigned_to_id = assigned_to_id
+        task.priority = new_priority
+        task.deadline = deadline
+        task.quantity = quantity
+        task.estimated_time = estimated_time
+
+        new_client = Client.query.get(client_id)
+        new_client_name = new_client.client_name if new_client else "-"
+
+        new_deliverable_name = deliverable.deliverable_name
+        new_assigned_to = assigned_user.name
+
+        new_deadline = (
+            task.deadline.strftime("%d %b %Y %I:%M %p")
+            if task.deadline else "-"
+        )
+
+        if old_title != task.title:
+            changes.append(
+                ("Title", old_title, task.title)
+            )
+
+        if old_description != task.description:
+            changes.append(
+                ("Description", "Updated", "Updated")
+            )
+
+        if old_client != new_client_name:
+            changes.append(
+                ("Client", old_client, new_client_name)
+            )
+
+        if old_deliverable != new_deliverable_name:
+            changes.append(
+                ("Deliverable", old_deliverable, new_deliverable_name)
+            )
+
+        if old_assigned_to != new_assigned_to:
+            changes.append(
+                ("Assigned To", old_assigned_to, new_assigned_to)
+            )
+
+        if old_priority != task.priority:
+            changes.append(
+                ("Priority", old_priority, task.priority)
+            )
+
+        if old_deadline != new_deadline:
+            changes.append(
+                ("Deadline", old_deadline, new_deadline)
+            )
+
+        if float(old_quantity) != float(task.quantity):
+            changes.append(
+                ("Quantity", old_quantity, task.quantity)
+            )
+
+        if float(old_estimated_time) != float(task.estimated_time):
+            changes.append(
+                (
+                    "Estimated Time / Qty",
+                    old_estimated_time,
+                    task.estimated_time
+                )
+            )
+
+        if new_status != task.status:
+            changes.append(
+                ("Status", task.status, new_status)
+            )
+
+            if task.timer_started_at and new_status != "In Progress":
+                pause_timer(task)
+
+            if new_status == "Published":
+                pause_timer(task)
+                task.completed_at = datetime.utcnow()
+
+            record_status_time(
+                task,
+                new_status
+            )
+
+        task.visible_to.clear()
+
+        visibility_ids = request.form.getlist("visibility_ids")
+
+        for user_id in visibility_ids:
+
+            try:
+                user_id = int(user_id)
+
+            except (TypeError, ValueError):
+                continue
+
+            user = User.query.filter(
+                User.id == user_id,
+                User.status == "active",
+                User.role.in_(["super_admin", "admin", "employee"])
+            ).first()
+
+            if user and user not in task.visible_to:
+                task.visible_to.append(user)
+
+        new_visibility_names = sorted(
+            [user.name for user in task.visible_to]
+        )
+
+        if old_visibility_names != new_visibility_names:
+            changes.append(
+                (
+                    "Visibility",
+                    ", ".join(old_visibility_names) or "-",
+                    ", ".join(new_visibility_names) or "-"
+                )
+            )
+
+        add_activity(
+            task,
+            action="updated",
+            message=build_task_update_message(changes),
+            old_status=old_status,
+            new_status=task.status
+        )
+
+        if old_assigned_to_id != task.assigned_to_id:
+            create_notification(
+                user_id=task.assigned_to_id,
+                title="Task assigned to you",
+                message=f"{current_user.name} assigned you: {task.title}",
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id
+            )
+
+            if old_assigned_to_id:
+                create_notification(
+                    user_id=old_assigned_to_id,
+                    title="Task reassigned",
+                    message=f"{task.title} is no longer assigned to you.",
+                    link=url_for("tasks.task_detail", task_id=task.id),
+                    actor_id=current_user.id,
+                    task_id=task.id
+                )
+
+        else:
+            create_notification(
+                user_id=task.assigned_to_id,
+                title="Task Updated",
+                message=f"{current_user.name} updated: {task.title}",
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id
+            )
+
+        for user in task.visible_to:
+            if user.id != task.assigned_to_id:
+                create_notification(
+                    user_id=user.id,
+                    title="Task Updated",
+                    message=f"{current_user.name} updated shared task: {task.title}",
+                    link=url_for("tasks.task_detail", task_id=task.id),
+                    actor_id=current_user.id,
+                    task_id=task.id
+                )
+
+        db.session.commit()
+
+        flash(
+            "Task updated successfully.",
+            "success"
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id
+            )
+        )
+
+    return render_template(
+        "tasks/edit.html",
+        task=task,
+        clients=clients,
+        deliverables=deliverables,
+        employees=employees
+    )
 
 @tasks_bp.route("/<int:task_id>/start", methods=["POST"])
 @login_required
@@ -1018,7 +1401,8 @@ def task_detail(task_id):
         live_seconds=live_seconds,
         pending_time=format_seconds(task.pending_seconds),
         in_progress_time=format_seconds(task.in_progress_seconds),
-hold_time=format_seconds(task.hold_seconds),    core_review_time=format_seconds(task.core_review_seconds),
+        hold_time=format_seconds(task.hold_seconds),
+        core_review_time=format_seconds(task.core_review_seconds),
         client_review_time=format_seconds(task.client_review_seconds),
         current_status_seconds=current_status_seconds,
         current_status=task.status,

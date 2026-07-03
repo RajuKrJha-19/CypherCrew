@@ -4777,3 +4777,22 @@ MEETING EMPLOYEE SELECT
     transform: translateY(-2px);
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
 }
+
+.kanban-card-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:12px;
+    flex-wrap:wrap;
+}
+
+.activity-message{
+    margin:0 0 8px;
+    color:#4b5563;
+    font-size:14px;
+    line-height:1.55;
+    white-space:pre-wrap;
+    word-break:break-word;
+    font-family:Arial, sans-serif;
+    background:transparent;
+}
