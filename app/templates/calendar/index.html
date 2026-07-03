@@ -149,12 +149,13 @@
 
                                 {% for meeting in day_meetings %}
 
-<div class="calendar-event event-meeting">
-    <span></span>
-    {{ meeting.title }}
-</div>
+                                <a href="{{ url_for('meetings.meeting_detail', meeting_id=meeting.id) }}"
+                                    class="calendar-event event-meeting">
+                                    <span></span>
+                                    {{ meeting.title }}
+                                </a>
 
-{% endfor %}
+                                {% endfor %}
 
                                 {% for task in day_events[:3] %}
 
@@ -239,33 +240,32 @@
 
                             {% for meeting in selected_meetings %}
 
-<div class="deadline-item meeting-item">
+                            <a href="{{ url_for('meetings.meeting_detail', meeting_id=meeting.id) }}"
+                                class="deadline-item meeting-item">
 
-    <div>
+                                <div>
 
-        <strong>{{ meeting.title }}</strong>
+                                    <strong>{{ meeting.title }}</strong>
 
-        <span>
-            {% if meeting.client %}
-                {{ meeting.client.client_name }}
-            {% else %}
-                Internal Meeting
-            {% endif %}
-        </span>
+                                    <span>
+                                        {% if meeting.client %}
+                                        {{ meeting.client.client_name }}
+                                        {% else %}
+                                        Internal Meeting
+                                        {% endif %}
+                                    </span>
 
-        <small>
+                                    <small>
+                                        {{ meeting.meeting_date.strftime("%I:%M %p") }}
+                                    </small>
 
-            {{ meeting.meeting_date.strftime("%I:%M %p") }}
+                                </div>
 
-        </small>
+                                <b>Meeting</b>
 
-    </div>
+                            </a>
 
-    <b>Meeting</b>
-
-</div>
-
-{% endfor %}
+                            {% endfor %}
                             {% for task in selected_tasks %}
                             <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="deadline-item">
                                 <div>

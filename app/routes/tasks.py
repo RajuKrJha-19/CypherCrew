@@ -1,7 +1,7 @@
 import os
 from werkzeug.utils import secure_filename
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
@@ -1021,5 +1021,6 @@ def task_detail(task_id):
 hold_time=format_seconds(task.hold_seconds),    core_review_time=format_seconds(task.core_review_seconds),
         client_review_time=format_seconds(task.client_review_seconds),
         current_status_seconds=current_status_seconds,
-        current_status=task.status
+        current_status=task.status,
+        timedelta=timedelta
     )

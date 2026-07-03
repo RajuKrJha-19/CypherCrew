@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ meeting.title }} | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+
+            <div>
+                <h1>Meeting Details</h1>
+                <p>{{ meeting.meeting_date.strftime("%d %b %Y • %I:%M %p") }}</p>
+            </div>
+
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+
+                <a href="{{ url_for('meetings.list_meetings') }}" class="btn">
+                    Back
+                </a>
+            </div>
+
+        </div>
+
+        <div class="task-detail-layout">
+
+            <div class="task-detail-left">
+
+                <div class="table-card">
+                    <h2 class="card-title">Meeting Info</h2>
+
+                    <div class="detail-row">
+                        <span>Title</span>
+                        <strong>{{ meeting.title }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Client</span>
+                        <strong>
+                            {% if meeting.client %}
+                                {{ meeting.client.client_name }}
+                            {% else %}
+                                Internal Meeting
+                            {% endif %}
+                        </strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Date</span>
+                        <strong>{{ meeting.meeting_date.strftime("%d %b %Y") }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Time</span>
+                        <strong>{{ meeting.meeting_date.strftime("%I:%M %p") }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Total Members</span>
+                        <strong>{{ meeting.participants|length }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Created At</span>
+                        <strong>
+                            {{ (meeting.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="table-card task-description-card">
+
+                    <div class="description-card-head">
+                        <h2 class="card-title">Agenda</h2>
+
+                        <button type="button" class="copy-description-btn" id="copyAgendaBtn">
+                            Copy
+                        </button>
+                    </div>
+
+                    <pre class="task-description" id="meetingAgendaText">{{ meeting.agenda or "No agenda provided." }}</pre>
+
+                </div>
+
+            </div>
+
+            <div class="task-detail-right">
+
+                <div class="table-card">
+                    <h2 class="card-title">Participants</h2>
+
+                    <div class="meeting-participant-list">
+
+                        {% for user in meeting.participants %}
+
+                            <div class="meeting-participant">
+                                <div>
+                                    <strong>{{ user.name }}</strong>
+                                    <span>{{ user.role|replace("_", " ")|title }}</span>
+                                </div>
+
+                                <small>{{ user.email }}</small>
+                            </div>
+
+                        {% else %}
+
+                            <p class="empty-text">
+                                No employees assigned to this meeting.
+                            </p>
+
+                        {% endfor %}
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+const copyAgendaBtn = document.getElementById("copyAgendaBtn");
+const meetingAgendaText = document.getElementById("meetingAgendaText");
+
+if (copyAgendaBtn && meetingAgendaText) {
+    copyAgendaBtn.addEventListener("click", function () {
+        navigator.clipboard.writeText(meetingAgendaText.innerText).then(function () {
+            copyAgendaBtn.textContent = "Copied";
+
+            setTimeout(function () {
+                copyAgendaBtn.textContent = "Copy";
+            }, 1200);
+        });
+    });
+}
+</script>
+
+</body>
+
+</html>

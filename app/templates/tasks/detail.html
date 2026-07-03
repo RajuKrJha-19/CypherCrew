@@ -316,7 +316,7 @@
                                     </div>
                                     {% endif %}
 
-                                    <small>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</small>
+                                    <small>{{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}</small>
                                 </div>
                             </div>
                             {% else %}

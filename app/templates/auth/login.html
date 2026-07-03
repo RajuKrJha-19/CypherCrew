@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Login | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -15,13 +16,13 @@
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert {{ category }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert {{ category }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
         {% endwith %}
 
         <form method="POST">
@@ -30,13 +31,35 @@
             <input type="email" name="email" required>
 
             <label>Password</label>
-            <input type="password" name="password" required>
+            <div class="password-field">
+                <input type="password" name="password" id="loginPassword" required>
+
+                <button type="button" id="togglePassword" class="password-toggle">
+                    Show
+                </button>
+            </div>
 
             <button type="submit">Login</button>
 
         </form>
 
     </div>
+<script>
+const loginPassword = document.getElementById("loginPassword");
+const togglePassword = document.getElementById("togglePassword");
 
+if (loginPassword && togglePassword) {
+    togglePassword.addEventListener("click", function () {
+        if (loginPassword.type === "password") {
+            loginPassword.type = "text";
+            togglePassword.textContent = "Hide";
+        } else {
+            loginPassword.type = "password";
+            togglePassword.textContent = "Show";
+        }
+    });
+}
+</script>
 </body>
+
 </html>
