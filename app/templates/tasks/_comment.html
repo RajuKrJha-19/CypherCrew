@@ -1,0 +1,97 @@
+<div class="comment-item">
+
+    <div class="comment-left-line">
+        <div class="comment-avatar">
+            {{ comment.user.name[:1]|upper }}
+        </div>
+    </div>
+
+    <div class="comment-main">
+
+        <div class="comment-bubble">
+
+            {% if current_user.id == comment.user_id %}
+            <div class="comment-menu">
+
+                <button
+                    type="button"
+                    class="comment-menu-btn"
+                    onclick="toggleCommentMenu(event, this)"
+                    aria-label="Comment options"
+                >
+                    ⋮
+                </button>
+
+                <div class="comment-menu-dropdown">
+
+                    <button
+                        type="button"
+                        class="comment-menu-item"
+                        onclick="showEditCommentForm({{ comment.id }})"
+                    >
+                        Edit
+                    </button>
+
+                    <form
+                        method="POST"
+                        action="{{ url_for('tasks.delete_comment', comment_id=comment.id) }}"
+                        onsubmit="return confirm('Delete this comment?')"
+                    >
+                        <button type="submit" class="comment-menu-item danger">
+                            Delete
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+            {% endif %}
+
+            <div class="comment-head">
+                <strong>{{ comment.user.name }}</strong>
+                <span>{{ (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}</span>
+            </div>
+
+            <p id="comment-message-{{ comment.id }}">{{ comment.message }}</p>
+
+            {% if comment.is_edited %}
+            <small class="edited-text">Edited</small>
+            {% endif %}
+
+            <form
+                method="POST"
+                action="{{ url_for('tasks.edit_comment', comment_id=comment.id) }}"
+                class="comment-edit-form"
+                id="comment-edit-form-{{ comment.id }}"
+                style="display:none;"
+            >
+                <textarea name="message" rows="3" required>{{ comment.message }}</textarea>
+
+                <div class="comment-edit-actions">
+                    <button type="submit">Save</button>
+
+                    <button
+                        type="button"
+                        onclick="hideEditCommentForm({{ comment.id }})"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
+
+        </div>
+
+        {% include "tasks/_comment_actions.html" %}
+        {% include "tasks/_reply_form.html" %}
+
+        {% if comment.replies %}
+        <div class="reply-list">
+            {% for comment in comment.replies %}
+                {% include "tasks/_comment.html" %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>

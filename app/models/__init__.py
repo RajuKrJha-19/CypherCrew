@@ -29,3 +29,5 @@ from .meeting import Meeting
 from .leave import Leave
 
 from .task_sequence import TaskSequence
+
+from app.models.task_comment import TaskComment, TaskCommentReaction

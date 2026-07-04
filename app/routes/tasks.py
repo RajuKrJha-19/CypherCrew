@@ -25,7 +25,8 @@ from app.models import (
     User,
     TaskFeedback,
     TaskActivity,
-    TaskSequence
+    TaskSequence,
+    TaskComment
 )
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
@@ -246,32 +247,23 @@ def list_tasks():
     query = get_task_base_query()
 
     if selected_status:
-        query = query.filter(
-            Task.status == selected_status
-        )
+        query = query.filter(Task.status == selected_status)
 
     if selected_priority:
-        query = query.filter(
-            Task.priority == selected_priority
-        )
+        query = query.filter(Task.priority == selected_priority)
 
-    query = apply_task_search(
-        query,
-        search
-    )
+    query = apply_task_search(query, search)
 
-    tasks = query.order_by(
-        Task.id.desc()
-    ).all()
+    tasks = query.order_by(Task.id.desc()).all()
 
     statuses = [
-    "Pending",
-    "In Progress",
-    "Hold",
-    "Core Review",
-    "Client Review",
-    "Published"
-]
+        "Pending",
+        "In Progress",
+        "Hold",
+        "Core Review",
+        "Client Review",
+        "Published"
+    ]
 
     priorities = [
         "Low",
@@ -286,10 +278,7 @@ def list_tasks():
     }
 
     for task in tasks:
-        board_columns.setdefault(
-            task.status,
-            []
-        ).append(task)
+        board_columns.setdefault(task.status, []).append(task)
 
     total_tasks = len(tasks)
 
@@ -1392,6 +1381,18 @@ def task_detail(task_id):
         TaskActivity.created_at.desc()
     ).all()
 
+    comments = (
+        TaskComment.query
+        .filter_by(
+            task_id=task.id,
+            parent_id=None
+        )
+        .order_by(
+            TaskComment.created_at.asc()
+        )
+        .all()
+    )
+
     return render_template(
         "tasks/detail.html",
         task=task,
@@ -1406,5 +1407,208 @@ def task_detail(task_id):
         client_review_time=format_seconds(task.client_review_seconds),
         current_status_seconds=current_status_seconds,
         current_status=task.status,
-        timedelta=timedelta
+        timedelta=timedelta,
+        comments=comments
     )
+
+@tasks_bp.route(
+    "/<int:task_id>/comment",
+    methods=["POST"]
+)
+@login_required
+def add_comment(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    message = request.form.get(
+        "message",
+        ""
+    ).strip()
+
+    if not message:
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "success": False,
+                "message": "Comment cannot be empty."
+            }), 400
+
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    comment = TaskComment(
+        task_id=task.id,
+        user_id=current_user.id,
+        message=message,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+
+    db.session.add(comment)
+    db.session.flush()
+
+    add_activity(
+        task,
+        action="comment",
+        message=f"{current_user.name} added a comment."
+    )
+
+    if task.assigned_to_id != current_user.id:
+        create_notification(
+            user_id=task.assigned_to_id,
+            title="New Comment",
+            message=f"{current_user.name} commented on '{task.title}'",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "success": True,
+            "comment": {
+                "id": comment.id,
+                "user_id": comment.user_id,
+                "user_name": comment.user.name,
+                "avatar": comment.user.name[:1].upper(),
+                "message": comment.message,
+                "time": (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p"),
+                "can_edit": comment.user_id == current_user.id
+            }
+        })
+
+    flash("Comment added.", "success")
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route(
+    "/comments/<int:comment_id>/reply",
+    methods=["POST"]
+)
+@login_required
+def reply_comment(comment_id):
+
+    comment = TaskComment.query.get_or_404(comment_id)
+    task = comment.task
+
+    message = request.form.get("message", "").strip()
+
+    if not message:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "success": False,
+                "message": "Reply cannot be empty."
+            }), 400
+
+        flash("Reply cannot be empty.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    reply = TaskComment(
+        task_id=task.id,
+        user_id=current_user.id,
+        parent_id=comment.id,
+        message=message,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+
+    db.session.add(reply)
+    db.session.flush()
+
+    add_activity(
+        task,
+        action="comment",
+        message=f"{current_user.name} replied to a comment."
+    )
+
+    if comment.user_id != current_user.id:
+        create_notification(
+            user_id=comment.user_id,
+            title="New Reply",
+            message=f"{current_user.name} replied to your comment.",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "success": True,
+            "reply": {
+                "id": reply.id,
+                "parent_id": comment.id,
+                "user_id": reply.user_id,
+                "user_name": reply.user.name,
+                "avatar": reply.user.name[:1].upper(),
+                "message": reply.message,
+                "time": (reply.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p"),
+                "can_edit": reply.user_id == current_user.id
+            }
+        })
+
+    flash("Reply added.", "success")
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/comments/<int:comment_id>/edit", methods=["POST"])
+@login_required
+def edit_comment(comment_id):
+
+    comment = TaskComment.query.get_or_404(comment_id)
+    task = comment.task
+
+    if comment.user_id != current_user.id:
+        flash("You can edit only your own comment.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    message = request.form.get("message", "").strip()
+
+    if not message:
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    comment.message = message
+    comment.is_edited = True
+    comment.updated_at = datetime.utcnow()
+
+    add_activity(
+        task,
+        action="comment",
+        message=f"{current_user.name} edited a comment."
+    )
+
+    db.session.commit()
+
+    flash("Comment updated.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/comments/<int:comment_id>/delete", methods=["POST"])
+@login_required
+def delete_comment(comment_id):
+
+    comment = TaskComment.query.get_or_404(comment_id)
+    task = comment.task
+
+    if comment.user_id != current_user.id:
+        flash("You can delete only your own comment.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    db.session.delete(comment)
+
+    add_activity(
+        task,
+        action="comment",
+        message=f"{current_user.name} deleted a comment."
+    )
+
+    db.session.commit()
+
+    flash("Comment deleted.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))

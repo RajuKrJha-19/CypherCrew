@@ -132,6 +132,7 @@
             console.log("Notification fetch error:", error);
         }
     }
+    window.fetchNotifications = fetchNotifications;
 
     btn.addEventListener("click", function (event) {
         event.stopPropagation();

@@ -1,0 +1,27 @@
+<div
+    id="reply-form-{{ comment.id }}"
+    class="reply-form"
+    style="display:none;"
+>
+
+    <form
+        method="POST"
+        action="{{ url_for('tasks.reply_comment', comment_id=comment.id) }}"
+    >
+
+        <textarea
+            name="message"
+            rows="2"
+            placeholder="Write a reply..."
+            required
+        ></textarea>
+
+        <button type="submit">
+
+            Reply
+
+        </button>
+
+    </form>
+
+</div>
