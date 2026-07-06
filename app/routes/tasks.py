@@ -372,7 +372,15 @@ def task_suggestions():
 def add_task():
 
     if not has_permission(current_user, "manage_tasks"):
-        return redirect(url_for("dashboard.index"))
+
+        flash(
+            "You don't have permission to assign tasks. You can self assign your own task.",
+            "error"
+        )
+
+        return redirect(
+            url_for("tasks.self_assign_task")
+        )
 
     clients = Client.query.filter_by(
         status="active"
@@ -415,12 +423,8 @@ def add_task():
             return redirect(url_for("tasks.add_task"))
 
         try:
-            quantity = float(
-                request.form.get("quantity") or 1
-            )
-            estimated_time = float(
-                request.form.get("estimated_time") or 1
-            )
+            quantity = float(request.form.get("quantity") or 1)
+            estimated_time = float(request.form.get("estimated_time") or 1)
 
         except (TypeError, ValueError):
             flash(
@@ -436,22 +440,14 @@ def add_task():
             )
             return redirect(url_for("tasks.add_task"))
 
-        deliverable = ClientDeliverable.query.get(
-            deliverable_id
-        )
+        deliverable = ClientDeliverable.query.get(deliverable_id)
 
         if not deliverable:
-            flash(
-                "Invalid deliverable selected.",
-                "error"
-            )
+            flash("Invalid deliverable selected.", "error")
             return redirect(url_for("tasks.add_task"))
 
         if not deliverable.monthly_target:
-            flash(
-                "Selected deliverable has no monthly target.",
-                "error"
-            )
+            flash("Selected deliverable has no monthly target.", "error")
             return redirect(url_for("tasks.add_task"))
 
         if deliverable.monthly_target.client_id != client_id:
@@ -467,10 +463,7 @@ def add_task():
         ).first()
 
         if not assigned_user:
-            flash(
-                "Selected employee is invalid.",
-                "error"
-            )
+            flash("Selected employee is invalid.", "error")
             return redirect(url_for("tasks.add_task"))
 
         task = Task(
@@ -489,9 +482,7 @@ def add_task():
             task_code=generate_task_code()
         )
 
-        visibility_ids = request.form.getlist(
-            "visibility_ids"
-        )
+        visibility_ids = request.form.getlist("visibility_ids")
 
         for user_id in visibility_ids:
 
@@ -548,6 +539,7 @@ def add_task():
             "Task created successfully.",
             "success"
         )
+
         return redirect(url_for("tasks.list_tasks"))
 
     deadline_default = request.args.get(
@@ -560,6 +552,114 @@ def add_task():
         clients=clients,
         deliverables=deliverables,
         employees=employees,
+        deadline_default=deadline_default
+    )
+
+@tasks_bp.route("/self-assign", methods=["GET", "POST"])
+@login_required
+def self_assign_task():
+
+    clients = Client.query.filter_by(
+        status="active"
+    ).order_by(
+        Client.client_name.asc()
+    ).all()
+
+    deliverables = ClientDeliverable.query.order_by(
+        ClientDeliverable.id.desc()
+    ).all()
+
+    if request.method == "POST":
+
+        deadline = None
+        deadline_value = request.form.get("deadline")
+
+        if deadline_value:
+            deadline = datetime.strptime(
+                deadline_value,
+                "%Y-%m-%dT%H:%M"
+            )
+
+        try:
+            client_id = int(request.form.get("client_id"))
+            deliverable_id = int(request.form.get("deliverable_id"))
+
+        except (TypeError, ValueError):
+            flash("Please select client and deliverable.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        try:
+            quantity = float(request.form.get("quantity") or 1)
+            estimated_time = float(request.form.get("estimated_time") or 1)
+
+        except (TypeError, ValueError):
+            flash("Quantity and estimated time must be valid.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        if quantity <= 0 or estimated_time <= 0:
+            flash("Quantity and estimated time must be greater than zero.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        deliverable = ClientDeliverable.query.get(deliverable_id)
+
+        if not deliverable or not deliverable.monthly_target:
+            flash("Invalid deliverable selected.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        if deliverable.monthly_target.client_id != client_id:
+            flash("Selected deliverable does not belong to selected client.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        title = request.form.get("title", "").strip()
+
+        if not title:
+            flash("Task title is required.", "error")
+            return redirect(url_for("tasks.self_assign_task"))
+
+        task = Task(
+            title=title,
+            description=request.form.get("description", "").strip(),
+            client_id=client_id,
+            deliverable_id=deliverable_id,
+            assigned_to_id=current_user.id,
+            priority=request.form.get("priority"),
+            deadline=deadline,
+            status="Pending",
+            quantity=quantity,
+            estimated_time=estimated_time,
+            status_started_at=datetime.utcnow(),
+            created_by_id=current_user.id,
+            task_code=generate_task_code()
+        )
+
+        db.session.add(task)
+        db.session.flush()
+
+        add_activity(
+            task,
+            action="created",
+            message=f"Self assigned by {current_user.name}",
+            old_status=None,
+            new_status="Pending"
+        )
+
+        db.session.commit()
+
+        flash("Task self assigned successfully.", "success")
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id
+            )
+        )
+
+    deadline_default = request.args.get("deadline", "")
+
+    return render_template(
+        "tasks/self_assign.html",
+        clients=clients,
+        deliverables=deliverables,
         deadline_default=deadline_default
     )
 

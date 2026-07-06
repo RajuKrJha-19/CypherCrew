@@ -4723,3 +4723,125 @@ SKETCH STYLE DISCUSSION UI
     opacity:.6;
     cursor:not-allowed;
 }
+
+.dashboard-card-link,
+.dashboard-card-link:hover,
+.dashboard-card-link:visited{
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+.dashboard-card-link *{
+    text-decoration: none !important;
+}
+
+/* ===========================
+CALENDAR UI EVENT FIX
+=========================== */
+
+.calendar-day{
+    min-height:135px !important;
+    padding:10px 10px 8px !important;
+    overflow:hidden !important;
+}
+
+.calendar-day-number{
+    display:block !important;
+    margin-bottom:8px !important;
+    font-size:13px !important;
+    font-weight:800 !important;
+}
+
+.calendar-events{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:5px !important;
+    max-height:78px !important;
+    overflow:hidden !important;
+}
+
+.calendar-event{
+    width:100% !important;
+    height:22px !important;
+    min-height:22px !important;
+    padding:0 8px !important;
+
+    display:flex !important;
+    align-items:center !important;
+    gap:7px !important;
+
+    border-radius:999px !important;
+    font-size:11px !important;
+    font-weight:700 !important;
+    line-height:1 !important;
+
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+}
+
+.calendar-event span{
+    width:7px !important;
+    height:7px !important;
+    min-width:7px !important;
+}
+
+.calendar-more{
+    display:block !important;
+    margin-top:2px !important;
+    padding-left:4px !important;
+    font-size:11px !important;
+    font-weight:800 !important;
+    color:#2563eb !important;
+    text-decoration:none !important;
+    line-height:1.2 !important;
+}
+
+.calendar-day.selected-day{
+    background:#eff6ff !important;
+    box-shadow:inset 0 0 0 2px #2563eb !important;
+}
+
+.calendar-main-card{
+    overflow:hidden !important;
+}
+
+.dashboard-status-link{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    text-decoration:none;
+    color:inherit;
+}
+
+.dashboard-status-link:hover{
+    color:inherit;
+    background:#f8fafc;
+    border-radius:8px;
+}
+
+.dashboard-status-link p{
+    margin:0;
+}
+
+/* TASK PAGE ONLY STICKY HEADER */
+
+.task-page-sticky-header{
+    position: fixed !important;
+    top: 0 !important;
+    left: 200px !important;
+    right: 0 !important;
+    z-index: 9999 !important;
+
+    background: #f5f7fb !important;
+    padding: 26px 26px 16px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+body.sidebar-collapsed .task-page-sticky-header{
+    left: 72px !important;
+}
+
+.main:has(.task-page-sticky-header){
+    padding-top: 120px !important;
+}

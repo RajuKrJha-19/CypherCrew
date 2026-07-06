@@ -581,8 +581,15 @@ def build_month_chart():
     start_date = today - timedelta(days=29)
 
     labels = []
-    created_values = []
-    completed_values = []
+
+    created = []
+    completed = []
+    pending = []
+    in_progress = []
+    hold = []
+    core_review = []
+    client_review = []
+    published = []
 
     for i in range(30):
 
@@ -592,21 +599,71 @@ def build_month_chart():
             current_date.strftime("%d %b")
         )
 
-        created_count = Task.query.filter(
-            db.func.date(Task.created_at) == current_date
-        ).count()
+        created.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date
+            ).count()
+        )
 
-        completed_count = Task.query.filter(
-            db.func.date(Task.employee_completed_at) == current_date
-        ).count()
+        completed.append(
+            Task.query.filter(
+                db.func.date(Task.employee_completed_at) == current_date
+            ).count()
+        )
 
-        created_values.append(created_count)
-        completed_values.append(completed_count)
+        pending.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "Pending"
+            ).count()
+        )
+
+        in_progress.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "In Progress"
+            ).count()
+        )
+
+        hold.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "Hold"
+            ).count()
+        )
+
+        core_review.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "Core Review"
+            ).count()
+        )
+
+        client_review.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "Client Review"
+            ).count()
+        )
+
+        published.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == "Published"
+            ).count()
+        )
 
     return {
         "labels": labels,
-        "created": created_values,
-        "completed": completed_values
+
+        "created": created,
+        "completed": completed,
+        "pending": pending,
+        "in_progress": in_progress,
+        "hold": hold,
+        "core_review": core_review,
+        "client_review": client_review,
+        "published": published
     }
 
 

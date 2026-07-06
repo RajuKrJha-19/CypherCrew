@@ -20,7 +20,7 @@ class DailyReport(db.Model):
     task_id = db.Column(
         db.Integer,
         db.ForeignKey("tasks.id"),
-        nullable=False
+        nullable=True
     )
 
     report_date = db.Column(
