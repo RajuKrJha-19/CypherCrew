@@ -19,7 +19,8 @@ def create_app():
     from app.routes.users import users_bp
     from app.routes.permissions import permissions_bp
     from app.routes.clients import clients_bp
-    from app.routes.tasks import tasks_bp
+    from app.routes.tasks import tasks_bp 
+    from app.routes.notes import notes_bp
     from app.routes.reports import reports_bp
     from app.routes.notifications import notifications_bp
     from app.routes.calendar import calendar_bp
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(permissions_bp)
     app.register_blueprint(clients_bp)
     app.register_blueprint(tasks_bp)
+    app.register_blueprint(notes_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(calendar_bp)

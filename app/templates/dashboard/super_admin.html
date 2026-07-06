@@ -219,7 +219,10 @@
                 <div class="live-employee-grid">
 
                     {% for employee in live_employees %}
-                    <div class="live-card {{ employee.state }} {% if employee.over_estimate %}over-estimate{% endif %}">
+                    <div class="live-card {{ employee.state }} {% if employee.over_estimate %}over-estimate{% endif %} {% if employee.task_id %}live-card-clickable{% endif %}"
+                        {% if employee.task_id %}
+                        onclick="window.location.href='{{ url_for('tasks.task_detail', task_id=employee.task_id) }}'" {%
+                        endif %}>
 
                         <div class="live-card-header">
                             <h3>{{ employee.employee_name }}</h3>
@@ -555,108 +558,108 @@
 
         const trendCtx = document.getElementById("taskTrendChart");
 
-if (trendCtx) {
-    new Chart(trendCtx, {
-        type: "line",
-        data: {
-            labels: {{ month_chart.labels|tojson }},
-            datasets: [
-                {
-                    label: "Created",
-                    data: {{ month_chart.created|tojson }},
-                    borderColor: "#2563EB",
-                    backgroundColor: "rgba(37, 99, 235, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+        if (trendCtx) {
+            new Chart(trendCtx, {
+                type: "line",
+                data: {
+                    labels: {{ month_chart.labels | tojson }},
+        datasets: [
+            {
+                label: "Created",
+                data: {{ month_chart.created | tojson }},
+            borderColor: "#2563EB",
+            backgroundColor: "rgba(37, 99, 235, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Completed",
-                    data: {{ month_chart.completed|tojson }},
-                    borderColor: "#22C55E",
-                    backgroundColor: "rgba(34, 197, 94, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Completed",
+                data: {{ month_chart.completed | tojson }},
+            borderColor: "#22C55E",
+            backgroundColor: "rgba(34, 197, 94, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Pending",
-                    data: {{ month_chart.pending|tojson }},
-                    borderColor: "#F97316",
-                    backgroundColor: "rgba(249, 115, 22, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Pending",
+                data: {{ month_chart.pending | tojson }},
+            borderColor: "#F97316",
+            backgroundColor: "rgba(249, 115, 22, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "In Progress",
-                    data: {{ month_chart.in_progress|tojson }},
-                    borderColor: "#8B5CF6",
-                    backgroundColor: "rgba(139, 92, 246, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "In Progress",
+                data: {{ month_chart.in_progress | tojson }},
+            borderColor: "#8B5CF6",
+            backgroundColor: "rgba(139, 92, 246, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Hold",
-                    data: {{ month_chart.hold|tojson }},
-                    borderColor: "#EF4444",
-                    backgroundColor: "rgba(239, 68, 68, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Hold",
+                data: {{ month_chart.hold | tojson }},
+            borderColor: "#EF4444",
+            backgroundColor: "rgba(239, 68, 68, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Core Review",
-                    data: {{ month_chart.core_review|tojson }},
-                    borderColor: "#EAB308",
-                    backgroundColor: "rgba(234, 179, 8, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Core Review",
+                data: {{ month_chart.core_review | tojson }},
+            borderColor: "#EAB308",
+            backgroundColor: "rgba(234, 179, 8, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Client Review",
-                    data: {{ month_chart.client_review|tojson }},
-                    borderColor: "#14B8A6",
-                    backgroundColor: "rgba(20, 184, 166, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Client Review",
+                data: {{ month_chart.client_review | tojson }},
+            borderColor: "#14B8A6",
+            backgroundColor: "rgba(20, 184, 166, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 },
-                {
-                    label: "Published",
-                    data: {{ month_chart.published|tojson }},
-                    borderColor: "#111827",
-                    backgroundColor: "rgba(17, 24, 39, 0.10)",
-                    tension: 0.35,
-                    fill: false,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+            {
+                label: "Published",
+                data: {{ month_chart.published | tojson }},
+            borderColor: "#111827",
+            backgroundColor: "rgba(17, 24, 39, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
                 }
-            ]
+        ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
+                maintainAspectRatio: false,
+                    interaction: {
                 mode: "index",
-                intersect: false
+                    intersect: false
             },
             plugins: {
                 legend: {
                     position: "top",
-                    labels: {
+                        labels: {
                         usePointStyle: true,
-                        boxWidth: 8,
-                        font: {
+                            boxWidth: 8,
+                                font: {
                             size: 12
                         }
                     }
@@ -669,14 +672,14 @@ if (trendCtx) {
                     },
                     ticks: {
                         color: "#64748B",
-                        maxTicksLimit: 7
+                            maxTicksLimit: 7
                     }
                 },
                 y: {
                     beginAtZero: true,
-                    ticks: {
+                        ticks: {
                         precision: 0,
-                        color: "#64748B"
+                            color: "#64748B"
                     },
                     grid: {
                         color: "#EEF2F7"

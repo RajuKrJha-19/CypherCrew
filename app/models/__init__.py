@@ -30,4 +30,13 @@ from .leave import Leave
 
 from .task_sequence import TaskSequence
 
-from app.models.task_comment import TaskComment, TaskCommentReaction
+from app.models.task_comment import (
+    TaskComment,
+    TaskCommentReaction
+)
+
+from app.models.note import (
+    Note,
+    NoteLabel,
+    NoteAttachment
+)

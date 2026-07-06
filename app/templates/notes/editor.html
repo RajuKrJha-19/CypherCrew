@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ note.title }} | Notes</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link
+        href="https://cdn.quilljs.com/1.3.6/quill.snow.css"
+        rel="stylesheet"
+    >
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="notes-editor-shell">
+
+            <div class="notes-editor-top">
+
+                <a href="{{ url_for('notes.list_notes') }}" class="mini-link">
+                    ← Back
+                </a>
+
+                <span id="saveStatus" class="save-status">
+                    Saved
+                </span>
+
+                <div class="notes-editor-actions">
+
+                    <form method="POST" action="{{ url_for('notes.toggle_pin', note_id=note.id) }}">
+                        <button type="submit" class="mini-action">
+                            {% if note.is_pinned %}
+                                Unpin
+                            {% else %}
+                                Pin
+                            {% endif %}
+                        </button>
+                    </form>
+
+                    <form method="POST" action="{{ url_for('notes.archive_note', note_id=note.id) }}">
+                        <button type="submit" class="mini-action">
+                            Archive
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+
+            <input
+                id="noteTitle"
+                class="note-title-input"
+                value="{{ note.title }}"
+                placeholder="Title"
+            >
+
+            <div id="noteEditor">
+                {{ note.content|safe }}
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+<script>
+const noteId = {{ note.id }};
+const autosaveUrl = "{{ url_for('notes.autosave', note_id=note.id) }}";
+const titleInput = document.getElementById("noteTitle");
+const saveStatus = document.getElementById("saveStatus");
+
+const quill = new Quill("#noteEditor", {
+    theme: "snow",
+    placeholder: "Write your note...",
+    modules: {
+        toolbar: [
+            [{ header: [1, 2, 3, false] }],
+            ["bold", "italic", "underline"],
+            [{ list: "ordered" }, { list: "bullet" }, { list: "check" }],
+            ["link", "image"],
+            [{ background: [] }],
+            ["clean"]
+        ]
+    }
+});
+
+let saveTimer = null;
+
+function setSaveStatus(text) {
+    saveStatus.textContent = text;
+}
+
+function autosaveNote() {
+    clearTimeout(saveTimer);
+
+    setSaveStatus("Saving...");
+
+    saveTimer = setTimeout(async function () {
+        try {
+            const response = await fetch(autosaveUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: JSON.stringify({
+                    title: titleInput.value || "Untitled Note",
+                    content: quill.root.innerHTML
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setSaveStatus("Saved ✓");
+            } else {
+                setSaveStatus("Save failed");
+            }
+
+        } catch (error) {
+            console.log(error);
+            setSaveStatus("Save failed");
+        }
+    }, 1200);
+}
+
+titleInput.addEventListener("input", autosaveNote);
+quill.on("text-change", autosaveNote);
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Personal Notes | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+            <div>
+                <h1>Personal Notes</h1>
+                <p>Your private Google Keep style workspace</p>
+            </div>
+
+            <div class="top-actions">
+                {% include "partials/notification_widget.html" %}
+
+                <form method="POST" action="{{ url_for('notes.new_note') }}">
+                    <button type="submit" class="btn">
+                        + New Note
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <form method="GET" class="notes-search-bar">
+            <input
+                type="text"
+                name="q"
+                placeholder="Search notes..."
+                value="{{ request.args.get('q', '') }}"
+            >
+        </form>
+
+        {% if pinned_notes %}
+        <div class="notes-section-title">
+            📌 Pinned
+        </div>
+
+        <div class="notes-grid">
+            {% for note in pinned_notes %}
+            <div class="note-card note-color-{{ note.color }}">
+
+                <div class="note-card-head">
+                    <a
+                        href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                        class="note-title-link"
+                    >
+                        <h3>{{ note.title }}</h3>
+                    </a>
+
+                    <div class="note-card-menu">
+                        <button
+                            type="button"
+                            class="note-menu-btn"
+                            onclick="toggleNoteMenu(event, this)"
+                            aria-label="Note options"
+                        >
+                            ⋮
+                        </button>
+
+                        <div class="note-menu-dropdown">
+                            <a href="{{ url_for('notes.edit_note', note_id=note.id) }}">
+                                Open
+                            </a>
+
+                            <form method="POST" action="{{ url_for('notes.toggle_pin', note_id=note.id) }}">
+                                <button type="submit">
+                                    Unpin
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ url_for('notes.archive_note', note_id=note.id) }}">
+                                <button type="submit">
+                                    Archive
+                                </button>
+                            </form>
+
+                            <form
+                                method="POST"
+                                action="{{ url_for('notes.delete_note', note_id=note.id) }}"
+                                onsubmit="return confirm('Move note to Trash?')"
+                            >
+                                <button type="submit" class="danger">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <a
+                    href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                    class="note-body-link"
+                >
+                    <div class="note-preview">
+                        {{ note.content|striptags|truncate(160) }}
+                    </div>
+
+                    <small>
+                        Updated {{ note.updated_at.strftime("%d %b, %I:%M %p") }}
+                    </small>
+                </a>
+
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="notes-section-title">
+            Notes
+        </div>
+
+        <div class="notes-grid">
+
+            {% for note in notes %}
+            <div class="note-card note-color-{{ note.color }}">
+
+                <div class="note-card-head">
+                    <a
+                        href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                        class="note-title-link"
+                    >
+                        <h3>{{ note.title }}</h3>
+                    </a>
+
+                    <div class="note-card-menu">
+                        <button
+                            type="button"
+                            class="note-menu-btn"
+                            onclick="toggleNoteMenu(event, this)"
+                            aria-label="Note options"
+                        >
+                            ⋮
+                        </button>
+
+                        <div class="note-menu-dropdown">
+                            <a href="{{ url_for('notes.edit_note', note_id=note.id) }}">
+                                Open
+                            </a>
+
+                            <form method="POST" action="{{ url_for('notes.toggle_pin', note_id=note.id) }}">
+                                <button type="submit">
+                                    Pin
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ url_for('notes.archive_note', note_id=note.id) }}">
+                                <button type="submit">
+                                    Archive
+                                </button>
+                            </form>
+
+                            <form
+                                method="POST"
+                                action="{{ url_for('notes.delete_note', note_id=note.id) }}"
+                                onsubmit="return confirm('Move note to Trash?')"
+                            >
+                                <button type="submit" class="danger">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <a
+                    href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                    class="note-body-link"
+                >
+                    <div class="note-preview">
+                        {{ note.content|striptags|truncate(160) }}
+                    </div>
+
+                    <small>
+                        Updated {{ note.updated_at.strftime("%d %b, %I:%M %p") }}
+                    </small>
+                </a>
+
+            </div>
+
+            {% else %}
+            <div class="empty-state">
+                <strong>No notes yet</strong>
+                <p>Create your first personal note.</p>
+            </div>
+            {% endfor %}
+
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+function toggleNoteMenu(event, button) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    document.querySelectorAll(".note-menu-dropdown").forEach(function (menu) {
+        if (menu !== button.nextElementSibling) {
+            menu.classList.remove("show");
+        }
+    });
+
+    button.nextElementSibling.classList.toggle("show");
+}
+
+document.addEventListener("click", function () {
+    document.querySelectorAll(".note-menu-dropdown").forEach(function (menu) {
+        menu.classList.remove("show");
+    });
+});
+
+document.querySelectorAll(".note-menu-dropdown").forEach(function (menu) {
+    menu.addEventListener("click", function (event) {
+        event.stopPropagation();
+    });
+});
+</script>
+
+</body>
+
+</html>

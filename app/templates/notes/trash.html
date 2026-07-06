@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Trash Notes | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+
+        <div class="page-header">
+            <div>
+                <h1>Trash</h1>
+                <p>Deleted personal notes</p>
+            </div>
+
+            <div class="top-actions">
+                <a href="{{ url_for('notes.list_notes') }}" class="btn">
+                    Back to Notes
+                </a>
+            </div>
+        </div>
+
+        <div class="notes-grid">
+            {% for note in notes %}
+            <div class="note-card note-color-{{ note.color }}">
+                <h3>{{ note.title }}</h3>
+
+                <div class="note-preview">
+                    {{ note.content|striptags|truncate(160) }}
+                </div>
+
+                <small>
+                    Deleted note
+                </small>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <strong>Trash is empty</strong>
+            </div>
+            {% endfor %}
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+
+</html>
