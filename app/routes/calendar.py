@@ -1,6 +1,6 @@
 import calendar
 from datetime import datetime, date
-
+from app.utils.timezone import ist_now
 from flask import (
     Blueprint,
     render_template,
@@ -28,7 +28,7 @@ calendar_bp = Blueprint(
 @login_required
 def index():
 
-    today = datetime.today()
+    today = ist_now()
 
     month = request.args.get(
         "month",

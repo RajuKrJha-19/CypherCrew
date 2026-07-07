@@ -24,7 +24,7 @@
     </a>
     {% endif %}
 
-    {% if has_permission(current_user,"manage_tasks") %}
+    {% if has_permission(current_user,"manage_tasks") or current_user.role in ["admin", "super_admin"] %}
     <a href="{{ url_for('tasks.list_tasks') }}">
         Tasks
     </a>
@@ -32,15 +32,17 @@
     <a href="{{ url_for('calendar.index') }}">
         Calendar
     </a>
-    <a href="{{ url_for('notes.list_notes') }}">
-        Notes
-    </a>
+
     <a href="{{ url_for('holidays.list_holidays') }}">
         Holidays
     </a>
     {% endif %}
 
-    {% if has_permission(current_user,"view_reports") %}
+    <a href="{{ url_for('notes.list_notes') }}">
+        Notes
+    </a>
+
+    {% if has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
     <a href="{{ url_for('reports.list_reports') }}">
         Reports
     </a>
@@ -56,8 +58,6 @@
         Calendar
     </a>
 
-    
-
     <a href="{{ url_for('reports.list_reports') }}">
         My Reports
     </a>
@@ -71,6 +71,7 @@
     <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn">
         ←
     </button>
+
     <script>
         const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
 
@@ -90,4 +91,5 @@
             }
         }
     </script>
+
 </aside>

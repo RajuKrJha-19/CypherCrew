@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-
+from app.utils.timezone import ist_now
 from flask import Blueprint, render_template, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -199,8 +199,8 @@ def build_company_health():
             idle += 1
 
     overdue = Task.query.filter(
-        Task.deadline < datetime.utcnow(),
-        Task.status != "Published"
+        Task.deadline < ist_now(),
+        Task.status.in_(["Pending", "In Progress", "Hold"])
     ).count()
 
     return {
@@ -422,7 +422,7 @@ def get_growth_data(current_value, previous_value):
 
 def build_overview():
 
-    today = date.today()
+    today = ist_now().date()
 
     current_month_start = today.replace(day=1)
 
@@ -520,8 +520,8 @@ def build_overview():
 
 def build_today_snapshot():
 
-    today = date.today()
-    now = datetime.utcnow()
+    today = ist_now().date()
+    now = ist_now()
 
     tasks_due_today = Task.query.filter(
         db.func.date(Task.deadline) == today
@@ -529,7 +529,7 @@ def build_today_snapshot():
 
     overdue_tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status != "Published"
+        Task.status.in_(["Pending", "In Progress", "Hold"])
     ).count()
 
     completed_today = Task.query.filter(
@@ -577,7 +577,7 @@ def build_status_chart(stats):
 
 def build_month_chart():
 
-    today = date.today()
+    today = ist_now().date()
     start_date = today - timedelta(days=29)
 
     labels = []
@@ -669,11 +669,11 @@ def build_month_chart():
 
 def build_overdue_tasks():
 
-    now = datetime.utcnow()
+    now = ist_now()
 
     tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status != "Published"
+        Task.status.in_(["Pending", "In Progress", "Hold"])
     ).order_by(
         Task.deadline.asc()
     ).limit(5).all()
@@ -766,7 +766,7 @@ def build_top_clients():
 
 def build_upcoming_events():
 
-    today = date.today()
+    today = ist_now().date()
     next_week = today + timedelta(days=7)
 
     events = []
@@ -863,8 +863,8 @@ def build_task_stats(tasks):
     overdue = [
         task for task in tasks
         if task.deadline
-        and task.deadline < datetime.utcnow()
-        and task.status != "Published"
+        and task.deadline < ist_now()
+        and task.status in ["Pending", "In Progress", "Hold"]
     ]
 
     return {

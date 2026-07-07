@@ -1,6 +1,6 @@
 import os
 from werkzeug.utils import secure_filename
-
+from app.utils.timezone import ist_now
 from datetime import datetime, timedelta
 
 from flask import (
@@ -295,8 +295,8 @@ def list_tasks():
     overdue_tasks = len([
         task for task in tasks
         if task.deadline
-        and task.deadline < datetime.utcnow()
-        and task.status != "Published"
+        and task.deadline < ist_now()
+            and task.status in ["Pending", "In Progress", "Hold"]
     ])
 
     return render_template(
