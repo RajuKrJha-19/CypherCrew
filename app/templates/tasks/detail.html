@@ -265,7 +265,7 @@
                         {% else %}
                         <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
                             <button type="submit">
-                                {% if task.status == "Pending" %}
+                                {% if task.status == "Assigned" %}
                                     Start Task
                                 {% else %}
                                     Resume Task

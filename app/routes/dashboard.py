@@ -3,7 +3,8 @@ from app.utils.timezone import ist_now
 from flask import Blueprint, render_template, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
-
+from app.utils.timezone import ist_now
+from app.utils.permissions import has_permission
 from app.extensions import db
 from app.models import Task,User,Client,TaskActivity,Meeting,Holiday,Leave
 
@@ -99,6 +100,37 @@ def admin():
         month_chart=month_chart
     )
 
+@dashboard_bp.route("/my-tasks")
+@login_required
+def my_tasks():
+
+    if current_user.role not in ["admin", "super_admin"] and not has_permission(current_user, "approve_tasks"):
+        return redirect(url_for("dashboard.index"))
+
+    core_review_tasks = Task.query.filter(
+        Task.status == "Core Review"
+    ).order_by(
+        Task.employee_completed_at.desc()
+    ).all()
+
+    client_review_tasks = Task.query.filter(
+        Task.status == "Client Review"
+    ).order_by(
+        Task.id.desc()
+    ).all()
+
+    published_tasks = Task.query.filter(
+        Task.status == "Published"
+    ).order_by(
+        Task.completed_at.desc()
+    ).limit(30).all()
+
+    return render_template(
+        "dashboard/my_tasks.html",
+        core_review_tasks=core_review_tasks,
+        client_review_tasks=client_review_tasks,
+        published_tasks=published_tasks
+    )
 
 @dashboard_bp.route("/employee")
 @login_required
@@ -125,7 +157,7 @@ def employee():
 def build_workload():
 
     active_statuses = [
-        "Pending",
+        "Assigned",
         "In Progress",
         "Core Review",
         "Client Review"
@@ -200,7 +232,7 @@ def build_company_health():
 
     overdue = Task.query.filter(
         Task.deadline < ist_now(),
-        Task.status.in_(["Pending", "In Progress", "Hold"])
+        Task.status.in_(["Assigned", "In Progress", "Paused"])
     ).count()
 
     return {
@@ -467,8 +499,8 @@ def build_overview():
         last_month_completed
     )
 
-    pending_tasks = Task.query.filter(
-        Task.status == "Pending"
+    assigned_tasks = Task.query.filter(
+        Task.status == "Assigned"
     ).count()
 
     active_clients = Client.query.filter_by(
@@ -487,7 +519,7 @@ def build_overview():
     return {
         "total_tasks": total_tasks,
         "completed_tasks": completed_tasks,
-        "pending_tasks": pending_tasks,
+        "pending_tasks": assigned_tasks,
         "active_clients": active_clients,
         "active_employees": active_employees,
         "meetings_today": meetings_today,
@@ -529,7 +561,7 @@ def build_today_snapshot():
 
     overdue_tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status.in_(["Pending", "In Progress", "Hold"])
+        Task.status.in_(["Assigned", "In Progress", "Paused"])
     ).count()
 
     completed_today = Task.query.filter(
@@ -614,7 +646,7 @@ def build_month_chart():
         pending.append(
             Task.query.filter(
                 db.func.date(Task.created_at) == current_date,
-                Task.status == "Pending"
+                Task.status == "Assigned"
             ).count()
         )
 
@@ -628,7 +660,7 @@ def build_month_chart():
         hold.append(
             Task.query.filter(
                 db.func.date(Task.created_at) == current_date,
-                Task.status == "Hold"
+                Task.status == "Paused"
             ).count()
         )
 
@@ -673,7 +705,7 @@ def build_overdue_tasks():
 
     tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status.in_(["Pending", "In Progress", "Hold"])
+        Task.status.in_(["Assigned", "In Progress", "Paused"])
     ).order_by(
         Task.deadline.asc()
     ).limit(5).all()
@@ -837,9 +869,9 @@ def build_upcoming_events():
 def build_task_stats(tasks):
 
     status_order = [
-        "Pending",
+        "Assigned",
         "In Progress",
-        "Hold",
+        "Paused",
         "Core Review",
         "Client Review",
         "Published"
@@ -864,7 +896,7 @@ def build_task_stats(tasks):
         task for task in tasks
         if task.deadline
         and task.deadline < ist_now()
-        and task.status in ["Pending", "In Progress", "Hold"]
+        and task.status in ["Assigned", "In Progress", "Paused"]
     ]
 
     return {

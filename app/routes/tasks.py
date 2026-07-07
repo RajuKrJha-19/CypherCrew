@@ -95,7 +95,7 @@ def record_status_time(task, new_status):
         (now - task.status_started_at).total_seconds()
     )
 
-    if task.status == "Pending":
+    if task.status == "Assigned":
         task.pending_seconds = (
             task.pending_seconds or 0
         ) + elapsed
@@ -105,7 +105,7 @@ def record_status_time(task, new_status):
             task.in_progress_seconds or 0
         ) + elapsed
 
-    elif task.status == "Hold":
+    elif task.status == "Paused":
         task.hold_seconds = (
             task.hold_seconds or 0
         ) + elapsed
@@ -257,9 +257,9 @@ def list_tasks():
     tasks = query.order_by(Task.id.desc()).all()
 
     statuses = [
-        "Pending",
+        "Assigned",
         "In Progress",
-        "Hold",
+        "Paused",
         "Core Review",
         "Client Review",
         "Published"
@@ -296,7 +296,7 @@ def list_tasks():
         task for task in tasks
         if task.deadline
         and task.deadline < ist_now()
-            and task.status in ["Pending", "In Progress", "Hold"]
+            and task.status in ["Assigned", "In Progress", "Paused"]
     ])
 
     return render_template(
@@ -474,7 +474,7 @@ def add_task():
             assigned_to_id=assigned_to_id,
             priority=request.form.get("priority"),
             deadline=deadline,
-            status="Pending",
+            status="Assigned",
             quantity=quantity,
             estimated_time=estimated_time,
             status_started_at=datetime.utcnow(),
@@ -509,7 +509,7 @@ def add_task():
             action="created",
             message=f"Created by {current_user.name}",
             old_status=None,
-            new_status="Pending"
+            new_status="Assigned"
         )
 
         create_notification(
@@ -624,7 +624,7 @@ def self_assign_task():
             assigned_to_id=current_user.id,
             priority=request.form.get("priority"),
             deadline=deadline,
-            status="Pending",
+            status="Assigned",
             quantity=quantity,
             estimated_time=estimated_time,
             status_started_at=datetime.utcnow(),
@@ -640,7 +640,7 @@ def self_assign_task():
             action="created",
             message=f"Self assigned by {current_user.name}",
             old_status=None,
-            new_status="Pending"
+            new_status="Assigned"
         )
 
         db.session.commit()
@@ -812,9 +812,9 @@ def edit_task(task_id):
         new_status = request.form.get("status")
 
         allowed_statuses = [
-            "Pending",
+            "Assigned",
             "In Progress",
-            "Hold",
+            "Paused",
             "Core Review",
             "Client Review",
             "Published"
@@ -974,6 +974,8 @@ def edit_task(task_id):
         )
 
         if old_assigned_to_id != task.assigned_to_id:
+            task.employee_completed = False
+            task.employee_completed_at = None
             create_notification(
                 user_id=task.assigned_to_id,
                 title="Task assigned to you",
@@ -1069,12 +1071,14 @@ def start_task(task_id):
             new_status="In Progress"
         )
 
-    if task.status == "Pending":
+    if task.status == "Assigned":
 
         old_status = record_status_time(
             task,
             "In Progress"
         )
+        task.employee_completed = False
+        task.employee_completed_at = None
 
         add_activity(
             task,
@@ -1084,7 +1088,7 @@ def start_task(task_id):
             new_status="In Progress"
         )
 
-    elif task.status == "Hold":
+    elif task.status == "Paused":
         old_status = record_status_time(
             task,
             "In Progress"
@@ -1093,7 +1097,7 @@ def start_task(task_id):
         add_activity(
             task,
             action="resumed",
-            message=f"Resumed from hold by {current_user.name}",
+            message=f"Resumed from Paused by {current_user.name}",
             old_status=old_status,
             new_status="In Progress"
         )
@@ -1119,7 +1123,7 @@ def start_task(task_id):
     else:
 
         flash(
-    "Only pending, hold or in-progress tasks can be started.",
+    "Only Assigned, Paused or in-progress tasks can be started.",
     "error"
 )
 
@@ -1154,15 +1158,15 @@ def pause_task(task_id):
 
     old_status = record_status_time(
         task,
-        "Hold"
+        "Paused"
     )
 
     add_activity(
         task,
         action="paused",
-        message=f"Put on hold by {current_user.name}",
+        message=f"Put on Paused by {current_user.name}",
         old_status=old_status,
-        new_status="Hold"
+        new_status="Paused"
     )
 
     db.session.commit()
@@ -1193,7 +1197,7 @@ def submit_review(task_id):
         )
         return redirect(url_for("tasks.list_tasks"))
 
-    if task.status in ["Pending", "In Progress"]:
+    if task.status in ["Assigned", "In Progress"]:
 
         pause_timer(task)
 

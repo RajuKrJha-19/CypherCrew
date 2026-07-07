@@ -68,7 +68,7 @@ def user_performance(user_id):
     ).count()
 
     pending_tasks = base_query.filter(
-        Task.status == "Pending"
+        Task.status == "Assigned"
     ).count()
 
     in_progress_tasks = base_query.filter(
@@ -85,7 +85,7 @@ def user_performance(user_id):
 
     overdue_tasks = base_query.filter(
         Task.deadline < now,
-        Task.status.in_(["Pending", "In Progress"])
+        Task.status.in_(["Assigned", "In Progress"])
     ).count()
 
     completion_rate = round(

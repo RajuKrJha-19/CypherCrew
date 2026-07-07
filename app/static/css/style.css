@@ -5248,3 +5248,348 @@ body.sidebar-collapsed .task-page-sticky-header{
 .kpi-card-link:hover{
     color:inherit;
 }
+
+/* ADMIN MY TASKS - FINAL COMPACT UI */
+
+.review-board{
+    display:grid !important;
+    grid-template-columns:repeat(3, minmax(260px, 1fr)) !important;
+    gap:16px !important;
+    align-items:start !important;
+}
+
+.review-column{
+    background:#ffffff !important;
+    border:1px solid #e5e7eb !important;
+    border-radius:16px !important;
+    padding:14px !important;
+    height:calc(100vh - 150px) !important;
+    min-height:420px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+}
+
+.review-column-head{
+    position:sticky !important;
+    top:0 !important;
+    z-index:5 !important;
+    background:#ffffff !important;
+    display:flex !important;
+    justify-content:space-between !important;
+    align-items:center !important;
+    padding-bottom:10px !important;
+    margin-bottom:10px !important;
+    border-bottom:1px solid #eef2f7 !important;
+}
+
+.review-column-head h2{
+    margin:0 !important;
+    font-size:18px !important;
+    font-weight:600 !important;
+}
+
+.review-column-head span{
+    min-width:28px !important;
+    height:28px !important;
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    border-radius:999px !important;
+    background:#eef2ff !important;
+    color:#2563eb !important;
+    font-size:13px !important;
+    font-weight:600 !important;
+}
+
+.review-task-card{
+    background:#f8fafc !important;
+    border:1px solid #e5e7eb !important;
+    border-radius:14px !important;
+    padding:12px !important;
+    margin-bottom:12px !important;
+    box-shadow:none !important;
+}
+
+.review-task-top{
+    display:flex !important;
+    justify-content:space-between !important;
+    align-items:center !important;
+    gap:8px !important;
+    margin-bottom:8px !important;
+}
+
+.review-task-top a{
+    font-size:14px !important;
+    font-weight:600 !important;
+    color:#2563eb !important;
+    text-decoration:none !important;
+}
+
+.review-task-card .status-pill{
+    font-size:11px !important;
+    padding:4px 8px !important;
+    white-space:nowrap !important;
+}
+
+.review-task-card h3{
+    margin:0 0 5px !important;
+    font-size:16px !important;
+    font-weight:600 !important;
+    line-height:1.25 !important;
+}
+
+.review-task-card p{
+    margin:0 0 8px !important;
+    color:#64748b !important;
+    font-size:13px !important;
+    line-height:1.35 !important;
+}
+
+.review-task-meta{
+    display:flex !important;
+    justify-content:space-between !important;
+    gap:10px !important;
+    padding:5px 0 !important;
+    border-top:1px solid #e5e7eb !important;
+    font-size:13px !important;
+}
+
+.review-task-meta span{
+    color:#64748b !important;
+}
+
+.review-task-meta strong{
+    color:#111827 !important;
+    font-weight:600 !important;
+    text-align:right !important;
+}
+
+.review-actions{
+    margin-top:10px !important;
+    display:grid !important;
+    grid-template-columns:96px 1fr !important;
+    gap:8px !important;
+    align-items:start !important;
+}
+
+.review-actions form{
+    margin:0 !important;
+    display:block !important;
+}
+
+.review-actions form:first-child{
+    grid-column:1 !important;
+}
+
+.review-actions form:last-child{
+    grid-column:2 !important;
+    display:grid !important;
+    grid-template-columns:1fr 86px !important;
+    gap:8px !important;
+}
+
+.review-actions textarea{
+    width:100% !important;
+    height:40px !important;
+    min-height:40px !important;
+    max-height:40px !important;
+    resize:none !important;
+    padding:8px 10px !important;
+    border:1px solid #d1d5db !important;
+    border-radius:10px !important;
+    font-size:13px !important;
+    line-height:1.2 !important;
+    margin:0 !important;
+}
+
+.review-actions .mini-action{
+    width:100% !important;
+    height:30px !important;
+    min-height:30px !important;
+    padding:0 10px !important;
+    border-radius:10px !important;
+    font-size:11px !important;
+    font-weight:600 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+}
+
+.review-actions .approve-btn{
+    background:#111827 !important;
+    color:#ffffff !important;
+}
+
+.review-actions .reject-btn{
+    background:#ef4444 !important;
+    color:#ffffff !important;
+}
+
+.review-actions .approve-btn:hover{
+    background:#1f2937 !important;
+}
+
+.review-actions .reject-btn:hover{
+    background:#dc2626 !important;
+}
+
+.review-column::-webkit-scrollbar{
+    width:6px !important;
+}
+
+.review-column::-webkit-scrollbar-thumb{
+    background:#cbd5e1 !important;
+    border-radius:999px !important;
+}
+
+@media(max-width:1200px){
+    .review-board{
+        grid-template-columns:repeat(2, minmax(260px, 1fr)) !important;
+    }
+}
+
+@media(max-width:768px){
+    .review-board{
+        grid-template-columns:1fr !important;
+    }
+
+    .review-column{
+        height:auto !important;
+        max-height:none !important;
+    }
+
+    .review-actions{
+        grid-template-columns:1fr !important;
+    }
+
+    .review-actions form:first-child,
+    .review-actions form:last-child{
+        grid-column:auto !important;
+    }
+
+    .review-actions form:last-child{
+        grid-template-columns:1fr !important;
+    }
+}
+.review-actions{
+    grid-template-columns:96px 1fr !important;
+}
+
+.review-reject-wrap{
+    width:100% !important;
+}
+
+.review-reject-form{
+    display:none !important;
+    margin-top:8px !important;
+}
+
+.review-reject-form.show{
+    display:block !important;
+}
+
+.review-reject-form textarea{
+    width:100% !important;
+    height:72px !important;
+    min-height:72px !important;
+    max-height:120px !important;
+    resize:vertical !important;
+}
+
+.review-reject-actions{
+    display:flex !important;
+    gap:8px !important;
+    margin-top:8px !important;
+}
+
+.review-reject-actions .mini-action{
+    flex:1 !important;
+}
+/* MY TASKS REJECT UI FINAL FIX */
+
+.review-column{
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding-top:0 !important;
+}
+
+.review-column-head{
+    position:sticky !important;
+    top:0 !important;
+    z-index:999 !important;
+    background:#ffffff !important;
+    padding:14px 0 12px !important;
+    margin:0 0 12px !important;
+    border-bottom:1px solid #e5e7eb !important;
+}
+
+.review-actions,
+.review-actions form:last-child{
+    display:none !important;
+}
+
+.review-actions-new{
+    margin-top:10px !important;
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+}
+
+.review-actions-new form{
+    display:block !important;
+    margin:0 !important;
+}
+
+.review-approve-btn,
+.review-reject-toggle{
+    width:100% !important;
+    height:30px !important;
+    border-radius:10px !important;
+    font-size:11px !important;
+    font-weight:600 !important;
+}
+
+.review-approve-btn{
+    background:#111827 !important;
+    color:#fff !important;
+}
+
+.review-reject-toggle{
+    background:#ef4444 !important;
+    color:#fff !important;
+}
+
+.review-reject-form-new{
+    display:none !important;
+    grid-column:1 / -1 !important;
+    margin-top:4px !important;
+}
+
+.review-reject-form-new.show{
+    display:block !important;
+}
+
+.review-reject-form-new textarea{
+    width:100% !important;
+    height:72px !important;
+    min-height:72px !important;
+    max-height:120px !important;
+    resize:vertical !important;
+    padding:10px !important;
+    font-size:13px !important;
+    border-radius:10px !important;
+}
+
+.review-reject-action-row{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+    margin-top:8px !important;
+}
+
+.review-reject-action-row button{
+    height:30px !important;
+    border-radius:10px !important;
+    font-size:11px !important;
+    font-weight:600 !important;
+}

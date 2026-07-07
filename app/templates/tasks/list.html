@@ -176,7 +176,7 @@
                             </a>
                             {% endif %}
 
-                            {% if task.status == "Pending" and (has_permission(current_user, "manage_tasks") or
+                            {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
                             task.assigned_to_id == current_user.id) %}
                             <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
                                 <button type="submit" class="mini-action">
@@ -274,7 +274,7 @@
                                     </a>
                                     {% endif %}
 
-                                    {% if task.status == "Pending" and (has_permission(current_user, "manage_tasks") or
+                                    {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
                                     task.assigned_to_id == current_user.id) %}
                                     <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
                                         <button type="submit" class="mini-action">

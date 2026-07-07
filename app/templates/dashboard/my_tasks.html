@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>My Tasks | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="layout">
+
+        {% include "partials/sidebar.html" %}
+
+        <main class="main">
+
+            <div class="page-header">
+                <div>
+                    <h1>My Tasks</h1>
+                    <p>Review submitted tasks and publish approved work</p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Open Tasks</a>
+                </div>
+            </div>
+
+            <div class="review-board">
+
+                <section class="review-column">
+                    <div class="review-column-head">
+                        <h2>Core Review</h2>
+                        <span>{{ core_review_tasks|length }}</span>
+                    </div>
+
+                    {% for task in core_review_tasks %}
+                    {% include "dashboard/_review_task_card.html" %}
+                    {% else %}
+                    <div class="empty-column">No tasks in core review.</div>
+                    {% endfor %}
+                </section>
+
+                <section class="review-column">
+                    <div class="review-column-head">
+                        <h2>Client Review</h2>
+                        <span>{{ client_review_tasks|length }}</span>
+                    </div>
+
+                    {% for task in client_review_tasks %}
+                    {% include "dashboard/_review_task_card.html" %}
+                    {% else %}
+                    <div class="empty-column">No tasks in client review.</div>
+                    {% endfor %}
+                </section>
+
+                <section class="review-column">
+                    <div class="review-column-head">
+                        <h2>Published</h2>
+                        <span>{{ published_tasks|length }}</span>
+                    </div>
+
+                    {% for task in published_tasks %}
+                    {% include "dashboard/_review_task_card.html" %}
+                    {% else %}
+                    <div class="empty-column">No published tasks.</div>
+                    {% endfor %}
+                </section>
+
+            </div>
+
+        </main>
+
+    </div>
+    <script>
+        function toggleReviewRejectBox(button) {
+            const card = button.closest(".review-task-card");
+            if (!card) return;
+
+            const form = card.querySelector(".review-reject-form-new");
+            if (!form) return;
+
+            form.classList.toggle("show");
+
+            const textarea = form.querySelector("textarea");
+            if (form.classList.contains("show") && textarea) {
+                textarea.focus();
+            }
+        }
+    </script>
+</body>
+
+</html>
