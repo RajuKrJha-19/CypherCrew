@@ -52,7 +52,7 @@
                 <span>{{ (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}</span>
             </div>
 
-            <p id="comment-message-{{ comment.id }}">{{ comment.message }}</p>
+            <p id="comment-message-{{ comment.id }}">{{ comment.message|linkify }}</p>
 
             {% if comment.is_edited %}
             <small class="edited-text">Edited</small>
@@ -65,7 +65,7 @@
                 id="comment-edit-form-{{ comment.id }}"
                 style="display:none;"
             >
-                <textarea name="message" rows="3" required>{{ comment.message }}</textarea>
+                <textarea name="message" rows="3" required>{{ comment.message|linkify }}</textarea>
 
                 <div class="comment-edit-actions">
                     <button type="submit">Save</button>

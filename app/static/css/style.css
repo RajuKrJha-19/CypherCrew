@@ -5598,3 +5598,20 @@ body.sidebar-collapsed .task-page-sticky-header{
     color:black !important;
     font-weight:600 !important;
 }
+.auto-link{
+    color:#2563eb !important;
+    font-weight:700;
+    text-decoration:underline;
+    word-break:break-word;
+}
+.task-description a,
+.feedback-card a,
+.activity-message a,
+.comment-bubble a,
+.note-card a,
+.notes-editor a{
+    color:#2563eb;
+    font-weight:600;
+    text-decoration:underline;
+    word-break:break-all;
+}

@@ -2,12 +2,13 @@ from flask import Flask
 from config import Config
 from app.extensions import db, login_manager
 from app.seed import seed_database
-
+from app.utils.text_filters import linkify_text
 
 def create_app():
 
     app = Flask(__name__)
 
+    
     app.config.from_object(Config)
 
     db.init_app(app)
@@ -52,4 +53,7 @@ def create_app():
     app.jinja_env.globals.update(
         has_permission=has_permission
     )
+
+    app.jinja_env.filters["linkify"] = linkify_text
+    
     return app
