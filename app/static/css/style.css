@@ -5593,3 +5593,8 @@ body.sidebar-collapsed .task-page-sticky-header{
     font-size:11px !important;
     font-weight:600 !important;
 }
+
+.task-current-status{
+    color:black !important;
+    font-weight:600 !important;
+}

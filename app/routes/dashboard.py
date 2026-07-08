@@ -638,10 +638,11 @@ def build_month_chart():
         )
 
         completed.append(
-            Task.query.filter(
-                db.func.date(Task.employee_completed_at) == current_date
-            ).count()
-        )
+    Task.query.filter(
+        Task.employee_completed == True,
+        db.func.date(Task.employee_completed_at) == current_date
+    ).count()
+)
 
         pending.append(
             Task.query.filter(

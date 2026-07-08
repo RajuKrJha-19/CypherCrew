@@ -8,584 +8,590 @@
 
 <body>
 
-<div class="layout">
+    <div class="layout">
 
-{% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" %}
 
-<main class="main">
+        <main class="main">
 
-    <div class="page-header">
-        <div>
-            <div class="task-header-block">
-                <span class="task-detail-id">
-                    #{{ task.task_code }}
-                </span>
-
-                <h1>{{ task.title }}</h1>
-            </div>
-
-            <p>
-                {{ task.client.client_name }}
-                -
-                {{ task.deliverable.service_name }}
-                -
-                {{ task.deliverable.deliverable_name }}
-            </p>
-        </div>
-
-        <div class="top-actions">
-            {% include "partials/notification_widget.html" %}
-
-            {% if has_permission(current_user, "manage_tasks") %}
-            <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn">
-                Manage Task
-            </a>
-            {% endif %}
-
-            <a href="{{ url_for('tasks.list_tasks') }}" class="btn">
-                Back
-            </a>
-        </div>
-    </div>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert {{ category }}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="task-detail-layout">
-
-        <div class="task-detail-left">
-
-            <div class="table-card">
-                <h2 class="card-title">
-                    Task Details
-                    <span class="task-detail-inline-id">
-                        #{{ task.task_code }}
-                    </span>
-                </h2>
-
-                <div class="progress-track">
-                    {% for item in ["Pending", "In Progress", "Hold", "Core Review", "Client Review", "Published"] %}
-                        <span class="{% if item == task.status %}active{% endif %}">
-                            {{ item }}
+            <div class="page-header">
+                <div>
+                    <div class="task-header-block">
+                        <span class="task-detail-id">
+                            #{{ task.task_code }}
                         </span>
-                    {% endfor %}
-                </div>
 
-                <div class="detail-row">
-                    <span>Task ID</span>
-                    <strong>#{{ task.task_code }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Client</span>
-                    <strong>{{ task.client.client_name }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Service</span>
-                    <strong>{{ task.deliverable.service_name }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Deliverable</span>
-                    <strong>{{ task.deliverable.deliverable_name }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Assigned To</span>
-                    <strong>{{ task.assigned_to.name if task.assigned_to else "-" }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Priority</span>
-                    <strong>{{ task.priority }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Quantity</span>
-                    <strong>{{ task.quantity or 1 }}</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Estimated / Quantity</span>
-                    <strong>{{ task.estimated_time or 1 }} hrs</strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Total Estimated</span>
-                    <strong>
-                        {{ ((task.quantity or 1) * (task.estimated_time or 1))|round(2) }} hrs
-                    </strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Deadline</span>
-                    <strong>
-                        {% if task.deadline %}
-                            {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Status</span>
-                    <strong>{{ task.status }}</strong>
-                </div>
-            </div>
-
-            <div class="table-card task-description-card">
-
-                <div class="description-card-head">
-                    <h2 class="card-title">Description</h2>
-
-                    <button type="button" class="copy-description-btn" id="copyDescriptionBtn">
-                        Copy
-                    </button>
-                </div>
-
-                <pre class="task-description" id="taskDescriptionText">{{ task.description or "No description provided." }}</pre>
-
-                {% if feedbacks %}
-                <div class="feedback-list">
-                    <h3>Feedback / Rejection Notes</h3>
-
-                    {% for feedback in feedbacks|reverse %}
-                    <div class="feedback-card">
-                        <strong>{{ feedback.sender.name }}</strong>
-                        <p>{{ feedback.message }}</p>
-
-                        {% if feedback.file_path %}
-                        <a
-                            href="{{ url_for('static', filename=feedback.file_path) }}"
-                            target="_blank"
-                            class="table-link"
-                        >
-                            View Reference File
-                        </a>
-                        {% endif %}
-
-                        <small>
-                            {{ (feedback.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p") }}
-                        </small>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
-                <div class="task-actions-box">
-                    <div class="review-actions">
-
-                        <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}">
-                            <button type="submit" class="review-btn approve-btn">
-                                Approve
-                            </button>
-                        </form>
-
-                        <form
-                            method="POST"
-                            action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
-                            enctype="multipart/form-data"
-                            class="reject-form"
-                        >
-                            <button type="button" class="review-btn reject-btn reject-toggle-btn">
-                                Reject
-                            </button>
-
-                            <div class="reject-box">
-                                <label>Rejection Message</label>
-
-                                <textarea
-                                    name="message"
-                                    rows="4"
-                                    placeholder="Write reason or changes needed..."
-                                    required
-                                ></textarea>
-
-                                <label>Reference File</label>
-
-                                <input
-                                    type="file"
-                                    name="reference_file"
-                                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                >
-
-                                <button type="submit" class="reject-submit-btn">
-                                    Send & Reassign
-                                </button>
-                            </div>
-                        </form>
-
-                    </div>
-                </div>
-                {% endif %}
-
-            </div>
-
-        </div>
-
-        <div class="task-detail-right">
-
-            <div class="table-card">
-                <h2 class="card-title">Time Tracking</h2>
-
-                <div class="timer-grid">
-                    <div>
-                        <span>Worked Time</span>
-                        <strong id="workedTime">{{ worked_time }}</strong>
+                        <h1>{{ task.title }}</h1>
                     </div>
 
-                    <div>
-                        <span>Timer Status</span>
-                        {% if task.timer_started_at %}
-                            <strong class="running" id="timerStatus">Running</strong>
-                        {% else %}
-                            <strong class="paused" id="timerStatus">Paused</strong>
-                        {% endif %}
-                    </div>
+                    <p>
+                        {{ task.client.client_name }}
+                        -
+                        {{ task.deliverable.service_name }}
+                        -
+                        {{ task.deliverable.deliverable_name }}
+                    </p>
                 </div>
 
-                <div class="task-actions-box">
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
 
-                    {% if task.status in ["Pending", "In Progress", "Hold"] and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
-
-                        {% if task.timer_started_at %}
-                        <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
-                            <button type="submit">Pause</button>
-                        </form>
-                        {% else %}
-                        <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
-                            <button type="submit">
-                                {% if task.status == "Assigned" %}
-                                    Start Task
-                                {% else %}
-                                    Resume Task
-                                {% endif %}
-                            </button>
-                        </form>
-                        {% endif %}
-
+                    {% if has_permission(current_user, "manage_tasks") %}
+                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn">
+                        Manage Task
+                    </a>
                     {% endif %}
 
-                    {% if task.assigned_to_id == current_user.id and task.status in ["Pending", "In Progress"] %}
-                    <form method="POST" action="{{ url_for('tasks.submit_review', task_id=task.id) }}">
-                        <button type="submit">
-                            Submit For Review
-                        </button>
-                    </form>
-                    {% endif %}
-
-                </div>
-
-                <div class="status-duration-box">
-                    <h3>Status Duration</h3>
-
-                    <div class="status-time-list">
-                        <p>
-                            <span>Pending</span>
-                            <strong id="pendingDuration">{{ pending_time }}</strong>
-                        </p>
-
-                        <p>
-                            <span>In Progress</span>
-                            <strong id="inProgressDuration">{{ in_progress_time }}</strong>
-                        </p>
-
-                        <p>
-                            <span>Hold</span>
-                            <strong id="holdDuration">{{ hold_time }}</strong>
-                        </p>
-
-                        <p>
-                            <span>Core Review</span>
-                            <strong id="coreReviewDuration">{{ core_review_time }}</strong>
-                        </p>
-
-                        <p>
-                            <span>Client Review</span>
-                            <strong id="clientReviewDuration">{{ client_review_time }}</strong>
-                        </p>
-                    </div>
+                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn">
+                        Back
+                    </a>
                 </div>
             </div>
 
-            <div class="table-card discussion-card">
-
-                <h2 class="card-title">Discussion</h2>
-
-                <form
-    method="POST"
-    action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
-    class="comment-form"
-    id="commentForm"
->
-                    <textarea
-                        name="message"
-                        rows="4"
-                        placeholder="Write a comment..."
-                        required
-                    ></textarea>
-
-                    <button type="submit">
-                        Comment
-                    </button>
-                </form>
-
-                <div class="comment-thread" id="commentThread">
-
-                    {% for comment in comments %}
-                        {% include "tasks/_comment.html" %}
-                    {% else %}
-                        <p class="empty-text">
-                            No comments yet. Start the discussion.
-                        </p>
-                    {% endfor %}
-
-                </div>
-
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert {{ category }}">
+                {{ message }}
             </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
 
-            <div class="table-card activity-card">
-                <h2 class="card-title">Activity Timeline</h2>
+            <div class="task-detail-layout">
 
-                <div class="activity-list">
+                <div class="task-detail-left">
 
-                    {% for activity in activities %}
-                    <div class="activity-item activity-{{ activity.action }}">
+                    <div class="table-card">
+                        <h2 class="card-title">
+                            Task Details
+                            <span class="task-detail-inline-id">
+                                #{{ task.task_code }}
+                            </span>
+                        </h2>
 
-                        <div class="activity-icon">
-                            {% if activity.action == "created" %}
-                                🟢
-                            {% elif activity.action == "started" %}
-                                ▶
-                            {% elif activity.action == "resumed" %}
-                                ▶
-                            {% elif activity.action == "paused" %}
-                                ⏸
-                            {% elif activity.action == "auto_paused" %}
-                                🟡
-                            {% elif activity.action == "submitted_review" %}
-                                📤
-                            {% elif activity.action == "approved_core_review" %}
-                                🟣
-                            {% elif activity.action == "rejected" %}
-                                ❌
-                            {% elif activity.action == "published" %}
-                                ✅
-                            {% elif activity.action == "comment" %}
-                                💬
-                            {% else %}
-                                ●
-                            {% endif %}
+                        <div class="progress-track">
+                            {% for item in ["Assigned", "In Progress", "Paused", "Core Review", "Client Review", "Published"] %}
+                            <span class="{% if item == task.status %}active{% endif %}">
+                                {{ item }}
+                            </span>
+                            {% endfor %}
                         </div>
 
-                        <div class="activity-content">
+                        <div class="detail-row">
+                            <span>Task ID</span>
+                            <strong>#{{ task.task_code }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Client</span>
+                            <strong>{{ task.client.client_name }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Service</span>
+                            <strong>{{ task.deliverable.service_name }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Deliverable</span>
+                            <strong>{{ task.deliverable.deliverable_name }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Assigned To</span>
+                            <strong>{{ task.assigned_to.name if task.assigned_to else "-" }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Priority</span>
+                            <strong>{{ task.priority }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Quantity</span>
+                            <strong>{{ task.quantity or 1 }}</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Estimated / Quantity</span>
+                            <strong>{{ task.estimated_time or 1 }} hrs</strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Total Estimated</span>
                             <strong>
-                                {% if activity.action == "created" %}
-                                    Task Created
-                                {% elif activity.action == "started" %}
-                                    Task Started
-                                {% elif activity.action == "resumed" %}
-                                    Task Resumed
-                                {% elif activity.action == "paused" %}
-                                    Task Paused
-                                {% elif activity.action == "auto_paused" %}
-                                    Auto Paused
-                                {% elif activity.action == "submitted_review" %}
-                                    Submitted for Core Review
-                                {% elif activity.action == "approved_core_review" %}
-                                    Core Review Approved
-                                {% elif activity.action == "rejected" %}
-                                    Task Rejected
-                                {% elif activity.action == "published" %}
-                                    Task Published
-                                {% elif activity.action == "comment" %}
-                                    Comment Added
+                                {{ ((task.quantity or 1) * (task.estimated_time or 1))|round(2) }} hrs
+                            </strong>
+                        </div>
+
+                        <div class="detail-row">
+                            <span>Deadline</span>
+                            <strong>
+                                {% if task.deadline %}
+                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
                                 {% else %}
-                                    {{ activity.action|replace("_", " ")|title }}
+                                -
                                 {% endif %}
                             </strong>
+                        </div>
 
-                            {% if activity.message %}
-                                <pre class="activity-message">{{ activity.message }}</pre>
-                            {% endif %}
+                        <div class="detail-row">
+                            <span>Status</span>
+                            <strong>{{ task.status }}</strong>
+                        </div>
+                    </div>
 
-                            {% if activity.old_status and activity.new_status and activity.old_status != activity.new_status %}
-                            <div class="activity-status-change">
-                                <span>{{ activity.old_status }}</span>
-                                <b>→</b>
-                                <span>{{ activity.new_status }}</span>
+                    <div class="table-card task-description-card">
+
+                        <div class="description-card-head">
+                            <h2 class="card-title">Description</h2>
+
+                            <button type="button" class="copy-description-btn" id="copyDescriptionBtn">
+                                Copy
+                            </button>
+                        </div>
+
+                        <pre class="task-description"
+                            id="taskDescriptionText">{{ task.description or "No description provided." }}</pre>
+
+                        {% if feedbacks %}
+                        <div class="feedback-list">
+                            <h3>Feedback / Rejection Notes</h3>
+
+                            {% for feedback in feedbacks|reverse %}
+                            <div class="feedback-card">
+                                <strong>{{ feedback.sender.name }}</strong>
+                                <p>{{ feedback.message }}</p>
+
+                                {% if feedback.file_path %}
+                                <a href="{{ url_for('static', filename=feedback.file_path) }}" target="_blank"
+                                    class="table-link">
+                                    View Reference File
+                                </a>
+                                {% endif %}
+
+                                <small>
+                                    {{ (feedback.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p") }}
+                                </small>
                             </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
+                        <div class="task-actions-box">
+                            <div class="review-actions">
+
+                                <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}">
+                                    <button type="submit" class="review-btn approve-btn">
+                                        Approve
+                                    </button>
+                                </form>
+
+                                <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
+                                    enctype="multipart/form-data" class="reject-form">
+                                    <button type="button" class="review-btn reject-btn reject-toggle-btn">
+                                        Reject
+                                    </button>
+
+                                    <div class="reject-box">
+                                        <label>Rejection Message</label>
+
+                                        <textarea name="message" rows="4"
+                                            placeholder="Write reason or changes needed..." required></textarea>
+
+                                        <label>Reference File</label>
+
+                                        <input type="file" name="reference_file"
+                                            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+
+                                        <button type="submit" class="reject-submit-btn">
+                                            Send & Reassign
+                                        </button>
+                                    </div>
+                                </form>
+
+                            </div>
+                        </div>
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+                <div class="task-detail-right">
+
+                    <div class="table-card">
+                        <h2 class="card-title">Time Tracking</h2>
+
+                        <div class="timer-grid">
+                            <div>
+                                <span>Worked Time</span>
+                                <strong id="workedTime">{{ worked_time }}</strong>
+                            </div>
+
+                            <div>
+
+                                <span>Timer Status</span>
+
+                                <strong id="timerStatus" class="task-current-status">
+
+                                    {% if timer_status_label == "Assigned" %}
+                                    Assigned
+
+                                    {% elif timer_status_label == "Reassigned" %}
+                                    Reassigned
+
+                                    {% elif timer_status_label == "Paused" %}
+                                    Paused
+
+                                    {% elif timer_status_label == "In Progress" %}
+                                    In Progress
+
+                                    {% elif timer_status_label == "Core Review" %}
+                                    In Core Review
+
+                                    {% elif timer_status_label == "Client Review" %}
+                                    In Client Review
+
+                                    {% elif timer_status_label == "Published" %}
+                                    Published
+
+                                    {% else %}
+                                    {{ timer_status_label }}
+
+                                    {% endif %}
+
+                                </strong>
+
+                            </div>
+                        </div>
+
+                        <div class="task-actions-box">
+
+                            {% if task.status in ["Assigned", "In Progress", "Paused"] and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
+
+                            {% if task.timer_started_at %}
+                            <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
+                                <button type="submit">Pause</button>
+                            </form>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                <button type="submit">
+                                    {% if task.status == "Assigned" %}
+                                    Start Task
+                                    {% else %}
+                                    Resume Task
+                                    {% endif %}
+                                </button>
+                            </form>
                             {% endif %}
 
-                            <small>
-                                {{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}
-                            </small>
+                            {% endif %}
+
+                            {% if task.assigned_to_id == current_user.id and task.status in ["Assigned", "In Progress"] %}
+                            <form method="POST" action="{{ url_for('tasks.submit_review', task_id=task.id) }}">
+                                <button type="submit">
+                                    Submit For Review
+                                </button>
+                            </form>
+                            {% endif %}
+
+                        </div>
+
+                        <div class="status-duration-box">
+                            <h3>Status Duration</h3>
+
+                            <div class="status-time-list">
+                                <p>
+                                    <span>Assigned</span>
+                                    <strong id="pendingDuration">{{ pending_time }}</strong>
+                                </p>
+
+                                <p>
+                                    <span>In Progress</span>
+                                    <strong id="inProgressDuration">{{ in_progress_time }}</strong>
+                                </p>
+
+                                <p>
+                                    <span>Paused</span>
+                                    <strong id="holdDuration">{{ hold_time }}</strong>
+                                </p>
+
+                                <p>
+                                    <span>Core Review</span>
+                                    <strong id="coreReviewDuration">{{ core_review_time }}</strong>
+                                </p>
+
+                                <p>
+                                    <span>Client Review</span>
+                                    <strong id="clientReviewDuration">{{ client_review_time }}</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-card discussion-card">
+
+                        <h2 class="card-title">Discussion</h2>
+
+                        <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
+                            class="comment-form" id="commentForm">
+                            <textarea name="message" rows="4" placeholder="Write a comment..." required></textarea>
+
+                            <button type="submit">
+                                Comment
+                            </button>
+                        </form>
+
+                        <div class="comment-thread" id="commentThread">
+
+                            {% for comment in comments %}
+                            {% include "tasks/_comment.html" %}
+                            {% else %}
+                            <p class="empty-text">
+                                No comments yet. Start the discussion.
+                            </p>
+                            {% endfor %}
+
                         </div>
 
                     </div>
-                    {% else %}
-                        <p class="notification-empty">
-                            No activity recorded yet.
-                        </p>
-                    {% endfor %}
+
+                    <div class="table-card activity-card">
+                        <h2 class="card-title">Activity Timeline</h2>
+
+                        <div class="activity-list">
+
+                            {% for activity in activities %}
+                            <div class="activity-item activity-{{ activity.action }}">
+
+                                <div class="activity-icon">
+                                    {% if activity.action == "created" %}
+                                    🟢
+                                    {% elif activity.action == "started" %}
+                                    ▶
+                                    {% elif activity.action == "resumed" %}
+                                    ▶
+                                    {% elif activity.action == "paused" %}
+                                    ⏸
+                                    {% elif activity.action == "auto_paused" %}
+                                    🟡
+                                    {% elif activity.action == "submitted_review" %}
+                                    📤
+                                    {% elif activity.action == "approved_core_review" %}
+                                    🟣
+                                    {% elif activity.action == "rejected" %}
+                                    ❌
+                                    {% elif activity.action == "published" %}
+                                    ✅
+                                    {% elif activity.action == "comment" %}
+                                    💬
+                                    {% else %}
+                                    ●
+                                    {% endif %}
+                                </div>
+
+                                <div class="activity-content">
+                                    <strong>
+                                        {% if activity.action == "created" %}
+                                        Task Created
+                                        {% elif activity.action == "started" %}
+                                        Task Started
+                                        {% elif activity.action == "resumed" %}
+                                        Task Resumed
+                                        {% elif activity.action == "paused" %}
+                                        Task Paused
+                                        {% elif activity.action == "auto_paused" %}
+                                        Auto Paused
+                                        {% elif activity.action == "submitted_review" %}
+                                        Submitted for Core Review
+                                        {% elif activity.action == "approved_core_review" %}
+                                        Core Review Approved
+                                        {% elif activity.action == "rejected" %}
+                                        Task Rejected
+                                        {% elif activity.action == "published" %}
+                                        Task Published
+                                        {% elif activity.action == "comment" %}
+                                        Comment Added
+                                        {% else %}
+                                        {{ activity.action|replace("_", " ")|title }}
+                                        {% endif %}
+                                    </strong>
+
+                                    {% if activity.message %}
+                                    <pre class="activity-message">{{ activity.message }}</pre>
+                                    {% endif %}
+
+                                    {% if activity.old_status and activity.new_status and activity.old_status !=
+                                    activity.new_status %}
+                                    <div class="activity-status-change">
+                                        <span>{{ activity.old_status }}</span>
+                                        <b>→</b>
+                                        <span>{{ activity.new_status }}</span>
+                                    </div>
+                                    {% endif %}
+
+                                    <small>
+                                        {{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}
+                                    </small>
+                                </div>
+
+                            </div>
+                            {% else %}
+                            <p class="notification-empty">
+                                No activity recorded yet.
+                            </p>
+                            {% endfor %}
+
+                        </div>
+                    </div>
 
                 </div>
+
             </div>
 
-        </div>
+        </main>
 
     </div>
 
-</main>
+    <script>
+        const rejectToggleBtn = document.querySelector(".reject-toggle-btn");
+        const rejectBox = document.querySelector(".reject-box");
 
-</div>
-
-<script>
-const rejectToggleBtn = document.querySelector(".reject-toggle-btn");
-const rejectBox = document.querySelector(".reject-box");
-
-if (rejectToggleBtn && rejectBox) {
-    rejectToggleBtn.addEventListener("click", function () {
-        rejectBox.classList.toggle("show");
-    });
-}
-</script>
-
-<script>
-const workedTime = document.getElementById("workedTime");
-
-function formatDuration(seconds) {
-    let hrs = Math.floor(seconds / 3600);
-    let mins = Math.floor((seconds % 3600) / 60);
-    let secs = seconds % 60;
-
-    return hrs + " hr " + mins + " min " + secs + " sec";
-}
-
-{% if task.timer_started_at %}
-let workedSeconds = {{ live_seconds }};
-
-function updateWorkedTimer() {
-    workedSeconds++;
-
-    if (workedTime) {
-        workedTime.innerHTML = formatDuration(workedSeconds);
-    }
-}
-
-setInterval(updateWorkedTimer, 1000);
-{% endif %}
-</script>
-
-<script>
-let currentStatus = "{{ current_status }}";
-let currentStatusSeconds = {{ current_status_seconds }};
-
-let statusMap = {
-    "Pending": "pendingDuration",
-    "In Progress": "inProgressDuration",
-    "Hold": "holdDuration",
-    "Core Review": "coreReviewDuration",
-    "Client Review": "clientReviewDuration"
-};
-
-function updateStatusDuration() {
-    let elementId = statusMap[currentStatus];
-
-    if (!elementId) return;
-
-    let element = document.getElementById(elementId);
-
-    if (!element) return;
-
-    currentStatusSeconds++;
-    element.innerHTML = formatDuration(currentStatusSeconds);
-}
-
-{% if task.status != "Published" %}
-setInterval(updateStatusDuration, 1000);
-{% endif %}
-</script>
-
-<script>
-const copyDescriptionBtn = document.getElementById("copyDescriptionBtn");
-const taskDescriptionText = document.getElementById("taskDescriptionText");
-
-if (copyDescriptionBtn && taskDescriptionText) {
-    copyDescriptionBtn.addEventListener("click", function () {
-        const text = taskDescriptionText.innerText;
-
-        navigator.clipboard.writeText(text).then(function () {
-            copyDescriptionBtn.textContent = "Copied";
-
-            setTimeout(function () {
-                copyDescriptionBtn.textContent = "Copy";
-            }, 1200);
-        });
-    });
-}
-</script>
-
-<script>
-function toggleReply(id) {
-    const form = document.getElementById("reply-form-" + id);
-
-    if (!form) return;
-
-    form.style.display =
-        form.style.display === "block"
-            ? "none"
-            : "block";
-}
-
-function toggleCommentMenu(event, button) {
-    event.stopPropagation();
-
-    const menu = button.closest(".comment-menu");
-    const dropdown = menu.querySelector(".comment-menu-dropdown");
-
-    document.querySelectorAll(".comment-menu-dropdown.show").forEach(function (item) {
-        if (item !== dropdown) {
-            item.classList.remove("show");
+        if (rejectToggleBtn && rejectBox) {
+            rejectToggleBtn.addEventListener("click", function () {
+                rejectBox.classList.toggle("show");
+            });
         }
-    });
+    </script>
 
-    dropdown.classList.toggle("show");
-}
+    <script>
+        const workedTime = document.getElementById("workedTime");
 
-document.addEventListener("click", function () {
-    document.querySelectorAll(".comment-menu-dropdown.show").forEach(function (item) {
-        item.classList.remove("show");
-    });
-});
-</script>
-<script>
-function showEditCommentForm(id) {
-    const form = document.getElementById("comment-edit-form-" + id);
-    if (form) form.style.display = "block";
-}
+        function formatDuration(seconds) {
+            let hrs = Math.floor(seconds / 3600);
+            let mins = Math.floor((seconds % 3600) / 60);
+            let secs = seconds % 60;
 
-function hideEditCommentForm(id) {
-    const form = document.getElementById("comment-edit-form-" + id);
-    if (form) form.style.display = "none";
-}
-</script>
-<script>
-const commentForm = document.getElementById("commentForm");
-const commentThread = document.getElementById("commentThread");
+            return hrs + " hr " + mins + " min " + secs + " sec";
+        }
 
-function createCommentHTML(comment) {
-    return `
+        {% if task.timer_started_at %}
+        let workedSeconds = {{ live_seconds }};
+
+        function updateWorkedTimer() {
+            workedSeconds++;
+
+            if (workedTime) {
+                workedTime.innerHTML = formatDuration(workedSeconds);
+            }
+        }
+
+        setInterval(updateWorkedTimer, 1000);
+        {% endif %}
+    </script>
+
+    <script>
+        let currentStatus = "{{ current_status }}";
+        let currentStatusSeconds = {{ current_status_seconds }};
+
+        let statusMap = {
+            "Assigned": "pendingDuration",
+            "In Progress": "inProgressDuration",
+            "Paused": "holdDuration",
+            "Core Review": "coreReviewDuration",
+            "Client Review": "clientReviewDuration"
+        };
+
+        function updateStatusDuration() {
+            let elementId = statusMap[currentStatus];
+
+            if (!elementId) return;
+
+            let element = document.getElementById(elementId);
+
+            if (!element) return;
+
+            currentStatusSeconds++;
+            element.innerHTML = formatDuration(currentStatusSeconds);
+        }
+
+        {% if task.status != "Published" %}
+        setInterval(updateStatusDuration, 1000);
+        {% endif %}
+    </script>
+
+    <script>
+        const copyDescriptionBtn = document.getElementById("copyDescriptionBtn");
+        const taskDescriptionText = document.getElementById("taskDescriptionText");
+
+        if (copyDescriptionBtn && taskDescriptionText) {
+            copyDescriptionBtn.addEventListener("click", function () {
+                const text = taskDescriptionText.innerText;
+
+                navigator.clipboard.writeText(text).then(function () {
+                    copyDescriptionBtn.textContent = "Copied";
+
+                    setTimeout(function () {
+                        copyDescriptionBtn.textContent = "Copy";
+                    }, 1200);
+                });
+            });
+        }
+    </script>
+
+    <script>
+        function toggleReply(id) {
+            const form = document.getElementById("reply-form-" + id);
+
+            if (!form) return;
+
+            form.style.display =
+                form.style.display === "block"
+                    ? "none"
+                    : "block";
+        }
+
+        function toggleCommentMenu(event, button) {
+            event.stopPropagation();
+
+            const menu = button.closest(".comment-menu");
+            const dropdown = menu.querySelector(".comment-menu-dropdown");
+
+            document.querySelectorAll(".comment-menu-dropdown.show").forEach(function (item) {
+                if (item !== dropdown) {
+                    item.classList.remove("show");
+                }
+            });
+
+            dropdown.classList.toggle("show");
+        }
+
+        document.addEventListener("click", function () {
+            document.querySelectorAll(".comment-menu-dropdown.show").forEach(function (item) {
+                item.classList.remove("show");
+            });
+        });
+    </script>
+    <script>
+        function showEditCommentForm(id) {
+            const form = document.getElementById("comment-edit-form-" + id);
+            if (form) form.style.display = "block";
+        }
+
+        function hideEditCommentForm(id) {
+            const form = document.getElementById("comment-edit-form-" + id);
+            if (form) form.style.display = "none";
+        }
+    </script>
+    <script>
+        const commentForm = document.getElementById("commentForm");
+        const commentThread = document.getElementById("commentThread");
+
+        function createCommentHTML(comment) {
+            return `
         <div class="comment-item ajax-new-comment">
 
             <div class="comment-left-line">
@@ -697,76 +703,269 @@ function createCommentHTML(comment) {
 
         </div>
     `;
-}
-
-if (commentForm && commentThread) {
-    commentForm.addEventListener("submit", async function (event) {
-        event.preventDefault();
-
-        const textarea = commentForm.querySelector("textarea");
-        const submitBtn = commentForm.querySelector("button");
-
-        if (!textarea.value.trim()) {
-            return;
         }
 
-        submitBtn.disabled = true;
+        if (commentForm && commentThread) {
+            commentForm.addEventListener("submit", async function (event) {
+                event.preventDefault();
 
-        const formData = new FormData(commentForm);
+                const textarea = commentForm.querySelector("textarea");
+                const submitBtn = commentForm.querySelector("button");
 
-        try {
-            const response = await fetch(commentForm.action, {
-                method: "POST",
-                body: formData,
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest"
+                if (!textarea.value.trim()) {
+                    return;
+                }
+
+                submitBtn.disabled = true;
+
+                const formData = new FormData(commentForm);
+
+                try {
+                    const response = await fetch(commentForm.action, {
+                        method: "POST",
+                        body: formData,
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest"
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        alert(data.message || "Comment failed.");
+                        return;
+                    }
+
+                    const emptyText = commentThread.querySelector(".empty-text");
+                    if (emptyText) {
+                        emptyText.remove();
+                    }
+
+                    commentThread.insertAdjacentHTML(
+                        "beforeend",
+                        createCommentHTML(data.comment)
+                    );
+
+                    textarea.value = "";
+
+                    const newComment = commentThread.querySelector(".ajax-new-comment:last-child");
+
+                    if (newComment) {
+                        newComment.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center"
+                        });
+
+                        setTimeout(function () {
+                            newComment.classList.remove("ajax-new-comment");
+                        }, 800);
+                    }
+
+                } catch (error) {
+                    console.log(error);
+                    alert("Something went wrong while adding comment.");
+                } finally {
+                    submitBtn.disabled = false;
                 }
             });
+        }
+    </script>
+    <script>
+        function createReplyHTML(reply) {
+            return `
+        <div class="comment-item ajax-new-comment">
 
-            const data = await response.json();
+            <div class="comment-left-line">
+                <div class="comment-avatar">
+                    ${reply.avatar}
+                </div>
+            </div>
 
-            if (!data.success) {
-                alert(data.message || "Comment failed.");
+            <div class="comment-main">
+
+                <div class="comment-bubble">
+
+                    ${reply.can_edit ? `
+                    <div class="comment-menu">
+                        <button
+                            type="button"
+                            class="comment-menu-btn"
+                            onclick="toggleCommentMenu(event, this)"
+                            aria-label="Comment options"
+                        >
+                            ⋮
+                        </button>
+
+                        <div class="comment-menu-dropdown">
+                            <button
+                                type="button"
+                                class="comment-menu-item"
+                                onclick="showEditCommentForm(${reply.id})"
+                            >
+                                Edit
+                            </button>
+
+                            <form
+                                method="POST"
+                                action="/tasks/comments/${reply.id}/delete"
+                                onsubmit="return confirm('Delete this comment?')"
+                            >
+                                <button type="submit" class="comment-menu-item danger">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    ` : ""}
+
+                    <div class="comment-head">
+                        <strong>${reply.user_name}</strong>
+                        <span>${reply.time}</span>
+                    </div>
+
+                    <p id="comment-message-${reply.id}">${reply.message}</p>
+
+                    <form
+                        method="POST"
+                        action="/tasks/comments/${reply.id}/edit"
+                        class="comment-edit-form"
+                        id="comment-edit-form-${reply.id}"
+                        style="display:none;"
+                    >
+                        <textarea name="message" rows="3" required>${reply.message}</textarea>
+
+                        <div class="comment-edit-actions">
+                            <button type="submit">Save</button>
+                            <button
+                                type="button"
+                                onclick="hideEditCommentForm(${reply.id})"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+
+                <div class="comment-actions">
+                    <button
+                        type="button"
+                        class="reply-text-btn"
+                        data-id="${reply.id}"
+                        onclick="toggleReply(this.dataset.id)"
+                    >
+                        Reply
+                    </button>
+                </div>
+
+                <div
+                    id="reply-form-${reply.id}"
+                    class="reply-form"
+                    style="display:none;"
+                >
+                    <form
+                        method="POST"
+                        action="/tasks/comments/${reply.id}/reply"
+                    >
+                        <textarea
+                            name="message"
+                            rows="2"
+                            placeholder="Write a reply..."
+                            required
+                        ></textarea>
+
+                        <button type="submit">Reply</button>
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
+    `;
+        }
+
+        document.addEventListener("submit", async function (event) {
+            const form = event.target;
+
+            if (!form.action || !form.action.includes("/comments/") || !form.action.includes("/reply")) {
                 return;
             }
 
-            const emptyText = commentThread.querySelector(".empty-text");
-            if (emptyText) {
-                emptyText.remove();
-            }
+            event.preventDefault();
 
-            commentThread.insertAdjacentHTML(
-                "beforeend",
-                createCommentHTML(data.comment)
-            );
+            const textarea = form.querySelector("textarea");
+            const submitBtn = form.querySelector("button[type='submit']");
 
-            textarea.value = "";
+            if (!textarea || !textarea.value.trim()) return;
 
-            const newComment = commentThread.querySelector(".ajax-new-comment:last-child");
+            submitBtn.disabled = true;
 
-            if (newComment) {
-                newComment.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center"
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    body: new FormData(form),
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
                 });
 
-                setTimeout(function () {
-                    newComment.classList.remove("ajax-new-comment");
-                }, 800);
-            }
+                const data = await response.json();
 
-        } catch (error) {
-            console.log(error);
-            alert("Something went wrong while adding comment.");
-        } finally {
-            submitBtn.disabled = false;
-        }
-    });
-}
-</script>
-<script>
-function createReplyHTML(reply) {
-    return `
+                if (!data.success) {
+                    alert(data.message || "Reply failed.");
+                    return;
+                }
+
+                let parentMain = form.closest(".comment-main");
+
+                let replyList = parentMain.querySelector(":scope > .reply-list");
+
+                if (!replyList) {
+                    replyList = document.createElement("div");
+                    replyList.className = "reply-list";
+                    parentMain.appendChild(replyList);
+                }
+
+                replyList.insertAdjacentHTML(
+                    "beforeend",
+                    createReplyHTML(data.reply)
+                );
+
+                textarea.value = "";
+
+                const replyFormWrapper = form.closest(".reply-form");
+                if (replyFormWrapper) {
+                    replyFormWrapper.style.display = "none";
+                }
+
+                const newReply = replyList.querySelector(".ajax-new-comment:last-child");
+
+                if (newReply) {
+                    newReply.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center"
+                    });
+
+                    setTimeout(function () {
+                        newReply.classList.remove("ajax-new-comment");
+                    }, 800);
+                }
+
+                if (window.fetchNotifications) {
+                    window.fetchNotifications(false);
+                }
+
+            } catch (error) {
+                console.log(error);
+                alert("Something went wrong while adding reply.");
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+    <script>
+        function createReplyHTML(reply) {
+            return `
         <div class="comment-item ajax-new-comment">
 
             <div class="comment-left-line">
@@ -876,280 +1075,87 @@ function createReplyHTML(reply) {
 
         </div>
     `;
-}
+        }
 
-document.addEventListener("submit", async function (event) {
-    const form = event.target;
+        document.addEventListener("submit", async function (event) {
+            const form = event.target;
 
-    if (!form.action || !form.action.includes("/comments/") || !form.action.includes("/reply")) {
-        return;
-    }
+            if (!form.action || !form.action.includes("/comments/") || !form.action.includes("/reply")) {
+                return;
+            }
 
-    event.preventDefault();
+            event.preventDefault();
 
-    const textarea = form.querySelector("textarea");
-    const submitBtn = form.querySelector("button[type='submit']");
+            const textarea = form.querySelector("textarea");
+            const submitBtn = form.querySelector("button[type='submit']");
 
-    if (!textarea || !textarea.value.trim()) return;
+            if (!textarea || !textarea.value.trim()) return;
 
-    submitBtn.disabled = true;
+            submitBtn.disabled = true;
 
-    try {
-        const response = await fetch(form.action, {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    body: new FormData(form),
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    alert(data.message || "Reply failed.");
+                    return;
+                }
+
+                let parentMain = form.closest(".comment-main");
+
+                let replyList = parentMain.querySelector(":scope > .reply-list");
+
+                if (!replyList) {
+                    replyList = document.createElement("div");
+                    replyList.className = "reply-list";
+                    parentMain.appendChild(replyList);
+                }
+
+                replyList.insertAdjacentHTML(
+                    "beforeend",
+                    createReplyHTML(data.reply)
+                );
+
+                textarea.value = "";
+
+                const replyFormWrapper = form.closest(".reply-form");
+                if (replyFormWrapper) {
+                    replyFormWrapper.style.display = "none";
+                }
+
+                const newReply = replyList.querySelector(".ajax-new-comment:last-child");
+
+                if (newReply) {
+                    newReply.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center"
+                    });
+
+                    setTimeout(function () {
+                        newReply.classList.remove("ajax-new-comment");
+                    }, 800);
+                }
+
+                if (window.fetchNotifications) {
+                    window.fetchNotifications(false);
+                }
+
+            } catch (error) {
+                console.log(error);
+                alert("Something went wrong while adding reply.");
+            } finally {
+                submitBtn.disabled = false;
             }
         });
-
-        const data = await response.json();
-
-        if (!data.success) {
-            alert(data.message || "Reply failed.");
-            return;
-        }
-
-        let parentMain = form.closest(".comment-main");
-
-        let replyList = parentMain.querySelector(":scope > .reply-list");
-
-        if (!replyList) {
-            replyList = document.createElement("div");
-            replyList.className = "reply-list";
-            parentMain.appendChild(replyList);
-        }
-
-        replyList.insertAdjacentHTML(
-            "beforeend",
-            createReplyHTML(data.reply)
-        );
-
-        textarea.value = "";
-
-        const replyFormWrapper = form.closest(".reply-form");
-        if (replyFormWrapper) {
-            replyFormWrapper.style.display = "none";
-        }
-
-        const newReply = replyList.querySelector(".ajax-new-comment:last-child");
-
-        if (newReply) {
-            newReply.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
-
-            setTimeout(function () {
-                newReply.classList.remove("ajax-new-comment");
-            }, 800);
-        }
-
-        if (window.fetchNotifications) {
-            window.fetchNotifications(false);
-        }
-
-    } catch (error) {
-        console.log(error);
-        alert("Something went wrong while adding reply.");
-    } finally {
-        submitBtn.disabled = false;
-    }
-});
-</script>
-<script>
-function createReplyHTML(reply) {
-    return `
-        <div class="comment-item ajax-new-comment">
-
-            <div class="comment-left-line">
-                <div class="comment-avatar">
-                    ${reply.avatar}
-                </div>
-            </div>
-
-            <div class="comment-main">
-
-                <div class="comment-bubble">
-
-                    ${reply.can_edit ? `
-                    <div class="comment-menu">
-                        <button
-                            type="button"
-                            class="comment-menu-btn"
-                            onclick="toggleCommentMenu(event, this)"
-                            aria-label="Comment options"
-                        >
-                            ⋮
-                        </button>
-
-                        <div class="comment-menu-dropdown">
-                            <button
-                                type="button"
-                                class="comment-menu-item"
-                                onclick="showEditCommentForm(${reply.id})"
-                            >
-                                Edit
-                            </button>
-
-                            <form
-                                method="POST"
-                                action="/tasks/comments/${reply.id}/delete"
-                                onsubmit="return confirm('Delete this comment?')"
-                            >
-                                <button type="submit" class="comment-menu-item danger">
-                                    Delete
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                    ` : ""}
-
-                    <div class="comment-head">
-                        <strong>${reply.user_name}</strong>
-                        <span>${reply.time}</span>
-                    </div>
-
-                    <p id="comment-message-${reply.id}">${reply.message}</p>
-
-                    <form
-                        method="POST"
-                        action="/tasks/comments/${reply.id}/edit"
-                        class="comment-edit-form"
-                        id="comment-edit-form-${reply.id}"
-                        style="display:none;"
-                    >
-                        <textarea name="message" rows="3" required>${reply.message}</textarea>
-
-                        <div class="comment-edit-actions">
-                            <button type="submit">Save</button>
-                            <button
-                                type="button"
-                                onclick="hideEditCommentForm(${reply.id})"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-
-                </div>
-
-                <div class="comment-actions">
-                    <button
-                        type="button"
-                        class="reply-text-btn"
-                        data-id="${reply.id}"
-                        onclick="toggleReply(this.dataset.id)"
-                    >
-                        Reply
-                    </button>
-                </div>
-
-                <div
-                    id="reply-form-${reply.id}"
-                    class="reply-form"
-                    style="display:none;"
-                >
-                    <form
-                        method="POST"
-                        action="/tasks/comments/${reply.id}/reply"
-                    >
-                        <textarea
-                            name="message"
-                            rows="2"
-                            placeholder="Write a reply..."
-                            required
-                        ></textarea>
-
-                        <button type="submit">Reply</button>
-                    </form>
-                </div>
-
-            </div>
-
-        </div>
-    `;
-}
-
-document.addEventListener("submit", async function (event) {
-    const form = event.target;
-
-    if (!form.action || !form.action.includes("/comments/") || !form.action.includes("/reply")) {
-        return;
-    }
-
-    event.preventDefault();
-
-    const textarea = form.querySelector("textarea");
-    const submitBtn = form.querySelector("button[type='submit']");
-
-    if (!textarea || !textarea.value.trim()) return;
-
-    submitBtn.disabled = true;
-
-    try {
-        const response = await fetch(form.action, {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
-            }
-        });
-
-        const data = await response.json();
-
-        if (!data.success) {
-            alert(data.message || "Reply failed.");
-            return;
-        }
-
-        let parentMain = form.closest(".comment-main");
-
-        let replyList = parentMain.querySelector(":scope > .reply-list");
-
-        if (!replyList) {
-            replyList = document.createElement("div");
-            replyList.className = "reply-list";
-            parentMain.appendChild(replyList);
-        }
-
-        replyList.insertAdjacentHTML(
-            "beforeend",
-            createReplyHTML(data.reply)
-        );
-
-        textarea.value = "";
-
-        const replyFormWrapper = form.closest(".reply-form");
-        if (replyFormWrapper) {
-            replyFormWrapper.style.display = "none";
-        }
-
-        const newReply = replyList.querySelector(".ajax-new-comment:last-child");
-
-        if (newReply) {
-            newReply.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
-
-            setTimeout(function () {
-                newReply.classList.remove("ajax-new-comment");
-            }, 800);
-        }
-
-        if (window.fetchNotifications) {
-            window.fetchNotifications(false);
-        }
-
-    } catch (error) {
-        console.log(error);
-        alert("Something went wrong while adding reply.");
-    } finally {
-        submitBtn.disabled = false;
-    }
-});
-</script>
+    </script>
 </body>
 
 </html>

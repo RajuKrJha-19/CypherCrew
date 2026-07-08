@@ -160,7 +160,7 @@ def build_task_update_message(changes):
     message = f"Task updated by {current_user.name}\n\nChanges:\n"
 
     for label, old_value, new_value in changes:
-        message += f"\n{label}\n{old_value or '-'} → {new_value or '-'}\n"
+        message += f"\n{label}\n{old_value or '-'} â†’ {new_value or '-'}\n"
 
     return message
 
@@ -284,7 +284,7 @@ def list_tasks():
 
     completed_tasks = len([
         task for task in tasks
-        if task.status == "Published"
+        if task.employee_completed
     ])
 
     review_tasks = len([
@@ -924,7 +924,7 @@ def edit_task(task_id):
 
             if new_status == "Published":
                 pause_timer(task)
-                task.completed_at = datetime.utcnow()
+                task.completed_at = ist_now()
 
             record_status_time(
                 task,
@@ -1203,7 +1203,7 @@ def submit_review(task_id):
 
         if not task.employee_completed:
             task.employee_completed = True
-            task.employee_completed_at = datetime.utcnow()
+            task.employee_completed_at = ist_now()
 
         old_status = record_status_time(
             task,
@@ -1297,7 +1297,7 @@ def approve_task(task_id):
             new_status="Published"
         )
 
-        task.completed_at = datetime.utcnow()
+        task.completed_at = ist_now()
         status_changed = True
 
         task.deliverable.completed_count += 1
@@ -1416,16 +1416,21 @@ def reject_task(task_id):
     )
 
     old_status = record_status_time(
-        task,
-        "In Progress"
+    task,
+        "Assigned"
     )
+
+    task.employee_completed = False
+    task.employee_completed_at = None
+    task.timer_started_at = None
+    task.started_at = None
 
     add_activity(
         task,
         action="rejected",
         message=f"Rejected by {current_user.name}: {message}",
         old_status=old_status,
-        new_status="In Progress"
+        new_status="Assigned"
     )
 
     db.session.add(feedback)
@@ -1442,7 +1447,7 @@ def reject_task(task_id):
     db.session.commit()
 
     flash(
-        "Task rejected and reassigned to employee.",
+        "Task rejected and moved back to assigned.",
         "success"
     )
 
@@ -1470,6 +1475,7 @@ def task_detail(task_id):
         if not can_view:
             return redirect(url_for("tasks.list_tasks"))
 
+    live_seconds = get_live_worked_seconds(task)
     current_status_seconds = 0
 
     if task.status_started_at and task.status != "Published":
@@ -1477,7 +1483,23 @@ def task_detail(task_id):
             (datetime.utcnow() - task.status_started_at).total_seconds()
         )
 
-    live_seconds = get_live_worked_seconds(task)
+    timer_status_label = task.status
+
+    if task.status == "Assigned":
+        rejected_activity = (
+            TaskActivity.query
+            .filter_by(
+                task_id=task.id,
+                action="rejected"
+            )
+            .order_by(
+                TaskActivity.created_at.desc()
+            )
+            .first()
+        )
+
+        if rejected_activity:
+            timer_status_label = "Reassigned"
 
     activities = TaskActivity.query.filter_by(
         task_id=task.id
@@ -1511,6 +1533,7 @@ def task_detail(task_id):
         client_review_time=format_seconds(task.client_review_seconds),
         current_status_seconds=current_status_seconds,
         current_status=task.status,
+        timer_status_label=timer_status_label,
         timedelta=timedelta,
         comments=comments
     )
@@ -1578,7 +1601,7 @@ def add_comment(task_id):
                 "user_name": comment.user.name,
                 "avatar": comment.user.name[:1].upper(),
                 "message": comment.message,
-                "time": (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p"),
+                "time": (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y â€¢ %I:%M %p"),
                 "can_edit": comment.user_id == current_user.id
             }
         })
@@ -1649,7 +1672,7 @@ def reply_comment(comment_id):
                 "user_name": reply.user.name,
                 "avatar": reply.user.name[:1].upper(),
                 "message": reply.message,
-                "time": (reply.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p"),
+                "time": (reply.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y â€¢ %I:%M %p"),
                 "can_edit": reply.user_id == current_user.id
             }
         })
