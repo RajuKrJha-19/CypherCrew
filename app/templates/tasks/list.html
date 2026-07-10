@@ -46,26 +46,40 @@
             {% endwith %}
 
             <div class="stats-grid">
-                <div class="metric-card">
-                    <span>Total Tasks</span>
-                    <strong>{{ total_tasks }}</strong>
-                </div>
 
-                <div class="metric-card">
-                    <span>In Review</span>
-                    <strong>{{ review_tasks }}</strong>
-                </div>
+    <a href="{{ url_for('tasks.filtered_tasks', filter_type='all') }}"
+       class="metric-card metric-card-link">
 
-                <div class="metric-card">
-                    <span>Completed</span>
-                    <strong>{{ completed_tasks }}</strong>
-                </div>
+        <span>Total Tasks</span>
+        <strong>{{ total_tasks }}</strong>
 
-                <div class="metric-card warning">
-                    <span>Overdue</span>
-                    <strong>{{ overdue_tasks }}</strong>
-                </div>
-            </div>
+    </a>
+
+    <a href="{{ url_for('tasks.filtered_tasks', filter_type='review') }}"
+       class="metric-card metric-card-link">
+
+        <span>In Review</span>
+        <strong>{{ review_tasks }}</strong>
+
+    </a>
+
+    <a href="{{ url_for('tasks.filtered_tasks', filter_type='completed') }}"
+       class="metric-card metric-card-link">
+
+        <span>Completed</span>
+        <strong>{{ completed_tasks }}</strong>
+
+    </a>
+
+    <a href="{{ url_for('tasks.filtered_tasks', filter_type='overdue') }}"
+       class="metric-card metric-card-link warning">
+
+        <span>Overdue</span>
+        <strong>{{ overdue_tasks }}</strong>
+
+    </a>
+
+</div>
 
             <form method="GET" class="filter-bar" id="taskFilterForm">
 
@@ -717,53 +731,7 @@
 
         });
 
-        .table - pagination - footer{
-            display: flex;
-            justify - content: space - between;
-            align - items: center;
-            padding: 12px 4px 0;
-            border - top: 1px solid #e5e7eb;
-            margin - top: 10px;
-        }
-
-.table - pagination - controls{
-            display: flex;
-            align - items: center;
-            gap: 16px;
-            color:#111827;
-            font - size: 13px;
-        }
-
-.table - pagination - controls label{
-            display: flex;
-            align - items: center;
-            gap: 8px;
-            font - size: 12px;
-        }
-
-.table - pagination - controls select{
-            height: 32px;
-            border: 1px solid #2563eb;
-            border - radius: 4px;
-            padding: 0 8px;
-            background: #fff;
-            color:#111827;
-        }
-
-.table - pagination - controls button{
-            border: 0;
-            background: transparent;
-            font - size: 24px;
-            line - height: 1;
-            cursor: pointer;
-            color:#111827;
-            padding: 2px 4px;
-        }
-
-.table - pagination - controls button:disabled{
-            color: #cbd5e1;
-            cursor: not - allowed;
-        }
+        
     </script>
 
 </body>

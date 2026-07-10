@@ -325,39 +325,66 @@ def filtered_tasks(filter_type):
     page_title = "Tasks"
     page_subtitle = "Filtered task list"
 
-    if filter_type == "total":
+    if filter_type in ["total", "all"]:
+
         page_title = "Total Tasks"
         page_subtitle = "All tasks available to you"
 
+        # No extra filter required.
+        # Base query already contains all tasks visible to current user.
+
     elif filter_type == "review":
+
         page_title = "In Review Tasks"
         page_subtitle = "Tasks currently in Core Review or Client Review"
+
         query = query.filter(
-            Task.status.in_(["Core Review", "Client Review"])
+            Task.status.in_([
+                "Core Review",
+                "Client Review"
+            ])
         )
 
     elif filter_type == "completed":
+
         page_title = "Completed Tasks"
         page_subtitle = "Tasks submitted by employees for review"
+
         query = query.filter(
-            Task.employee_completed == True
+            Task.employee_completed.is_(True)
         )
 
     elif filter_type == "overdue":
+
         page_title = "Overdue Tasks"
         page_subtitle = "Tasks whose deadline has passed"
+
         query = query.filter(
             Task.deadline.isnot(None),
             Task.deadline < ist_now(),
-            Task.status.in_(["Assigned", "In Progress", "Paused"])
+            Task.status.in_([
+                "Assigned",
+                "In Progress",
+                "Paused"
+            ])
         )
 
     else:
-        flash("Invalid task filter.", "error")
-        return redirect(url_for("tasks.list_tasks"))
+
+        flash(
+            "Invalid task filter.",
+            "error"
+        )
+
+        return redirect(
+            url_for("tasks.list_tasks")
+        )
 
     if search:
-        query = apply_task_search(query, search)
+        query = apply_task_search(
+            query,
+            search
+        )
 
     tasks = query.order_by(
         Task.deadline.asc().nullslast(),
