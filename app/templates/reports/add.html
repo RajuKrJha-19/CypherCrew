@@ -14,66 +14,163 @@
 
 <main class="main">
 
-    <div class="form-card add-task-card">
-        <h1>Add Daily Report</h1>
-        <p>Submit your work update for today</p>
+    <div class="page-header">
+        <div>
+            <h1>Add Daily Report</h1>
+            <p>Auto-generated task summary for today</p>
+        </div>
 
-        <form method="POST">
+        <div class="top-actions">
+            {% include "partials/notification_widget.html" %}
+            <a href="{{ url_for('reports.list_reports') }}" class="btn">Back</a>
+        </div>
+    </div>
 
-            <label>Task</label>
-            <select name="task_id" required>
-                <option value="">Select Task</option>
-                <option value="general">General Work / Other</option>
-                {% for task in tasks %}
-                    <option value="{{ task.id }}">
-                        {{ task.client.client_name }} - {{ task.title }}
-                    </option>
+    <form method="POST" class="daily-report-page">
+
+        <div class="report-summary-grid">
+
+            <div class="report-mini-card">
+                <span>Completed Today</span>
+                <strong>{{ completed_tasks|length }}</strong>
+            </div>
+
+            <div class="report-mini-card">
+                <span>In Progress</span>
+                <strong>{{ in_progress_tasks|length }}</strong>
+            </div>
+
+            <div class="report-mini-card">
+                <span>Assigned</span>
+                <strong>{{ assigned_tasks|length }}</strong>
+            </div>
+
+            <div class="report-mini-card">
+                <span>Hours Worked</span>
+                <strong>{{ total_hours }}</strong>
+                <small>Auto calculated</small>
+            </div>
+
+        </div>
+
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Work Completed</h2>
+                <p>Tasks completed by you today</p>
+            </div>
+
+            <div class="report-task-list">
+                {% for task in completed_tasks %}
+                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="report-task-item">
+                    <span>#{{ task.task_code }}</span>
+                    <strong>{{ task.title }}</strong>
+                    <em>{{ task.client.client_name if task.client else "-" }}</em>
+                </a>
+                {% else %}
+                <div class="report-empty">No completed tasks today.</div>
                 {% endfor %}
-            </select>
+            </div>
+        </section>
 
-            <label>Work Done</label>
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>In Progress</h2>
+                <p>Tasks currently being worked on</p>
+            </div>
+
+            <div class="report-task-list">
+                {% for task in in_progress_tasks %}
+                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="report-task-item">
+                    <span>#{{ task.task_code }}</span>
+                    <strong>{{ task.title }}</strong>
+                    <em>{{ task.client.client_name if task.client else "-" }}</em>
+                </a>
+                {% else %}
+                <div class="report-empty">No tasks in progress.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Assigned</h2>
+                <p>Tasks assigned but not started yet</p>
+            </div>
+
+            <div class="report-task-list">
+                {% for task in assigned_tasks %}
+                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="report-task-item">
+                    <span>#{{ task.task_code }}</span>
+                    <strong>{{ task.title }}</strong>
+                    <em>{{ task.client.client_name if task.client else "-" }}</em>
+                </a>
+                {% else %}
+                <div class="report-empty">No assigned tasks pending.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Today's Summary <b>*</b></h2>
+                <p>Write a short summary of your day</p>
+            </div>
+
             <textarea
                 name="completed_work"
-                rows="4"
-                placeholder="Write what you completed today"
+                rows="5"
+                placeholder="Example: Completed 3 creatives, updated client landing page, and submitted campaign assets for review."
                 required
             ></textarea>
+        </section>
 
-            <label>Hours Worked</label>
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Hours Worked</h2>
+                <p>Automatically calculated from completed tasks</p>
+            </div>
+
             <input
-                type="number"
-                step="0.5"
-                name="hours_worked"
-                value="0"
+                type="text"
+                value="{{ total_hours }} hrs"
+                readonly
             >
+        </section>
 
-            <label>In Progress Work</label>
-            <textarea
-                name="in_progress_work"
-                rows="3"
-                placeholder="What is still in progress?"
-            ></textarea>
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Issues / Blockers</h2>
+                <p>Mention any blockers faced today</p>
+            </div>
 
-            <label>Issues / Blockers</label>
             <textarea
                 name="issues"
-                rows="3"
-                placeholder="Any issue or blocker?"
+                rows="4"
+                placeholder="Example: Waiting for client approval, missing content, access issue..."
             ></textarea>
+        </section>
 
-            <label>Tomorrow Plan</label>
+        <section class="report-section">
+            <div class="report-section-head">
+                <h2>Tomorrow Plan</h2>
+                <p>Optional plan for the next working day</p>
+            </div>
+
             <textarea
                 name="tomorrow_plan"
-                rows="3"
-                placeholder="Plan for tomorrow"
+                rows="4"
+                placeholder="Write your plan for tomorrow..."
             ></textarea>
+        </section>
 
-            <button type="submit">
-                Submit Report
-            </button>
+        <input type="hidden" name="in_progress_work"
+               value="{% for task in in_progress_tasks %}#{{ task.task_code }} - {{ task.title }}{% if not loop.last %}&#10;{% endif %}{% endfor %}">
 
-        </form>
-    </div>
+        <button type="submit" class="report-submit-btn">
+            Submit Daily Report
+        </button>
+
+    </form>
 
 </main>
 

@@ -145,7 +145,7 @@
 
             <label>Status</label>
             <select name="status">
-                {% for status in ["Pending", "In Progress", "Hold", "Core Review", "Client Review", "Published"] %}
+                {% for status in ["Assigned", "In Progress", "Pause", "Core Review", "Client Review", "Published"] %}
                     <option value="{{ status }}" {% if task.status == status %}selected{% endif %}>
                         {{ status }}
                     </option>

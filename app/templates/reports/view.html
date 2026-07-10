@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Report Details | CypherCrew</title>
+    <title>Daily Report | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
@@ -16,82 +16,283 @@
 
     <div class="page-header">
         <div>
+            <a href="{{ url_for('reports.list_reports') }}" class="filtered-back-btn">
+                ← Back
+            </a>
+
             <h1>Daily Report</h1>
-            <p>{{ report.report_date.strftime("%d %b %Y") }}</p>
+
+            <p>
+                {{ report.report_date.strftime("%d %b %Y") }}
+                {% if submitted_at %}
+                    | {{ submitted_at.strftime("%I:%M %p") }}
+                {% endif %}
+            </p>
         </div>
 
         <div class="top-actions">
             {% include "partials/notification_widget.html" %}
-            <a href="{{ url_for('reports.list_reports') }}" class="btn">
-                Back
-            </a>
+            <button type="button" class="btn" onclick="window.print()">
+                Print
+            </button>
         </div>
     </div>
 
-    <div class="task-detail-grid">
+    <div class="daily-report-view">
 
-        <div class="table-card">
-            <h2 class="card-title">Report Info</h2>
+        <section class="report-profile-card">
 
-            <div class="detail-row">
+            <div>
                 <span>Employee</span>
-                <strong>{{ report.employee.name }}</strong>
+                <h2>{{ employee.name }}</h2>
+                <p>{{ employee.designation or "Team Member" }}</p>
             </div>
 
-            <div class="detail-row">
-                <span>Task</span>
-                <strong>
-                    {% if report.task %}
-                        {{ report.task.title }}
-                    {% else %}
-                        General Work / Other
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="detail-row">
-                <span>Client</span>
-                <strong>
-                    {% if report.task and report.task.client %}
-                        {{ report.task.client.client_name }}
+            <div>
+                <span>Submitted</span>
+                <h2>
+                    {% if submitted_at %}
+                        {{ submitted_at.strftime("%I:%M %p") }}
                     {% else %}
                         -
                     {% endif %}
-                </strong>
+                </h2>
+                <p>{{ report.report_date.strftime("%d %b %Y") }}</p>
             </div>
 
-            <div class="detail-row">
-                <span>Service</span>
-                <strong>
-                    {% if report.task and report.task.deliverable %}
-                        {{ report.task.deliverable.service_name }}
-                    {% else %}
-                        -
-                    {% endif %}
-                </strong>
+        </section>
+
+        <section class="report-kpi-grid">
+
+            <div class="report-kpi-card completed">
+                <span>Tasks Completed</span>
+                <strong>{{ completed_count }}</strong>
             </div>
 
-            <div class="detail-row">
-                <span>Hours Worked</span>
-                <strong>{{ report.hours_worked }}</strong>
+            <div class="report-kpi-card progress">
+                <span>In Progress</span>
+                <strong>{{ in_progress_count }}</strong>
             </div>
-        </div>
 
-        <div class="table-card">
-            <h2 class="card-title">Work Update</h2>
+            <div class="report-kpi-card assigned">
+                <span>Assigned</span>
+                <strong>{{ assigned_count }}</strong>
+            </div>
 
-            <h3 class="report-section-title">Completed Work</h3>
-            <p class="report-text">{{ report.completed_work }}</p>
+            <div class="report-kpi-card time">
+                <span>Total Worked</span>
+                <strong>{{ total_worked_time }}</strong>
+            </div>
 
-            <h3 class="report-section-title">In Progress Work</h3>
-            <p class="report-text">{{ report.in_progress_work or "-" }}</p>
+        </section>
 
-            <h3 class="report-section-title">Issues / Blockers</h3>
-            <p class="report-text">{{ report.issues or "-" }}</p>
+        <section class="report-panel">
+            <div class="report-panel-head">
+                <h2>Completed Tasks</h2>
+                <span>{{ completed_count }}</span>
+            </div>
 
-            <h3 class="report-section-title">Tomorrow Plan</h3>
-            <p class="report-text">{{ report.tomorrow_plan or "-" }}</p>
-        </div>
+            <div class="report-table-wrap">
+                <table class="report-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Task ID</th>
+                            <th>Task</th>
+                            <th>Client</th>
+                            <th>Worked Time</th>
+                            <th>Submitted</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in completed_task_rows %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('tasks.task_detail', task_id=row.task.id) }}" class="table-link">
+                                    #{{ row.task.task_code }}
+                                </a>
+                            </td>
+
+                            <td>
+                                <strong>{{ row.task.title }}</strong>
+                                <span>
+                                    {{ row.task.deliverable.deliverable_name if row.task.deliverable else "-" }}
+                                </span>
+                            </td>
+
+                            <td>{{ row.task.client.client_name if row.task.client else "-" }}</td>
+
+                            <td>{{ row.worked_time }}</td>
+
+                            <td>
+                                {% if row.submitted_at %}
+                                    {{ row.submitted_at.strftime("%I:%M %p") }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="empty-table-text">
+                                No tasks completed on this date.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="report-panel">
+            <div class="report-panel-head">
+                <h2>In Progress Tasks</h2>
+                <span>{{ in_progress_count }}</span>
+            </div>
+
+            <div class="report-table-wrap">
+                <table class="report-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Task ID</th>
+                            <th>Task</th>
+                            <th>Client</th>
+                            <th>Started</th>
+                            <th>Worked</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in in_progress_task_rows %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('tasks.task_detail', task_id=row.task.id) }}" class="table-link">
+                                    #{{ row.task.task_code }}
+                                </a>
+                            </td>
+
+                            <td>
+                                <strong>{{ row.task.title }}</strong>
+                                <span>
+                                    {{ row.task.deliverable.deliverable_name if row.task.deliverable else "-" }}
+                                </span>
+                            </td>
+
+                            <td>{{ row.task.client.client_name if row.task.client else "-" }}</td>
+
+                            <td>
+                                {% if row.started_at %}
+                                    {{ row.started_at.strftime("%I:%M %p") }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+
+                            <td>{{ row.worked_time }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="empty-table-text">
+                                No tasks in progress.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="report-panel">
+            <div class="report-panel-head">
+                <h2>Assigned Tasks</h2>
+                <span>{{ assigned_count }}</span>
+            </div>
+
+            <div class="report-table-wrap">
+                <table class="report-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Task ID</th>
+                            <th>Task</th>
+                            <th>Client</th>
+                            <th>Deadline</th>
+                            <th>Priority</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in assigned_task_rows %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('tasks.task_detail', task_id=row.task.id) }}" class="table-link">
+                                    #{{ row.task.task_code }}
+                                </a>
+                            </td>
+
+                            <td>
+                                <strong>{{ row.task.title }}</strong>
+                                <span>
+                                    {{ row.task.deliverable.deliverable_name if row.task.deliverable else "-" }}
+                                </span>
+                            </td>
+
+                            <td>{{ row.task.client.client_name if row.task.client else "-" }}</td>
+
+                            <td>
+                                {% if row.deadline %}
+                                    {{ row.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <span class="status-pill">
+                                    {{ row.task.priority }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="empty-table-text">
+                                No assigned tasks pending.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="report-panel">
+            <div class="report-panel-head">
+                <h2>Today's Summary</h2>
+            </div>
+
+            <div class="report-text-box">
+                {{ report.completed_work }}
+            </div>
+        </section>
+
+        <section class="report-panel issues-panel">
+            <div class="report-panel-head">
+                <h2>Issues / Blockers</h2>
+            </div>
+
+            <div class="report-text-box">
+                {{ report.issues or "No issues or blockers reported." }}
+            </div>
+        </section>
+
+        <section class="report-panel">
+            <div class="report-panel-head">
+                <h2>Tomorrow Plan</h2>
+            </div>
+
+            <div class="report-text-box">
+                {{ report.tomorrow_plan or "No plan added." }}
+            </div>
+        </section>
 
     </div>
 

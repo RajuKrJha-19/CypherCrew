@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ page_title }} | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="layout">
+
+        {% include "partials/sidebar.html" %}
+
+        <main class="main">
+
+            <div class="page-header">
+                <div>
+                    <a href="{{ url_for('tasks.list_tasks') }}" class="filtered-back-btn">
+                        ← Back to Tasks
+                    </a>
+
+                    <h1>{{ page_title }}</h1>
+                    <p>{{ page_subtitle }}</p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                </div>
+            </div>
+
+            <div class="filtered-task-card">
+
+                <form method="GET" class="filtered-task-search" id="filteredTaskSearchForm">
+
+                    <div class="task-search-wrap">
+                        <input type="text" name="q" id="filteredTaskSearchInput"
+                            placeholder="Search by task id, title, client, employee..." value="{{ search }}"
+                            autocomplete="off">
+
+                        <div class="task-search-suggestions" id="filteredTaskSearchSuggestions"></div>
+                    </div>
+
+                    <a href="{{ url_for('tasks.filtered_tasks', filter_type=filter_type) }}" class="reset-btn">
+                        Reset
+                    </a>
+
+                </form>
+
+                <div class="filtered-table-wrap">
+
+                    <table class="filtered-task-table">
+                        <thead>
+                            <tr>
+                                <th>Task ID</th>
+                                <th>Task</th>
+                                <th>Assigned At</th>
+                                <th>Deadline</th>
+                                <th>Assigned To</th>
+                                <th>Assigned By</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for task in tasks %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="table-link">
+                                        #{{ task.task_code }}
+                                    </a>
+                                </td>
+
+                                <td>
+                                    <strong>{{ task.title }}</strong>
+                                    <span>
+                                        {{ task.client.client_name if task.client else "-" }}
+                                        {% if task.deliverable %}
+                                        • {{ task.deliverable.deliverable_name }}
+                                        {% endif %}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    {% if task.created_at %}
+                                    {{ (task.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p")
+                                    }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if task.deadline %}
+                                    {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ task.assigned_to.name if task.assigned_to else "-" }}
+                                </td>
+
+                                <td>
+                                    {{ task.created_by.name if task.created_by else "-" }}
+                                </td>
+
+                                <td>
+                                    <span class="status-pill">
+                                        {{ task.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="empty-table-text">
+                                    No tasks found.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <p class="filtered-count">
+                    Showing {{ tasks|length }} task{{ "s" if tasks|length != 1 else "" }}
+                </p>
+
+            </div>
+
+        </main>
+
+    </div>
+    <script>
+        const filteredTaskSearchInput = document.getElementById("filteredTaskSearchInput");
+        const filteredTaskSearchSuggestions = document.getElementById("filteredTaskSearchSuggestions");
+        const filteredTaskSearchForm = document.getElementById("filteredTaskSearchForm");
+
+        let filteredSuggestionTimer = null;
+        let filteredActiveIndex = -1;
+
+        function escapeHtml(value) {
+            if (!value) return "";
+
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function hideFilteredSuggestions() {
+            if (!filteredTaskSearchSuggestions) return;
+
+            filteredTaskSearchSuggestions.innerHTML = "";
+            filteredTaskSearchSuggestions.classList.remove("show");
+            filteredActiveIndex = -1;
+        }
+
+        function showFilteredSuggestions(suggestions) {
+            if (!filteredTaskSearchSuggestions) return;
+
+            filteredActiveIndex = -1;
+
+            if (!suggestions.length) {
+                filteredTaskSearchSuggestions.innerHTML = `
+            <div class="task-suggestion-empty">
+                No matching task found
+            </div>
+        `;
+                filteredTaskSearchSuggestions.classList.add("show");
+                return;
+            }
+
+            filteredTaskSearchSuggestions.innerHTML = suggestions.map(function (task, index) {
+                return `
+            <a href="/tasks/${task.id}" class="task-suggestion-item" data-index="${index}">
+                <span class="task-suggestion-code">#${escapeHtml(task.task_code)}</span>
+
+                <div>
+                    <strong>${escapeHtml(task.title)}</strong>
+                    <small>
+                        ${escapeHtml(task.client)}
+                        •
+                        ${escapeHtml(task.assigned_to)}
+                        •
+                        ${escapeHtml(task.status)}
+                    </small>
+                </div>
+            </a>
+        `;
+            }).join("");
+
+            filteredTaskSearchSuggestions.classList.add("show");
+        }
+
+        function fetchFilteredSuggestions() {
+            const query = filteredTaskSearchInput.value.trim();
+
+            if (!query) {
+                hideFilteredSuggestions();
+                return;
+            }
+
+            fetch("/tasks/suggestions?q=" + encodeURIComponent(query))
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+                    showFilteredSuggestions(data.suggestions || []);
+                })
+                .catch(function () {
+                    hideFilteredSuggestions();
+                });
+        }
+
+        function setFilteredActiveSuggestion(index) {
+            const items = document.querySelectorAll("#filteredTaskSearchSuggestions .task-suggestion-item");
+
+            if (!items.length) return;
+
+            if (index < 0) index = items.length - 1;
+            if (index >= items.length) index = 0;
+
+            items.forEach(function (item) {
+                item.classList.remove("active");
+            });
+
+            items[index].classList.add("active");
+            filteredActiveIndex = index;
+        }
+
+        if (filteredTaskSearchInput) {
+            filteredTaskSearchInput.addEventListener("input", function () {
+                clearTimeout(filteredSuggestionTimer);
+
+                filteredSuggestionTimer = setTimeout(function () {
+                    fetchFilteredSuggestions();
+                }, 250);
+            });
+
+            filteredTaskSearchInput.addEventListener("keydown", function (event) {
+                const items = document.querySelectorAll("#filteredTaskSearchSuggestions .task-suggestion-item");
+
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setFilteredActiveSuggestion(filteredActiveIndex + 1);
+                }
+
+                if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setFilteredActiveSuggestion(filteredActiveIndex - 1);
+                }
+
+                if (event.key === "Enter") {
+                    if (filteredActiveIndex >= 0 && items[filteredActiveIndex]) {
+                        event.preventDefault();
+                        window.location.href = items[filteredActiveIndex].href;
+                    }
+                }
+
+                if (event.key === "Escape") {
+                    hideFilteredSuggestions();
+                }
+            });
+
+            filteredTaskSearchInput.addEventListener("focus", function () {
+                if (filteredTaskSearchInput.value.trim()) {
+                    fetchFilteredSuggestions();
+                }
+            });
+        }
+
+        document.addEventListener("click", function (event) {
+            if (!event.target.closest(".task-search-wrap")) {
+                hideFilteredSuggestions();
+            }
+        });
+    </script>
+</body>
+
+</html>

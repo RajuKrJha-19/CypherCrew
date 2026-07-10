@@ -202,105 +202,164 @@
                 {% endfor %}
             </div>
 
-            <div class="table-card">
-                <div class="section-heading">
+            <div class="section-heading">
+
+                <div>
                     <h2>Task List</h2>
                     <p>Detailed view for review and follow-up</p>
                 </div>
 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Task ID</th>
-                            <th>Task</th>
-                            <th>Client</th>
-                            <th>Service</th>
-                            <th>Deliverable</th>
-                            <th>Assigned To</th>
-                            <th>Deadline</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
+                <div class="column-customizer">
 
-                    <tbody>
-                        {% for task in tasks %}
+                    <button type="button" id="columnCustomizerBtn" class="mini-link">
+                        ⚙ Columns
+                    </button>
 
-                        <tr data-task-id="{{ task.id }}">
-                            <td>
-                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="task-code-badge">
-                                    #{{ task.task_code }}
-                                </a>
-                            </td>
+                    <div class="column-dropdown" id="columnDropdown">
 
-                            <td>
-                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
-                                    {{ task.title }}
-                                </a>
-                            </td>
+                        <label><input type="checkbox" value="task_id" checked> Task ID</label>
+                        <label><input type="checkbox" value="task" checked> Task</label>
+                        <label><input type="checkbox" value="client" checked> Client</label>
+                        <label><input type="checkbox" value="service" checked> Service</label>
+                        <label><input type="checkbox" value="deliverable" checked> Deliverable</label>
+                        <label><input type="checkbox" value="assigned_to" checked> Assigned To</label>
+                        <label><input type="checkbox" value="deadline" checked> Deadline</label>
+                        <label><input type="checkbox" value="status" checked> Status</label>
+                        <label><input type="checkbox" value="action" checked> Action</label>
 
-                            <td>{{ task.client.client_name }}</td>
-                            <td>{{ task.deliverable.service_name }}</td>
-                            <td>{{ task.deliverable.deliverable_name }}</td>
+                        <hr>
 
-                            <td>
-                                {{ task.assigned_to.name if task.assigned_to else "-" }}
-                            </td>
+                        <button type="button" id="resetColumns" class="mini-link">
+                            Reset Default
+                        </button>
 
-                            <td>
-                                {% if task.deadline %}
-                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
+                    </div>
 
-                            <td>
-                                <span class="status-pill">
-                                    {{ task.status }}
-                                </span>
-                            </td>
+                </div>
 
-                            <td>
-                                <div class="table-actions">
-
-                                    <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="mini-link">
-                                        View
-                                    </a>
-
-                                    {% if has_permission(current_user, "manage_tasks") %}
-                                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="mini-link">
-                                        Manage
-                                    </a>
-                                    {% endif %}
-
-                                    {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
-                                    task.assigned_to_id == current_user.id) %}
-                                    <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
-                                        <button type="submit" class="mini-action">
-                                            Start
-                                        </button>
-                                    </form>
-                                    {% endif %}
-
-                                </div>
-                            </td>
-                        </tr>
-
-                        {% else %}
-
-                        <tr>
-                            <td colspan="9">
-                                No tasks found.
-                            </td>
-                        </tr>
-
-                        {% endfor %}
-                    </tbody>
-                </table>
             </div>
 
-        </main>
+            <table id="taskListTable">
+                <thead>
+                    <tr>
+                        <th data-column="task_id">Task ID</th>
+                        <th data-column="task">Task</th>
+                        <th data-column="client">Client</th>
+                        <th data-column="service">Service</th>
+                        <th data-column="deliverable">Deliverable</th>
+                        <th data-column="assigned_to">Assigned To</th>
+                        <th data-column="deadline">Deadline</th>
+                        <th data-column="status">Status</th>
+                        <th data-column="action">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for task in tasks %}
+
+                    <tr data-task-id="{{ task.id }}">
+                        <td data-column="task_id">
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="task-code-badge">
+                                #{{ task.task_code }}
+                            </a>
+                        </td>
+
+                        <td data-column="task">
+                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                                {{ task.title }}
+                            </a>
+                        </td>
+
+                        <td data-column="client">{{ task.client.client_name }}</td>
+                        <td data-column="service">{{ task.deliverable.service_name }}</td>
+                        <td data-column="deliverable">{{ task.deliverable.deliverable_name }}</td>
+
+                        <td data-column="assigned_to">
+                            {{ task.assigned_to.name if task.assigned_to else "-" }}
+                        </td>
+
+                        <td data-column="deadline">
+                            {% if task.deadline %}
+                            {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+
+                        <td data-column="status">
+                            <span class="status-pill">
+                                {{ task.status }}
+                            </span>
+                        </td>
+
+                        <td data-column="action">
+                            <div class="table-actions">
+
+                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="mini-link">
+                                    View
+                                </a>
+
+                                {% if has_permission(current_user, "manage_tasks") %}
+                                <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="mini-link">
+                                    Manage
+                                </a>
+                                {% endif %}
+
+                                {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
+                                task.assigned_to_id == current_user.id) %}
+                                <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                    <button type="submit" class="mini-action">
+                                        Start
+                                    </button>
+                                </form>
+                                {% endif %}
+
+                            </div>
+                        </td>
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="9">
+                            No tasks found.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="table-pagination-footer">
+
+                <div></div>
+
+                <div class="table-pagination-controls">
+
+                    <label>
+                        Show rows:
+                        <select id="tableRowsSelect">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+
+                    <span id="tableRangeText">
+                        1 - 10 of 0
+                    </span>
+
+                    <button type="button" id="firstPageBtn">|‹</button>
+                    <button type="button" id="prevPageBtn">‹</button>
+                    <button type="button" id="nextPageBtn">›</button>
+                    <button type="button" id="lastPageBtn">›|</button>
+
+                </div>
+
+            </div>
+    </div>
+
+    </main>
 
     </div>
 
@@ -529,7 +588,106 @@
                 hideSuggestions();
             }
         });
+        /* ==========================
+           COLUMN CUSTOMIZER
+        ========================== */
 
+        const customizerBtn = document.getElementById("columnCustomizerBtn");
+        const dropdown = document.getElementById("columnDropdown");
+
+        if (customizerBtn) {
+
+            customizerBtn.onclick = function (e) {
+                e.stopPropagation();
+                dropdown.classList.toggle("show");
+            };
+
+            document.addEventListener("click", function () {
+
+                dropdown.classList.remove("show");
+
+            });
+
+            dropdown.onclick = function (e) {
+
+                e.stopPropagation();
+
+            };
+
+            function updateColumns() {
+
+                const selected = [];
+
+                dropdown.querySelectorAll("input").forEach(function (cb) {
+
+                    if (cb.checked) {
+
+                        selected.push(cb.value);
+
+                    }
+
+                });
+
+                localStorage.setItem(
+                    "task_columns",
+                    JSON.stringify(selected)
+                );
+
+                document.querySelectorAll("[data-column]").forEach(function (el) {
+
+                    if (selected.includes(el.dataset.column)) {
+
+                        el.style.display = "";
+
+                    }
+
+                    else {
+
+                        el.style.display = "none";
+
+                    }
+
+                });
+
+            }
+
+            dropdown.querySelectorAll("input").forEach(function (cb) {
+
+                cb.addEventListener("change", updateColumns);
+
+            });
+
+            const saved = JSON.parse(
+                localStorage.getItem("task_columns")
+                ||
+                "null"
+            );
+
+            if (saved) {
+
+                dropdown.querySelectorAll("input").forEach(function (cb) {
+
+                    cb.checked = saved.includes(cb.value);
+
+                });
+
+            }
+
+            updateColumns();
+
+            document.getElementById("resetColumns").onclick = function () {
+
+                dropdown.querySelectorAll("input").forEach(function (cb) {
+
+                    cb.checked = true;
+
+                });
+
+                updateColumns();
+
+            };
+
+        }
         /* ==========================
            KANBAN COPY DESCRIPTION
         ========================== */
@@ -558,6 +716,54 @@
             });
 
         });
+
+        .table - pagination - footer{
+            display: flex;
+            justify - content: space - between;
+            align - items: center;
+            padding: 12px 4px 0;
+            border - top: 1px solid #e5e7eb;
+            margin - top: 10px;
+        }
+
+.table - pagination - controls{
+            display: flex;
+            align - items: center;
+            gap: 16px;
+            color:#111827;
+            font - size: 13px;
+        }
+
+.table - pagination - controls label{
+            display: flex;
+            align - items: center;
+            gap: 8px;
+            font - size: 12px;
+        }
+
+.table - pagination - controls select{
+            height: 32px;
+            border: 1px solid #2563eb;
+            border - radius: 4px;
+            padding: 0 8px;
+            background: #fff;
+            color:#111827;
+        }
+
+.table - pagination - controls button{
+            border: 0;
+            background: transparent;
+            font - size: 24px;
+            line - height: 1;
+            cursor: pointer;
+            color:#111827;
+            padding: 2px 4px;
+        }
+
+.table - pagination - controls button:disabled{
+            color: #cbd5e1;
+            cursor: not - allowed;
+        }
     </script>
 
 </body>

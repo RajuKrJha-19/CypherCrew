@@ -314,6 +314,65 @@ def list_tasks():
         overdue_tasks=overdue_tasks
     )
 
+@tasks_bp.route("/filtered/<string:filter_type>")
+@login_required
+def filtered_tasks(filter_type):
+
+    search = request.args.get("q", "").strip()
+
+    query = get_task_base_query()
+
+    page_title = "Tasks"
+    page_subtitle = "Filtered task list"
+
+    if filter_type == "total":
+        page_title = "Total Tasks"
+        page_subtitle = "All tasks available to you"
+
+    elif filter_type == "review":
+        page_title = "In Review Tasks"
+        page_subtitle = "Tasks currently in Core Review or Client Review"
+        query = query.filter(
+            Task.status.in_(["Core Review", "Client Review"])
+        )
+
+    elif filter_type == "completed":
+        page_title = "Completed Tasks"
+        page_subtitle = "Tasks submitted by employees for review"
+        query = query.filter(
+            Task.employee_completed == True
+        )
+
+    elif filter_type == "overdue":
+        page_title = "Overdue Tasks"
+        page_subtitle = "Tasks whose deadline has passed"
+        query = query.filter(
+            Task.deadline.isnot(None),
+            Task.deadline < ist_now(),
+            Task.status.in_(["Assigned", "In Progress", "Paused"])
+        )
+
+    else:
+        flash("Invalid task filter.", "error")
+        return redirect(url_for("tasks.list_tasks"))
+
+    if search:
+        query = apply_task_search(query, search)
+
+    tasks = query.order_by(
+        Task.deadline.asc().nullslast(),
+        Task.id.desc()
+    ).all()
+
+    return render_template(
+        "tasks/filtered.html",
+        tasks=tasks,
+        filter_type=filter_type,
+        page_title=page_title,
+        page_subtitle=page_subtitle,
+        search=search,
+        timedelta=timedelta
+    )
 
 @tasks_bp.route("/suggestions")
 @login_required
@@ -931,6 +990,12 @@ def edit_task(task_id):
                 new_status
             )
 
+            if new_status in ["Core Review", "Client Review", "Published"]:
+                task.employee_completed = True
+
+                if not task.employee_completed_at:
+                    task.employee_completed_at = ist_now()
+
         task.visible_to.clear()
 
         visibility_ids = request.form.getlist("visibility_ids")
@@ -1253,6 +1318,12 @@ def approve_task(task_id):
     task = Task.query.get_or_404(task_id)
     status_changed = False
 
+    if task.status in ["Core Review", "Client Review", "Published"]:
+        task.employee_completed = True
+
+        if not task.employee_completed_at:
+            task.employee_completed_at = ist_now()
+
     if task.status == "Core Review":
 
         old_status = record_status_time(
@@ -1282,7 +1353,9 @@ def approve_task(task_id):
                 "Task deliverable not found.",
                 "error"
             )
-            return redirect(url_for("tasks.list_tasks"))
+            return redirect(
+                request.referrer or url_for("tasks.list_tasks")
+            )
 
         old_status = record_status_time(
             task,
@@ -1326,7 +1399,9 @@ def approve_task(task_id):
 
     db.session.commit()
 
-    return redirect(url_for("tasks.list_tasks"))
+    return redirect(
+        request.referrer or url_for("tasks.list_tasks")
+    )
 
 
 @tasks_bp.route("/<int:task_id>/reject", methods=["POST"])
@@ -1344,7 +1419,7 @@ def reject_task(task_id):
             "error"
         )
         return redirect(
-            url_for(
+            request.referrer or url_for(
                 "tasks.task_detail",
                 task_id=task.id
             )
@@ -1365,7 +1440,7 @@ def reject_task(task_id):
             "error"
         )
         return redirect(
-            url_for(
+            request.referrer or url_for(
                 "tasks.task_detail",
                 task_id=task.id
             )
@@ -1416,7 +1491,7 @@ def reject_task(task_id):
     )
 
     old_status = record_status_time(
-    task,
+        task,
         "Assigned"
     )
 
@@ -1452,7 +1527,7 @@ def reject_task(task_id):
     )
 
     return redirect(
-        url_for(
+        request.referrer or url_for(
             "tasks.task_detail",
             task_id=task.id
         )

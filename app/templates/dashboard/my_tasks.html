@@ -88,6 +88,40 @@
             }
         }
     </script>
+    <script>
+        document.addEventListener("submit", function (event) {
+            const form = event.target;
+
+            if (!form.classList.contains("review-move-form")) return;
+
+            sessionStorage.setItem("review_moved_task_id", form.dataset.taskId || "");
+            sessionStorage.setItem("review_from_status", form.dataset.fromStatus || "");
+            sessionStorage.setItem("review_to_status", form.dataset.toStatus || "");
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const movedTaskId = sessionStorage.getItem("review_moved_task_id");
+            const toStatus = sessionStorage.getItem("review_to_status");
+
+            if (!movedTaskId || !toStatus) return;
+
+            const selector = `.review-task-card[data-task-id="${movedTaskId}"]`;
+            const movedCard = document.querySelector(selector);
+
+            if (movedCard) {
+                movedCard.classList.add("review-card-moved-in");
+
+                movedCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            }
+
+            sessionStorage.removeItem("review_moved_task_id");
+            sessionStorage.removeItem("review_from_status");
+            sessionStorage.removeItem("review_to_status");
+        });
+    </script>
 </body>
 
 </html>

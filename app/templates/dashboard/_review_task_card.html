@@ -1,4 +1,4 @@
-<div class="review-task-card">
+<div class="review-task-card" data-task-id="{{ task.id }}" data-status="{{ task.status }}">
 
     <div class="review-task-top">
         <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
@@ -44,44 +44,35 @@
     {% if task.status in ["Core Review", "Client Review"] %}
     <div class="review-actions-new">
 
-    <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}">
-        <button type="submit" class="review-approve-btn">
-            Approve
+        <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}" class="review-move-form"
+            data-task-id="{{ task.id }}" data-from-status="{{ task.status }}"
+            data-to-status="{% if task.status == 'Core Review' %}Client Review{% elif task.status == 'Client Review' %}Published{% endif %}">
+            <button type="submit" class="review-approve-btn">
+                Approve
+            </button>
+        </form>
+
+        <button type="button" class="review-reject-toggle" onclick="toggleReviewRejectBox(this)">
+            Reject
         </button>
-    </form>
 
-    <button
-        type="button"
-        class="review-reject-toggle"
-        onclick="toggleReviewRejectBox(this)"
-    >
-        Reject
-    </button>
+        <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
+            class="review-reject-form-new review-move-form" data-task-id="{{ task.id }}"
+            data-from-status="{{ task.status }}" data-to-status="Assigned">
+            <textarea name="message" placeholder="Write rejection reason..." required minlength="10"></textarea>
 
-    <form
-        method="POST"
-        action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
-        class="review-reject-form-new"
-    >
-        <textarea
-            name="message"
-            placeholder="Write rejection reason..."
-            required
-            minlength="10"
-        ></textarea>
+            <div class="review-reject-action-row">
+                <button type="button" onclick="toggleReviewRejectBox(this)">
+                    Cancel
+                </button>
 
-        <div class="review-reject-action-row">
-            <button type="button" onclick="toggleReviewRejectBox(this)">
-                Cancel
-            </button>
+                <button type="submit">
+                    Confirm Reject
+                </button>
+            </div>
+        </form>
 
-            <button type="submit">
-                Confirm Reject
-            </button>
-        </div>
-    </form>
-
-</div>
+    </div>
     {% endif %}
 
 </div>
