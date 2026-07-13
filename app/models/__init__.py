@@ -40,3 +40,4 @@ from app.models.note import (
     NoteLabel,
     NoteAttachment
 )
+from app.models.task_file import TaskFile

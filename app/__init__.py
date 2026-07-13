@@ -1,6 +1,10 @@
 from flask import Flask
 from config import Config
-from app.extensions import db, login_manager
+from app.extensions import (
+    db,
+    login_manager,
+    migrate,
+)
 from app.seed import seed_database
 from app.utils.text_filters import linkify_text
 
@@ -12,6 +16,7 @@ def create_app():
     app.config.from_object(Config)
 
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
 
     from app import models
@@ -45,7 +50,6 @@ def create_app():
     app.register_blueprint(leaves_bp)
 
     with app.app_context():
-        db.create_all()
         if app.config.get("AUTO_SEED", True):
             seed_database()
 

@@ -71,7 +71,8 @@
                         </h2>
 
                         <div class="progress-track">
-                            {% for item in ["Assigned", "In Progress", "Paused", "Core Review", "Client Review", "Published"] %}
+                            {% for item in ["Assigned", "In Progress", "Paused", "Core Review", "Client Review",
+                            "Published"] %}
                             <span class="{% if item == task.status %}active{% endif %}">
                                 {{ item }}
                             </span>
@@ -155,6 +156,72 @@
                         <pre class="task-description"
                             id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify }}</pre>
 
+
+                        <hr class="section-divider">
+
+                        <div class="task-files-section">
+
+                            <div class="section-header">
+                                <h3>📁 Reference Files</h3>
+
+                                <span class="file-count">
+                                    {{ reference_files|length }} file(s)
+                                </span>
+                            </div>
+
+                            {% if reference_files %}
+
+                            <div class="task-file-list">
+
+                                {% for file in reference_files %}
+
+                                <div class="task-file-card">
+
+                                    <div class="task-file-info">
+
+                                        <div class="task-file-name">
+                                            📄 {{ file.original_filename }}
+                                        </div>
+
+                                        <div class="task-file-meta">
+
+                                            {{ (file.file_size / 1024 / 1024)|round(2) }} MB
+
+                                            •
+
+                                            {{ file.created_at.strftime("%d %b %Y %I:%M %p") }}
+
+                                        </div>
+
+                                    </div>
+
+                                    <div class="task-file-actions">
+
+                                        <a href="#" class="btn btn-sm">
+                                            Preview
+                                        </a>
+
+                                        <a href="#" class="btn btn-sm">
+                                            Download
+                                        </a>
+
+                                    </div>
+
+                                </div>
+
+                                {% endfor %}
+
+                            </div>
+
+                            {% else %}
+
+                            <p class="empty-text">
+                                No reference files uploaded.
+                            </p>
+
+                            {% endif %}
+
+                        </div>
                         {% if feedbacks %}
                         <div class="feedback-list">
                             <h3>Feedback / Rejection Notes</h3>
@@ -172,14 +239,16 @@
                                 {% endif %}
 
                                 <small>
-                                    {{ (feedback.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p") }}
+                                    {{ (feedback.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M
+                                    %p") }}
                                 </small>
                             </div>
                             {% endfor %}
                         </div>
                         {% endif %}
 
-                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
+                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client
+                        Review"] %}
                         <div class="task-actions-box">
                             <div class="review-actions">
 
@@ -270,7 +339,8 @@
 
                         <div class="task-actions-box">
 
-                            {% if task.status in ["Assigned", "In Progress", "Paused"] and (has_permission(current_user, "manage_tasks") or task.assigned_to_id == current_user.id) %}
+                            {% if task.status in ["Assigned", "In Progress", "Paused"] and (has_permission(current_user,
+                            "manage_tasks") or task.assigned_to_id == current_user.id) %}
 
                             {% if task.timer_started_at %}
                             <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
@@ -290,7 +360,8 @@
 
                             {% endif %}
 
-                            {% if task.assigned_to_id == current_user.id and task.status in ["Assigned", "In Progress"] %}
+                            {% if task.assigned_to_id == current_user.id and task.status in ["Assigned", "In Progress"]
+                            %}
                             <form method="POST" action="{{ url_for('tasks.submit_review', task_id=task.id) }}">
                                 <button type="submit">
                                     Submit For Review
@@ -434,7 +505,8 @@
                                     {% endif %}
 
                                     <small>
-                                        {{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}
+                                        {{ (activity.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y •
+                                        %I:%M %p") }}
                                     </small>
                                 </div>
 

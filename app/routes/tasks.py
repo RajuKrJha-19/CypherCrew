@@ -5,12 +5,12 @@ from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
+    current_app,
+    flash,
+    redirect,
     render_template,
     request,
-    redirect,
     url_for,
-    flash,
-    jsonify
 )
 
 from flask_login import login_required, current_user
@@ -26,13 +26,20 @@ from app.models import (
     TaskFeedback,
     TaskActivity,
     TaskSequence,
-    TaskComment
+    TaskComment,
+    TaskFile
 )
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
 
 
 tasks_bp = Blueprint("tasks", __name__, url_prefix="/tasks")
+
+from app.storage.storage_service import (
+    StorageService,
+    StorageServiceError,
+)
+from app.models import TaskFile
 
 
 def generate_task_code():
@@ -458,117 +465,253 @@ def task_suggestions():
 def add_task():
 
     if not has_permission(current_user, "manage_tasks"):
-
         flash(
-            "You don't have permission to assign tasks. You can self assign your own task.",
-            "error"
+            (
+                "You don't have permission to assign tasks. "
+                "You can self assign your own task."
+            ),
+            "error",
         )
 
         return redirect(
             url_for("tasks.self_assign_task")
         )
 
-    clients = Client.query.filter_by(
-        status="active"
-    ).order_by(
-        Client.client_name.asc()
-    ).all()
+    clients = (
+        Client.query
+        .filter_by(status="active")
+        .order_by(Client.client_name.asc())
+        .all()
+    )
 
-    deliverables = ClientDeliverable.query.order_by(
-        ClientDeliverable.id.desc()
-    ).all()
+    deliverables = (
+        ClientDeliverable.query
+        .order_by(ClientDeliverable.id.desc())
+        .all()
+    )
 
-    employees = User.query.filter(
-        User.status == "active",
-        User.role.in_(["super_admin", "admin", "employee"])
-    ).order_by(
-        User.name.asc()
-    ).all()
+    employees = (
+        User.query
+        .filter(
+            User.status == "active",
+            User.role.in_(
+                [
+                    "super_admin",
+                    "admin",
+                    "employee",
+                ]
+            ),
+        )
+        .order_by(User.name.asc())
+        .all()
+    )
 
     if request.method == "POST":
 
+        uploaded_object_keys = []
+
         deadline = None
-        deadline_value = request.form.get("deadline")
+        deadline_value = request.form.get(
+            "deadline",
+            "",
+        ).strip()
 
         if deadline_value:
-            deadline = datetime.strptime(
-                deadline_value,
-                "%Y-%m-%dT%H:%M"
-            )
+            try:
+                deadline = datetime.strptime(
+                    deadline_value,
+                    "%Y-%m-%dT%H:%M",
+                )
+
+            except ValueError:
+                flash(
+                    "Deadline format is invalid.",
+                    "error",
+                )
+
+                return redirect(
+                    url_for("tasks.add_task")
+                )
 
         try:
-            client_id = int(request.form.get("client_id"))
-            deliverable_id = int(request.form.get("deliverable_id"))
-            assigned_to_id = int(request.form.get("assigned_to_id"))
+            client_id = int(
+                request.form.get("client_id")
+            )
+
+            deliverable_id = int(
+                request.form.get("deliverable_id")
+            )
+
+            assigned_to_id = int(
+                request.form.get("assigned_to_id")
+            )
 
         except (TypeError, ValueError):
             flash(
-                "Please fill all required task fields correctly.",
-                "error"
+                (
+                    "Please fill all required task "
+                    "fields correctly."
+                ),
+                "error",
             )
-            return redirect(url_for("tasks.add_task"))
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
 
         try:
-            quantity = float(request.form.get("quantity") or 1)
-            estimated_time = float(request.form.get("estimated_time") or 1)
+            quantity = float(
+                request.form.get("quantity") or 1
+            )
+
+            estimated_time = float(
+                request.form.get("estimated_time") or 1
+            )
 
         except (TypeError, ValueError):
             flash(
-                "Quantity and estimated time must be valid numbers.",
-                "error"
+                (
+                    "Quantity and estimated time "
+                    "must be valid numbers."
+                ),
+                "error",
             )
-            return redirect(url_for("tasks.add_task"))
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
 
         if quantity <= 0 or estimated_time <= 0:
             flash(
-                "Quantity and estimated time must be greater than zero.",
-                "error"
+                (
+                    "Quantity and estimated time "
+                    "must be greater than zero."
+                ),
+                "error",
             )
-            return redirect(url_for("tasks.add_task"))
 
-        deliverable = ClientDeliverable.query.get(deliverable_id)
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        title = request.form.get(
+            "title",
+            "",
+        ).strip()
+
+        if not title:
+            flash(
+                "Task title is required.",
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        deliverable = db.session.get(
+            ClientDeliverable,
+            deliverable_id,
+        )
 
         if not deliverable:
-            flash("Invalid deliverable selected.", "error")
-            return redirect(url_for("tasks.add_task"))
+            flash(
+                "Invalid deliverable selected.",
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
 
         if not deliverable.monthly_target:
-            flash("Selected deliverable has no monthly target.", "error")
-            return redirect(url_for("tasks.add_task"))
-
-        if deliverable.monthly_target.client_id != client_id:
             flash(
-                "Selected deliverable does not belong to selected client.",
-                "error"
+                (
+                    "Selected deliverable has no "
+                    "monthly target."
+                ),
+                "error",
             )
-            return redirect(url_for("tasks.add_task"))
 
-        assigned_user = User.query.filter_by(
-            id=assigned_to_id,
-            status="active"
-        ).first()
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        if (
+            deliverable.monthly_target.client_id
+            != client_id
+        ):
+            flash(
+                (
+                    "Selected deliverable does not "
+                    "belong to selected client."
+                ),
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        assigned_user = (
+            User.query
+            .filter_by(
+                id=assigned_to_id,
+                status="active",
+            )
+            .first()
+        )
 
         if not assigned_user:
-            flash("Selected employee is invalid.", "error")
-            return redirect(url_for("tasks.add_task"))
+            flash(
+                "Selected employee is invalid.",
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        reference_files = [
+            uploaded_file
+            for uploaded_file
+            in request.files.getlist(
+                "reference_files"
+            )
+            if (
+                uploaded_file
+                and (
+                    uploaded_file.filename
+                    or ""
+                ).strip()
+            )
+        ]
 
         task = Task(
-            title=request.form.get("title"),
-            description=request.form.get("description"),
+            title=title,
+            description=request.form.get(
+                "description",
+                "",
+            ).strip(),
             client_id=client_id,
             deliverable_id=deliverable_id,
             assigned_to_id=assigned_to_id,
-            priority=request.form.get("priority"),
+            priority=request.form.get(
+                "priority",
+                "Medium",
+            ),
             deadline=deadline,
             status="Assigned",
             quantity=quantity,
             estimated_time=estimated_time,
             status_started_at=datetime.utcnow(),
             created_by_id=current_user.id,
-            task_code=generate_task_code()
+            task_code=generate_task_code(),
         )
 
-        visibility_ids = request.form.getlist("visibility_ids")
+        visibility_ids = request.form.getlist(
+            "visibility_ids"
+        )
 
         for user_id in visibility_ids:
 
@@ -578,59 +721,194 @@ def add_task():
             except (TypeError, ValueError):
                 continue
 
-            user = User.query.filter(
-                User.id == user_id,
-                User.status == "active",
-                User.role.in_(["super_admin", "admin", "employee"])
-            ).first()
+            visible_user = (
+                User.query
+                .filter(
+                    User.id == user_id,
+                    User.status == "active",
+                    User.role.in_(
+                        [
+                            "super_admin",
+                            "admin",
+                            "employee",
+                        ]
+                    ),
+                )
+                .first()
+            )
 
-            if user and user not in task.visible_to:
-                task.visible_to.append(user)
-
-        db.session.add(task)
-        db.session.flush()
-
-        add_activity(
-            task,
-            action="created",
-            message=f"Created by {current_user.name}",
-            old_status=None,
-            new_status="Assigned"
-        )
-
-        create_notification(
-            user_id=assigned_to_id,
-            title="New task assigned",
-            message=f"{current_user.name} assigned you: {task.title}",
-            link=url_for("tasks.task_detail", task_id=task.id),
-            actor_id=current_user.id,
-            task_id=task.id
-        )
-
-        for user in task.visible_to:
-
-            if user.id != assigned_to_id:
-                create_notification(
-                    user_id=user.id,
-                    title="Task shared with you",
-                    message=f"{current_user.name} shared: {task.title}",
-                    link=url_for("tasks.task_detail", task_id=task.id),
-                    actor_id=current_user.id,
-                    task_id=task.id
+            if (
+                visible_user
+                and visible_user not in task.visible_to
+            ):
+                task.visible_to.append(
+                    visible_user
                 )
 
-        db.session.commit()
+        storage = None
+
+        try:
+            db.session.add(task)
+
+            # Generates task.id before building the R2 object key.
+            db.session.flush()
+
+            storage = StorageService()
+
+            for reference_file in reference_files:
+                upload_result = (
+                    storage.upload_task_file(
+                        task=task,
+                        file_storage=reference_file,
+                        uploaded_by_id=current_user.id,
+                        folder_type="reference",
+                        is_final=False,
+                    )
+                )
+
+                object_key = (
+                    upload_result[
+                        "provider_metadata"
+                    ].get("object_key")
+                )
+
+                if object_key:
+                    uploaded_object_keys.append(
+                        object_key
+                    )
+
+            add_activity(
+                task,
+                action="created",
+                message=(
+                    f"Created by {current_user.name}"
+                ),
+                old_status=None,
+                new_status="Assigned",
+            )
+
+            create_notification(
+                user_id=assigned_to_id,
+                title="New task assigned",
+                message=(
+                    f"{current_user.name} assigned "
+                    f"you: {task.title}"
+                ),
+                link=url_for(
+                    "tasks.task_detail",
+                    task_id=task.id,
+                ),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+
+            for visible_user in task.visible_to:
+
+                if visible_user.id == assigned_to_id:
+                    continue
+
+                create_notification(
+                    user_id=visible_user.id,
+                    title="Task shared with you",
+                    message=(
+                        f"{current_user.name} shared: "
+                        f"{task.title}"
+                    ),
+                    link=url_for(
+                        "tasks.task_detail",
+                        task_id=task.id,
+                    ),
+                    actor_id=current_user.id,
+                    task_id=task.id,
+                )
+
+            db.session.commit()
+
+        except StorageServiceError as error:
+            db.session.rollback()
+
+            if storage is not None:
+                for object_key in uploaded_object_keys:
+                    try:
+                        storage.delete(
+                            object_key=object_key
+                        )
+
+                    except Exception:
+                        current_app.logger.exception(
+                            (
+                                "Unable to clean up R2 "
+                                "object after failed task "
+                                "creation: %s"
+                            ),
+                            object_key,
+                        )
+
+            current_app.logger.exception(
+                "Reference file upload failed."
+            )
+
+            flash(
+                (
+                    "Task could not be created because "
+                    "a reference file upload failed. "
+                    f"{error}"
+                ),
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
+
+        except Exception:
+            db.session.rollback()
+
+            if storage is not None:
+                for object_key in uploaded_object_keys:
+                    try:
+                        storage.delete(
+                            object_key=object_key
+                        )
+
+                    except Exception:
+                        current_app.logger.exception(
+                            (
+                                "Unable to clean up R2 "
+                                "object after failed task "
+                                "creation: %s"
+                            ),
+                            object_key,
+                        )
+
+            current_app.logger.exception(
+                "Unexpected task creation failure."
+            )
+
+            flash(
+                (
+                    "Task could not be created due to "
+                    "an unexpected error."
+                ),
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.add_task")
+            )
 
         flash(
             "Task created successfully.",
-            "success"
+            "success",
         )
 
-        return redirect(url_for("tasks.list_tasks"))
+        return redirect(
+            url_for("tasks.list_tasks")
+        )
 
     deadline_default = request.args.get(
         "deadline",
-        ""
+        "",
     )
 
     return render_template(
@@ -638,7 +916,7 @@ def add_task():
         clients=clients,
         deliverables=deliverables,
         employees=employees,
-        deadline_default=deadline_default
+        deadline_default=deadline_default,
     )
 
 @tasks_bp.route("/self-assign", methods=["GET", "POST"])
@@ -1566,6 +1844,41 @@ def reject_task(task_id):
 def task_detail(task_id):
 
     task = Task.query.get_or_404(task_id)
+    reference_files = (
+        TaskFile.query
+        .filter_by(
+            task_id=task.id,
+            folder_type="reference",
+        )
+        .order_by(
+            TaskFile.created_at.desc()
+        )
+        .all()
+    )
+
+    working_files = (
+        TaskFile.query
+        .filter_by(
+            task_id=task.id,
+            folder_type="working",
+        )
+        .order_by(
+            TaskFile.created_at.desc()
+        )
+        .all()
+    )
+
+    final_files = (
+        TaskFile.query
+        .filter_by(
+            task_id=task.id,
+            folder_type="final",
+        )
+        .order_by(
+            TaskFile.created_at.desc()
+        )
+        .all()
+    )
 
     if not has_permission(current_user, "manage_tasks"):
 
@@ -1637,7 +1950,154 @@ def task_detail(task_id):
         current_status=task.status,
         timer_status_label=timer_status_label,
         timedelta=timedelta,
-        comments=comments
+        comments=comments,
+        reference_files=reference_files,
+        working_files=working_files,
+        final_files=final_files,
+    )
+
+@tasks_bp.route("/files/<int:file_id>/preview")
+@login_required
+def preview_task_file(file_id):
+
+    task_file = TaskFile.query.get_or_404(file_id)
+    task = task_file.task
+
+    if not has_permission(current_user, "manage_tasks"):
+
+        can_view = (
+            task.assigned_to_id == current_user.id
+            or current_user in task.visible_to
+        )
+
+        if not can_view:
+            flash(
+                "You are not allowed to view this file.",
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.list_tasks")
+            )
+
+    try:
+        storage = StorageService()
+
+        preview_url = storage.preview_url(
+            object_key=task_file.object_key,
+            expires_in=600,
+        )
+
+    except StorageServiceError:
+        current_app.logger.exception(
+            "Unable to generate preview URL for task file %s.",
+            task_file.id,
+        )
+
+        flash(
+            "File preview is currently unavailable.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    except Exception:
+        current_app.logger.exception(
+            "Unexpected file preview failure for task file %s.",
+            task_file.id,
+        )
+
+        flash(
+            "File preview is currently unavailable.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    return redirect(
+        preview_url
+    )
+@tasks_bp.route("/files/<int:file_id>/download")
+@login_required
+def download_task_file(file_id):
+
+    task_file = TaskFile.query.get_or_404(file_id)
+    task = task_file.task
+
+    if not has_permission(current_user, "manage_tasks"):
+
+        can_view = (
+            task.assigned_to_id == current_user.id
+            or current_user in task.visible_to
+        )
+
+        if not can_view:
+            flash(
+                "You are not allowed to download this file.",
+                "error",
+            )
+
+            return redirect(
+                url_for("tasks.list_tasks")
+            )
+
+    try:
+        storage = StorageService()
+
+        download_url = storage.download_url(
+            object_key=task_file.object_key,
+            download_filename=task_file.original_filename,
+            expires_in=600,
+        )
+
+    except StorageServiceError:
+        current_app.logger.exception(
+            "Unable to generate download URL for task file %s.",
+            task_file.id,
+        )
+
+        flash(
+            "File download is currently unavailable.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    except Exception:
+        current_app.logger.exception(
+            "Unexpected file download failure for task file %s.",
+            task_file.id,
+        )
+
+        flash(
+            "File download is currently unavailable.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    return redirect(
+        download_url
     )
 
 @tasks_bp.route(

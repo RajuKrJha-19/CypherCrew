@@ -3,7 +3,10 @@
 
 <head>
     <title>Add Task | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
 </head>
 
 <body>
@@ -18,17 +21,56 @@
                 <h1>Add Task</h1>
                 <p>Create a task linked with client deliverable</p>
 
-                <form method="POST">
+                <form
+                    method="POST"
+                    enctype="multipart/form-data"
+                >
 
                     <label>Task Title</label>
-                    <input type="text" name="title" required>
+                    <input
+                        type="text"
+                        name="title"
+                        required
+                    >
 
                     <label>Description</label>
-                    <textarea name="description" rows="4"></textarea>
+                    <textarea
+                        name="description"
+                        rows="4"
+                    ></textarea>
+
+                    <div class="form-group task-reference-upload">
+                        <label for="referenceFiles">
+                            Reference Files
+                        </label>
+
+                        <input
+                            type="file"
+                            id="referenceFiles"
+                            name="reference_files"
+                            multiple
+                        >
+
+                        <small class="form-help-text">
+                            You can select multiple images, videos,
+                            PDFs, documents, ZIP, PSD or other
+                            reference files.
+                        </small>
+
+                        <div
+                            class="selected-reference-files"
+                            id="selectedReferenceFiles"
+                        ></div>
+                    </div>
 
                     <label>Client</label>
-                    <select name="client_id" id="clientSelect" required>
+                    <select
+                        name="client_id"
+                        id="clientSelect"
+                        required
+                    >
                         <option value="">Select Client</option>
+
                         {% for client in clients %}
                         <option value="{{ client.id }}">
                             {{ client.client_name }}
@@ -37,11 +79,18 @@
                     </select>
 
                     <label>Deliverable</label>
-                    <select name="deliverable_id" id="deliverableSelect" required>
+                    <select
+                        name="deliverable_id"
+                        id="deliverableSelect"
+                        required
+                    >
                         <option value="">Select Deliverable</option>
 
                         {% for item in deliverables %}
-                        <option value="{{ item.id }}" data-client-id="{{ item.monthly_target.client_id }}">
+                        <option
+                            value="{{ item.id }}"
+                            data-client-id="{{ item.monthly_target.client_id }}"
+                        >
                             {{ item.monthly_target.client.client_name }}
                             - {{ item.service_name }}
                             - {{ item.deliverable_name }}
@@ -51,11 +100,17 @@
                     </select>
 
                     <label>Assign To</label>
-                    <select name="assigned_to_id" required>
+                    <select
+                        name="assigned_to_id"
+                        required
+                    >
                         <option value="">Select Employee</option>
+
                         {% for employee in employees %}
                         <option value="{{ employee.id }}">
-                            {{ employee.name }} - {{ employee.role|replace("_", " ")|title }}
+                            {{ employee.name }}
+                            -
+                            {{ employee.role|replace("_", " ")|title }}
                         </option>
                         {% endfor %}
                     </select>
@@ -64,36 +119,74 @@
                         <label>Visibility</label>
 
                         <div class="visibility-dropdown">
-                            <div class="visibility-btn" id="visibilityBtn">
-                                <span id="visibilityText">Select Employees</span>
+                            <div
+                                class="visibility-btn"
+                                id="visibilityBtn"
+                            >
+                                <span id="visibilityText">
+                                    Select Employees
+                                </span>
                             </div>
 
-                            <div class="visibility-menu" id="visibilityMenu">
+                            <div
+                                class="visibility-menu"
+                                id="visibilityMenu"
+                            >
                                 {% for employee in employees %}
                                 <label class="visibility-option">
-                                    <input type="checkbox" name="visibility_ids" value="{{ employee.id }}"
-                                        data-name="{{ employee.name }} - {{ employee.role|replace('_', ' ')|title }}">
+                                    <input
+                                        type="checkbox"
+                                        name="visibility_ids"
+                                        value="{{ employee.id }}"
+                                        data-name="{{ employee.name }} - {{ employee.role|replace('_', ' ')|title }}"
+                                    >
+
                                     <span>
-                                        {{ employee.name }} - {{ employee.role|replace("_", " ")|title }}
+                                        {{ employee.name }}
+                                        -
+                                        {{ employee.role|replace("_", " ")|title }}
                                     </span>
                                 </label>
                                 {% endfor %}
                             </div>
                         </div>
 
-                        <div class="selected-visibility" id="selectedVisibility"></div>
+                        <div
+                            class="selected-visibility"
+                            id="selectedVisibility"
+                        ></div>
                     </div>
 
                     <div class="work-estimate-row">
+
                         <div class="work-estimate-field">
                             <label>Quantity</label>
-                            <input type="number" name="quantity" min="0.1" step="0.1" value="1" required>
+
+                            <input
+                                type="number"
+                                name="quantity"
+                                min="0.1"
+                                step="0.1"
+                                value="1"
+                                required
+                            >
                         </div>
 
                         <div class="work-estimate-field">
-                            <label>Est. Time / Quantity (hrs)</label>
-                            <input type="number" name="estimated_time" min="0.1" step="0.1" value="1" required>
+                            <label>
+                                Est. Time / Quantity (hrs)
+                            </label>
+
+                            <input
+                                type="number"
+                                name="estimated_time"
+                                min="0.1"
+                                step="0.1"
+                                value="1"
+                                required
+                            >
                         </div>
+
                     </div>
 
                     <label>Priority</label>
@@ -105,9 +198,15 @@
                     </select>
 
                     <label>Deadline</label>
-                    <input type="datetime-local" name="deadline" value="{{ deadline_default }}">
+                    <input
+                        type="datetime-local"
+                        name="deadline"
+                        value="{{ deadline_default }}"
+                    >
 
-                    <button type="submit">Create Task</button>
+                    <button type="submit">
+                        Create Task
+                    </button>
 
                 </form>
             </div>
@@ -116,10 +215,14 @@
 
     </div>
 
-
     <script>
-        const clientSelect = document.getElementById("clientSelect");
-        const deliverableSelect = document.getElementById("deliverableSelect");
+        const clientSelect = document.getElementById(
+            "clientSelect"
+        );
+
+        const deliverableSelect = document.getElementById(
+            "deliverableSelect"
+        );
 
         const allDeliverableOptions = Array.from(
             deliverableSelect.querySelectorAll("option")
@@ -130,89 +233,213 @@
 
             deliverableSelect.innerHTML = "";
 
-            const defaultOption = document.createElement("option");
+            const defaultOption = document.createElement(
+                "option"
+            );
+
             defaultOption.value = "";
             defaultOption.textContent = "Select Deliverable";
-            deliverableSelect.appendChild(defaultOption);
+
+            deliverableSelect.appendChild(
+                defaultOption
+            );
 
             if (!selectedClientId) {
                 return;
             }
 
-            allDeliverableOptions.forEach(function (option) {
-                if (!option.value) {
-                    return;
-                }
+            allDeliverableOptions.forEach(
+                function (option) {
+                    if (!option.value) {
+                        return;
+                    }
 
-                if (option.dataset.clientId === selectedClientId) {
-                    deliverableSelect.appendChild(option.cloneNode(true));
+                    if (
+                        option.dataset.clientId
+                        === selectedClientId
+                    ) {
+                        deliverableSelect.appendChild(
+                            option.cloneNode(true)
+                        );
+                    }
                 }
-            });
+            );
         }
 
-        clientSelect.addEventListener("change", filterDeliverablesByClient);
+        clientSelect.addEventListener(
+            "change",
+            filterDeliverablesByClient
+        );
+
         filterDeliverablesByClient();
 
+        const visibilityBtn = document.getElementById(
+            "visibilityBtn"
+        );
 
-        const visibilityBtn = document.getElementById("visibilityBtn");
-        const visibilityMenu = document.getElementById("visibilityMenu");
-        const selectedVisibility = document.getElementById("selectedVisibility");
-        const visibilityText = document.getElementById("visibilityText");
+        const visibilityMenu = document.getElementById(
+            "visibilityMenu"
+        );
 
-        visibilityBtn.addEventListener("click", function () {
-            visibilityMenu.classList.toggle("show");
-        });
+        const selectedVisibility = document.getElementById(
+            "selectedVisibility"
+        );
 
-        document.addEventListener("click", function (e) {
-            if (!e.target.closest(".visibility-dropdown")) {
-                visibilityMenu.classList.remove("show");
+        const visibilityText = document.getElementById(
+            "visibilityText"
+        );
+
+        visibilityBtn.addEventListener(
+            "click",
+            function () {
+                visibilityMenu.classList.toggle(
+                    "show"
+                );
             }
-        });
+        );
+
+        document.addEventListener(
+            "click",
+            function (event) {
+                if (
+                    !event.target.closest(
+                        ".visibility-dropdown"
+                    )
+                ) {
+                    visibilityMenu.classList.remove(
+                        "show"
+                    );
+                }
+            }
+        );
 
         function updateSelectedVisibility() {
-            const checkedBoxes = document.querySelectorAll("input[name='visibility_ids']:checked");
+            const checkedBoxes = document.querySelectorAll(
+                "input[name='visibility_ids']:checked"
+            );
 
             selectedVisibility.innerHTML = "";
 
             if (checkedBoxes.length === 0) {
-                visibilityText.textContent = "Select Employees";
+                visibilityText.textContent =
+                    "Select Employees";
+
                 return;
             }
 
-            visibilityText.textContent = checkedBoxes.length + " employee selected";
+            visibilityText.textContent =
+                checkedBoxes.length
+                + " employee selected";
 
-            checkedBoxes.forEach(function (checkbox) {
-                const chip = document.createElement("div");
-                chip.className = "visibility-chip";
+            checkedBoxes.forEach(
+                function (checkbox) {
+                    const chip = document.createElement(
+                        "div"
+                    );
 
-                chip.innerHTML = `
-            <span>${checkbox.dataset.name}</span>
-            <button type="button" data-id="${checkbox.value}">×</button>
-        `;
+                    chip.className = "visibility-chip";
 
-                selectedVisibility.appendChild(chip);
-            });
+                    chip.innerHTML = `
+                        <span>
+                            ${checkbox.dataset.name}
+                        </span>
+
+                        <button
+                            type="button"
+                            data-id="${checkbox.value}"
+                        >
+                            ×
+                        </button>
+                    `;
+
+                    selectedVisibility.appendChild(
+                        chip
+                    );
+                }
+            );
         }
 
-        document.querySelectorAll("input[name='visibility_ids']").forEach(function (checkbox) {
-            checkbox.addEventListener("change", updateSelectedVisibility);
-        });
+        document.querySelectorAll(
+            "input[name='visibility_ids']"
+        ).forEach(
+            function (checkbox) {
+                checkbox.addEventListener(
+                    "change",
+                    updateSelectedVisibility
+                );
+            }
+        );
 
-        selectedVisibility.addEventListener("click", function (e) {
-            if (e.target.tagName === "BUTTON") {
-                const id = e.target.getAttribute("data-id");
+        selectedVisibility.addEventListener(
+            "click",
+            function (event) {
+                if (
+                    event.target.tagName === "BUTTON"
+                ) {
+                    const id = event.target.getAttribute(
+                        "data-id"
+                    );
 
-                const checkbox = document.querySelector(
-                    `input[name='visibility_ids'][value="${id}"]`
+                    const checkbox = document.querySelector(
+                        `input[name='visibility_ids'][value="${id}"]`
+                    );
+
+                    if (checkbox) {
+                        checkbox.checked = false;
+                    }
+
+                    updateSelectedVisibility();
+                }
+            }
+        );
+
+        const referenceFilesInput = document.getElementById(
+            "referenceFiles"
+        );
+
+        const selectedReferenceFiles = document.getElementById(
+            "selectedReferenceFiles"
+        );
+
+        referenceFilesInput.addEventListener(
+            "change",
+            function () {
+                selectedReferenceFiles.innerHTML = "";
+
+                const files = Array.from(
+                    referenceFilesInput.files
                 );
 
-                if (checkbox) {
-                    checkbox.checked = false;
+                if (files.length === 0) {
+                    return;
                 }
 
-                updateSelectedVisibility();
+                files.forEach(
+                    function (file) {
+                        const item = document.createElement(
+                            "div"
+                        );
+
+                        item.className =
+                            "selected-reference-file";
+
+                        const sizeInMb = (
+                            file.size / (1024 * 1024)
+                        ).toFixed(2);
+
+                        item.textContent =
+                            file.name
+                            + " — "
+                            + sizeInMb
+                            + " MB";
+
+                        selectedReferenceFiles.appendChild(
+                            item
+                        );
+                    }
+                );
             }
-        });
+        );
     </script>
 
 </body>
