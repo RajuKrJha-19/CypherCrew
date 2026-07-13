@@ -14,8 +14,7 @@ class Config:
     # Database
 
     SQLALCHEMY_DATABASE_URI = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///cyphercrew.db"
+    "DATABASE_URL"
 )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
