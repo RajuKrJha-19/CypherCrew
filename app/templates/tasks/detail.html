@@ -157,253 +157,220 @@
                             id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify }}</pre>
 
 
-                        <!-- ==========================
+<!-- ==========================
      Reference Files
 ========================== -->
 
-                        <div class="task-files-panel">
+<section class="task-files-panel">
 
-                            <div class="task-files-panel-header">
+    <div class="task-files-header">
 
-                                <div class="task-files-heading">
+        <div class="task-files-heading">
+            <div class="task-files-folder-icon">
+                📁
+            </div>
 
-                                    <div class="task-files-heading-icon">
-                                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                                            <path
-                                                d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z">
-                                            </path>
-                                        </svg>
-                                    </div>
+            <div>
+                <h3>Reference Files</h3>
+                <p>Files shared while assigning this task</p>
+            </div>
+        </div>
 
-                                    <div>
-                                        <h3>Reference Files</h3>
+        <span class="task-files-count">
+            {{ reference_files|length }}
+            {% if reference_files|length == 1 %}
+                File
+            {% else %}
+                Files
+            {% endif %}
+        </span>
 
-                                        <p>
-                                            Files shared while assigning this task
-                                        </p>
-                                    </div>
+    </div>
 
-                                </div>
+    {% if reference_files %}
 
-                                <span class="task-files-count">
-                                    {{ reference_files|length }}
-                                    {% if reference_files|length == 1 %}
-                                    File
-                                    {% else %}
-                                    Files
-                                    {% endif %}
-                                </span>
+    <div class="task-files-list">
 
-                            </div>
+        {% for file in reference_files %}
 
-                            {% if reference_files %}
+        <article class="task-file-item">
 
-                            <div class="task-files-list">
+            <div class="task-file-main">
 
-                                {% for file in reference_files %}
+                <div class="task-file-icon">
 
-                                <article class="task-file-row">
+                    {% if file.mime_type and file.mime_type.startswith("image/") %}
+                        🖼️
 
-                                    <div class="
-                    task-file-type-icon
+                    {% elif file.mime_type and file.mime_type.startswith("video/") %}
+                        🎬
 
-                    {% if file.mime_type and file.mime_type.startswith('image/') %}
-                        file-type-image
+                    {% elif file.mime_type and file.mime_type.startswith("audio/") %}
+                        🎵
 
-                    {% elif file.mime_type and file.mime_type.startswith('video/') %}
-                        file-type-video
-
-                    {% elif file.mime_type == 'application/pdf' %}
-                        file-type-pdf
+                    {% elif file.mime_type == "application/pdf" %}
+                        📕
 
                     {% elif file.mime_type and (
-                        'zip' in file.mime_type
-                        or 'compressed' in file.mime_type
+                        "zip" in file.mime_type
+                        or "compressed" in file.mime_type
                     ) %}
-                        file-type-archive
+                        🗜️
+
+                    {% elif file.mime_type and (
+                        "spreadsheet" in file.mime_type
+                        or "excel" in file.mime_type
+                    ) %}
+                        📊
 
                     {% else %}
-                        file-type-document
+                        📄
                     {% endif %}
-                ">
 
-                                        {% if file.mime_type and file.mime_type.startswith("image/") %}
+                </div>
 
-                                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                                            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                <div class="task-file-details">
 
-                                            <circle cx="8.5" cy="9" r="1.5"></circle>
+                    <strong
+                        class="task-file-name"
+                        title="{{ file.original_filename }}"
+                    >
+                        {{ file.original_filename }}
+                    </strong>
 
-                                            <path d="m4 17 5-5 4 4 2-2 5 5"></path>
-                                        </svg>
+                    <div class="task-file-meta">
 
-                                        {% elif file.mime_type and file.mime_type.startswith("video/") %}
+                        <span class="task-file-type-label">
 
-                                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                                            <rect x="3" y="5" width="14" height="14" rx="2"></rect>
+                            {% if file.mime_type and file.mime_type.startswith("image/") %}
+                                Image
 
-                                            <path d="m17 10 4-2v8l-4-2z"></path>
-                                        </svg>
+                            {% elif file.mime_type and file.mime_type.startswith("video/") %}
+                                Video
 
-                                        {% elif file.mime_type == "application/pdf" %}
+                            {% elif file.mime_type and file.mime_type.startswith("audio/") %}
+                                Audio
 
-                                        <span class="task-file-extension">
-                                            PDF
-                                        </span>
+                            {% elif file.mime_type == "application/pdf" %}
+                                PDF Document
 
-                                        {% elif file.mime_type and (
-                                        "zip" in file.mime_type
-                                        or "compressed" in file.mime_type
-                                        ) %}
+                            {% elif file.mime_type and (
+                                "zip" in file.mime_type
+                                or "compressed" in file.mime_type
+                            ) %}
+                                Archive
 
-                                        <span class="task-file-extension">
-                                            ZIP
-                                        </span>
-
-                                        {% else %}
-
-                                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                                            <path d="M6 3h8l4 4v14H6z"></path>
-
-                                            <path d="M14 3v5h5"></path>
-                                        </svg>
-
-                                        {% endif %}
-
-                                    </div>
-
-                                    <div class="task-file-details">
-
-                                        <strong class="task-file-title" title="{{ file.original_filename }}">
-                                            {{ file.original_filename }}
-                                        </strong>
-
-                                        <div class="task-file-metadata">
-
-                                            <span class="task-file-format">
-
-                                                {% if file.mime_type and file.mime_type.startswith("image/") %}
-                                                Image
-
-                                                {% elif file.mime_type and file.mime_type.startswith("video/") %}
-                                                Video
-
-                                                {% elif file.mime_type == "application/pdf" %}
-                                                PDF Document
-
-                                                {% elif file.mime_type and (
-                                                "zip" in file.mime_type
-                                                or "compressed" in file.mime_type
-                                                ) %}
-                                                Archive
-
-                                                {% else %}
-                                                Document
-                                                {% endif %}
-
-                                            </span>
-
-                                            <span class="task-file-meta-dot"></span>
-
-                                            <span>
-                                                {% if file.file_size %}
-
-                                                {% if file.file_size < 1024 %} {{ file.file_size }} B {% elif
-                                                    file.file_size < 1048576 %} {{ (file.file_size / 1024)|round(1) }}
-                                                    KB {% else %} {{ (file.file_size / 1048576)|round(2) }} MB {% endif
-                                                    %} {% else %} Size unavailable {% endif %} </span>
-
-                                                    <span class="task-file-meta-dot"></span>
-
-                                                    <span>
-                                                        Uploaded by
-                                                        {{ file.uploaded_by.name if file.uploaded_by else "-" }}
-                                                    </span>
-
-                                                    <span class="task-file-meta-dot"></span>
-
-                                                    <span>
-                                                        {{
-                                                        (
-                                                        file.created_at
-                                                        + timedelta(hours=5, minutes=30)
-                                                        ).strftime(
-                                                        "%d %b %Y, %I:%M %p"
-                                                        )
-                                                        }}
-                                                    </span>
-
-                                        </div>
-
-                                    </div>
-
-                                    <div class="task-file-actions">
-
-                                        <a href="{{ url_for(
-                        'tasks.preview_task_file',
-                        file_id=file.id
-                    ) }}" target="_blank" rel="noopener noreferrer" class="task-file-action-btn" title="Preview file">
-                                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z">
-                                                </path>
-
-                                                <circle cx="12" cy="12" r="2.5"></circle>
-                                            </svg>
-
-                                            <span>Preview</span>
-                                        </a>
-
-                                        <a href="{{ url_for(
-                        'tasks.download_task_file',
-                        file_id=file.id
-                    ) }}" class="
-                        task-file-action-btn
-                        task-file-download-action
-                    " title="Download file">
-                                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                                <path d="M12 3v12"></path>
-
-                                                <path d="m7 10 5 5 5-5"></path>
-
-                                                <path d="M5 21h14"></path>
-                                            </svg>
-
-                                            <span>Download</span>
-                                        </a>
-
-                                    </div>
-
-                                </article>
-
-                                {% endfor %}
-
-                            </div>
+                            {% elif file.mime_type and (
+                                "spreadsheet" in file.mime_type
+                                or "excel" in file.mime_type
+                            ) %}
+                                Spreadsheet
 
                             {% else %}
-
-                            <div class="task-files-empty">
-
-                                <div class="task-files-empty-icon">
-                                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                                        <path
-                                            d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z">
-                                        </path>
-                                    </svg>
-                                </div>
-
-                                <strong>No reference files</strong>
-
-                                <p>
-                                    Files attached while creating this task will appear here.
-                                </p>
-
-                            </div>
-
+                                Document
                             {% endif %}
 
-                        </div>
+                        </span>
 
-                        
+                        <span class="task-file-dot">•</span>
+
+                        <span>
+                            {% if file.file_size %}
+
+                                {% if file.file_size < 1024 %}
+                                    {{ file.file_size }} B
+
+                                {% elif file.file_size < 1048576 %}
+                                    {{ (file.file_size / 1024)|round(1) }} KB
+
+                                {% else %}
+                                    {{ (file.file_size / 1048576)|round(2) }} MB
+                                {% endif %}
+
+                            {% else %}
+                                Size unavailable
+                            {% endif %}
+                        </span>
+
+                    </div>
+
+                    <div class="task-file-upload-info">
+
+                        <span>
+                            Uploaded by
+                            <strong>
+                                {{ file.uploaded_by.name if file.uploaded_by else "-" }}
+                            </strong>
+                        </span>
+
+                        <span class="task-file-dot">•</span>
+
+                        <span>
+                            {{
+                                (
+                                    file.created_at
+                                    + timedelta(hours=5, minutes=30)
+                                ).strftime("%d %b %Y, %I:%M %p")
+                            }}
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="task-file-actions">
+
+                <a
+                    href="{{ url_for(
+                        'tasks.preview_task_file',
+                        file_id=file.id
+                    ) }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="task-file-btn task-file-preview-btn"
+                >
+                    <span>👁</span>
+                    Preview
+                </a>
+
+                <a
+                    href="{{ url_for(
+                        'tasks.download_task_file',
+                        file_id=file.id
+                    ) }}"
+                    class="task-file-btn task-file-download-btn"
+                >
+                    <span>↓</span>
+                    Download
+                </a>
+
+            </div>
+
+        </article>
+
+        {% endfor %}
+
+    </div>
+
+    {% else %}
+
+    <div class="task-files-empty">
+        <div class="task-files-empty-icon">📂</div>
+
+        <strong>No reference files</strong>
+
+        <p>
+            Files attached while creating this task will appear here.
+        </p>
+    </div>
+
+    {% endif %}
+
+</section>
+
+
                         {% if feedbacks %}
                         <div class="feedback-list">
                             <h3>Feedback / Rejection Notes</h3>
