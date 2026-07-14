@@ -39,6 +39,7 @@ from app.storage.storage_service import (
     StorageService,
     StorageServiceError,
 )
+
 from app.models import TaskFile
 
 
@@ -763,6 +764,7 @@ def add_task():
                         uploaded_by_id=current_user.id,
                         folder_type="reference",
                         is_final=False,
+
                     )
                 )
 
@@ -1855,6 +1857,17 @@ def task_detail(task_id):
         )
         .all()
     )
+    submission_files = (
+        TaskFile.query
+        .filter_by(
+            task_id=task.id,
+            folder_type="submission"
+        )
+        .order_by(
+            TaskFile.created_at.desc()
+        )
+        .all()
+    )
 
     working_files = (
         TaskFile.query
@@ -1954,6 +1967,7 @@ def task_detail(task_id):
         reference_files=reference_files,
         working_files=working_files,
         final_files=final_files,
+        submission_files=submission_files,
     )
 
 @tasks_bp.route("/files/<int:file_id>/preview")
@@ -2098,6 +2112,142 @@ def download_task_file(file_id):
 
     return redirect(
         download_url
+    )
+
+@tasks_bp.route("/<int:task_id>/upload-submission", methods=["POST"])
+@login_required
+def upload_submission(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    if task.assigned_to_id != current_user.id:
+        flash(
+            "Only the assigned employee can upload submission files.",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    submission_files = request.files.getlist(
+        "submission_files"
+    )
+
+    if not submission_files or not submission_files[0].filename:
+        flash(
+            "Please select at least one file.",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    uploaded_count = 0
+
+    storage = StorageService()
+
+    try:
+
+        for submission_file in submission_files:
+
+            if not submission_file.filename:
+                continue
+
+            storage.upload_task_file(
+                task=task,
+                file_storage=submission_file,
+                uploaded_by_id=current_user.id,
+                folder_type="submission",
+                is_final=False,
+            )
+
+            uploaded_count += 1
+
+        add_activity(
+            task,
+            action="submission_uploaded",
+            message=(
+                f"{current_user.name} uploaded "
+                f"{uploaded_count} submission file(s)."
+            ),
+        )
+
+        if task.created_by_id != current_user.id:
+
+            create_notification(
+                user_id=task.created_by_id,
+                title="Task submission uploaded",
+                message=(
+                    f"{current_user.name} uploaded files for "
+                    f"'{task.title}'."
+                ),
+                link=url_for(
+                    "tasks.task_detail",
+                    task_id=task.id,
+                ),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+
+        db.session.commit()
+
+    except StorageServiceError as error:
+
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Submission upload failed."
+        )
+
+        flash(
+            f"Submission upload failed: {error}",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    except Exception as error:
+
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Submission upload failed for task %s.",
+            task.id,
+        )
+
+        flash(
+            str(error),
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    flash(
+        f"{uploaded_count} submission file(s) uploaded successfully.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "tasks.task_detail",
+            task_id=task.id,
+        )
     )
 
 @tasks_bp.route(

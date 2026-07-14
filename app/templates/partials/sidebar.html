@@ -1,98 +1,154 @@
 <aside class="sidebar">
 
+    {% set endpoint = request.endpoint or "" %}
+
     <h2>CypherCrew</h2>
 
-    <a href="{{ url_for('dashboard.index') }}">
-        Dashboard
+    <a href="{{ url_for('dashboard.index') }}"
+       class="{% if endpoint == 'dashboard.index' %}active{% endif %}">
+        <i class="fa-solid fa-house"></i>
+        <span>Dashboard</span>
     </a>
 
     {% if has_permission(current_user,"manage_users") %}
-    <a href="{{ url_for('users.list_users') }}">
-        Users
+    <a href="{{ url_for('users.list_users') }}"
+       class="{% if endpoint.startswith('users.') %}active{% endif %}">
+        <i class="fa-solid fa-users"></i>
+        <span>Users</span>
     </a>
     {% endif %}
 
     {% if has_permission(current_user,"manage_permissions") %}
-    <a href="{{ url_for('permissions.list_permissions') }}">
-        Permissions
+    <a href="{{ url_for('permissions.list_permissions') }}"
+       class="{% if endpoint.startswith('permissions.') %}active{% endif %}">
+        <i class="fa-solid fa-key"></i>
+        <span>Permissions</span>
     </a>
     {% endif %}
 
     {% if has_permission(current_user,"manage_clients") %}
-    <a href="{{ url_for('clients.list_clients') }}">
-        Clients
+    <a href="{{ url_for('clients.list_clients') }}"
+       class="{% if endpoint.startswith('clients.') %}active{% endif %}">
+        <i class="fa-solid fa-building"></i>
+        <span>Clients</span>
     </a>
     {% endif %}
 
     {% if has_permission(current_user,"manage_tasks") or current_user.role in ["admin", "super_admin"] %}
-    <a href="{{ url_for('tasks.list_tasks') }}">
-        Tasks
+
+    <a href="{{ url_for('tasks.list_tasks') }}"
+       class="{% if endpoint.startswith('tasks.') %}active{% endif %}">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Tasks</span>
     </a>
 
-    <a href="{{ url_for('dashboard.my_tasks') }}">
-        My Tasks
+    <a href="{{ url_for('dashboard.my_tasks') }}"
+       class="{% if endpoint == 'dashboard.my_tasks' %}active{% endif %}">
+        <i class="fa-solid fa-user-check"></i>
+        <span>My Tasks</span>
     </a>
 
-    <a href="{{ url_for('calendar.index') }}">
-        Calendar
+    <a href="{{ url_for('calendar.index') }}"
+       class="{% if endpoint.startswith('calendar.') %}active{% endif %}">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>Calendar</span>
     </a>
 
-    <a href="{{ url_for('holidays.list_holidays') }}">
-        Holidays
+    <a href="{{ url_for('holidays.list_holidays') }}"
+       class="{% if endpoint.startswith('holidays.') %}active{% endif %}">
+        <i class="fa-solid fa-umbrella-beach"></i>
+        <span>Holidays</span>
     </a>
+
     {% endif %}
 
-    <a href="{{ url_for('notes.list_notes') }}">
-        Notes
+    <a href="{{ url_for('notes.list_notes') }}"
+       class="{% if endpoint.startswith('notes.') %}active{% endif %}">
+        <i class="fa-solid fa-note-sticky"></i>
+        <span>Notes</span>
     </a>
 
     {% if has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
-    <a href="{{ url_for('reports.list_reports') }}">
-        Reports
+
+    <a href="{{ url_for('reports.list_reports') }}"
+       class="{% if endpoint.startswith('reports.') %}active{% endif %}">
+        <i class="fa-solid fa-chart-column"></i>
+        <span>Reports</span>
     </a>
+
     {% endif %}
 
     {% if current_user.role == "employee" %}
 
-    <a href="{{ url_for('tasks.list_tasks') }}">
-        My Tasks
+    <a href="{{ url_for('tasks.list_tasks') }}"
+       class="{% if endpoint.startswith('tasks.') %}active{% endif %}">
+        <i class="fa-solid fa-list-check"></i>
+        <span>My Tasks</span>
     </a>
 
-    <a href="{{ url_for('calendar.index') }}">
-        Calendar
+    <a href="{{ url_for('calendar.index') }}"
+       class="{% if endpoint.startswith('calendar.') %}active{% endif %}">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>Calendar</span>
     </a>
 
-    <a href="{{ url_for('reports.list_reports') }}">
-        My Reports
+    <a href="{{ url_for('reports.list_reports') }}"
+       class="{% if endpoint.startswith('reports.') %}active{% endif %}">
+        <i class="fa-solid fa-chart-column"></i>
+        <span>My Reports</span>
     </a>
 
     {% endif %}
 
     <a href="{{ url_for('auth.logout') }}">
-        Logout
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span>Logout</span>
     </a>
 
-    <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn">
-        ←
+    <button
+        type="button"
+        class="sidebar-collapse-btn"
+        id="sidebarCollapseBtn">
+        <i class="fa-solid fa-angles-left"></i>
     </button>
 
     <script>
         const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
 
         if (sidebarCollapseBtn) {
+
             sidebarCollapseBtn.addEventListener("click", function () {
+
                 document.body.classList.toggle("sidebar-collapsed");
 
+                const icon = sidebarCollapseBtn.querySelector("i");
+
                 if (document.body.classList.contains("sidebar-collapsed")) {
+
                     localStorage.setItem("sidebar_collapsed", "yes");
+                    icon.classList.remove("fa-angles-left");
+                    icon.classList.add("fa-angles-right");
+
                 } else {
+
                     localStorage.setItem("sidebar_collapsed", "no");
+                    icon.classList.remove("fa-angles-right");
+                    icon.classList.add("fa-angles-left");
+
                 }
+
             });
 
             if (localStorage.getItem("sidebar_collapsed") === "yes") {
+
                 document.body.classList.add("sidebar-collapsed");
+
+                const icon = sidebarCollapseBtn.querySelector("i");
+                icon.classList.remove("fa-angles-left");
+                icon.classList.add("fa-angles-right");
+
             }
+
         }
     </script>
 

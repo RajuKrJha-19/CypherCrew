@@ -4,6 +4,7 @@
 <head>
     <title>Login | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
 <body class="auth-body">
@@ -44,22 +45,22 @@
         </form>
 
     </div>
-<script>
-const loginPassword = document.getElementById("loginPassword");
-const togglePassword = document.getElementById("togglePassword");
+    <script>
+        const loginPassword = document.getElementById("loginPassword");
+        const togglePassword = document.getElementById("togglePassword");
 
-if (loginPassword && togglePassword) {
-    togglePassword.addEventListener("click", function () {
-        if (loginPassword.type === "password") {
-            loginPassword.type = "text";
-            togglePassword.textContent = "Hide";
-        } else {
-            loginPassword.type = "password";
-            togglePassword.textContent = "Show";
+        if (loginPassword && togglePassword) {
+            togglePassword.addEventListener("click", function () {
+                if (loginPassword.type === "password") {
+                    loginPassword.type = "text";
+                    togglePassword.textContent = "Hide";
+                } else {
+                    loginPassword.type = "password";
+                    togglePassword.textContent = "Show";
+                }
+            });
         }
-    });
-}
-</script>
+    </script>
 </body>
 
 </html>

@@ -6572,3 +6572,109 @@ body.sidebar-collapsed .task-page-sticky-header{
     }
 
 }
+/* ===========================================
+   Sidebar Active Navigation
+=========================================== */
+
+.sidebar a{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px 16px;
+    border-radius:10px;
+    transition:all .25s ease;
+}
+
+.sidebar a:hover{
+    background:#eef4ff;
+    color:#1f4ed8;
+    transform:translateX(4px);
+}
+
+.sidebar a.active{
+    background:#2563eb;
+    color:#fff;
+    font-weight:600;
+    box-shadow:0 8px 22px rgba(37,99,235,.18);
+}
+
+.sidebar a.active::before{
+    content:"";
+    position:absolute;
+    left:-12px;
+    top:8px;
+    bottom:8px;
+    width:4px;
+    border-radius:50px;
+    background:#2563eb;
+}
+
+
+/* Sidebar Icons */
+
+.sidebar a{
+    display:flex;
+    align-items:center;
+    gap:14px;
+}
+
+.sidebar a i{
+    width:22px;
+    min-width:22px;
+    text-align:center;
+    font-size:18px;
+}
+
+.sidebar a span{
+    transition:opacity .25s;
+}
+
+body.sidebar-collapsed .sidebar a{
+    justify-content:center;
+}
+
+/* body.sidebar-collapsed .sidebar a span{
+    display:none;
+} */
+
+/* ===== Sidebar Collapse ===== */
+
+body.sidebar-collapsed .sidebar{
+    width:80px;
+    min-width:80px;
+}
+
+body.sidebar-collapsed .sidebar h2{
+    display:none;
+}
+
+body.sidebar-collapsed .sidebar a{
+    justify-content:center;
+    padding:14px 0;
+}
+
+body.sidebar-collapsed .sidebar a span{
+    display:none;
+}
+
+body.sidebar-collapsed .sidebar a i{
+    display:block;
+    font-size:22px;
+    width:auto;
+    min-width:auto;
+    margin:0;
+}
+
+body.sidebar-collapsed .sidebar .sidebar-collapse-btn{
+    width:48px;
+    height:48px;
+    margin:auto;
+}
+
+body.sidebar-collapsed .main{
+    margin-left:90px;
+}
+
+
+

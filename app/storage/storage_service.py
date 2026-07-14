@@ -27,7 +27,7 @@ class StorageService:
 
     ALLOWED_FOLDER_TYPES = {
         "reference",
-        "working",
+        "submission",
         "final",
     }
 

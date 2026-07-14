@@ -1,61 +1,64 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Add Client | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
 <body>
 
-<div class="layout">
+    <div class="layout">
 
-    {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" %}
 
-<main class="main">
+        <main class="main">
 
-    <div class="form-card">
-        <h1>Add Client</h1>
-        <p>Create internal client profile</p>
+            <div class="form-card">
+                <h1>Add Client</h1>
+                <p>Create internal client profile</p>
 
-        <form method="POST">
+                <form method="POST">
 
-            <label>Client Name</label>
-            <input type="text" name="client_name" required>
+                    <label>Client Name</label>
+                    <input type="text" name="client_name" required>
 
-            <label>Company Name</label>
-            <input type="text" name="company_name">
+                    <label>Company Name</label>
+                    <input type="text" name="company_name">
 
-            <label>Phone</label>
-            <input type="text" name="phone">
+                    <label>Phone</label>
+                    <input type="text" name="phone">
 
-            <label>Email</label>
-            <input type="email" name="email">
+                    <label>Email</label>
+                    <input type="email" name="email">
 
-            <label>Industry</label>
-            <input type="text" name="industry" placeholder="Real Estate, Education, Healthcare">
+                    <label>Industry</label>
+                    <input type="text" name="industry" placeholder="Real Estate, Education, Healthcare">
 
-            <label>Assigned Manager</label>
-            <select name="assigned_manager_id">
-                <option value="">Select Manager</option>
-                {% for manager in managers %}
-                    <option value="{{ manager.id }}">{{ manager.name }}</option>
-                {% endfor %}
-            </select>
+                    <label>Assigned Manager</label>
+                    <select name="assigned_manager_id">
+                        <option value="">Select Manager</option>
+                        {% for manager in managers %}
+                        <option value="{{ manager.id }}">{{ manager.name }}</option>
+                        {% endfor %}
+                    </select>
 
-            <label>Status</label>
-            <select name="status">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-            </select>
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
 
-            <button type="submit">Save Client</button>
+                    <button type="submit">Save Client</button>
 
-        </form>
+                </form>
+            </div>
+
+        </main>
+
     </div>
 
-</main>
-
-</div>
-
 </body>
+
 </html>
