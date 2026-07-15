@@ -1425,6 +1425,16 @@ def start_task(task_id):
         )
         return redirect(url_for("tasks.list_tasks"))
 
+    running_task = None
+
+    if not has_permission(current_user, "manage_tasks"):
+
+        running_task = Task.query.filter(
+            Task.assigned_to_id == task.assigned_to_id,
+            Task.id != task.id,
+            Task.timer_started_at.isnot(None),
+            Task.status == "In Progress"
+        ).first()
     running_task = Task.query.filter(
         Task.assigned_to_id == task.assigned_to_id,
         Task.id != task.id,
@@ -1713,7 +1723,8 @@ def kanban_update_status():
     # --------------------------------------------
 
     if (
-        new_status == "In Progress"
+        not has_permission(current_user, "manage_tasks")
+        and new_status == "In Progress"
         and task.assigned_to_id
     ):
 
