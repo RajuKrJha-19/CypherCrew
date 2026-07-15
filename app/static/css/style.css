@@ -6630,9 +6630,9 @@ body.sidebar-collapsed .task-page-sticky-header{
     transition:opacity .25s;
 }
 
-body.sidebar-collapsed .sidebar a{
+/* body.sidebar-collapsed .sidebar a{
     justify-content:center;
-}
+} */
 
 /* body.sidebar-collapsed .sidebar a span{
     display:none;
@@ -6678,3 +6678,46 @@ body.sidebar-collapsed .main{
 
 
 
+/* ==========================================
+   KANBAN DRAG DROP
+========================================== */
+
+.task-card{
+
+    cursor:grab;
+
+}
+
+.task-card:active{
+
+    cursor:grabbing;
+
+}
+
+.task-card.dragging{
+
+    opacity:.45;
+
+    transform:rotate(2deg);
+
+}
+
+.board-column{
+
+    transition:.25s;
+
+}
+
+.board-column.drag-over{
+
+    background:#eef6ff;
+
+    border:2px dashed #2563eb;
+
+}
+
+.board-column.drag-over .board-column-header{
+
+    color:#2563eb;
+
+}

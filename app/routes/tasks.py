@@ -11,6 +11,7 @@ from flask import (
     render_template,
     request,
     url_for,
+    jsonify,
 )
 
 from flask_login import login_required, current_user
@@ -1614,7 +1615,211 @@ def submit_review(task_id):
 
     return redirect(url_for("tasks.list_tasks"))
 
+@tasks_bp.route("/kanban/update-status", methods=["POST"])
+@login_required
+def kanban_update_status():
 
+    data = request.get_json()
+
+    if not data:
+        return jsonify(
+            {
+                "success": False,
+                "message": "Invalid request."
+            }
+        ), 400
+
+    task_id = data.get("task_id")
+    new_status = data.get("status")
+
+    task = Task.query.get_or_404(task_id)
+
+    if (
+        task.assigned_to_id != current_user.id
+        and
+        not has_permission(current_user, "manage_tasks")
+    ):
+        return jsonify(
+            {
+                "success": False,
+                "message": "Permission denied."
+            }
+        ), 403
+
+    allowed_status = [
+        "Assigned",
+        "In Progress",
+        "Paused",
+        "Core Review",
+        "Client Review",
+        "Published",
+    ]
+
+    # ---------------------------------------
+    # Employee Drag Rules
+    # ---------------------------------------
+
+    if not has_permission(current_user, "manage_tasks"):
+
+        allowed_moves = {
+
+            "Assigned": [
+                "In Progress"
+            ],
+
+            "In Progress": [
+                "Paused",
+                "Core Review"
+            ],
+
+            "Paused": [
+                "In Progress"
+            ],
+
+            "Core Review": [],
+
+            "Client Review": [],
+
+            "Published": []
+
+        }
+
+        if new_status not in allowed_moves.get(task.status, []):
+
+            return jsonify({
+
+                "success": False,
+
+                "message": (
+                    "You cannot move this task to that status."
+                )
+
+            }), 403
+
+    if new_status not in allowed_status:
+
+        return jsonify(
+            {
+                "success": False,
+                "message": "Invalid status."
+            }
+        ), 400
+
+    old_status = task.status
+    previous_task = None
+
+    # --------------------------------------------
+    # Only one In Progress task allowed
+    # --------------------------------------------
+
+    if (
+        new_status == "In Progress"
+        and task.assigned_to_id
+    ):
+
+        previous_task = (
+            Task.query.filter(
+                Task.assigned_to_id == task.assigned_to_id,
+                Task.status == "In Progress",
+                Task.id != task.id
+            ).first()
+        )
+
+        if previous_task:
+
+            pause_timer(previous_task)
+
+            record_status_time(
+                previous_task,
+                "Paused"
+            )
+
+            add_activity(
+                previous_task,
+                action="auto_paused",
+                message=(
+                    f"{previous_task.title} was automatically paused "
+                    "because another task was started."
+                ),
+                old_status="In Progress",
+                new_status="Paused"
+            )
+
+    # --------------------------------------------
+    # Update current task status
+    # --------------------------------------------
+
+    record_status_time(
+        task,
+        new_status
+    )
+        # ---------------------------------------
+# Timer automation
+# ---------------------------------------
+
+    current_time = datetime.utcnow()
+
+    if new_status == "In Progress":
+
+        if task.timer_started_at is None:
+            task.timer_started_at = current_time
+
+    elif new_status == "Paused":
+
+        if task.timer_started_at:
+
+            worked = (
+                current_time -
+                task.timer_started_at
+            ).total_seconds()
+
+            task.worked_seconds = (
+                task.worked_seconds or 0
+            ) + int(worked)
+
+            task.timer_started_at = None
+
+    elif new_status in [
+        "Core Review",
+        "Client Review",
+        "Published",
+    ]:
+
+        if task.timer_started_at:
+
+            worked = (
+                current_time -
+                task.timer_started_at
+            ).total_seconds()
+
+            task.worked_seconds = (
+                task.worked_seconds or 0
+            ) + int(worked)
+
+            task.timer_started_at = None
+
+    add_activity(
+        task,
+        action="status_changed",
+        message=f"{current_user.name} moved task from {old_status} to {new_status}.",
+    )
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "message": (
+                "Previous task was paused automatically."
+                if (
+                    new_status == "In Progress"
+                    and task.assigned_to_id
+                    and previous_task
+                )
+                else "Task updated successfully."
+            )
+        }
+    )
 @tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
 @login_required
 def approve_task(task_id):
