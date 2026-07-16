@@ -4,8 +4,7 @@
 <head>
     <title>#{{ task.task_code }} - {{ task.title }} | CypherCrew</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
 <body>
@@ -380,16 +379,18 @@ Submission Files
                                 </span>
 
                             </div>
+                            
 
                             {% if task.assigned_to_id == current_user.id
                             and task.status in ["Assigned", "In Progress", "Paused"] %}
 
-                            <form method="POST" action="{{ url_for('tasks.upload_submission', task_id=task.id) }}"
+                            <form id="submissionUploadForm" method="POST"
+                                action="{{ url_for('tasks.upload_submission', task_id=task.id) }}"
                                 enctype="multipart/form-data" class="submission-upload-form">
 
-                                <input type="file" name="submission_files" multiple required>
+                                <input type="file" id="submissionFiles" name="submission_files" multiple required>
 
-                                <button type="submit" class="btn">
+                                <button id="uploadBtn" type="submit" class="btn">
                                     Upload Submission
                                 </button>
 
@@ -786,6 +787,33 @@ Submission Files
             </div>
 
         </main>
+
+    </div>
+
+    <div id="uploadPopup" class="upload-popup">
+
+        <div class="upload-box">
+
+            <div class="upload-title">
+                Uploading Files...
+            </div>
+
+            <div class="upload-progress">
+
+                <div id="uploadProgressBar" class="upload-progress-fill">
+                </div>
+
+            </div>
+
+            <div id="uploadPercent" class="upload-percent">
+                0%
+            </div>
+
+            <div id="uploadRemaining" class="upload-remaining">
+                Calculating...
+            </div>
+
+        </div>
 
     </div>
 
@@ -1488,6 +1516,100 @@ Submission Files
                 submitBtn.disabled = false;
             }
         });
+    </script>
+    <script>
+
+        const uploadForm = document.getElementById("submissionUploadForm");
+
+        if (uploadForm) {
+
+            uploadForm.addEventListener("submit", function (e) {
+
+                e.preventDefault();
+
+                const popup = document.getElementById("uploadPopup");
+                const progressBar = document.getElementById("uploadProgressBar");
+                const percent = document.getElementById("uploadPercent");
+                const remaining = document.getElementById("uploadRemaining");
+                const uploadBtn = document.getElementById("uploadBtn");
+
+                popup.classList.add("show");
+
+                uploadBtn.disabled = true;
+
+                const xhr = new XMLHttpRequest();
+
+                const formData = new FormData(uploadForm);
+
+                const startTime = Date.now();
+
+                xhr.upload.addEventListener("progress", function (event) {
+
+                    if (!event.lengthComputable) {
+                        return;
+                    }
+
+                    const progress = Math.round((event.loaded / event.total) * 100);
+
+                    progressBar.style.width = progress + "%";
+
+                    percent.innerHTML = progress + "%";
+
+                    const elapsed = (Date.now() - startTime) / 1000;
+
+                    const speed = event.loaded / elapsed;
+
+                    const remainingBytes = event.total - event.loaded;
+
+                    if (speed > 0) {
+
+                        const seconds = Math.ceil(remainingBytes / speed);
+
+                        remaining.innerHTML = "Remaining : " + seconds + " sec";
+
+                    }
+
+                });
+
+                xhr.onreadystatechange = function () {
+
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+
+                    popup.classList.remove("show");
+
+                    uploadBtn.disabled = false;
+
+                    if (xhr.status === 200) {
+
+                        location.reload();
+
+                    }
+                    else {
+
+                        alert("Upload failed.");
+
+                    }
+
+                };
+
+                xhr.open(
+
+                    "POST",
+
+                    uploadForm.action,
+
+                    true
+
+                );
+
+                xhr.send(formData);
+
+            });
+
+        }
+
     </script>
 </body>
 
