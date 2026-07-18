@@ -253,6 +253,12 @@ def list_tasks():
     selected_priority = request.args.get("priority", "").strip()
     search = request.args.get("q", "").strip()
 
+    sort_by = request.args.get("sort", "").strip()
+    filter_by = request.args.get("filter", "").strip()
+    assigned_to = request.args.get("assigned_to", "").strip()
+    assigned_by = request.args.get("assigned_by", "").strip()
+    client_id = request.args.get("client", "").strip()
+
     query = get_task_base_query()
 
     if selected_status:
@@ -263,7 +269,136 @@ def list_tasks():
 
     query = apply_task_search(query, search)
 
-    tasks = query.order_by(Task.id.desc()).all()
+        # =====================================
+    # FILTER BY
+    # =====================================
+
+    today = ist_now()
+
+    if filter_by == "today":
+
+        query = query.filter(
+            db.func.date(Task.created_at) == today.date()
+        )
+
+    elif filter_by == "yesterday":
+
+        yesterday = today.date() - timedelta(days=1)
+
+        query = query.filter(
+            db.func.date(Task.created_at) == yesterday
+        )
+
+    elif filter_by == "last_7_days":
+
+        query = query.filter(
+            Task.created_at >= today - timedelta(days=7)
+        )
+
+    elif filter_by == "last_30_days":
+
+        query = query.filter(
+            Task.created_at >= today - timedelta(days=30)
+        )
+
+    elif filter_by == "this_month":
+
+        query = query.filter(
+            db.extract("month", Task.created_at) == today.month,
+            db.extract("year", Task.created_at) == today.year
+        )
+
+    elif filter_by == "last_90_days":
+
+        query = query.filter(
+            Task.created_at >= today - timedelta(days=90)
+        )
+
+    if assigned_to:
+
+        query = query.filter(
+            Task.assigned_to_id == int(assigned_to)
+        )
+
+    if assigned_by:
+
+        query = query.filter(
+            Task.created_by_id == int(assigned_by)
+        )
+
+    if client_id:
+
+        query = query.filter(
+            Task.client_id == int(client_id)
+        )
+
+        # =====================================
+    # SORT BY
+    # =====================================
+
+    if sort_by == "oldest":
+
+        query = query.order_by(Task.id.asc())
+
+    elif sort_by == "deadline_asc":
+
+        query = query.order_by(
+            Task.deadline.asc().nullslast(),
+            Task.id.desc()
+        )
+
+    elif sort_by == "deadline_desc":
+
+        query = query.order_by(
+            Task.deadline.desc().nullslast(),
+            Task.id.desc()
+        )
+
+    elif sort_by == "priority_high":
+
+        query = query.order_by(
+            db.case(
+                (Task.priority == "Urgent", 4),
+                (Task.priority == "High", 3),
+                (Task.priority == "Medium", 2),
+                (Task.priority == "Low", 1),
+                else_=0
+            ).desc()
+        )
+
+    elif sort_by == "priority_low":
+
+        query = query.order_by(
+            db.case(
+                (Task.priority == "Urgent", 4),
+                (Task.priority == "High", 3),
+                (Task.priority == "Medium", 2),
+                (Task.priority == "Low", 1),
+                else_=0
+            ).asc()
+        )
+
+    elif sort_by == "taskid_asc":
+
+        query = query.order_by(Task.task_code.asc())
+
+    elif sort_by == "taskid_desc":
+
+        query = query.order_by(Task.task_code.desc())
+
+    elif sort_by == "title_asc":
+
+        query = query.order_by(Task.title.asc())
+
+    elif sort_by == "title_desc":
+
+        query = query.order_by(Task.title.desc())
+
+    else:
+
+        query = query.order_by(Task.id.desc())
+
+    tasks = query.all()
 
     statuses = [
         "Assigned",
@@ -938,6 +1073,8 @@ def self_assign_task():
 
     if request.method == "POST":
 
+        uploaded_object_keys = []
+
         deadline = None
         deadline_value = request.form.get("deadline")
 
@@ -983,6 +1120,16 @@ def self_assign_task():
             flash("Task title is required.", "error")
             return redirect(url_for("tasks.self_assign_task"))
 
+        reference_files = [
+            uploaded_file
+            for uploaded_file
+            in request.files.getlist("reference_files")
+            if (
+                uploaded_file
+                and (uploaded_file.filename or "").strip()
+            )
+        ]
+
         task = Task(
             title=title,
             description=request.form.get("description", "").strip(),
@@ -999,18 +1146,89 @@ def self_assign_task():
             task_code=generate_task_code()
         )
 
-        db.session.add(task)
-        db.session.flush()
+        storage = None
 
-        add_activity(
-            task,
-            action="created",
-            message=f"Self assigned by {current_user.name}",
-            old_status=None,
-            new_status="Assigned"
-        )
+        try:
+            db.session.add(task)
 
-        db.session.commit()
+            # Generates task.id before building the R2 object key.
+            db.session.flush()
+
+            storage = StorageService()
+
+            for reference_file in reference_files:
+                upload_result = storage.upload_task_file(
+                    task=task,
+                    file_storage=reference_file,
+                    uploaded_by_id=current_user.id,
+                    folder_type="reference",
+                    is_final=False,
+                )
+
+                object_key = (
+                    upload_result["provider_metadata"].get("object_key")
+                )
+
+                if object_key:
+                    uploaded_object_keys.append(object_key)
+
+            add_activity(
+                task,
+                action="created",
+                message=f"Self assigned by {current_user.name}",
+                old_status=None,
+                new_status="Assigned"
+            )
+
+            db.session.commit()
+
+        except StorageServiceError as error:
+            db.session.rollback()
+
+            if storage is not None:
+                for object_key in uploaded_object_keys:
+                    try:
+                        storage.delete(object_key=object_key)
+                    except Exception:
+                        current_app.logger.exception(
+                            "Unable to clean up R2 object after failed self assign: %s",
+                            object_key,
+                        )
+
+            current_app.logger.exception(
+                "Reference file upload failed during self assign."
+            )
+
+            flash(
+                f"Task could not be created because a reference file upload failed. {error}",
+                "error",
+            )
+
+            return redirect(url_for("tasks.self_assign_task"))
+
+        except Exception:
+            db.session.rollback()
+
+            if storage is not None:
+                for object_key in uploaded_object_keys:
+                    try:
+                        storage.delete(object_key=object_key)
+                    except Exception:
+                        current_app.logger.exception(
+                            "Unable to clean up R2 object after failed self assign: %s",
+                            object_key,
+                        )
+
+            current_app.logger.exception(
+                "Unexpected self assign task creation failure."
+            )
+
+            flash(
+                "Task could not be created due to an unexpected error.",
+                "error",
+            )
+
+            return redirect(url_for("tasks.self_assign_task"))
 
         flash("Task self assigned successfully.", "success")
 
@@ -1034,10 +1252,15 @@ def self_assign_task():
 @login_required
 def edit_task(task_id):
 
-    if not has_permission(current_user, "manage_tasks"):
-        return redirect(url_for("dashboard.index"))
-
     task = Task.query.get_or_404(task_id)
+
+    is_self_assigned_owner = (
+        task.created_by_id == current_user.id
+        and task.assigned_to_id == current_user.id
+    )
+
+    if not has_permission(current_user, "manage_tasks") and not is_self_assigned_owner:
+        return redirect(url_for("dashboard.index"))
 
     clients = Client.query.filter_by(
         status="active"
@@ -1643,6 +1866,23 @@ def kanban_update_status():
     new_status = data.get("status")
 
     task = Task.query.get_or_404(task_id)
+        # -------------------------------------------------
+    # Employee can pull back their own task from
+    # Core Review if it was submitted by mistake.
+    # -------------------------------------------------
+
+    if (
+        task.assigned_to_id == current_user.id
+        and task.status == "Core Review"
+    ):
+        employee_allowed_statuses = [
+            "Assigned",
+            "In Progress",
+            "Hold",
+        ]
+
+        if new_status in employee_allowed_statuses:
+            pass
 
     if (
         task.assigned_to_id != current_user.id
@@ -1686,7 +1926,12 @@ def kanban_update_status():
                 "In Progress"
             ],
 
-            "Core Review": [],
+            # Employee can pull back a mistaken submission
+            "Core Review": [
+                "Assigned",
+                "In Progress",
+                "Paused",
+            ],
 
             "Client Review": [],
 

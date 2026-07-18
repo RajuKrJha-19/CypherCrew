@@ -3856,12 +3856,6 @@ body.sidebar-collapsed .sidebar h2 {
     pointer-events: none !important;
 }
 
-body.sidebar-collapsed .sidebar a {
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-indent: -999px !important;
-    padding: 12px 0 !important;
-}
 
 .sidebar-collapse-btn {
     position: fixed !important;
@@ -3916,24 +3910,7 @@ body.sidebar-collapsed .sidebar-collapse-btn {
     }
 }
 
-body.sidebar-collapsed .sidebar a {
-    color: transparent !important;
-    text-shadow: none !important;
 
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-indent: -9999px !important;
-
-    position: relative !important;
-}
-
-body.sidebar-collapsed .sidebar a::first-letter {
-    color: #ffffff !important;   /* White */
-    text-indent: 0 !important;
-    margin-left: 9999px !important;
-    font-size: 15px !important;
-    font-weight: 500 !important;
-}
 
 /* TASK DETAIL DESCRIPTION COPY ONLY */
 
@@ -6833,4 +6810,160 @@ UPLOAD PROGRESS POPUP
 
     color:#666;
 
+}
+
+.status-bubble.clickable {
+
+    cursor: pointer;
+
+    transition: .2s;
+
+}
+
+.status-bubble.clickable:hover {
+
+    transform: translateY(-2px);
+
+    opacity: .9;
+
+}
+
+.status-bubble:not(.clickable):not(.active) {
+
+    cursor: not-allowed;
+
+    opacity: .55;
+
+}
+
+/*=========================================
+TASK LIST TOOLBAR
+=========================================*/
+
+.task-list-toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:18px;
+    margin-bottom:18px;
+}
+
+.task-list-toolbar-left{
+    display:flex;
+    align-items:center;
+    gap:2px;
+}
+
+.task-toolbar-dropdown{
+    position:relative;
+}
+
+.toolbar-dropdown-btn{
+    background:#eef2ff;
+    /* border:1px solid #d9dce3; */
+    border-radius:10px;
+    height:40px;
+    padding:5px 9px;
+    font-size:12px;
+    font-weight:600;
+    color:#1d4ed8;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.toolbar-dropdown-btn:hover{
+    background:#f7f8fb;
+    border-color:#c6cbd8;
+}
+
+.task-list-toolbar .column-customizer{
+    position:relative;
+}
+
+.toolbar-dropdown-menu{
+    position:absolute;
+    top:48px;
+    left:0;
+
+    min-width:240px;
+
+    background:#ffffff;
+    border:1px solid #e3e7ef;
+    border-radius:12px;
+
+    box-shadow:0 15px 35px rgba(0,0,0,.08);
+
+    padding:8px;
+
+    display:none;
+
+    z-index:9999;
+}
+
+.toolbar-dropdown-menu.show{
+    display:block;
+}
+
+.toolbar-dropdown-menu button{
+    display:block;
+    width:100%;
+    padding:10px 12px;
+    background:transparent;
+    border:none;
+    color:#1d2433;
+    font-size:12px;
+    font-weight:500;
+    text-align:left;
+    cursor:pointer;
+    border-radius:8px;
+}
+
+.toolbar-dropdown-menu button:hover{
+    background:#f5f7fb;
+}
+
+.toolbar-dropdown-menu hr{
+    margin:8px 0;
+    border:none;
+    border-top:1px solid #eceff5;
+
+}
+
+
+
+/* TASK LIST TABLE - HORIZONTAL SCROLL FIX */
+
+.task-table-scroll{
+    width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+}
+
+#taskListTable{
+    width:100%;
+    min-width:980px;
+    border-collapse:collapse;
+}
+
+.task-table-scroll::-webkit-scrollbar{
+    height:8px;
+}
+
+.task-table-scroll::-webkit-scrollbar-thumb{
+    background:#cbd5e1;
+    border-radius:20px;
+}
+
+/* TASK FILE THUMBNAIL (IMAGE PREVIEW) */
+
+.task-file-thumb{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    border-radius:12px;
+    display:block;
+}
+
+.task-file-icon{
+    overflow:hidden;
 }

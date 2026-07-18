@@ -224,36 +224,162 @@
                     <p>Detailed view for review and follow-up</p>
                 </div>
 
-                <div class="column-customizer">
+                <div class="task-list-toolbar">
 
-                    <button type="button" id="columnCustomizerBtn" class="mini-link">
-                        ⚙ Columns
-                    </button>
+    <div class="task-list-toolbar-left">
 
-                    <div class="column-dropdown" id="columnDropdown">
+        <!-- SORT -->
+        <div class="task-toolbar-dropdown">
 
-                        <label><input type="checkbox" value="task_id" checked> Task ID</label>
-                        <label><input type="checkbox" value="task" checked> Task</label>
-                        <label><input type="checkbox" value="client" checked> Client</label>
-                        <label><input type="checkbox" value="service" checked> Service</label>
-                        <label><input type="checkbox" value="deliverable" checked> Deliverable</label>
-                        <label><input type="checkbox" value="assigned_to" checked> Assigned To</label>
-                        <label><input type="checkbox" value="deadline" checked> Deadline</label>
-                        <label><input type="checkbox" value="status" checked> Status</label>
-                        <label><input type="checkbox" value="action" checked> Action</label>
+            <button
+                type="button"
+                class="toolbar-dropdown-btn"
+                id="sortDropdownBtn">
+                Sort By ▼
+            </button>
 
-                        <hr>
+            <div
+    class="toolbar-dropdown-menu"
+    id="sortDropdownMenu">
 
-                        <button type="button" id="resetColumns" class="mini-link">
-                            Reset Default
-                        </button>
+    <button type="button" data-sort="newest">Newest First</button>
 
-                    </div>
+    <button type="button" data-sort="oldest">Oldest First</button>
+
+    <button type="button" data-sort="deadline_asc">
+        Deadline (Earliest)
+    </button>
+
+    <button type="button" data-sort="deadline_desc">
+        Deadline (Latest)
+    </button>
+
+    <button type="button" data-sort="priority_desc">
+        Priority (High → Low)
+    </button>
+
+    <button type="button" data-sort="priority_asc">
+        Priority (Low → High)
+    </button>
+
+    <button type="button" data-sort="taskid_asc">
+        Task ID (Ascending)
+    </button>
+
+    <button type="button" data-sort="taskid_desc">
+        Task ID (Descending)
+    </button>
+
+    <button type="button" data-sort="az">
+        A → Z
+    </button>
+
+    <button type="button" data-sort="za">
+        Z → A
+    </button>
+
+</div>
+
+        </div>
+
+        <!-- FILTER -->
+        <div class="task-toolbar-dropdown">
+
+            <button
+                type="button"
+                class="toolbar-dropdown-btn"
+                id="filterDropdownBtn">
+                Filter By ▼
+            </button>
+
+            <div
+    class="toolbar-dropdown-menu"
+    id="filterDropdownMenu">
+
+    <button type="button" data-filter="today">
+        Today
+    </button>
+
+    <button type="button" data-filter="yesterday">
+        Yesterday
+    </button>
+
+    <button type="button" data-filter="last7">
+        Last 7 Days
+    </button>
+
+    <button type="button" data-filter="last30">
+        Last 30 Days
+    </button>
+
+    <button type="button" data-filter="month">
+        This Month
+    </button>
+
+    <button type="button" data-filter="last90">
+        Last 90 Days
+    </button>
+
+</div>
+{# .mini-link{
+    display:inline-block;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:600;
+    padding:5px 9px;
+    border-radius:7px;
+    background:#eef2ff;
+    color:#1d4ed8;
+} #}
+        </div>
+
+    </div>
+
+    <div class="column-customizer">
+
+        <button
+            type="button"
+            id="columnCustomizerBtn"
+            class="mini-link">
+            ⚙ Columns
+        </button>
+
+        <div
+            class="column-dropdown"
+            id="columnDropdown">
+
+            <label><input type="checkbox" value="task_id" checked> Task ID</label>
+            <label><input type="checkbox" value="task" checked> Task</label>
+            <label><input type="checkbox" value="client" checked> Client</label>
+            <label><input type="checkbox" value="service" checked> Service</label>
+            <label><input type="checkbox" value="deliverable" checked> Deliverable</label>
+            <label><input type="checkbox" value="assigned_to" checked> Assigned To</label>
+            <label><input type="checkbox" value="assigned_by" checked> Assigned By</label>
+            <label><input type="checkbox" value="deadline" checked> Deadline</label>
+            <label><input type="checkbox" value="status" checked> Status</label>
+            <label><input type="checkbox" value="action" checked> Action</label>
+
+            <hr>
+
+            <button
+                type="button"
+                id="resetColumns"
+                class="mini-link">
+                Reset Default
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+                    
 
                 </div>
 
-            </div>
-
+            <div class="task-table-scroll">
             <table id="taskListTable">
                 <thead>
                     <tr>
@@ -263,6 +389,7 @@
                         <th data-column="service">Service</th>
                         <th data-column="deliverable">Deliverable</th>
                         <th data-column="assigned_to">Assigned To</th>
+                        <th data-column="assigned_by">Assigned By</th>
                         <th data-column="deadline">Deadline</th>
                         <th data-column="status">Status</th>
                         <th data-column="action">Action</th>
@@ -291,6 +418,10 @@
 
                         <td data-column="assigned_to">
                             {{ task.assigned_to.name if task.assigned_to else "-" }}
+                        </td>
+
+                        <td data-column="assigned_by">
+                            {{ task.created_by.name if task.created_by else "-" }}
                         </td>
 
                         <td data-column="deadline">
@@ -341,9 +472,12 @@
                         </td>
                     </tr>
 
+
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
+
             <div class="table-pagination-footer">
 
                 <div></div>
@@ -672,7 +806,13 @@
 
             });
 
-            const saved = JSON.parse(
+            const allColumnValues = Array.from(
+                dropdown.querySelectorAll("input")
+            ).map(function (cb) {
+                return cb.value;
+            });
+
+            let saved = JSON.parse(
                 localStorage.getItem("task_columns")
                 ||
                 "null"
@@ -680,9 +820,29 @@
 
             if (saved) {
 
+                const missingColumn = allColumnValues.some(function (value) {
+                    return !saved.includes(value);
+                });
+
+                if (missingColumn) {
+                    saved = null;
+                }
+
+            }
+
+            if (saved) {
+
                 dropdown.querySelectorAll("input").forEach(function (cb) {
 
                     cb.checked = saved.includes(cb.value);
+
+                });
+
+            } else {
+
+                dropdown.querySelectorAll("input").forEach(function (cb) {
+
+                    cb.checked = true;
 
                 });
 
@@ -840,6 +1000,130 @@
 
         });
 
+/*=========================================
+SORT BY (BACKEND)
+=========================================*/
+
+document.querySelectorAll("#sortDropdownMenu button").forEach(function(button){
+
+    button.addEventListener("click",function(){
+
+        const url = new URL(window.location.href);
+
+        url.searchParams.set(
+            "sort",
+            this.dataset.sort
+        );
+
+        window.location.href = url.toString();
+
+    });
+
+});
+/*=========================================
+FILTER BY (BACKEND)
+=========================================*/
+
+document.querySelectorAll("#filterDropdownMenu button").forEach(function(button){
+
+    button.addEventListener("click",function(){
+
+        const value = this.dataset.filter;
+
+        if(!value){
+            return;
+        }
+
+        const url = new URL(window.location.href);
+
+        url.searchParams.set(
+            "filter",
+            value
+        );
+
+        window.location.href = url.toString();
+
+    });
+
+});
+        /*=========================================
+TASK LIST TOOLBAR DROPDOWNS
+=========================================*/
+const sortBtn = document.getElementById("sortDropdownBtn");
+const filterBtn = document.getElementById("filterDropdownBtn");
+
+const sortMenu = document.getElementById("sortDropdownMenu");
+const filterMenu = document.getElementById("filterDropdownMenu");
+
+function closeToolbarMenus() {
+
+    if (sortMenu) {
+        sortMenu.classList.remove("show");
+    }
+
+    if (filterMenu) {
+        filterMenu.classList.remove("show");
+    }
+
+}
+
+if (sortBtn && sortMenu) {
+
+    sortBtn.addEventListener("click", function (e) {
+
+        e.stopPropagation();
+
+        if (filterMenu) {
+            filterMenu.classList.remove("show");
+        }
+
+        sortMenu.classList.toggle("show");
+
+    });
+
+}
+
+if (filterBtn && filterMenu) {
+
+    filterBtn.addEventListener("click", function (e) {
+
+        e.stopPropagation();
+
+        if (sortMenu) {
+            sortMenu.classList.remove("show");
+        }
+
+        filterMenu.classList.toggle("show");
+
+    });
+
+}
+
+document.addEventListener("click", function () {
+
+    closeToolbarMenus();
+
+});
+
+if (sortMenu) {
+
+    sortMenu.addEventListener("click", function (e) {
+
+        e.stopPropagation();
+
+    });
+
+}
+
+if (filterMenu) {
+
+    filterMenu.addEventListener("click", function (e) {
+
+        e.stopPropagation();
+
+    });
+
+}
     </script>
 
 </body>

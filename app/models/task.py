@@ -168,3 +168,8 @@ class Task(db.Model):
         db.DateTime,
         default=datetime.utcnow
     )
+    status_changed_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )

@@ -21,7 +21,7 @@
             <h1>Self Assign Task</h1>
             <p>Create a task for yourself</p>
 
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
 
                 <label>Task Title</label>
                 <input type="text" name="title" required>
@@ -98,6 +98,13 @@
                     type="datetime-local"
                     name="deadline"
                     value="{{ deadline_default }}"
+                >
+
+                <label>Reference Files</label>
+                <input
+                    type="file"
+                    name="reference_files"
+                    multiple
                 >
 
                 <button type="submit">

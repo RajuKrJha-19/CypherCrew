@@ -37,7 +37,8 @@
                 <div class="top-actions">
                     {% include "partials/notification_widget.html" %}
 
-                    {% if has_permission(current_user, "manage_tasks") %}
+                    {% if has_permission(current_user, "manage_tasks")
+                        or (task.created_by_id == current_user.id and task.assigned_to_id == current_user.id) %}
                     <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn">
                         Manage Task
                     </a>
@@ -72,12 +73,42 @@
                         </h2>
 
                         <div class="progress-track">
-                            {% for item in ["Assigned", "In Progress", "Paused", "Core Review", "Client Review",
-                            "Published"] %}
-                            <span class="{% if item == task.status %}active{% endif %}">
+
+                            {% for item in [
+                            "Assigned",
+                            "In Progress",
+                            "Paused",
+                            "Core Review",
+                            "Client Review",
+                            "Published"
+                            ] %}
+
+                            {% set employee_moves = {
+                            "Assigned": ["In Progress"],
+                            "In Progress": ["Paused", "Core Review"],
+                            "Paused": ["In Progress"],
+                            "Core Review": ["Assigned", "In Progress", "Paused"],
+                            "Client Review": [],
+                            "Published": []
+                            } %}
+
+                            <span class="
+        status-bubble
+        {% if item == task.status %}active{% endif %}
+        {% if has_permission(current_user, 'manage_tasks')
+            or (
+                task.assigned_to_id == current_user.id
+                and item in employee_moves.get(task.status, [])
+            )
+        %}
+            clickable
+        {% endif %}
+    " data-task-id="{{ task.id }}" data-status="{{ item }}">
                                 {{ item }}
                             </span>
+
                             {% endfor %}
+
                         </div>
 
                         <div class="detail-row">
@@ -201,7 +232,12 @@
                                         <div class="task-file-icon">
 
                                             {% if file.mime_type and file.mime_type.startswith("image/") %}
-                                            🖼️
+                                            <img
+                                                class="task-file-thumb"
+                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                alt="{{ file.original_filename }}"
+                                                loading="lazy"
+                                            >
 
                                             {% elif file.mime_type and file.mime_type.startswith("video/") %}
                                             🎬
@@ -379,7 +415,7 @@ Submission Files
                                 </span>
 
                             </div>
-                            
+
 
                             {% if task.assigned_to_id == current_user.id
                             and task.status in ["Assigned", "In Progress", "Paused"] %}
@@ -409,7 +445,18 @@ Submission Files
                                     <div class="task-file-main">
 
                                         <div class="task-file-icon">
+
+                                            {% if file.mime_type and file.mime_type.startswith("image/") %}
+                                            <img
+                                                class="task-file-thumb"
+                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                alt="{{ file.original_filename }}"
+                                                loading="lazy"
+                                            >
+                                            {% else %}
                                             📄
+                                            {% endif %}
+
                                         </div>
 
                                         <div class="task-file-details">
@@ -1609,7 +1656,71 @@ Submission Files
             });
 
         }
+        </script>
+        <script>
 
+            document.querySelectorAll(".status-bubble").forEach(function (bubble) {
+
+                bubble.addEventListener("click", async function () {
+                    console.log("Bubble clicked");
+                    console.log(this.dataset.taskId);
+                    console.log(this.dataset.status);
+                    if (!this.classList.contains("clickable")) {
+                        return;
+                    }
+
+                    const taskId = this.dataset.taskId;
+                    const status = this.dataset.status;
+
+                    if (this.classList.contains("active")) {
+                        return;
+                    }
+
+                    try {
+
+                        const response = await fetch("/tasks/kanban/update-status", {
+
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+
+                            body: JSON.stringify({
+
+                                task_id: taskId,
+                                status: status
+
+                            })
+
+                        });
+
+                        const data = await response.json();
+
+                        if (!data.success) {
+
+                            alert(data.message);
+                            return;
+
+                        }
+
+                        location.reload();
+
+                    }
+
+                    catch (error) {
+
+                        console.log(error);
+
+                        alert("Unable to update task status.");
+
+                    }
+
+                });
+
+});
+
+    
     </script>
 </body>
 
