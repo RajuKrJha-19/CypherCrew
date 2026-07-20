@@ -163,6 +163,39 @@
                         </div>
                         {% endif %}
 
+                        {% set ref_count = file_counts.get(task.id, {}).get("reference", 0) %}
+                        {% set sub_count = file_counts.get(task.id, {}).get("submission", 0) %}
+
+                        {% if ref_count > 0 or sub_count > 0 %}
+                        <div class="kanban-file-badges">
+
+                            {% if ref_count > 0 %}
+                            <button
+                                type="button"
+                                class="kanban-file-btn ref-btn"
+                                data-task-id="{{ task.id }}"
+                                data-folder-type="reference"
+                            >
+                                📎 Ref
+                                <span class="file-count-badge">{{ ref_count }}</span>
+                            </button>
+                            {% endif %}
+
+                            {% if sub_count > 0 %}
+                            <button
+                                type="button"
+                                class="kanban-file-btn sub-btn"
+                                data-task-id="{{ task.id }}"
+                                data-folder-type="submission"
+                            >
+                                📤 Sub
+                                <span class="file-count-badge">{{ sub_count }}</span>
+                            </button>
+                            {% endif %}
+
+                        </div>
+                        {% endif %}
+
                         <p class="kanban-client">
                             {{ task.client.client_name }}
                             •
@@ -217,6 +250,22 @@
                 {% endfor %}
             </div>
 
+            <div class="file-popup-overlay" id="filePopupOverlay">
+
+                <div class="file-popup-box">
+
+                    <div class="file-popup-head">
+                        <h3 id="filePopupTitle">Files</h3>
+                        <button type="button" class="file-popup-close" id="filePopupClose">&times;</button>
+                    </div>
+
+                    <div class="file-popup-grid" id="filePopupGrid">
+                    </div>
+
+                </div>
+
+            </div>
+
             <div class="section-heading">
 
                 <div>
@@ -226,256 +275,238 @@
 
                 <div class="task-list-toolbar">
 
-    <div class="task-list-toolbar-left">
+                    <div class="task-list-toolbar-left">
 
-        <!-- SORT -->
-        <div class="task-toolbar-dropdown">
+                        <!-- SORT -->
+                        <div class="task-toolbar-dropdown">
 
-            <button
-                type="button"
-                class="toolbar-dropdown-btn"
-                id="sortDropdownBtn">
-                Sort By ▼
-            </button>
+                            <button type="button" class="toolbar-dropdown-btn" id="sortDropdownBtn">
+                                Sort By ▼
+                            </button>
 
-            <div
-    class="toolbar-dropdown-menu"
-    id="sortDropdownMenu">
+                            <div class="toolbar-dropdown-menu" id="sortDropdownMenu">
 
-    <button type="button" data-sort="newest">Newest First</button>
+                                <button type="button" data-sort="newest">Newest First</button>
 
-    <button type="button" data-sort="oldest">Oldest First</button>
+                                <button type="button" data-sort="oldest">Oldest First</button>
 
-    <button type="button" data-sort="deadline_asc">
-        Deadline (Earliest)
-    </button>
+                                <button type="button" data-sort="deadline_asc">
+                                    Deadline (Earliest)
+                                </button>
 
-    <button type="button" data-sort="deadline_desc">
-        Deadline (Latest)
-    </button>
+                                <button type="button" data-sort="deadline_desc">
+                                    Deadline (Latest)
+                                </button>
 
-    <button type="button" data-sort="priority_desc">
-        Priority (High → Low)
-    </button>
+                                <button type="button" data-sort="priority_desc">
+                                    Priority (High → Low)
+                                </button>
 
-    <button type="button" data-sort="priority_asc">
-        Priority (Low → High)
-    </button>
+                                <button type="button" data-sort="priority_asc">
+                                    Priority (Low → High)
+                                </button>
 
-    <button type="button" data-sort="taskid_asc">
-        Task ID (Ascending)
-    </button>
+                                <button type="button" data-sort="taskid_asc">
+                                    Task ID (Ascending)
+                                </button>
 
-    <button type="button" data-sort="taskid_desc">
-        Task ID (Descending)
-    </button>
+                                <button type="button" data-sort="taskid_desc">
+                                    Task ID (Descending)
+                                </button>
 
-    <button type="button" data-sort="az">
-        A → Z
-    </button>
+                                <button type="button" data-sort="az">
+                                    A → Z
+                                </button>
 
-    <button type="button" data-sort="za">
-        Z → A
-    </button>
+                                <button type="button" data-sort="za">
+                                    Z → A
+                                </button>
 
-</div>
+                            </div>
 
-        </div>
+                        </div>
 
-        <!-- FILTER -->
-        <div class="task-toolbar-dropdown">
+                        <!-- FILTER -->
+                        <div class="task-toolbar-dropdown">
 
-            <button
-                type="button"
-                class="toolbar-dropdown-btn"
-                id="filterDropdownBtn">
-                Filter By ▼
-            </button>
+                            <button type="button" class="toolbar-dropdown-btn" id="filterDropdownBtn">
+                                Filter By ▼
+                            </button>
 
-            <div
-    class="toolbar-dropdown-menu"
-    id="filterDropdownMenu">
+                            <div class="toolbar-dropdown-menu" id="filterDropdownMenu">
 
-    <button type="button" data-filter="today">
-        Today
-    </button>
+                                <button type="button" data-filter="today">
+                                    Today
+                                </button>
 
-    <button type="button" data-filter="yesterday">
-        Yesterday
-    </button>
+                                <button type="button" data-filter="yesterday">
+                                    Yesterday
+                                </button>
 
-    <button type="button" data-filter="last7">
-        Last 7 Days
-    </button>
+                                <button type="button" data-filter="last7">
+                                    Last 7 Days
+                                </button>
 
-    <button type="button" data-filter="last30">
-        Last 30 Days
-    </button>
+                                <button type="button" data-filter="last30">
+                                    Last 30 Days
+                                </button>
 
-    <button type="button" data-filter="month">
-        This Month
-    </button>
+                                <button type="button" data-filter="month">
+                                    This Month
+                                </button>
 
-    <button type="button" data-filter="last90">
-        Last 90 Days
-    </button>
+                                <button type="button" data-filter="last90">
+                                    Last 90 Days
+                                </button>
 
-</div>
-{# .mini-link{
-    display:inline-block;
-    text-decoration:none;
-    font-size:12px;
-    font-weight:600;
-    padding:5px 9px;
-    border-radius:7px;
-    background:#eef2ff;
-    color:#1d4ed8;
-} #}
-        </div>
+                            </div>
+                            {# .mini-link{
+                            display:inline-block;
+                            text-decoration:none;
+                            font-size:12px;
+                            font-weight:600;
+                            padding:5px 9px;
+                            border-radius:7px;
+                            background:#eef2ff;
+                            color:#1d4ed8;
+                            } #}
+                        </div>
 
-    </div>
+                    </div>
 
-    <div class="column-customizer">
+                    <div class="column-customizer">
 
-        <button
-            type="button"
-            id="columnCustomizerBtn"
-            class="mini-link">
-            ⚙ Columns
-        </button>
+                        <button type="button" id="columnCustomizerBtn" class="mini-link">
+                            ⚙ Columns
+                        </button>
 
-        <div
-            class="column-dropdown"
-            id="columnDropdown">
+                        <div class="column-dropdown" id="columnDropdown">
 
-            <label><input type="checkbox" value="task_id" checked> Task ID</label>
-            <label><input type="checkbox" value="task" checked> Task</label>
-            <label><input type="checkbox" value="client" checked> Client</label>
-            <label><input type="checkbox" value="service" checked> Service</label>
-            <label><input type="checkbox" value="deliverable" checked> Deliverable</label>
-            <label><input type="checkbox" value="assigned_to" checked> Assigned To</label>
-            <label><input type="checkbox" value="assigned_by" checked> Assigned By</label>
-            <label><input type="checkbox" value="deadline" checked> Deadline</label>
-            <label><input type="checkbox" value="status" checked> Status</label>
-            <label><input type="checkbox" value="action" checked> Action</label>
+                            <label><input type="checkbox" value="task_id" checked> Task ID</label>
+                            <label><input type="checkbox" value="task" checked> Task</label>
+                            <label><input type="checkbox" value="client" checked> Client</label>
+                            <label><input type="checkbox" value="service" checked> Service</label>
+                            <label><input type="checkbox" value="deliverable" checked> Deliverable</label>
+                            <label><input type="checkbox" value="assigned_to" checked> Assigned To</label>
+                            <label><input type="checkbox" value="assigned_by" checked> Assigned By</label>
+                            <label><input type="checkbox" value="deadline" checked> Deadline</label>
+                            <label><input type="checkbox" value="status" checked> Status</label>
+                            <label><input type="checkbox" value="action" checked> Action</label>
 
-            <hr>
+                            <hr>
 
-            <button
-                type="button"
-                id="resetColumns"
-                class="mini-link">
-                Reset Default
-            </button>
+                            <button type="button" id="resetColumns" class="mini-link">
+                                Reset Default
+                            </button>
 
-        </div>
+                        </div>
 
-    </div>
-
-</div>
-
-
-                    
+                    </div>
 
                 </div>
 
+
+
+
+            </div>
+
             <div class="task-table-scroll">
-            <table id="taskListTable">
-                <thead>
-                    <tr>
-                        <th data-column="task_id">Task ID</th>
-                        <th data-column="task">Task</th>
-                        <th data-column="client">Client</th>
-                        <th data-column="service">Service</th>
-                        <th data-column="deliverable">Deliverable</th>
-                        <th data-column="assigned_to">Assigned To</th>
-                        <th data-column="assigned_by">Assigned By</th>
-                        <th data-column="deadline">Deadline</th>
-                        <th data-column="status">Status</th>
-                        <th data-column="action">Action</th>
-                    </tr>
-                </thead>
+                <table id="taskListTable">
+                    <thead>
+                        <tr>
+                            <th data-column="task_id">Task ID</th>
+                            <th data-column="task">Task</th>
+                            <th data-column="client">Client</th>
+                            <th data-column="service">Service</th>
+                            <th data-column="deliverable">Deliverable</th>
+                            <th data-column="assigned_to">Assigned To</th>
+                            <th data-column="assigned_by">Assigned By</th>
+                            <th data-column="deadline">Deadline</th>
+                            <th data-column="status">Status</th>
+                            <th data-column="action">Action</th>
+                        </tr>
+                    </thead>
 
-                <tbody>
-                    {% for task in tasks %}
+                    <tbody>
+                        {% for task in tasks %}
 
-                    <tr data-task-id="{{ task.id }}">
-                        <td data-column="task_id">
-                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="task-code-badge">
-                                #{{ task.task_code }}
-                            </a>
-                        </td>
-
-                        <td data-column="task">
-                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
-                                {{ task.title }}
-                            </a>
-                        </td>
-
-                        <td data-column="client">{{ task.client.client_name }}</td>
-                        <td data-column="service">{{ task.deliverable.service_name }}</td>
-                        <td data-column="deliverable">{{ task.deliverable.deliverable_name }}</td>
-
-                        <td data-column="assigned_to">
-                            {{ task.assigned_to.name if task.assigned_to else "-" }}
-                        </td>
-
-                        <td data-column="assigned_by">
-                            {{ task.created_by.name if task.created_by else "-" }}
-                        </td>
-
-                        <td data-column="deadline">
-                            {% if task.deadline %}
-                            {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-
-                        <td data-column="status">
-                            <span class="status-pill">
-                                {{ task.status }}
-                            </span>
-                        </td>
-
-                        <td data-column="action">
-                            <div class="table-actions">
-
-                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="mini-link">
-                                    View
+                        <tr data-task-id="{{ task.id }}">
+                            <td data-column="task_id">
+                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="task-code-badge">
+                                    #{{ task.task_code }}
                                 </a>
+                            </td>
 
-                                {% if has_permission(current_user, "manage_tasks") %}
-                                <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="mini-link">
-                                    Manage
+                            <td data-column="task">
+                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                                    {{ task.title }}
                                 </a>
+                            </td>
+
+                            <td data-column="client">{{ task.client.client_name }}</td>
+                            <td data-column="service">{{ task.deliverable.service_name }}</td>
+                            <td data-column="deliverable">{{ task.deliverable.deliverable_name }}</td>
+
+                            <td data-column="assigned_to">
+                                {{ task.assigned_to.name if task.assigned_to else "-" }}
+                            </td>
+
+                            <td data-column="assigned_by">
+                                {{ task.created_by.name if task.created_by else "-" }}
+                            </td>
+
+                            <td data-column="deadline">
+                                {% if task.deadline %}
+                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                                {% else %}
+                                -
                                 {% endif %}
+                            </td>
 
-                                {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
-                                task.assigned_to_id == current_user.id) %}
-                                <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
-                                    <button type="submit" class="mini-action">
-                                        Start
-                                    </button>
-                                </form>
-                                {% endif %}
+                            <td data-column="status">
+                                <span class="status-pill">
+                                    {{ task.status }}
+                                </span>
+                            </td>
 
-                            </div>
-                        </td>
-                    </tr>
+                            <td data-column="action">
+                                <div class="table-actions">
 
-                    {% else %}
+                                    <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="mini-link">
+                                        View
+                                    </a>
 
-                    <tr>
-                        <td colspan="9">
-                            No tasks found.
-                        </td>
-                    </tr>
+                                    {% if has_permission(current_user, "manage_tasks") %}
+                                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="mini-link">
+                                        Manage
+                                    </a>
+                                    {% endif %}
+
+                                    {% if task.status == "Assigned" and (has_permission(current_user, "manage_tasks") or
+                                    task.assigned_to_id == current_user.id) %}
+                                    <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
+                                        <button type="submit" class="mini-action">
+                                            Start
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                </div>
+                            </td>
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="9">
+                                No tasks found.
+                            </td>
+                        </tr>
 
 
-                    {% endfor %}
-                </tbody>
-            </table>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
 
             <div class="table-pagination-footer">
@@ -864,6 +895,236 @@
 
         }
         /* ==========================
+           TABLE PAGINATION
+        ========================== */
+
+        (function () {
+
+            const rowsSelect = document.getElementById("tableRowsSelect");
+            const rangeText = document.getElementById("tableRangeText");
+            const firstBtn = document.getElementById("firstPageBtn");
+            const prevBtn = document.getElementById("prevPageBtn");
+            const nextBtn = document.getElementById("nextPageBtn");
+            const lastBtn = document.getElementById("lastPageBtn");
+
+            const tableBody = document.querySelector("#taskListTable tbody");
+
+            if (!rowsSelect || !tableBody) {
+                return;
+            }
+
+            const allRows = Array.from(
+                tableBody.querySelectorAll("tr[data-task-id]")
+            );
+
+            let currentPage = 1;
+            let rowsPerPage = parseInt(rowsSelect.value, 10) || 10;
+
+            function renderPage() {
+
+                const totalRows = allRows.length;
+
+                rowsPerPage = rowsSelect.value === "all"
+                    ? (totalRows || 1)
+                    : parseInt(rowsSelect.value, 10) || 10;
+
+                const totalPages = Math.max(
+                    1,
+                    Math.ceil(totalRows / rowsPerPage)
+                );
+
+                if (currentPage > totalPages) {
+                    currentPage = totalPages;
+                }
+
+                if (currentPage < 1) {
+                    currentPage = 1;
+                }
+
+                const startIndex = (currentPage - 1) * rowsPerPage;
+                const endIndex = Math.min(
+                    startIndex + rowsPerPage,
+                    totalRows
+                );
+
+                allRows.forEach(function (row, index) {
+                    row.style.display =
+                        (index >= startIndex && index < endIndex)
+                            ? ""
+                            : "none";
+                });
+
+                if (totalRows === 0) {
+                    rangeText.textContent = "0 - 0 of 0";
+                } else {
+                    rangeText.textContent =
+                        (startIndex + 1) + " - " + endIndex + " of " + totalRows;
+                }
+
+                firstBtn.disabled = currentPage === 1;
+                prevBtn.disabled = currentPage === 1;
+                nextBtn.disabled = currentPage === totalPages;
+                lastBtn.disabled = currentPage === totalPages;
+
+                function totalPagesValue() {
+                    return totalPages;
+                }
+
+                tableBody.dataset.totalPages = totalPages;
+            }
+
+            rowsSelect.addEventListener("change", function () {
+                currentPage = 1;
+                renderPage();
+            });
+
+            firstBtn.addEventListener("click", function () {
+                currentPage = 1;
+                renderPage();
+            });
+
+            prevBtn.addEventListener("click", function () {
+                currentPage = currentPage - 1;
+                renderPage();
+            });
+
+            nextBtn.addEventListener("click", function () {
+                currentPage = currentPage + 1;
+                renderPage();
+            });
+
+            lastBtn.addEventListener("click", function () {
+                currentPage = parseInt(tableBody.dataset.totalPages, 10) || 1;
+                renderPage();
+            });
+
+            renderPage();
+
+        })();
+        /* ==========================
+           KANBAN REF / SUB FILE POPUP
+        ========================== */
+
+        (function () {
+
+            const overlay = document.getElementById("filePopupOverlay");
+            const grid = document.getElementById("filePopupGrid");
+            const title = document.getElementById("filePopupTitle");
+            const closeBtn = document.getElementById("filePopupClose");
+
+            if (!overlay) return;
+
+            function iconForMime(mimeType) {
+
+                mimeType = mimeType || "";
+
+                if (mimeType.startsWith("video/")) return "🎬";
+                if (mimeType.startsWith("audio/")) return "🎵";
+                if (mimeType === "application/pdf") return "📕";
+                if (mimeType.includes("zip") || mimeType.includes("compressed")) return "🗜️";
+                if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "📊";
+
+                return "📄";
+            }
+
+            function openPopup(files, folderType) {
+
+                title.textContent = folderType === "reference" ? "Reference Files" : "Submission Files";
+
+                grid.innerHTML = "";
+
+                if (!files.length) {
+                    grid.innerHTML = '<div class="file-popup-empty">No files found.</div>';
+                } else {
+
+                    files.forEach(function (file) {
+
+                        const item = document.createElement("div");
+                        item.className = "file-popup-item";
+
+                        if (file.is_image) {
+                            item.innerHTML = `<img class="file-popup-thumb" src="${file.preview_url}" alt="${file.filename}">`;
+                        } else {
+                            item.innerHTML = `<div class="file-popup-icon">${iconForMime(file.mime_type)}</div>`;
+                        }
+
+                        const nameDiv = document.createElement("div");
+                        nameDiv.className = "file-popup-name";
+                        nameDiv.textContent = file.filename;
+                        item.appendChild(nameDiv);
+
+                        const downloadLink = document.createElement("a");
+                        downloadLink.className = "file-popup-download";
+                        downloadLink.href = file.download_url;
+                        downloadLink.title = "Download";
+                        downloadLink.innerHTML = "↓";
+                        downloadLink.addEventListener("click", function (e) {
+                            e.stopPropagation();
+                        });
+                        item.appendChild(downloadLink);
+
+                        item.addEventListener("dblclick", function () {
+                            window.open(file.preview_url, "_blank");
+                        });
+
+                        grid.appendChild(item);
+
+                    });
+                }
+
+                overlay.classList.add("show");
+            }
+
+            function closePopup() {
+                overlay.classList.remove("show");
+            }
+
+            if (closeBtn) {
+                closeBtn.addEventListener("click", closePopup);
+            }
+
+            overlay.addEventListener("click", function (e) {
+                if (e.target === overlay) {
+                    closePopup();
+                }
+            });
+
+            document.addEventListener("click", function (e) {
+
+                const btn = e.target.closest(".kanban-file-btn");
+
+                if (!btn) return;
+
+                const taskId = btn.dataset.taskId;
+                const folderType = btn.dataset.folderType;
+
+                fetch(`/tasks/${taskId}/files-panel/${folderType}`)
+                    .then(function (response) {
+                        return response.json();
+                    })
+                    .then(function (data) {
+
+                        if (!data.success) {
+                            alert(data.message || "Unable to load files.");
+                            return;
+                        }
+
+                        if (data.files.length === 1) {
+                            window.open(data.files[0].preview_url, "_blank");
+                            return;
+                        }
+
+                        openPopup(data.files, folderType);
+
+                    })
+                    .catch(function () {
+                        alert("Unable to load files.");
+                    });
+
+            });
+
+        })();
+        /* ==========================
            KANBAN COPY DESCRIPTION
         ========================== */
 
@@ -1000,130 +1261,130 @@
 
         });
 
-/*=========================================
-SORT BY (BACKEND)
-=========================================*/
+        /*=========================================
+        SORT BY (BACKEND)
+        =========================================*/
 
-document.querySelectorAll("#sortDropdownMenu button").forEach(function(button){
+        document.querySelectorAll("#sortDropdownMenu button").forEach(function (button) {
 
-    button.addEventListener("click",function(){
+            button.addEventListener("click", function () {
 
-        const url = new URL(window.location.href);
+                const url = new URL(window.location.href);
 
-        url.searchParams.set(
-            "sort",
-            this.dataset.sort
-        );
+                url.searchParams.set(
+                    "sort",
+                    this.dataset.sort
+                );
 
-        window.location.href = url.toString();
+                window.location.href = url.toString();
 
-    });
+            });
 
-});
-/*=========================================
-FILTER BY (BACKEND)
-=========================================*/
+        });
+        /*=========================================
+        FILTER BY (BACKEND)
+        =========================================*/
 
-document.querySelectorAll("#filterDropdownMenu button").forEach(function(button){
+        document.querySelectorAll("#filterDropdownMenu button").forEach(function (button) {
 
-    button.addEventListener("click",function(){
+            button.addEventListener("click", function () {
 
-        const value = this.dataset.filter;
+                const value = this.dataset.filter;
 
-        if(!value){
-            return;
-        }
+                if (!value) {
+                    return;
+                }
 
-        const url = new URL(window.location.href);
+                const url = new URL(window.location.href);
 
-        url.searchParams.set(
-            "filter",
-            value
-        );
+                url.searchParams.set(
+                    "filter",
+                    value
+                );
 
-        window.location.href = url.toString();
+                window.location.href = url.toString();
 
-    });
+            });
 
-});
+        });
         /*=========================================
 TASK LIST TOOLBAR DROPDOWNS
 =========================================*/
-const sortBtn = document.getElementById("sortDropdownBtn");
-const filterBtn = document.getElementById("filterDropdownBtn");
+        const sortBtn = document.getElementById("sortDropdownBtn");
+        const filterBtn = document.getElementById("filterDropdownBtn");
 
-const sortMenu = document.getElementById("sortDropdownMenu");
-const filterMenu = document.getElementById("filterDropdownMenu");
+        const sortMenu = document.getElementById("sortDropdownMenu");
+        const filterMenu = document.getElementById("filterDropdownMenu");
 
-function closeToolbarMenus() {
+        function closeToolbarMenus() {
 
-    if (sortMenu) {
-        sortMenu.classList.remove("show");
-    }
+            if (sortMenu) {
+                sortMenu.classList.remove("show");
+            }
 
-    if (filterMenu) {
-        filterMenu.classList.remove("show");
-    }
+            if (filterMenu) {
+                filterMenu.classList.remove("show");
+            }
 
-}
-
-if (sortBtn && sortMenu) {
-
-    sortBtn.addEventListener("click", function (e) {
-
-        e.stopPropagation();
-
-        if (filterMenu) {
-            filterMenu.classList.remove("show");
         }
 
-        sortMenu.classList.toggle("show");
+        if (sortBtn && sortMenu) {
 
-    });
+            sortBtn.addEventListener("click", function (e) {
 
-}
+                e.stopPropagation();
 
-if (filterBtn && filterMenu) {
+                if (filterMenu) {
+                    filterMenu.classList.remove("show");
+                }
 
-    filterBtn.addEventListener("click", function (e) {
+                sortMenu.classList.toggle("show");
 
-        e.stopPropagation();
+            });
+
+        }
+
+        if (filterBtn && filterMenu) {
+
+            filterBtn.addEventListener("click", function (e) {
+
+                e.stopPropagation();
+
+                if (sortMenu) {
+                    sortMenu.classList.remove("show");
+                }
+
+                filterMenu.classList.toggle("show");
+
+            });
+
+        }
+
+        document.addEventListener("click", function () {
+
+            closeToolbarMenus();
+
+        });
 
         if (sortMenu) {
-            sortMenu.classList.remove("show");
+
+            sortMenu.addEventListener("click", function (e) {
+
+                e.stopPropagation();
+
+            });
+
         }
 
-        filterMenu.classList.toggle("show");
+        if (filterMenu) {
 
-    });
+            filterMenu.addEventListener("click", function (e) {
 
-}
+                e.stopPropagation();
 
-document.addEventListener("click", function () {
+            });
 
-    closeToolbarMenus();
-
-});
-
-if (sortMenu) {
-
-    sortMenu.addEventListener("click", function (e) {
-
-        e.stopPropagation();
-
-    });
-
-}
-
-if (filterMenu) {
-
-    filterMenu.addEventListener("click", function (e) {
-
-        e.stopPropagation();
-
-    });
-
-}
+        }
     </script>
 
 </body>

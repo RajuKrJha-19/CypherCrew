@@ -443,6 +443,33 @@ def list_tasks():
             and task.status in ["Assigned", "In Progress", "Paused"]
     ])
 
+    task_ids = [task.id for task in tasks]
+
+    file_counts = {}
+
+    if task_ids:
+
+        count_rows = (
+            db.session.query(
+                TaskFile.task_id,
+                TaskFile.folder_type,
+                db.func.count(TaskFile.id)
+            )
+            .filter(
+                TaskFile.task_id.in_(task_ids),
+                TaskFile.folder_type.in_(["reference", "submission"])
+            )
+            .group_by(TaskFile.task_id, TaskFile.folder_type)
+            .all()
+        )
+
+        for row_task_id, row_folder_type, row_count in count_rows:
+            file_counts.setdefault(
+                row_task_id,
+                {"reference": 0, "submission": 0}
+            )
+            file_counts[row_task_id][row_folder_type] = row_count
+
     return render_template(
         "tasks/list.html",
         tasks=tasks,
@@ -455,8 +482,59 @@ def list_tasks():
         total_tasks=total_tasks,
         completed_tasks=completed_tasks,
         review_tasks=review_tasks,
-        overdue_tasks=overdue_tasks
+        overdue_tasks=overdue_tasks,
+        file_counts=file_counts
     )
+
+@tasks_bp.route("/<int:task_id>/files-panel/<string:folder_type>")
+@login_required
+def task_files_panel(task_id, folder_type):
+
+    if folder_type not in ("reference", "submission"):
+        return jsonify(success=False, message="Invalid folder type."), 400
+
+    task = Task.query.get_or_404(task_id)
+
+    if not has_permission(current_user, "manage_tasks"):
+
+        can_view = (
+            task.assigned_to_id == current_user.id
+            or current_user in task.visible_to
+        )
+
+        if not can_view:
+            return jsonify(success=False, message="Not allowed."), 403
+
+    files = (
+        TaskFile.query
+        .filter_by(task_id=task.id, folder_type=folder_type)
+        .order_by(TaskFile.created_at.desc())
+        .all()
+    )
+
+    file_list = []
+
+    for task_file in files:
+        file_list.append({
+            "id": task_file.id,
+            "filename": task_file.original_filename,
+            "mime_type": task_file.mime_type or "",
+            "is_image": bool(
+                task_file.mime_type
+                and task_file.mime_type.startswith("image/")
+            ),
+            "preview_url": url_for(
+                "tasks.preview_task_file",
+                file_id=task_file.id
+            ),
+            "download_url": url_for(
+                "tasks.download_task_file",
+                file_id=task_file.id
+            ),
+        })
+
+    return jsonify(success=True, files=file_list)
+
 
 @tasks_bp.route("/filtered/<string:filter_type>")
 @login_required
