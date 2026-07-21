@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Gallery | CypherCrew</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="layout">
+
+        {% include "partials/sidebar.html" %}
+
+        <main class="main">
+
+            <div class="page-header">
+                <div>
+                    <h1>Gallery</h1>
+                    <p>All reference and submission files across the company</p>
+                </div>
+
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                </div>
+            </div>
+
+            <form method="GET" class="gallery-search-bar">
+                <input
+                    style="height: 200px;"
+                    type="text"
+                    name="q"
+                    value="{{ search }}"
+                    placeholder="Search by filename or uploaded by..."
+                >
+                <button type="submit" >Search</button>
+
+                {% if search %}
+                <a href="{{ url_for('gallery.index') }}" class="mini-link">Reset</a>
+                {% endif %}
+            </form>
+
+            {% if grouped_files %}
+
+                {% for group in grouped_files %}
+
+                <div class="gallery-date-group">
+
+                    <h3 class="gallery-date-label">{{ group.date_label }}</h3>
+
+                    <div class="gallery-grid">
+
+                        {% for file in group.files %}
+
+                        {% set is_image = file.mime_type and file.mime_type.startswith("image/") %}
+
+                        <div
+                            class="gallery-item"
+                            data-preview-url="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                            data-download-url="{{ url_for('tasks.download_task_file', file_id=file.id) }}"
+                            data-filename="{{ file.original_filename }}"
+                            data-uploader="{{ file.uploaded_by.name if file.uploaded_by else '-' }}"
+                            data-task-title="{{ file.task.title if file.task else '-' }}"
+                            data-task-code="{{ file.task.task_code if file.task else '-' }}"
+                            data-client="{{ file.task.client.client_name if file.task and file.task.client else '-' }}"
+                            data-uploaded-at="{{ (file.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y, %I:%M %p') }}"
+                            data-mime="{{ file.mime_type or '-' }}"
+                            data-size="{% if file.file_size %}{% if file.file_size < 1024 %}{{ file.file_size }} B{% elif file.file_size < 1048576 %}{{ (file.file_size / 1024)|round(1) }} KB{% else %}{{ (file.file_size / 1048576)|round(2) }} MB{% endif %}{% else %}-{% endif %}"
+                        >
+
+                            <div class="gallery-thumb-box">
+
+                                {% if is_image %}
+                                <img class="gallery-thumb" src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}" alt="{{ file.original_filename }}" loading="lazy">
+                                {% else %}
+                                <div class="gallery-icon">
+                                    {% if file.mime_type and file.mime_type.startswith("video/") %}
+                                    🎬
+                                    {% elif file.mime_type and file.mime_type.startswith("audio/") %}
+                                    🎵
+                                    {% elif file.mime_type == "application/pdf" %}
+                                    📕
+                                    {% elif file.mime_type and ("zip" in file.mime_type or "compressed" in file.mime_type) %}
+                                    🗜️
+                                    {% elif file.mime_type and ("spreadsheet" in file.mime_type or "excel" in file.mime_type) %}
+                                    📊
+                                    {% else %}
+                                    📄
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                            </div>
+
+                            <div class="gallery-item-name" title="{{ file.original_filename }}">
+                                {{ file.original_filename }}
+                            </div>
+
+                            <div class="gallery-item-uploader">
+                                {{ file.uploaded_by.name if file.uploaded_by else "-" }}
+                            </div>
+
+                        </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                </div>
+
+                {% endfor %}
+
+            {% else %}
+
+            <div class="empty-state">
+                <strong>No files found</strong>
+                <p>Try a different search or check back later.</p>
+            </div>
+
+            {% endif %}
+
+            {% if pagination.pages > 1 %}
+            <div class="gallery-pagination">
+
+                {% if pagination.has_prev %}
+                <a href="{{ url_for('gallery.index', q=search, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
+                {% endif %}
+
+                <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+
+                {% if pagination.has_next %}
+                <a href="{{ url_for('gallery.index', q=search, page=pagination.next_num) }}" class="mini-link">Next →</a>
+                {% endif %}
+
+            </div>
+            {% endif %}
+
+        </main>
+
+    </div>
+
+    <!-- CONTEXT MENU -->
+    <div id="galleryContextMenu" class="gallery-context-menu">
+        <button type="button" data-action="open">Open</button>
+        <button type="button" data-action="download">Download</button>
+        <button type="button" data-action="properties">Properties</button>
+    </div>
+
+    <!-- PROPERTIES MODAL -->
+    <div class="file-popup-overlay" id="propertiesOverlay">
+        <div class="file-popup-box properties-box">
+
+            <div class="file-popup-head">
+                <h3>File Properties</h3>
+                <button type="button" class="file-popup-close" id="propertiesClose">&times;</button>
+            </div>
+
+            <div class="properties-body" id="propertiesBody"></div>
+
+        </div>
+    </div>
+
+    <script>
+        (function () {
+
+            const contextMenu = document.getElementById("galleryContextMenu");
+            const propertiesOverlay = document.getElementById("propertiesOverlay");
+            const propertiesBody = document.getElementById("propertiesBody");
+            const propertiesClose = document.getElementById("propertiesClose");
+
+            let activeItem = null;
+
+            function hideContextMenu() {
+                contextMenu.classList.remove("show");
+                activeItem = null;
+            }
+
+            document.addEventListener("dblclick", function (event) {
+
+                const item = event.target.closest(".gallery-item");
+
+                if (!item) return;
+
+                window.open(item.dataset.previewUrl, "_blank");
+
+            });
+
+            document.addEventListener("contextmenu", function (event) {
+
+                const item = event.target.closest(".gallery-item");
+
+                if (!item) return;
+
+                event.preventDefault();
+
+                activeItem = item;
+
+                contextMenu.style.left = event.pageX + "px";
+                contextMenu.style.top = event.pageY + "px";
+                contextMenu.classList.add("show");
+
+            });
+
+            document.addEventListener("click", function (event) {
+
+                if (!event.target.closest("#galleryContextMenu")) {
+                    hideContextMenu();
+                }
+
+            });
+
+            contextMenu.addEventListener("click", function (event) {
+
+                const button = event.target.closest("button");
+
+                if (!button || !activeItem) return;
+
+                const action = button.dataset.action;
+
+                if (action === "open") {
+                    window.open(activeItem.dataset.previewUrl, "_blank");
+                }
+
+                if (action === "download") {
+                    window.location.href = activeItem.dataset.downloadUrl;
+                }
+
+                if (action === "properties") {
+
+                    propertiesBody.innerHTML = `
+                        <div class="detail-row"><span>Filename</span><strong>${activeItem.dataset.filename}</strong></div>
+                        <div class="detail-row"><span>Uploaded By</span><strong>${activeItem.dataset.uploader}</strong></div>
+                        <div class="detail-row"><span>Uploaded At</span><strong>${activeItem.dataset.uploadedAt}</strong></div>
+                        <div class="detail-row"><span>Task</span><strong>#${activeItem.dataset.taskCode} - ${activeItem.dataset.taskTitle}</strong></div>
+                        <div class="detail-row"><span>Client</span><strong>${activeItem.dataset.client}</strong></div>
+                        <div class="detail-row"><span>File Type</span><strong>${activeItem.dataset.mime}</strong></div>
+                        <div class="detail-row"><span>File Size</span><strong>${activeItem.dataset.size}</strong></div>
+                    `;
+
+                    propertiesOverlay.classList.add("show");
+                }
+
+                hideContextMenu();
+
+            });
+
+            if (propertiesClose) {
+                propertiesClose.addEventListener("click", function () {
+                    propertiesOverlay.classList.remove("show");
+                });
+            }
+
+            propertiesOverlay.addEventListener("click", function (event) {
+                if (event.target === propertiesOverlay) {
+                    propertiesOverlay.classList.remove("show");
+                }
+            });
+
+        })();
+    </script>
+
+</body>
+
+</html>

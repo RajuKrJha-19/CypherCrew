@@ -68,6 +68,12 @@
         <span>Notes</span>
     </a>
 
+    <a href="{{ url_for('gallery.index') }}"
+       class="{% if endpoint.startswith('gallery.') %}active{% endif %}">
+        <i class="fa-solid fa-images"></i>
+        <span>Gallery</span>
+    </a>
+
     {% if has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
 
     <a href="{{ url_for('reports.list_reports') }}"

@@ -7162,3 +7162,149 @@ TASK LIST TOOLBAR
     text-align:center;
     color:#64748b;
 }
+
+/* NEW FLAT GALLERY - PHONE STYLE */
+
+.gallery-search-bar{
+    /* display:flex; */
+    gap:10px;
+    /* align-items:center; */
+    margin-bottom:22px;
+    height: 90px;
+    
+}
+
+.gallery-search-bar input{
+    flex:1;
+    max-width:100%;
+}
+
+.gallery-date-group{
+    margin-bottom:28px;
+}
+
+.gallery-date-label{
+    margin:0 0 12px;
+    font-size:14px;
+    font-weight:800;
+    color:#374151;
+}
+
+.gallery-grid{
+    display:grid !important;
+    grid-template-columns:repeat(auto-fill, 130px) !important;
+    gap:12px !important;
+    width:100% !important;
+}
+
+.gallery-item{
+    width:130px !important;
+    max-width:130px !important;
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    overflow:hidden;
+    cursor:pointer;
+    user-select:none;
+    transition:.2s;
+}
+
+.gallery-item:hover{
+    border-color:#2563eb;
+    transform:translateY(-2px);
+    box-shadow:0 10px 20px rgba(37,99,235,.10);
+}
+
+.gallery-thumb-box{
+    width:130px !important;
+    height:130px !important;
+    max-width:130px !important;
+    background:#f1f5f9;
+    overflow:hidden;
+}
+
+.gallery-thumb{
+    width:130px !important;
+    height:130px !important;
+    max-width:130px !important;
+    object-fit:cover !important;
+    display:block;
+}
+
+.gallery-icon{
+    width:130px;
+    height:130px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:40px;
+}
+
+.gallery-item-name{
+    padding:8px 10px 2px;
+    font-size:12px;
+    font-weight:700;
+    color:#111827;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.gallery-item-uploader{
+    padding:0 10px 10px;
+    font-size:11px;
+    color:#6b7280;
+}
+
+.gallery-pagination{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:16px;
+    margin-top:20px;
+    font-size:13px;
+    color:#374151;
+    font-weight:600;
+}
+
+.gallery-context-menu{
+    display:none;
+    position:absolute;
+    z-index:99999;
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    box-shadow:0 15px 40px rgba(0,0,0,.15);
+    padding:6px;
+    min-width:150px;
+}
+
+.gallery-context-menu.show{
+    display:block;
+}
+
+.gallery-context-menu button{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:9px 12px;
+    background:transparent;
+    border:none;
+    border-radius:7px;
+    font-size:13px;
+    font-weight:600;
+    color:#111827;
+    cursor:pointer;
+}
+
+.gallery-context-menu button:hover{
+    background:#f1f5f9;
+}
+
+.properties-box{
+    width:420px;
+}
+
+.properties-body{
+    padding:16px 20px;
+}
