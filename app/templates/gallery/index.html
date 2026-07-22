@@ -14,19 +14,100 @@
                 </div>
             </div>
 
-            <form method="GET" class="gallery-search-bar">
-                <input
-                    type="text"
-                    name="q"
-                    value="{{ search }}"
-                    placeholder="Search by filename or uploaded by..."
-                >
-                <button type="submit" >Search</button>
+            {#
+                One GET form for the whole toolbar, so search, filters and
+                sort compose instead of clobbering one another - picking a
+                sort keeps the filters you already set. The selects submit
+                on change; only the free-text box needs a button.
+            #}
+            <form method="GET" class="gallery-toolbar" id="galleryToolbar">
 
-                {% if search %}
-                <a href="{{ url_for('gallery.index') }}" class="mini-link">Reset</a>
-                {% endif %}
+                <div class="gallery-search-wrap">
+                    <i class="fa-solid fa-magnifying-glass gallery-search-icon"></i>
+
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ search }}"
+                        placeholder="Search files, people, task or task ID"
+                        aria-label="Search files"
+                    >
+                </div>
+
+                <select name="type" data-gallery-auto
+                        aria-label="File type"
+                        title="Show only one kind of file">
+                    <option value="">All types</option>
+                    {% for value, label in type_options %}
+                    <option value="{{ value }}" {% if file_type == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="folder" data-gallery-auto
+                        aria-label="Reference or submission"
+                        title="Reference files are the brief; submissions are the work sent back">
+                    <option value="">Reference &amp; submissions</option>
+                    {% for value, label in folder_options %}
+                    <option value="{{ value }}" {% if folder == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="uploader" data-gallery-auto
+                        aria-label="Uploaded by"
+                        title="Show only files uploaded by one person">
+                    <option value="">Anyone</option>
+                    {% for person in uploaders %}
+                    <option value="{{ person.id }}" {% if uploader_id == person.id %}selected{% endif %}>
+                        {{ person.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="client" data-gallery-auto
+                        aria-label="Client"
+                        title="Show only files on this client's tasks">
+                    <option value="">All clients</option>
+                    {% for client in clients %}
+                    <option value="{{ client.id }}" {% if client_id == client.id %}selected{% endif %}>
+                        {{ client.client_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="sort" data-gallery-auto
+                        class="gallery-sort"
+                        aria-label="Sort files"
+                        title="Order the files">
+                    {% for value, label in sort_options %}
+                    <option value="{{ value }}" {% if sort == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit" class="gallery-search-btn">Search</button>
+
             </form>
+
+            <div class="gallery-result-bar">
+
+                <span class="gallery-result-count">
+                    {{ total_files }} file{{ '' if total_files == 1 else 's' }}
+                    {% if search or active_filters %}matched{% endif %}
+                </span>
+
+                {% if search or active_filters or sort != 'newest' %}
+                <a href="{{ url_for('gallery.index') }}" class="gallery-clear-link">
+                    <i class="fa-solid fa-xmark"></i>
+                    Clear {{ 'filters' if active_filters else 'search' }}
+                </a>
+                {% endif %}
+
+            </div>
 
             {% if grouped_files %}
 
@@ -34,7 +115,9 @@
 
                 <div class="gallery-date-group">
 
+                    {% if group.date_label %}
                     <h3 class="gallery-date-label">{{ group.date_label }}</h3>
+                    {% endif %}
 
                     <div class="gallery-grid">
 
@@ -122,7 +205,11 @@
 
             <div class="empty-state">
                 <strong>No files found</strong>
-                <p>Try a different search or check back later.</p>
+                {% if search or active_filters %}
+                <p>Nothing matches those filters. Try widening them or clearing the search.</p>
+                {% else %}
+                <p>Reference files and submissions will appear here once tasks have attachments.</p>
+                {% endif %}
             </div>
 
             {% endif %}
@@ -131,13 +218,13 @@
             <div class="list-pagination">
 
                 {% if pagination.has_prev %}
-                <a href="{{ url_for('gallery.index', q=search, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
+                <a href="{{ url_for('gallery.index', q=search, sort=sort, type=file_type, folder=folder, uploader=uploader_id, client=client_id, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
                 {% endif %}
 
                 <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
 
                 {% if pagination.has_next %}
-                <a href="{{ url_for('gallery.index', q=search, page=pagination.next_num) }}" class="mini-link">Next →</a>
+                <a href="{{ url_for('gallery.index', q=search, sort=sort, type=file_type, folder=folder, uploader=uploader_id, client=client_id, page=pagination.next_num) }}" class="mini-link">Next →</a>
                 {% endif %}
 
             </div>
@@ -150,6 +237,19 @@
 
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+
+<script>
+    // Selects apply immediately; page resets so a filter can't leave you
+    // stranded on a page number the narrowed result set no longer has.
+    document.querySelectorAll("[data-gallery-auto]").forEach(function (field) {
+        field.addEventListener("change", function () {
+            const form = field.form;
+            const page = form.querySelector('input[name="page"]');
+            if (page) page.remove();
+            form.submit();
+        });
+    });
+</script>
 
 <!-- CONTEXT MENU -->
     <div id="galleryContextMenu" class="gallery-context-menu">

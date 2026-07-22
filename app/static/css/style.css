@@ -7900,18 +7900,6 @@ TASK LIST TOOLBAR
 
 /* NEW FLAT GALLERY - PHONE STYLE */
 
-.gallery-search-bar{
-    display:flex;
-    flex-direction:row;
-    gap:10px;
-    align-items:center;
-    margin-bottom:22px;
-}
-
-.gallery-search-bar input{
-    flex:1;
-    max-width:100%;
-}
 
 .gallery-date-group{
     margin-bottom:28px;
@@ -9141,4 +9129,122 @@ body.sidebar-collapsed .sidebar-logout{
 .file-popup-thumb.file-video-poster{
     height:90px;
     border-radius:8px;
+}
+
+
+/* ==========================================================
+   GALLERY TOOLBAR
+   Search, filters and sort in one row that wraps. All of it
+   is a single GET form, so the controls compose rather than
+   replacing each other.
+   ========================================================== */
+
+.gallery-toolbar{
+    display:flex;
+    /* The global form rule is flex-direction:column - without this the
+       toolbar stacks into a centred pile. */
+    flex-direction:row;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+    padding:12px;
+    border:1px solid var(--color-border);
+    border-radius:12px;
+    background:var(--color-surface);
+}
+
+.gallery-search-wrap{
+    position:relative;
+    flex:1 1 260px;
+    min-width:0;
+}
+
+.gallery-search-icon{
+    position:absolute;
+    top:50%;
+    left:13px;
+    transform:translateY(-50%);
+    color:var(--color-text-muted);
+    font-size:13px;
+    pointer-events:none;
+}
+
+.gallery-search-wrap input{
+    width:100%;
+    height:40px;
+    padding:0 12px 0 36px;
+}
+
+.gallery-toolbar select{
+    flex:0 1 auto;
+    width:auto;
+    min-width:132px;
+    max-width:200px;
+    height:40px;
+}
+
+/* Sort is a different kind of control from the filters - it changes
+   order, not what is in the set - so it reads slightly apart. */
+.gallery-toolbar .gallery-sort{
+    margin-left:auto;
+}
+
+.gallery-search-btn{
+    flex:0 0 auto;
+    height:40px;
+    padding:0 18px;
+}
+
+/* Result count + clear */
+.gallery-result-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:18px;
+    padding:0 2px;
+}
+
+.gallery-result-count{
+    font-size:13px;
+    font-weight:600;
+    color:var(--color-text-muted);
+    font-variant-numeric:tabular-nums;
+}
+
+.gallery-clear-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 10px;
+    border-radius:var(--radius-sm);
+    color:var(--color-primary);
+    font-size:12.5px;
+    font-weight:700;
+    text-decoration:none;
+}
+
+.gallery-clear-link:hover{
+    background:var(--color-primary-soft);
+}
+
+.gallery-clear-link i{
+    font-size:11px;
+}
+
+@media(max-width:900px){
+
+    .gallery-toolbar select{
+        flex:1 1 140px;
+        max-width:none;
+    }
+
+    .gallery-toolbar .gallery-sort{
+        margin-left:0;
+    }
+
+    .gallery-search-btn{
+        flex:1 1 100%;
+    }
 }
