@@ -17,6 +17,34 @@
                 </div>
             </div>
 
+            <form method="GET" class="filter-bar" id="reportFilterForm">
+
+                {% if can_view_all %}
+                <select name="employee_id">
+                    <option value="">All Employees</option>
+
+                    {% for employee in employees %}
+                    <option value="{{ employee.id }}" {% if selected_employee==(employee.id|string) %}selected{% endif %}>
+                        {{ employee.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+
+                <input type="date" name="from_date" value="{{ from_date }}" title="From date">
+
+                <input type="date" name="to_date" value="{{ to_date }}" title="To date">
+
+                <button type="submit">
+                    Filter
+                </button>
+
+                <a href="{{ url_for('reports.list_reports') }}" class="mini-link">
+                    Reset
+                </a>
+
+            </form>
+
             <div class="table-card">
                 <table>
                     <thead>
@@ -67,7 +95,12 @@
                         {% else %}
                         <tr>
                             <td colspan="6">
+                                {% if is_filtered %}
+                                No reports match these filters.
+                                <a href="{{ url_for('reports.list_reports') }}" class="mini-link">Clear filters</a>
+                                {% else %}
                                 No reports found.
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

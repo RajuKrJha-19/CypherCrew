@@ -1,10 +1,10 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import DailyReport, Task
+from app.models import DailyReport, Task, User
 from app.utils.permissions import has_permission
 
 
@@ -76,31 +76,76 @@ def build_report_rows(reports):
     return rows
 
 
+def parse_filter_date(value):
+    if not value:
+        return None
+
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 @reports_bp.route("/")
 @login_required
 def list_reports():
 
-    if has_permission(current_user, "view_reports"):
+    can_view_all = has_permission(current_user, "view_reports")
 
-        reports = DailyReport.query.order_by(
-            DailyReport.report_date.desc(),
-            DailyReport.created_at.desc()
-        ).all()
+    selected_employee = request.args.get("employee_id", "").strip()
+    from_date_raw = request.args.get("from_date", "").strip()
+    to_date_raw = request.args.get("to_date", "").strip()
 
+    from_date = parse_filter_date(from_date_raw)
+    to_date = parse_filter_date(to_date_raw)
+
+    if can_view_all:
+        query = DailyReport.query
     else:
+        query = DailyReport.query.filter_by(employee_id=current_user.id)
 
-        reports = DailyReport.query.filter_by(
-            employee_id=current_user.id
-        ).order_by(
-            DailyReport.report_date.desc(),
-            DailyReport.created_at.desc()
-        ).all()
+    # Only a viewer who can already see every employee's reports is
+    # allowed to narrow by employee - for anyone else the base query
+    # above already scopes to just their own, so this filter would be
+    # a no-op at best and a false sense of control at worst.
+    if can_view_all and selected_employee.isdigit():
+        query = query.filter(DailyReport.employee_id == int(selected_employee))
+
+    if from_date:
+        query = query.filter(DailyReport.report_date >= from_date)
+
+    if to_date:
+        query = query.filter(DailyReport.report_date <= to_date)
+
+    reports = query.order_by(
+        DailyReport.report_date.desc(),
+        DailyReport.created_at.desc()
+    ).all()
 
     report_rows = build_report_rows(reports)
 
+    employees = []
+
+    if can_view_all:
+        employees = User.query.filter(
+            User.status == "active"
+        ).order_by(
+            User.name.asc()
+        ).all()
+
+    is_filtered = bool(
+        (can_view_all and selected_employee) or from_date_raw or to_date_raw
+    )
+
     return render_template(
         "reports/list.html",
-        report_rows=report_rows
+        report_rows=report_rows,
+        can_view_all=can_view_all,
+        employees=employees,
+        selected_employee=selected_employee,
+        from_date=from_date_raw,
+        to_date=to_date_raw,
+        is_filtered=is_filtered
     )
 
 
