@@ -390,7 +390,6 @@ body.sidebar-collapsed .sidebar a span{
 body.sidebar-collapsed .sidebar-collapse-btn{
     margin-left:auto;
     margin-right:auto;
-    transform:rotate(180deg);
 }
 
 @media(max-width:768px){
@@ -722,6 +721,30 @@ select:focus{
 @media (prefers-reduced-motion: reduce){
     .toast{
         transition:none;
+    }
+}
+
+/* Brief highlight when a live-polled dashboard number changes
+   without a page reload - same "just updated" tint already used by
+   .kanban-card-moved, so a live number and a moved kanban card read
+   as the same kind of event. */
+@keyframes statLiveFlash{
+    0%{
+        background:var(--color-primary-soft);
+    }
+    100%{
+        background:transparent;
+    }
+}
+
+.stat-live-updated{
+    animation:statLiveFlash 1.6s ease-out;
+    border-radius:var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .stat-live-updated{
+        animation:none;
     }
 }
 
