@@ -32,6 +32,7 @@
                     <input
                         type="text"
                         name="title"
+                        placeholder="e.g. Instagram Reel Editing - July Batch"
                         required
                     >
 
@@ -39,6 +40,7 @@
                     <textarea
                         name="description"
                         rows="4"
+                        placeholder="What needs to be done? Add any specifics the assignee should know."
                     ></textarea>
 
                     <div class="form-group task-reference-upload">
@@ -364,6 +366,8 @@
                         <button
                             type="button"
                             data-id="${checkbox.value}"
+                            aria-label="Remove"
+                            title="Remove"
                         >
                             ×
                         </button>

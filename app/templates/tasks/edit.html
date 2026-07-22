@@ -262,7 +262,7 @@ function updateSelectedVisibility() {
 
         chip.innerHTML = `
             <span>${checkbox.dataset.name}</span>
-            <button type="button" data-id="${checkbox.value}">×</button>
+            <button type="button" data-id="${checkbox.value}" aria-label="Remove" title="Remove">×</button>
         `;
 
         selectedVisibility.appendChild(chip);

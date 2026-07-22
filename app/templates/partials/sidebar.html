@@ -120,7 +120,9 @@
     <button
         type="button"
         class="sidebar-collapse-btn"
-        id="sidebarCollapseBtn">
+        id="sidebarCollapseBtn"
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar">
         <i class="fa-solid fa-angles-left"></i>
     </button>
 
@@ -129,35 +131,33 @@
 
         if (sidebarCollapseBtn) {
 
+            function setCollapseButtonState(collapsed) {
+
+                const icon = sidebarCollapseBtn.querySelector("i");
+                const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+
+                icon.classList.toggle("fa-angles-left", !collapsed);
+                icon.classList.toggle("fa-angles-right", collapsed);
+
+                sidebarCollapseBtn.setAttribute("aria-label", label);
+                sidebarCollapseBtn.setAttribute("title", label);
+            }
+
             sidebarCollapseBtn.addEventListener("click", function () {
 
                 document.body.classList.toggle("sidebar-collapsed");
 
-                const icon = sidebarCollapseBtn.querySelector("i");
+                const isCollapsed = document.body.classList.contains("sidebar-collapsed");
 
-                if (document.body.classList.contains("sidebar-collapsed")) {
-
-                    localStorage.setItem("sidebar_collapsed", "yes");
-                    icon.classList.remove("fa-angles-left");
-                    icon.classList.add("fa-angles-right");
-
-                } else {
-
-                    localStorage.setItem("sidebar_collapsed", "no");
-                    icon.classList.remove("fa-angles-right");
-                    icon.classList.add("fa-angles-left");
-
-                }
+                localStorage.setItem("sidebar_collapsed", isCollapsed ? "yes" : "no");
+                setCollapseButtonState(isCollapsed);
 
             });
 
             if (localStorage.getItem("sidebar_collapsed") === "yes") {
 
                 document.body.classList.add("sidebar-collapsed");
-
-                const icon = sidebarCollapseBtn.querySelector("i");
-                icon.classList.remove("fa-angles-left");
-                icon.classList.add("fa-angles-right");
+                setCollapseButtonState(true);
 
             }
 
