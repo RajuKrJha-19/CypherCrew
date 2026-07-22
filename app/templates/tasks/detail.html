@@ -1,4 +1,10 @@
-{% extends "base_app.html" %}
+{#
+    Rendered two ways from the same template: as a normal full page, and
+    (with ?panel=1) as the body of the task side drawer. The drawer loads
+    this page in an iframe, so everything below works identically in both
+    modes - only the surrounding chrome differs.
+#}
+{% extends "base_panel.html" if panel_mode else "base_app.html" %}
 
 {% block title %}#{{ task.task_code }} - {{ task.title }} | CypherCrew{% endblock %}
 
@@ -23,18 +29,25 @@
                 </div>
 
                 <div class="top-actions">
+                    {# The drawer supplies its own close/navigation chrome,
+                       and the bell already sits on the page behind it. #}
+                    {% if not panel_mode %}
                     {% include "partials/notification_widget.html" %}
+                    {% endif %}
 
                     {% if has_permission(current_user, "manage_tasks")
                         or (task.created_by_id == current_user.id and task.assigned_to_id == current_user.id) %}
-                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn">
+                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn"
+                        {% if panel_mode %}target="_top"{% endif %}>
                         Manage Task
                     </a>
                     {% endif %}
 
+                    {% if not panel_mode %}
                     <a href="{{ url_for('tasks.list_tasks') }}" class="btn btn-secondary">
                         Back
                     </a>
+                    {% endif %}
                 </div>
             </div>
 

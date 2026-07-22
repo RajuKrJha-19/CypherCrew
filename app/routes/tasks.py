@@ -2824,6 +2824,9 @@ def task_detail(task_id):
 
     return render_template(
         "tasks/detail.html",
+        # ?panel=1 renders the same page without the app shell so it can
+        # be shown inside the task side drawer.
+        panel_mode=request.args.get("panel") == "1",
         task=task,
         activities=activities,
         feedbacks=task.feedbacks,

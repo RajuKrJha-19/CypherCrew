@@ -16,4 +16,14 @@
     </main>
 
 </div>
+
+{#
+    Loaded for every signed-in page rather than per-template: task links
+    live on the board, the list, the dashboards, the calendar, reports
+    and the review queue, and all of them should open the side panel.
+    Not included in base_panel.html, so the drawer can never nest inside
+    itself. Placed here instead of in {% block scripts %} because pages
+    override that block wholesale.
+#}
+<script src="{{ url_for('static', filename='js/task-panel.js') }}" defer></script>
 {% endblock %}

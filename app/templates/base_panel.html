@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{#
+    Bare shell for the task side panel.
+
+    Same stylesheet, fonts and blocks as a normal app page, but without
+    the sidebar - this renders inside the task drawer's iframe, and the
+    hosting page already provides navigation. Rendering the real task
+    page in the drawer (rather than re-building it) is what keeps every
+    existing form, timer, upload and script on tasks/detail.html working
+    exactly as it does on the full page.
+#}
+
+{% block body_class %}panel-mode{% endblock %}
+
+{% block body %}
+<main class="main main-panel">
+    {% block content %}{% endblock %}
+</main>
+
+<script>
+    (function () {
+
+        if (window.parent === window) return;
+
+        // A keydown inside an iframe never reaches the hosting document,
+        // so Esc has to be forwarded up by hand for the drawer to close.
+        // The in-page media viewer owns Esc while it is open, so don't
+        // close the drawer out from under a video someone is watching.
+        document.addEventListener("keydown", function (event) {
+
+            if (event.key !== "Escape") return;
+            if (document.querySelector(".media-viewer.show")) return;
+            if (document.fullscreenElement) return;
+
+            window.parent.postMessage({
+                source: "cypher-task-panel",
+                type: "close"
+            }, window.location.origin);
+        });
+
+    })();
+</script>
+{% endblock %}

@@ -8461,3 +8461,270 @@ body.media-viewer-open{
 .file-popup-video-wrap{
     cursor:pointer;
 }
+
+
+/* ==========================================================
+   TASK SIDE DRAWER
+   Opens any /tasks/<id> link as a right-hand panel over the
+   current page instead of navigating away from the board.
+   The panel body is the real task page rendered with ?panel=1
+   inside an iframe. Sits below .toast-container (100000).
+   ========================================================== */
+
+.task-drawer-root{
+    position:fixed;
+    inset:0;
+    z-index:99998;
+    display:none;
+}
+
+.task-drawer-root.show{
+    display:block;
+}
+
+body.task-drawer-open{
+    overflow:hidden;
+}
+
+.task-drawer-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(15,23,42,.32);
+    animation:taskDrawerFade .18s ease;
+}
+
+.task-drawer{
+    position:absolute;
+    top:0;
+    right:0;
+    bottom:0;
+
+    display:flex;
+    flex-direction:column;
+
+    width:720px;
+    max-width:100%;
+
+    background:var(--color-surface);
+    box-shadow:-18px 0 48px rgba(15,23,42,.18);
+    animation:taskDrawerSlide .22s cubic-bezier(.32,.72,.35,1);
+}
+
+@keyframes taskDrawerFade{
+    from{opacity:0}
+    to{opacity:1}
+}
+
+@keyframes taskDrawerSlide{
+    from{transform:translateX(28px);opacity:.4}
+    to{transform:translateX(0);opacity:1}
+}
+
+/* Drag handle on the panel's leading edge */
+.task-drawer-resize{
+    position:absolute;
+    top:0;
+    left:-3px;
+    bottom:0;
+    z-index:2;
+    width:7px;
+    cursor:col-resize;
+    background:transparent;
+}
+
+.task-drawer-resize::after{
+    content:"";
+    position:absolute;
+    top:0;
+    bottom:0;
+    left:3px;
+    width:1px;
+    background:transparent;
+    transition:background .15s ease;
+}
+
+.task-drawer-resize:hover::after,
+.task-drawer-resize:focus-visible::after,
+body.task-drawer-resizing .task-drawer-resize::after{
+    background:var(--color-primary);
+}
+
+.task-drawer-resize:focus-visible{
+    outline:none;
+}
+
+/* Keep the iframe from swallowing pointer events mid-drag, which would
+   otherwise stall the resize the moment the cursor crosses the panel. */
+body.task-drawer-resizing{
+    cursor:col-resize;
+    user-select:none;
+}
+
+body.task-drawer-resizing .task-drawer-frame{
+    pointer-events:none;
+}
+
+/* Toolbar */
+.task-drawer-bar{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex:0 0 auto;
+    padding:10px 12px;
+    border-bottom:1px solid var(--color-border);
+    background:var(--color-surface);
+}
+
+.task-drawer-bar-spacer{
+    flex:1;
+}
+
+.task-drawer-stepper{
+    display:flex;
+    align-items:center;
+    gap:2px;
+}
+
+.task-drawer-position{
+    min-width:46px;
+    font-size:12px;
+    font-weight:700;
+    color:var(--color-text-muted);
+    font-variant-numeric:tabular-nums;
+    text-align:center;
+}
+
+.task-drawer-tool{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;
+    height:34px;
+    border:none;
+    border-radius:var(--radius-sm);
+    background:transparent;
+    color:var(--color-neutral);
+    font-size:14px;
+    text-decoration:none;
+    cursor:pointer;
+    transition:background .15s ease;
+}
+
+.task-drawer-tool:hover{
+    background:var(--color-surface-muted);
+}
+
+.task-drawer-tool:disabled{
+    opacity:.35;
+    cursor:default;
+}
+
+.task-drawer-tool:disabled:hover{
+    background:transparent;
+}
+
+/* Body */
+.task-drawer-body{
+    position:relative;
+    flex:1 1 auto;
+    min-height:0;
+}
+
+.task-drawer-frame{
+    display:block;
+    width:100%;
+    height:100%;
+    border:none;
+    background:var(--color-bg);
+}
+
+/* Loading skeleton, shown until the frame paints */
+.task-drawer-loader{
+    position:absolute;
+    inset:0;
+    z-index:1;
+    display:none;
+    flex-direction:column;
+    gap:14px;
+    padding:28px;
+    background:var(--color-bg);
+}
+
+.task-drawer-loader.show{
+    display:flex;
+}
+
+.task-drawer-skeleton{
+    border-radius:var(--radius-sm);
+    background:linear-gradient(
+        90deg,
+        var(--color-surface-muted) 25%,
+        var(--color-border) 37%,
+        var(--color-surface-muted) 63%
+    );
+    background-size:400% 100%;
+    animation:taskDrawerShimmer 1.3s ease infinite;
+}
+
+.skeleton-title{
+    width:52%;
+    height:26px;
+}
+
+.skeleton-line{
+    width:100%;
+    height:13px;
+}
+
+.skeleton-line.short{
+    width:38%;
+}
+
+.skeleton-block{
+    width:100%;
+    height:190px;
+}
+
+@keyframes taskDrawerShimmer{
+    from{background-position:100% 50%}
+    to{background-position:0 50%}
+}
+
+/* The panel page itself: no sidebar, so the content owns the width */
+body.panel-mode .main-panel{
+    width:100%;
+    max-width:100%;
+    margin:0;
+    padding:22px;
+}
+
+@media(max-width:900px){
+
+    .task-drawer{
+        width:100% !important;
+    }
+
+    .task-drawer-resize{
+        display:none;
+    }
+
+    body.panel-mode .main-panel{
+        padding:16px;
+    }
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .task-drawer,
+    .task-drawer-backdrop{
+        animation:none;
+    }
+
+    .task-drawer-skeleton{
+        animation:none;
+    }
+
+    .task-drawer-tool{
+        transition:none;
+    }
+}
