@@ -79,6 +79,12 @@
             <div class="form-group">
                 <label>Visibility</label>
 
+                <p class="form-hint">
+                    Extra people who should be able to open this task. The
+                    assignee and anyone who can manage tasks always see it -
+                    this is for everyone else.
+                </p>
+
                 <div class="visibility-dropdown">
                     <div class="visibility-btn" id="visibilityBtn" tabindex="0" role="button" aria-haspopup="true">
                         <span id="visibilityText">Select Employees</span>
@@ -115,6 +121,7 @@
                         step="0.1"
                         value="{{ task.quantity or 1 }}"
                         required
+                        title="How many units of this deliverable - 5 reels, 3 banners, 1 landing page."
                     >
                 </div>
 
@@ -127,9 +134,15 @@
                         step="0.1"
                         value="{{ task.estimated_time or 1 }}"
                         required
+                        title="Hours expected for ONE unit, not the whole task."
                     >
                 </div>
             </div>
+
+            <p class="form-hint">
+                Quantity x est. time per unit = the total estimate this task is
+                measured against.
+            </p>
 
             <label>Priority</label>
             <select name="priority">

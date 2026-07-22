@@ -144,9 +144,10 @@
 
                 <section class="board-column" data-status="{{ status }}">
 
-                    <div class="board-column-header">
+                    <div class="board-column-header"
+                        title="{{ status }} - {{ task_status.description(status) }}">
                         <h2>{{ status }}</h2>
-                        <span>{{ column_tasks|length }}</span>
+                        <span title="{{ column_tasks|length }} task{{ '' if column_tasks|length == 1 else 's' }} in this column">{{ column_tasks|length }}</span>
                     </div>
 
                     {% for task in column_tasks %}

@@ -23,6 +23,58 @@ VOID = "Void"
 
 
 # ---------------------------------------------------------------
+# Plain-English meanings
+# ---------------------------------------------------------------
+
+#: What each status actually means, for tooltips on the board columns,
+#: the status stepper and the time-tracking breakdown.
+#:
+#: The distinctions people get wrong are Paused vs On Hold (whose fault
+#: the delay is, and who may clear it) and Void vs Published (both stop
+#: the work, only one counts as delivered), so those say so explicitly.
+#: Kept here next to the rules they describe - a description that lives
+#: apart from the transition tables is one that quietly goes stale.
+DESCRIPTIONS = {
+    ASSIGNED:
+        "Handed to the assignee but not started yet. "
+        "Counts as pending work.",
+
+    IN_PROGRESS:
+        "Being worked on right now. The time tracker runs in "
+        "this status.",
+
+    PAUSED:
+        "The assignee stopped work for now and can resume it "
+        "themselves. The timer is stopped.",
+
+    ON_HOLD:
+        "Blocked by something outside the team, so the delay is "
+        "not counted against the deadline. Only a manager can "
+        "move it out. Needs a reason.",
+
+    CORE_REVIEW:
+        "Submitted for internal review. The team checks it before "
+        "the client sees anything.",
+
+    CLIENT_REVIEW:
+        "With the client for approval.",
+
+    PUBLISHED:
+        "Approved and delivered. The task is complete.",
+
+    VOID:
+        "Cancelled, so the work will not resume. Left out of every "
+        "performance metric - a cancelled job does not count "
+        "against the team. Needs a reason.",
+}
+
+
+def description(status):
+    """Plain-English meaning of `status`, or "" if unknown."""
+    return DESCRIPTIONS.get(status, "")
+
+
+# ---------------------------------------------------------------
 # Groupings
 # ---------------------------------------------------------------
 

@@ -8869,3 +8869,103 @@ body.panel-mode .main-panel{
         transition:none;
     }
 }
+
+
+/* ==========================================================
+   FIELD HINTS + PERMISSION LIST
+   Explanatory copy that has to be readable to be useful, so
+   it sits inline rather than behind a hover.
+   ========================================================== */
+
+/* Sits under a label to explain a field whose rule isn't obvious
+   (Visibility, quantity x estimate). */
+.form-hint{
+    margin:-2px 0 12px;
+    color:var(--color-text-muted);
+    font-size:12.5px;
+    line-height:1.5;
+}
+
+/* Wider note about the form as a whole. */
+.form-note{
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    margin:0 0 20px;
+    padding:11px 13px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md);
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    font-size:13px;
+    line-height:1.55;
+}
+
+.form-note i{
+    margin-top:2px;
+    color:var(--color-primary);
+    font-size:13px;
+}
+
+/* Permission checkboxes: name plus what it actually unlocks. */
+.permission-list{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    margin-bottom:22px;
+}
+
+.permission-item{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    padding:13px 14px;
+    border:1px solid transparent;
+    border-radius:var(--radius-md);
+    cursor:pointer;
+    transition:background .15s ease, border-color .15s ease;
+}
+
+.permission-item:hover{
+    border-color:var(--color-border);
+    background:var(--color-surface-muted);
+}
+
+.permission-item:focus-within{
+    border-color:var(--color-primary);
+}
+
+.permission-item input[type="checkbox"]{
+    width:17px;
+    height:17px;
+    margin:2px 0 0;
+    flex-shrink:0;
+    accent-color:var(--color-primary);
+    cursor:pointer;
+}
+
+.permission-text{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
+}
+
+.permission-text strong{
+    font-size:14px;
+    font-weight:700;
+    color:var(--color-neutral);
+}
+
+.permission-text small{
+    color:var(--color-text-muted);
+    font-size:12.5px;
+    line-height:1.55;
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .permission-item{
+        transition:none;
+    }
+}

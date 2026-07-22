@@ -537,6 +537,8 @@ def list_tasks():
         "tasks/list.html",
         tasks=tasks,
         board_columns=board_columns,
+        # Board columns explain themselves via task_status.description().
+        task_status=task_status,
         statuses=statuses,
         priorities=priorities,
         selected_status=selected_status,

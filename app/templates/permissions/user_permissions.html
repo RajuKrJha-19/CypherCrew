@@ -26,34 +26,56 @@
 
 <form method="POST">
 
-{% for permission in permissions %}
+    {% if user.role == "super_admin" %}
+    <p class="form-note">
+        <i class="fa-solid fa-circle-info"></i>
+        Super admins already have every permission, so these checkboxes
+        do not restrict them.
+    </p>
+    {% else %}
+    <p class="form-note">
+        <i class="fa-solid fa-circle-info"></i>
+        Anything left unticked stays hidden for this user. Changes apply
+        the next time they load a page.
+    </p>
+    {% endif %}
 
-<label class="check-item">
+    {#
+        The description sits inline rather than in a tooltip: this is a
+        list of consequential choices, and you have to read them to
+        decide, which is exactly what a hover-only hint prevents.
+    #}
+    <div class="permission-list">
 
-<input
-type="checkbox"
-name="permissions"
-value="{{ permission.id }}"
-{% if permission.id in assigned %}checked{% endif %}
->
+        {% for permission in permissions %}
 
-<span>
-{{ permission.name }}
-</span>
+        <label class="permission-item">
 
-</label>
+            <input
+                type="checkbox"
+                name="permissions"
+                value="{{ permission.id }}"
+                {% if permission.id in assigned %}checked{% endif %}
+            >
 
-<br>
+            <span class="permission-text">
+                <strong>{{ permission.name }}</strong>
 
-{% endfor %}
+                {% set note = permission_description(permission.code) %}
+                {% if note %}
+                <small>{{ note }}</small>
+                {% endif %}
+            </span>
 
-<br>
+        </label>
 
-<button type="submit">
+        {% endfor %}
 
-Save Permissions
+    </div>
 
-</button>
+    <button type="submit">
+        Save Permissions
+    </button>
 
 </form>
 

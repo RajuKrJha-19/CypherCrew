@@ -160,12 +160,20 @@
                                 ]
                             %}
 
+                            {#
+                                The tooltip says what the status means, and
+                                for a clickable bubble also what pressing it
+                                will do - a stepper that silently moves the
+                                task on click needs to say so before the
+                                click, not after.
+                            #}
                             <span class="
         status-bubble
         status-{{ task_status.css_modifier(item) }}
         {% if item == task.status %}active{% endif %}
         {% if is_clickable %}clickable{% endif %}
-    " data-task-id="{{ task.id }}" data-status="{{ item }}">
+    " data-task-id="{{ task.id }}" data-status="{{ item }}"
+                                title="{{ item }} - {{ task_status.description(item) }}{% if is_clickable %} (Click to move this task here.){% elif item == task.status %} (Current status.){% endif %}">
                                 {{ item }}
                             </span>
 
@@ -738,14 +746,16 @@ Submission Files
                             <div class="review-actions">
 
                                 <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}">
-                                    <button type="submit" class="review-btn approve-btn">
+                                    <button type="submit" class="review-btn approve-btn"
+                                        title="{% if task.status == 'Core Review' %}Passes internal review and sends this task on to Client Review.{% else %}Marks this task Published - approved, delivered and complete.{% endif %}">
                                         Approve
                                     </button>
                                 </form>
 
                                 <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
                                     enctype="multipart/form-data" class="reject-form">
-                                    <button type="button" class="review-btn reject-btn reject-toggle-btn">
+                                    <button type="button" class="review-btn reject-btn reject-toggle-btn"
+                                        title="Send this task back to the assignee with changes. Requires a message explaining what needs fixing, and you can attach a reference file.">
                                         Reject
                                     </button>
 
@@ -827,13 +837,22 @@ Submission Files
                             {% if task.status in ["Assigned", "In Progress", "Paused"] and (has_permission(current_user,
                             "manage_tasks") or task.assigned_to_id == current_user.id) %}
 
+                            {#
+                                These buttons each move the task and start or
+                                stop the timer, so the tooltip states the
+                                effect rather than repeating the label.
+                            #}
                             {% if task.timer_started_at %}
                             <form method="POST" action="{{ url_for('tasks.pause_task', task_id=task.id) }}">
-                                <button type="submit">Pause</button>
+                                <button type="submit"
+                                    title="Stop the timer and move this task to Paused. You can resume it yourself at any time.">
+                                    Pause
+                                </button>
                             </form>
                             {% else %}
                             <form method="POST" action="{{ url_for('tasks.start_task', task_id=task.id) }}">
-                                <button type="submit">
+                                <button type="submit"
+                                    title="{% if task.status == 'Assigned' %}Move this task to In Progress and start the timer.{% else %}Move this task back to In Progress and restart the timer.{% endif %}">
                                     {% if task.status == "Assigned" %}
                                     Start Task
                                     {% else %}
@@ -848,7 +867,8 @@ Submission Files
                             {% if task.assigned_to_id == current_user.id and task.status in ["Assigned", "In Progress"]
                             %}
                             <form method="POST" action="{{ url_for('tasks.submit_review', task_id=task.id) }}">
-                                <button type="submit">
+                                <button type="submit"
+                                    title="Hand this over for internal review. The timer stops and the task moves to Core Review, where the team checks it before the client sees it.">
                                     Submit For Review
                                 </button>
                             </form>
@@ -863,14 +883,16 @@ Submission Files
 
                             {% if task_status.ON_HOLD in task_status.allowed_moves(task.status, True) %}
                             <button type="button" class="btn-secondary"
-                                data-toggle-panel="holdPanel">
+                                data-toggle-panel="holdPanel"
+                                title="Park this task because something outside the team is blocking it. Time on hold is not counted against the deadline, and only a manager can take it off hold. Asks for a reason.">
                                 Put On Hold
                             </button>
                             {% endif %}
 
                             {% if task_status.VOID in task_status.allowed_moves(task.status, True) %}
                             <button type="button" class="btn-ghost task-void-trigger"
-                                data-toggle-panel="voidPanel">
+                                data-toggle-panel="voidPanel"
+                                title="Cancel this task for good. It is left out of every performance metric so a cancelled job does not count against the team. Asks for a reason, and a manager can undo it later.">
                                 Void Task
                             </button>
                             {% endif %}
@@ -934,35 +956,40 @@ Submission Files
                         {% endif %}
 
                         <div class="status-duration-box">
-                            <h3>Status Duration</h3>
+                            <h3 title="How long this task has spent in each status so far. Useful for spotting where time actually goes - a task can be 'late' mostly because it sat waiting for a client.">
+                                Status Duration
+                            </h3>
 
+                            {# Same descriptions as the board columns and the
+                               stepper, so a row here means what the column of
+                               that name means. #}
                             <div class="status-time-list">
-                                <p>
+                                <p title="Assigned - {{ task_status.description(task_status.ASSIGNED) }}">
                                     <span>Assigned</span>
                                     <strong id="pendingDuration">{{ pending_time }}</strong>
                                 </p>
 
-                                <p>
+                                <p title="In Progress - {{ task_status.description(task_status.IN_PROGRESS) }}">
                                     <span>In Progress</span>
                                     <strong id="inProgressDuration">{{ in_progress_time }}</strong>
                                 </p>
 
-                                <p>
+                                <p title="Paused - {{ task_status.description(task_status.PAUSED) }}">
                                     <span>Paused</span>
                                     <strong id="pausedDuration">{{ paused_time }}</strong>
                                 </p>
 
-                                <p>
+                                <p title="On Hold - {{ task_status.description(task_status.ON_HOLD) }}">
                                     <span>On Hold</span>
                                     <strong id="onHoldDuration">{{ on_hold_time }}</strong>
                                 </p>
 
-                                <p>
+                                <p title="Core Review - {{ task_status.description(task_status.CORE_REVIEW) }}">
                                     <span>Core Review</span>
                                     <strong id="coreReviewDuration">{{ core_review_time }}</strong>
                                 </p>
 
-                                <p>
+                                <p title="Client Review - {{ task_status.description(task_status.CLIENT_REVIEW) }}">
                                     <span>Client Review</span>
                                     <strong id="clientReviewDuration">{{ client_review_time }}</strong>
                                 </p>

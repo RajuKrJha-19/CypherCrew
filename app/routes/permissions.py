@@ -9,6 +9,8 @@ from app.models import (
     UserPermission
 )
 
+from app.utils.permissions import description as permission_description
+
 
 permissions_bp = Blueprint(
     "permissions",
@@ -94,5 +96,7 @@ def user_permissions(user_id):
         "permissions/user_permissions.html",
         user=user,
         permissions=permissions,
-        assigned=assigned
+        assigned=assigned,
+        # Each checkbox explains what it actually unlocks.
+        permission_description=permission_description
     )
