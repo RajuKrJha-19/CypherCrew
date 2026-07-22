@@ -23,6 +23,33 @@
             {% endif %}
             {% endwith %}
 
+            <form method="GET" class="filter-bar" id="userFilterForm">
+
+                <input type="text" name="q" value="{{ search }}" placeholder="Search by name, email or designation">
+
+                <select name="role">
+                    <option value="">All Roles</option>
+                    <option value="employee" {% if selected_role=="employee" %}selected{% endif %}>Employee</option>
+                    <option value="admin" {% if selected_role=="admin" %}selected{% endif %}>Admin</option>
+                    <option value="super_admin" {% if selected_role=="super_admin" %}selected{% endif %}>Super Admin</option>
+                </select>
+
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <option value="active" {% if selected_status=="active" %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if selected_status=="inactive" %}selected{% endif %}>Inactive</option>
+                </select>
+
+                <button type="submit">
+                    Filter
+                </button>
+
+                <a href="{{ url_for('users.list_users') }}" class="mini-link">
+                    Reset
+                </a>
+
+            </form>
+
             <div class="table-card">
                 <table>
                     <thead>
@@ -59,7 +86,14 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7">No users found.</td>
+                            <td colspan="7">
+                                {% if is_filtered %}
+                                No users match these filters.
+                                <a href="{{ url_for('users.list_users') }}" class="mini-link">Clear filters</a>
+                                {% else %}
+                                No users found.
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

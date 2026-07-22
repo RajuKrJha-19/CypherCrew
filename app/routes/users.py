@@ -26,13 +26,43 @@ def list_users():
     if not can_manage_users():
         return redirect(url_for("dashboard.index"))
 
-    users = User.query.order_by(
+    search = request.args.get("q", "").strip()
+    selected_role = request.args.get("role", "").strip()
+    selected_status = request.args.get("status", "").strip()
+
+    query = User.query
+
+    if search:
+
+        like = f"%{search}%"
+
+        query = query.filter(
+            db.or_(
+                User.name.ilike(like),
+                User.email.ilike(like),
+                User.designation.ilike(like),
+            )
+        )
+
+    if selected_role:
+        query = query.filter(User.role == selected_role)
+
+    if selected_status:
+        query = query.filter(User.status == selected_status)
+
+    users = query.order_by(
         User.id.desc()
     ).all()
 
+    is_filtered = bool(search or selected_role or selected_status)
+
     return render_template(
         "users/list.html",
-        users=users
+        users=users,
+        search=search,
+        selected_role=selected_role,
+        selected_status=selected_status,
+        is_filtered=is_filtered
     )
 
 
