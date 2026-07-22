@@ -8976,3 +8976,121 @@ body.panel-mode .main-panel{
         transition:none;
     }
 }
+
+
+/* ==========================================================
+   TASKS BOARD: FILL THE WINDOW
+   The board columns were pinned to a hard 360px, so on a
+   900px-tall window the board stopped two thirds of the way
+   down and left a dead band underneath while cards were
+   clipped mid-card. The columns now stretch to the bottom of
+   the viewport and scroll inside themselves instead.
+
+   Scoped with :has() to the board view only - the list view
+   is a long table and still scrolls the page normally. The
+   file already relies on :has() for the sticky header.
+   ========================================================== */
+
+.main:has(#kanbanViewPanel.active){
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+}
+
+.main:has(#kanbanViewPanel.active) #kanbanViewPanel{
+    display:flex;
+    flex-direction:column;
+    flex:1 1 auto;
+    min-height:0;
+}
+
+.main:has(#kanbanViewPanel.active) .board-shell{
+    flex:1 1 auto;
+    min-height:0;
+    margin-bottom:0;
+}
+
+/* Still a full-height drop target - the reason the fixed height
+   existed - just measured against the window rather than a magic
+   number, so an empty column can still receive a dragged card. */
+.main:has(#kanbanViewPanel.active) .board-column{
+    height:100% !important;
+    min-height:0 !important;
+    max-height:100% !important;
+}
+
+/* Below this the window is too short to be worth pinning; let the
+   page scroll as it always did. */
+@media(max-height:620px){
+
+    .main:has(#kanbanViewPanel.active){
+        height:auto;
+        overflow:visible;
+    }
+
+    .main:has(#kanbanViewPanel.active) .board-column{
+        height:360px !important;
+        max-height:360px !important;
+    }
+}
+
+
+/* Filter form and the Board/List switcher share one row: the switcher
+   is two buttons and was costing a whole line of vertical space above
+   the board, on the page that most needs the height. */
+.task-filter-row{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    margin-bottom:14px;
+}
+
+.task-filter-row .filter-bar{
+    flex:1 1 auto;
+    min-width:0;
+    margin-bottom:0;
+}
+
+.task-filter-row .task-view-switcher{
+    flex:0 0 auto;
+    margin-bottom:0;
+    height:66px;
+    align-items:center;
+}
+
+@media(max-width:900px){
+
+    .task-filter-row{
+        flex-direction:column;
+        align-items:stretch;
+    }
+
+    .task-filter-row .task-view-switcher{
+        height:auto;
+        align-self:flex-start;
+    }
+}
+
+
+/* Logout pinned under the nav instead of scrolling inside it, with a
+   rule separating the session action from the navigation above it. */
+.sidebar-logout{
+    flex-shrink:0;
+    margin-top:10px;
+    margin-bottom:0;
+    padding-top:14px;
+    border-top:1px solid rgba(255,255,255,.08);
+    border-radius:0;
+}
+
+.sidebar-logout:hover{
+    border-radius:var(--radius-md);
+}
+
+/* Collapsed rail: the separator would sit under a lone icon and read
+   as a stray line, so drop it and centre the icon like the nav items. */
+body.sidebar-collapsed .sidebar-logout{
+    border-top:none;
+    padding-top:12px;
+}

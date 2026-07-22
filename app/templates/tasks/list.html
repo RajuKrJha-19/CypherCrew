@@ -69,6 +69,9 @@
 
             </div>
 
+            {# Filters and the view switcher share one row. #}
+            <div class="task-filter-row">
+
             <form method="GET" class="filter-bar" id="taskFilterForm">
 
                 <div class="task-search-wrap">
@@ -112,6 +115,9 @@
 
             </form>
 
+            {# Sits on the filter row rather than owning a line of its own -
+               two buttons were costing a full row of vertical space above
+               the board. #}
             <div class="task-view-switcher" role="group" aria-label="Task view">
 
                 <button
@@ -135,6 +141,8 @@
                     <i class="fa-solid fa-list"></i>
                     List
                 </button>
+
+            </div>
 
             </div>
 

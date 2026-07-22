@@ -109,13 +109,22 @@
         <span>Gallery</span>
     </a>
 
+    </nav>
+
+    {#
+        Logout sits below the nav rather than inside it. It is a session
+        action, not a place to go, and as the last item of the WORKSPACE
+        group it read like one - and scrolled away with the list. Pinning
+        it here also puts the empty space at the foot of the sidebar to
+        use.
+    #}
     <a href="{{ url_for('auth.logout') }}"
+       class="sidebar-logout"
+       title="Sign out of CypherCrew"
        onclick="return confirm('Log out of CypherCrew?')">
         <i class="fa-solid fa-right-from-bracket"></i>
         <span>Logout</span>
     </a>
-
-    </nav>
 
     <button
         type="button"
