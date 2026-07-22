@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>{{ client.client_name }} | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"> 
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}{{ client.client_name }} | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="page-header">
             <div>
                 <h1>{{ client.client_name }}</h1>
@@ -174,10 +161,5 @@
             </div>
         {% endif %}
 
-    </main>
-
-</div>
-
-</body>
-
-</html>
+    
+{% endblock %}

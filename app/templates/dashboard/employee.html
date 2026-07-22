@@ -1,19 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Employee | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Employee | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
+{% block content %}
             <div class="page-header">
                 <div>
                     <h1>Employee Dashboard</h1>
@@ -84,9 +73,5 @@
                 <p>No extra permissions assigned.</p>
                 {% endif %}
             </div>
-        </main>
-    </div>
-
-</body>
-
-</html>
+        
+{% endblock %}

@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>#{{ task.task_code }} - {{ task.title }} | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}#{{ task.task_code }} - {{ task.title }} | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header">
                 <div>
                     <div class="task-header-block">
@@ -44,7 +32,7 @@
                     </a>
                     {% endif %}
 
-                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn">
+                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn btn-secondary">
                         Back
                     </a>
                 </div>
@@ -60,6 +48,70 @@
             {% endif %}
             {% endwith %}
 
+            {#
+                A stalled task is worthless without the reason it stalled,
+                so On Hold and Void state their cause up front rather than
+                burying it in the activity timeline.
+            #}
+            {% if task.status == task_status.ON_HOLD %}
+            <div class="task-state-banner state-on-hold">
+                <i class="fa-solid fa-circle-pause"></i>
+                <div>
+                    <strong>On hold</strong>
+                    <p>
+                        {{ task.hold_reason
+                           or "No reason was recorded for this hold." }}
+                    </p>
+                    <span>
+                        Put on hold by
+                        {{ task.held_by.name if task.held_by else "a manager" }}
+                        {% if task.held_at %}
+                        on {{ task.held_at.strftime("%d %b %Y") }}
+                        {% endif %}
+                    </span>
+                </div>
+
+                {% if can_manage_tasks %}
+                <form method="POST"
+                    action="{{ url_for('tasks.resume_task', task_id=task.id) }}">
+                    <button type="submit" class="btn-secondary">
+                        Take off hold
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if task.status == task_status.VOID %}
+            <div class="task-state-banner state-void">
+                <i class="fa-solid fa-ban"></i>
+                <div>
+                    <strong>Voided</strong>
+                    <p>
+                        {{ task.void_reason
+                           or "No reason was recorded for this void." }}
+                    </p>
+                    <span>
+                        Voided by
+                        {{ task.voided_by.name if task.voided_by else "a manager" }}
+                        {% if task.voided_at %}
+                        on {{ task.voided_at.strftime("%d %b %Y") }}
+                        {% endif %}
+                        &middot; excluded from performance figures
+                    </span>
+                </div>
+
+                {% if can_manage_tasks %}
+                <form method="POST"
+                    action="{{ url_for('tasks.restore_task', task_id=task.id) }}">
+                    <button type="submit" class="btn-secondary">
+                        Restore
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="task-detail-layout">
 
                 <div class="task-detail-left">
@@ -74,35 +126,32 @@
 
                         <div class="progress-track">
 
-                            {% for item in [
-                            "Assigned",
-                            "In Progress",
-                            "Paused",
-                            "Core Review",
-                            "Client Review",
-                            "Published"
-                            ] %}
+                            {#
+                                Both the column list and the move rules come
+                                from app/utils/task_status.py so the stepper
+                                cannot drift out of step with the board or
+                                the server-side validation.
+                            #}
+                            {% for item in task_status.BOARD_STATUSES %}
 
-                            {% set employee_moves = {
-                            "Assigned": ["In Progress"],
-                            "In Progress": ["Paused", "Core Review"],
-                            "Paused": ["In Progress"],
-                            "Core Review": ["Assigned", "In Progress", "Paused"],
-                            "Client Review": [],
-                            "Published": []
-                            } %}
+                            {% set is_clickable =
+                                item in task_status.allowed_moves(
+                                    task.status, can_manage_tasks
+                                )
+                                and (
+                                    can_manage_tasks
+                                    or task.assigned_to_id == current_user.id
+                                )
+                                and item not in [
+                                    task_status.ON_HOLD, task_status.VOID
+                                ]
+                            %}
 
                             <span class="
         status-bubble
+        status-{{ task_status.css_modifier(item) }}
         {% if item == task.status %}active{% endif %}
-        {% if has_permission(current_user, 'manage_tasks')
-            or (
-                task.assigned_to_id == current_user.id
-                and item in employee_moves.get(task.status, [])
-            )
-        %}
-            clickable
-        {% endif %}
+        {% if is_clickable %}clickable{% endif %}
     " data-task-id="{{ task.id }}" data-status="{{ item }}">
                                 {{ item }}
                             </span>
@@ -240,7 +289,14 @@
                                             >
 
                                             {% elif file.mime_type and file.mime_type.startswith("video/") %}
-                                            🎬
+                                            <video
+                                                class="task-file-thumb video-thumb"
+                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                preload="metadata"
+                                                muted
+                                                playsinline
+                                            ></video>
+                                            <span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>
 
                                             {% elif file.mime_type and file.mime_type.startswith("audio/") %}
                                             🎵
@@ -362,6 +418,18 @@
                                             Download
                                         </a>
 
+                                        {% if can_manage_tasks or file.uploaded_by_id == current_user.id %}
+                                        <form method="POST" action="{{ url_for(
+                            'tasks.delete_task_file',
+                            file_id=file.id
+                        ) }}" onsubmit="return confirm('Delete this file? This cannot be undone.')">
+                                            <button type="submit" class="task-file-btn task-file-delete-btn">
+                                                <span>🗑</span>
+                                                Delete
+                                            </button>
+                                        </form>
+                                        {% endif %}
+
                                     </div>
 
                                 </article>
@@ -453,6 +521,15 @@ Submission Files
                                                 alt="{{ file.original_filename }}"
                                                 loading="lazy"
                                             >
+                                            {% elif file.mime_type and file.mime_type.startswith("video/") %}
+                                            <video
+                                                class="task-file-thumb video-thumb"
+                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                preload="metadata"
+                                                muted
+                                                playsinline
+                                            ></video>
+                                            <span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>
                                             {% else %}
                                             📄
                                             {% endif %}
@@ -502,6 +579,18 @@ Submission Files
                                             class="task-file-btn task-file-download-btn">
                                             Download
                                         </a>
+
+                                        {% if can_manage_tasks or file.uploaded_by_id == current_user.id %}
+                                        <form method="POST" action="{{ url_for(
+                            'tasks.delete_task_file',
+                            file_id=file.id
+                        ) }}" onsubmit="return confirm('Delete this file? This cannot be undone.')">
+                                            <button type="submit" class="task-file-btn task-file-delete-btn">
+                                                <span>🗑</span>
+                                                Delete
+                                            </button>
+                                        </form>
+                                        {% endif %}
 
                                     </div>
 
@@ -678,7 +767,84 @@ Submission Files
                             </form>
                             {% endif %}
 
+                            {#
+                                On Hold and Void are manager decisions and both
+                                demand a written reason, so each opens a small
+                                form rather than firing on a single click.
+                            #}
+                            {% if can_manage_tasks %}
+
+                            {% if task_status.ON_HOLD in task_status.allowed_moves(task.status, True) %}
+                            <button type="button" class="btn-secondary"
+                                data-toggle-panel="holdPanel">
+                                Put On Hold
+                            </button>
+                            {% endif %}
+
+                            {% if task_status.VOID in task_status.allowed_moves(task.status, True) %}
+                            <button type="button" class="btn-ghost task-void-trigger"
+                                data-toggle-panel="voidPanel">
+                                Void Task
+                            </button>
+                            {% endif %}
+
+                            {% endif %}
+
                         </div>
+
+                        {% if can_manage_tasks %}
+
+                        {% if task_status.ON_HOLD in task_status.allowed_moves(task.status, True) %}
+                        <form method="POST" id="holdPanel" class="task-reason-panel"
+                            action="{{ url_for('tasks.hold_task', task_id=task.id) }}">
+
+                            <label for="holdReason">
+                                What is this task waiting on?
+                            </label>
+
+                            <textarea id="holdReason" name="reason" required minlength="10"
+                                placeholder="Example: waiting on client approval of the final copy."></textarea>
+
+                            <div class="task-reason-actions">
+                                <button type="button" class="btn-secondary"
+                                    data-close-panel="holdPanel">
+                                    Cancel
+                                </button>
+                                <button type="submit">Put On Hold</button>
+                            </div>
+                        </form>
+                        {% endif %}
+
+                        {% if task_status.VOID in task_status.allowed_moves(task.status, True) %}
+                        <form method="POST" id="voidPanel" class="task-reason-panel"
+                            action="{{ url_for('tasks.void_task', task_id=task.id) }}">
+
+                            <label for="voidReason">
+                                Why is this task being cancelled?
+                            </label>
+
+                            <textarea id="voidReason" name="reason" required minlength="10"
+                                placeholder="Example: client cancelled the campaign, work stopped mid-way."></textarea>
+
+                            <p class="task-reason-note">
+                                The task stops here and is left out of
+                                completion and performance figures. A manager
+                                can undo this later.
+                            </p>
+
+                            <div class="task-reason-actions">
+                                <button type="button" class="btn-secondary"
+                                    data-close-panel="voidPanel">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="btn-danger">
+                                    Void Task
+                                </button>
+                            </div>
+                        </form>
+                        {% endif %}
+
+                        {% endif %}
 
                         <div class="status-duration-box">
                             <h3>Status Duration</h3>
@@ -696,7 +862,12 @@ Submission Files
 
                                 <p>
                                     <span>Paused</span>
-                                    <strong id="holdDuration">{{ hold_time }}</strong>
+                                    <strong id="pausedDuration">{{ paused_time }}</strong>
+                                </p>
+
+                                <p>
+                                    <span>On Hold</span>
+                                    <strong id="onHoldDuration">{{ on_hold_time }}</strong>
                                 </p>
 
                                 <p>
@@ -833,11 +1004,67 @@ Submission Files
 
             </div>
 
-        </main>
+        
+{% endblock %}
 
-    </div>
+{% block scripts %}
+<script>
+    // Video thumbnails show the browser's own first decoded frame - there
+    // is no server-side thumbnail generator. Chrome/Safari usually paint
+    // frame 0 as soon as metadata loads; Firefox stays blank until playback
+    // starts or currentTime is nudged, so this nudges it uniformly.
+    document.querySelectorAll(".video-thumb").forEach(function (video) {
+        video.addEventListener("loadedmetadata", function () {
+            try {
+                video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
+            } catch (err) {}
+        }, { once: true });
+    });
+</script>
+<script>
+    // Reason panels for On Hold / Void. Only one is open at a time so
+    // the two cannot be confused with each other.
+    (function () {
 
-    <div id="uploadPopup" class="upload-popup">
+        function closeAll() {
+            document
+                .querySelectorAll(".task-reason-panel.show")
+                .forEach(function (panel) {
+                    panel.classList.remove("show");
+                });
+        }
+
+        document.addEventListener("click", function (event) {
+
+            const opener = event.target.closest("[data-toggle-panel]");
+
+            if (opener) {
+                const panel = document.getElementById(
+                    opener.dataset.togglePanel
+                );
+                if (!panel) return;
+
+                const wasOpen = panel.classList.contains("show");
+                closeAll();
+
+                if (!wasOpen) {
+                    panel.classList.add("show");
+                    const field = panel.querySelector("textarea");
+                    if (field) field.focus();
+                }
+                return;
+            }
+
+            const closer = event.target.closest("[data-close-panel]");
+
+            if (closer) {
+                closeAll();
+            }
+        });
+    })();
+</script>
+
+<div id="uploadPopup" class="upload-popup">
 
         <div class="upload-box">
 
@@ -859,6 +1086,10 @@ Submission Files
             <div id="uploadRemaining" class="upload-remaining">
                 Calculating...
             </div>
+
+            <button id="uploadCancelBtn" type="button" class="upload-cancel-btn">
+                Cancel Upload
+            </button>
 
         </div>
 
@@ -1570,9 +1801,192 @@ Submission Files
 
         if (uploadForm) {
 
-            uploadForm.addEventListener("submit", function (e) {
+            const PART_SIZE = 8 * 1024 * 1024;
+
+            const MULTIPART_ENDPOINTS = {
+                initiate: "{{ url_for('tasks.initiate_submission_multipart_upload', task_id=task.id) }}",
+                partUrl: "{{ url_for('tasks.get_submission_multipart_part_url', task_id=task.id) }}",
+                complete: "{{ url_for('tasks.complete_submission_multipart_upload', task_id=task.id) }}",
+                abort: "{{ url_for('tasks.abort_submission_multipart_upload', task_id=task.id) }}",
+            };
+
+            let currentController = null;
+
+            async function postJSON(url, payload, signal) {
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload || {}),
+                    signal: signal,
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message || "Request failed.");
+                }
+
+                return data;
+            }
+
+            function putPart(url, blob, onProgress, signal) {
+
+                return new Promise(function (resolve, reject) {
+
+                    function cancelledError() {
+                        return Object.assign(new Error("Upload cancelled."), { name: "AbortError" });
+                    }
+
+                    if (signal && signal.aborted) {
+                        reject(cancelledError());
+                        return;
+                    }
+
+                    const xhr = new XMLHttpRequest();
+
+                    xhr.open("PUT", url, true);
+
+                    function handleAbort() {
+                        xhr.abort();
+                    }
+
+                    if (signal) {
+                        signal.addEventListener("abort", handleAbort);
+                    }
+
+                    xhr.upload.addEventListener("progress", function (event) {
+
+                        if (event.lengthComputable) {
+                            onProgress(event.loaded);
+                        }
+
+                    });
+
+                    xhr.onreadystatechange = function () {
+
+                        if (xhr.readyState !== 4) {
+                            return;
+                        }
+
+                        if (signal) {
+                            signal.removeEventListener("abort", handleAbort);
+                        }
+
+                        if (signal && signal.aborted) {
+                            reject(cancelledError());
+                            return;
+                        }
+
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            resolve(xhr.getResponseHeader("ETag"));
+                        } else {
+                            reject(new Error("Part upload failed."));
+                        }
+
+                    };
+
+                    xhr.send(blob);
+
+                });
+            }
+
+            async function uploadSubmissionFile(file, uploadedBytesBefore, onProgress, signal) {
+
+                const initiateData = await postJSON(MULTIPART_ENDPOINTS.initiate, {
+                    filename: file.name,
+                    content_type: file.type,
+                }, signal);
+
+                const uploadId = initiateData.upload_id;
+                const objectKey = initiateData.object_key;
+
+                const parts = [];
+
+                let partNumber = 1;
+                let offset = 0;
+                let uploadedInFile = 0;
+
+                try {
+
+                    while (offset < file.size) {
+
+                        const end = Math.min(offset + PART_SIZE, file.size);
+                        const blob = file.slice(offset, end);
+
+                        const partUrlData = await postJSON(MULTIPART_ENDPOINTS.partUrl, {
+                            object_key: objectKey,
+                            upload_id: uploadId,
+                            part_number: partNumber,
+                        }, signal);
+
+                        const etag = await putPart(partUrlData.url, blob, function (loaded) {
+                            onProgress(uploadedBytesBefore + uploadedInFile + loaded);
+                        }, signal);
+
+                        parts.push({
+                            ETag: etag,
+                            PartNumber: partNumber,
+                        });
+
+                        uploadedInFile += blob.size;
+                        offset = end;
+                        partNumber += 1;
+                    }
+
+                    await postJSON(MULTIPART_ENDPOINTS.complete, {
+                        object_key: objectKey,
+                        upload_id: uploadId,
+                        parts: parts,
+                        original_filename: initiateData.original_filename,
+                        stored_filename: initiateData.stored_filename,
+                    }, signal);
+
+                } catch (error) {
+
+                    if (uploadId && objectKey) {
+
+                        try {
+                            await postJSON(MULTIPART_ENDPOINTS.abort, {
+                                object_key: objectKey,
+                                upload_id: uploadId,
+                            });
+                        } catch (abortError) {
+                            console.log(abortError);
+                        }
+
+                    }
+
+                    throw error;
+                }
+            }
+
+            const cancelBtn = document.getElementById("uploadCancelBtn");
+
+            if (cancelBtn) {
+
+                cancelBtn.addEventListener("click", function () {
+
+                    if (currentController) {
+                        currentController.abort();
+                    }
+
+                });
+
+            }
+
+            uploadForm.addEventListener("submit", async function (e) {
 
                 e.preventDefault();
+
+                const fileInput = document.getElementById("submissionFiles");
+                const files = Array.from(fileInput.files);
+
+                if (!files.length) {
+                    return;
+                }
 
                 const popup = document.getElementById("uploadPopup");
                 const progressBar = document.getElementById("uploadProgressBar");
@@ -1580,33 +1994,37 @@ Submission Files
                 const remaining = document.getElementById("uploadRemaining");
                 const uploadBtn = document.getElementById("uploadBtn");
 
+                progressBar.style.width = "0%";
+                percent.innerHTML = "0.0%";
+                remaining.innerHTML = "Calculating...";
+
                 popup.classList.add("show");
 
                 uploadBtn.disabled = true;
 
-                const xhr = new XMLHttpRequest();
+                currentController = new AbortController();
 
-                const formData = new FormData(uploadForm);
+                const totalBytes = files.reduce(function (sum, file) {
+                    return sum + file.size;
+                }, 0);
 
                 const startTime = Date.now();
 
-                xhr.upload.addEventListener("progress", function (event) {
+                function updateProgress(uploadedBytes) {
 
-                    if (!event.lengthComputable) {
-                        return;
-                    }
+                    const rawProgress = totalBytes
+                        ? (uploadedBytes / totalBytes) * 100
+                        : 100;
 
-                    const progress = Math.round((event.loaded / event.total) * 100);
+                    const progress = Math.min(100, Math.max(0, rawProgress));
 
                     progressBar.style.width = progress + "%";
 
-                    percent.innerHTML = progress + "%";
+                    percent.innerHTML = progress.toFixed(1) + "%";
 
                     const elapsed = (Date.now() - startTime) / 1000;
-
-                    const speed = event.loaded / elapsed;
-
-                    const remainingBytes = event.total - event.loaded;
+                    const speed = uploadedBytes / elapsed;
+                    const remainingBytes = totalBytes - uploadedBytes;
 
                     if (speed > 0) {
 
@@ -1616,42 +2034,44 @@ Submission Files
 
                     }
 
-                });
+                }
 
-                xhr.onreadystatechange = function () {
+                try {
 
-                    if (xhr.readyState !== 4) {
-                        return;
+                    let uploadedBeforeCurrentFile = 0;
+
+                    for (const file of files) {
+
+                        await uploadSubmissionFile(
+                            file,
+                            uploadedBeforeCurrentFile,
+                            updateProgress,
+                            currentController.signal
+                        );
+
+                        uploadedBeforeCurrentFile += file.size;
                     }
+
+                    currentController = null;
+
+                    location.reload();
+
+                } catch (error) {
+
+                    console.log(error);
 
                     popup.classList.remove("show");
-
                     uploadBtn.disabled = false;
 
-                    if (xhr.status === 200) {
+                    const wasCancelled = currentController && currentController.signal.aborted;
 
-                        location.reload();
+                    currentController = null;
 
-                    }
-                    else {
-
+                    if (!wasCancelled) {
                         alert("Upload failed.");
-
                     }
 
-                };
-
-                xhr.open(
-
-                    "POST",
-
-                    uploadForm.action,
-
-                    true
-
-                );
-
-                xhr.send(formData);
+                }
 
             });
 
@@ -1722,6 +2142,4 @@ Submission Files
 
     
     </script>
-</body>
-
-</html>
+{% endblock %}

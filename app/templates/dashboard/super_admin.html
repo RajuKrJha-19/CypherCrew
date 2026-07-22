@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Super Admin | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Super Admin | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header">
                 <div>
                     <h1>Super Admin Dashboard</h1>
@@ -31,7 +18,7 @@
             <div class="dashboard-kpi-grid">
 
                 <a href="{{ url_for('tasks.list_tasks') }}" class="kpi-card kpi-blue dashboard-card-link">
-                    <div class="kpi-icon">☑</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
                     <div class="kpi-content">
                         <span>Total Tasks</span>
                         <h2>{{ overview.total_tasks }}</h2>
@@ -43,7 +30,7 @@
 
                 <a href="{{ url_for('tasks.list_tasks', status='Published') }}"
                     class="kpi-card kpi-green dashboard-card-link">
-                    <div class="kpi-icon">✓</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-check"></i></div>
                     <div class="kpi-content">
                         <span>Completed Tasks</span>
                         <h2>{{ overview.completed_tasks }}</h2>
@@ -55,7 +42,7 @@
 
                 <a href="{{ url_for('tasks.list_tasks', status='Pending') }}"
                     class="kpi-card kpi-purple dashboard-card-link">
-                    <div class="kpi-icon">⌛</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
                     <div class="kpi-content">
                         <span>Pending Tasks</span>
                         <h2>{{ overview.pending_tasks }}</h2>
@@ -66,7 +53,7 @@
                 </a>
 
                 <a href="{{ url_for('clients.list_clients') }}" class="kpi-card kpi-orange dashboard-card-link">
-                    <div class="kpi-icon">👥</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-building"></i></div>
                     <div class="kpi-content">
                         <span>Active Clients</span>
                         <h2>{{ overview.active_clients }}</h2>
@@ -77,7 +64,7 @@
                 </a>
 
                 <a href="{{ url_for('users.list_users') }}" class="kpi-card kpi-sky dashboard-card-link">
-                    <div class="kpi-icon">👥</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
                     <div class="kpi-content">
                         <span>Active Employees</span>
                         <h2>{{ overview.active_employees }}</h2>
@@ -88,7 +75,7 @@
                 </a>
 
                 <div class="kpi-card kpi-red">
-                    <div class="kpi-icon">▣</div>
+                    <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
                     <div class="kpi-content">
                         <span>Meetings Today</span>
                         <h2>{{ overview.meetings_today }}</h2>
@@ -406,11 +393,11 @@
 
             </div>
 
-        </main>
+        
+{% endblock %}
 
-    </div>
-
-    <script>
+{% block scripts %}
+<script>
         function formatHMS(seconds) {
             seconds = Number(seconds || 0);
 
@@ -466,10 +453,14 @@
         const statusValues = {{ status_chart["values"]| tojson }};
         const statusTotal = statusValues.reduce((a, b) => a + b, 0);
 
+        // Order matches task_status.BOARD_STATUSES. On Hold is slate
+        // rather than another warm colour: it is parked work, not
+        // work in flight, and it should read that way at a glance.
         const statusColors = [
-            "#2563EB",   // Pending
+            "#2563EB",   // Assigned
             "#EC4899",   // In Progress
-            "#FB923C",   // Hold
+            "#FB923C",   // Paused
+            "#94A3B8",   // On Hold
             "#FACC15",   // Core Review
             "#14B8A6",   // Client Review
             "#10B981"    // Published
@@ -607,10 +598,20 @@
             pointHoverRadius: 5
                 },
             {
-                label: "Hold",
-                data: {{ month_chart.hold | tojson }},
-            borderColor: "#EF4444",
-            backgroundColor: "rgba(239, 68, 68, 0.10)",
+                label: "Paused",
+                data: {{ month_chart.paused | tojson }},
+            borderColor: "#FB923C",
+            backgroundColor: "rgba(251, 146, 60, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "On Hold",
+                data: {{ month_chart.on_hold | tojson }},
+            borderColor: "#94A3B8",
+            backgroundColor: "rgba(148, 163, 184, 0.10)",
             tension: 0.35,
             fill: false,
             pointRadius: 3,
@@ -692,6 +693,4 @@
     });
 }
     </script>
-</body>
-
-</html>
+{% endblock %}

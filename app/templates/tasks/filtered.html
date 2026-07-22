@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>{{ page_title }} | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}{{ page_title }} | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header">
                 <div>
                     <a href="{{ url_for('tasks.list_tasks') }}" class="filtered-back-btn">
@@ -132,10 +119,11 @@
 
             </div>
 
-        </main>
+        
+{% endblock %}
 
-    </div>
-    <script>
+{% block scripts %}
+<script>
         const filteredTaskSearchInput = document.getElementById("filteredTaskSearchInput");
         const filteredTaskSearchSuggestions = document.getElementById("filteredTaskSearchSuggestions");
         const filteredTaskSearchForm = document.getElementById("filteredTaskSearchForm");
@@ -282,6 +270,4 @@
             }
         });
     </script>
-</body>
-
-</html>
+{% endblock %}

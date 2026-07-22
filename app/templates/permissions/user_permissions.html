@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Permissions</title>
+{% extends "base_app.html" %}
 
-    <link rel="stylesheet"
-    href="{{ url_for('static', filename='css/style.css') }}">
-</head>
+{% block title %}Permissions{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-<main class="main">
-
+{% block content %}
 <div class="form-card">
 
 <h1>{{ user.name }}</h1>
@@ -55,10 +43,4 @@ Save Permissions
 </form>
 
 </div>
-
-</main>
-
-</div>
-
-</body>
-</html>
+{% endblock %}

@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Gallery | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Gallery | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header">
                 <div>
                     <h1>Gallery</h1>
@@ -28,7 +16,6 @@
 
             <form method="GET" class="gallery-search-bar">
                 <input
-                    style="height: 200px;"
                     type="text"
                     name="q"
                     value="{{ search }}"
@@ -69,15 +56,25 @@
                             data-size="{% if file.file_size %}{% if file.file_size < 1024 %}{{ file.file_size }} B{% elif file.file_size < 1048576 %}{{ (file.file_size / 1024)|round(1) }} KB{% else %}{{ (file.file_size / 1048576)|round(2) }} MB{% endif %}{% else %}-{% endif %}"
                         >
 
+                            {% set is_video = file.mime_type and file.mime_type.startswith("video/") %}
+
                             <div class="gallery-thumb-box">
 
                                 {% if is_image %}
                                 <img class="gallery-thumb" src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}" alt="{{ file.original_filename }}" loading="lazy">
+                                {% elif is_video %}
+                                {#
+                                    No server-side image processing is set up (no Pillow/ffmpeg in
+                                    requirements.txt), so the poster frame is the browser's own
+                                    first decoded video frame rather than a pre-generated image.
+                                    preload="metadata" keeps this to a small range-request against
+                                    R2 rather than pulling the whole file.
+                                #}
+                                <video class="gallery-thumb video-thumb" src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}" preload="metadata" muted playsinline></video>
+                                <span class="video-thumb-badge"><i class="fa-solid fa-play"></i></span>
                                 {% else %}
                                 <div class="gallery-icon">
-                                    {% if file.mime_type and file.mime_type.startswith("video/") %}
-                                    🎬
-                                    {% elif file.mime_type and file.mime_type.startswith("audio/") %}
+                                    {% if file.mime_type and file.mime_type.startswith("audio/") %}
                                     🎵
                                     {% elif file.mime_type == "application/pdf" %}
                                     📕
@@ -136,11 +133,26 @@
             </div>
             {% endif %}
 
-        </main>
+        
+{% endblock %}
 
-    </div>
+{% block scripts %}
 
-    <!-- CONTEXT MENU -->
+<script>
+    // Video thumbnails show the browser's own first decoded frame - there
+    // is no server-side thumbnail generator. Chrome/Safari usually paint
+    // frame 0 as soon as metadata loads; Firefox stays blank until playback
+    // starts or currentTime is nudged, so this nudges it uniformly.
+    document.querySelectorAll(".video-thumb").forEach(function (video) {
+        video.addEventListener("loadedmetadata", function () {
+            try {
+                video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
+            } catch (err) {}
+        }, { once: true });
+    });
+</script>
+
+<!-- CONTEXT MENU -->
     <div id="galleryContextMenu" class="gallery-context-menu">
         <button type="button" data-action="open">Open</button>
         <button type="button" data-action="download">Download</button>
@@ -259,7 +271,4 @@
 
         })();
     </script>
-
-</body>
-
-</html>
+{% endblock %}

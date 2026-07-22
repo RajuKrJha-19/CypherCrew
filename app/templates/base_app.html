@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{#
+    Shell for every signed-in page: sidebar + main column.
+    Pages that sit outside the app shell (e.g. login) extend
+    base.html directly instead.
+#}
+
+{% block body %}
+<div class="layout">
+
+    {% include "partials/sidebar.html" %}
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+{% endblock %}

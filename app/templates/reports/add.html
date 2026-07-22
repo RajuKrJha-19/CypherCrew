@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Add Report | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Add Report | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-{% include "partials/sidebar.html" %}
-
-<main class="main">
-
+{% block content %}
     <div class="page-header">
         <div>
             <h1>Add Daily Report</h1>
@@ -24,7 +11,7 @@
 
         <div class="top-actions">
             {% include "partials/notification_widget.html" %}
-            <a href="{{ url_for('reports.list_reports') }}" class="btn">Back</a>
+            <a href="{{ url_for('reports.list_reports') }}" class="btn btn-secondary">Back</a>
         </div>
     </div>
 
@@ -173,11 +160,4 @@
         </button>
 
     </form>
-
-</main>
-
-</div>
-
-</body>
-
-</html>
+{% endblock %}

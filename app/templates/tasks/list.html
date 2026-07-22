@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Tasks | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Tasks | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header task-page-sticky-header">
                 <div>
                     <h1>Tasks</h1>
@@ -30,7 +18,7 @@
                     </a>
                     {% endif %}
 
-                    <a href="{{ url_for('tasks.self_assign_task') }}" class="btn">
+                    <a href="{{ url_for('tasks.self_assign_task') }}" class="btn btn-secondary">
                         + Self Assign Task
                     </a>
                 </div>
@@ -298,11 +286,11 @@
                                     Deadline (Latest)
                                 </button>
 
-                                <button type="button" data-sort="priority_desc">
+                                <button type="button" data-sort="priority_high">
                                     Priority (High → Low)
                                 </button>
 
-                                <button type="button" data-sort="priority_asc">
+                                <button type="button" data-sort="priority_low">
                                     Priority (Low → High)
                                 </button>
 
@@ -314,12 +302,20 @@
                                     Task ID (Descending)
                                 </button>
 
-                                <button type="button" data-sort="az">
+                                <button type="button" data-sort="title_asc">
                                     A → Z
                                 </button>
 
-                                <button type="button" data-sort="za">
+                                <button type="button" data-sort="title_desc">
                                     Z → A
+                                </button>
+
+                                <button type="button" data-sort="file_size_desc">
+                                    File Size (Largest First)
+                                </button>
+
+                                <button type="button" data-sort="file_size_asc">
+                                    File Size (Smallest First)
                                 </button>
 
                             </div>
@@ -343,21 +339,35 @@
                                     Yesterday
                                 </button>
 
-                                <button type="button" data-filter="last7">
+                                <button type="button" data-filter="last_7_days">
                                     Last 7 Days
                                 </button>
 
-                                <button type="button" data-filter="last30">
+                                <button type="button" data-filter="last_30_days">
                                     Last 30 Days
                                 </button>
 
-                                <button type="button" data-filter="month">
+                                <button type="button" data-filter="this_month">
                                     This Month
                                 </button>
 
-                                <button type="button" data-filter="last90">
+                                <button type="button" data-filter="last_90_days">
                                     Last 90 Days
                                 </button>
+
+                                <hr>
+
+                                <div class="custom-filter-days-box">
+                                    <input
+                                        type="number"
+                                        id="customFilterDaysInput"
+                                        min="1"
+                                        placeholder="Enter days"
+                                    >
+                                    <button type="button" id="customFilterDaysApply">
+                                        Go
+                                    </button>
+                                </div>
 
                             </div>
                             {# .mini-link{
@@ -539,11 +549,11 @@
             </div>
     </div>
 
-    </main>
+    
+{% endblock %}
 
-    </div>
-
-    <script>
+{% block scripts %}
+<script>
         document.addEventListener("DOMContentLoaded", function () {
             const cards = document.querySelectorAll(".task-card");
 
@@ -1044,6 +1054,20 @@
 
                         if (file.is_image) {
                             item.innerHTML = `<img class="file-popup-thumb" src="${file.preview_url}" alt="${file.filename}">`;
+                        } else if (file.is_video) {
+                            item.innerHTML = `<div class="file-popup-video-wrap">` +
+                                `<video class="file-popup-thumb video-thumb" src="${file.preview_url}" preload="metadata" muted playsinline></video>` +
+                                `<span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>` +
+                                `</div>`;
+
+                            // Chrome/Safari paint frame 0 once metadata loads;
+                            // Firefox needs a nudge to actually show a frame.
+                            const videoEl = item.querySelector(".video-thumb");
+                            videoEl.addEventListener("loadedmetadata", function () {
+                                try {
+                                    videoEl.currentTime = Math.min(0.1, (videoEl.duration || 1) / 2);
+                                } catch (err) {}
+                            }, { once: true });
                         } else {
                             item.innerHTML = `<div class="file-popup-icon">${iconForMime(file.mime_type)}</div>`;
                         }
@@ -1153,13 +1177,104 @@
 
         });
         /* ==========================================
-           KANBAN DRAG & DROP (PHASE 1)
+           KANBAN DRAG & DROP
         ========================================== */
 
         const kanbanCards = document.querySelectorAll(".task-card");
         const kanbanColumns = document.querySelectorAll(".board-column");
 
         let draggedCard = null;
+
+        function columnCardCount(column) {
+            return column.querySelectorAll(".task-card").length;
+        }
+
+        // Keeps the header count and the "No tasks here." placeholder
+        // in sync after a drag moves a card between columns - both were
+        // rendered once from the server and never touched again, so a
+        // drop used to leave stale counts and a missing/leftover
+        // placeholder until the page was reloaded.
+        function syncColumnChrome(column) {
+
+            const count = columnCardCount(column);
+
+            const countLabel = column.querySelector(".board-column-header span");
+
+            if (countLabel) {
+                countLabel.textContent = count;
+            }
+
+            const placeholder = column.querySelector(".empty-column");
+
+            if (count === 0 && !placeholder) {
+
+                const emptyState = document.createElement("div");
+                emptyState.className = "empty-column";
+                emptyState.textContent = "No tasks here.";
+                column.appendChild(emptyState);
+
+            } else if (count > 0 && placeholder) {
+
+                placeholder.remove();
+
+            }
+        }
+
+        // Plays the "just landed" pulse - a brief blue-tint flash and
+        // scale bump. The CSS for this already existed (.kanban-card-moved
+        // / @keyframes kanbanMoveSafe) but nothing in this file ever
+        // added the class, so it never ran.
+        function pulseCardLanded(card) {
+
+            card.classList.remove("kanban-card-moved");
+
+            // force reflow so re-adding the class restarts the
+            // animation even if the card was just pulsed a moment ago
+            void card.offsetWidth;
+
+            card.classList.add("kanban-card-moved");
+
+            card.addEventListener("animationend", function cleanup() {
+                card.classList.remove("kanban-card-moved");
+                card.removeEventListener("animationend", cleanup);
+            });
+        }
+
+        // FLIP: read the card's position before the DOM move, then
+        // animate from there back to its natural position, so a drop
+        // reads as the card travelling into the new column rather
+        // than teleporting there. Once it arrives, it settles with
+        // the landed pulse above.
+        function animateCardMove(card, mutate) {
+
+            const before = card.getBoundingClientRect();
+
+            mutate();
+
+            const after = card.getBoundingClientRect();
+
+            const dx = before.left - after.left;
+            const dy = before.top - after.top;
+
+            if (!dx && !dy) {
+                pulseCardLanded(card);
+                return;
+            }
+
+            card.style.transition = "none";
+            card.style.transform = `translate(${dx}px, ${dy}px)`;
+
+            requestAnimationFrame(function () {
+                card.style.transition = "transform .28s cubic-bezier(.22,.8,.28,1)";
+                card.style.transform = "";
+            });
+
+            card.addEventListener("transitionend", function cleanup() {
+                card.style.transition = "";
+                card.removeEventListener("transitionend", cleanup);
+                pulseCardLanded(card);
+            });
+        }
 
         kanbanCards.forEach(function (card) {
 
@@ -1191,7 +1306,16 @@
 
             });
 
-            column.addEventListener("dragleave", function () {
+            column.addEventListener("dragleave", function (e) {
+
+                // Moving the pointer between cards inside the same
+                // column fires dragleave/dragenter on every card in
+                // between (bubbling), which flickered the highlight
+                // off and on. Only clear it once the pointer has
+                // actually left the column's box.
+                if (column.contains(e.relatedTarget)) {
+                    return;
+                }
 
                 column.classList.remove("drag-over");
 
@@ -1206,11 +1330,23 @@
                 if (!draggedCard) {
                     return;
                 }
+
                 const oldColumn = draggedCard.parentElement;
-                column.appendChild(draggedCard);
+
+                if (oldColumn === column) {
+                    return;
+                }
+
+                animateCardMove(draggedCard, function () {
+                    column.appendChild(draggedCard);
+                });
+
+                syncColumnChrome(oldColumn);
+                syncColumnChrome(column);
 
                 const taskId = draggedCard.dataset.taskId;
                 const status = column.dataset.status;
+                const movedCard = draggedCard;
 
                 fetch("/tasks/kanban/update-status", {
 
@@ -1234,7 +1370,12 @@
 
                         if (!data.success) {
 
-                            oldColumn.appendChild(draggedCard);
+                            animateCardMove(movedCard, function () {
+                                oldColumn.appendChild(movedCard);
+                            });
+
+                            syncColumnChrome(oldColumn);
+                            syncColumnChrome(column);
 
                             alert(data.message);
 
@@ -1251,7 +1392,12 @@
                     })
                     .catch(function () {
 
-                        oldColumn.appendChild(draggedCard);
+                        animateCardMove(movedCard, function () {
+                            oldColumn.appendChild(movedCard);
+                        });
+
+                        syncColumnChrome(oldColumn);
+                        syncColumnChrome(column);
 
                         alert("Unable to update task.");
 
@@ -1285,7 +1431,7 @@
         FILTER BY (BACKEND)
         =========================================*/
 
-        document.querySelectorAll("#filterDropdownMenu button").forEach(function (button) {
+        document.querySelectorAll("#filterDropdownMenu button[data-filter]").forEach(function (button) {
 
             button.addEventListener("click", function () {
 
@@ -1297,16 +1443,49 @@
 
                 const url = new URL(window.location.href);
 
-                url.searchParams.set(
-                    "filter",
-                    value
-                );
+                url.searchParams.set("filter", value);
+                url.searchParams.delete("days");
 
                 window.location.href = url.toString();
 
             });
 
         });
+        /*=========================================
+        CUSTOM DAYS FILTER
+        =========================================*/
+
+        const customFilterDaysInput = document.getElementById("customFilterDaysInput");
+        const customFilterDaysApply = document.getElementById("customFilterDaysApply");
+
+        function applyCustomDaysFilter() {
+
+            const days = customFilterDaysInput.value.trim();
+
+            if (!days || parseInt(days, 10) <= 0) {
+                return;
+            }
+
+            const url = new URL(window.location.href);
+
+            url.searchParams.set("filter", "custom_days");
+            url.searchParams.set("days", days);
+
+            window.location.href = url.toString();
+        }
+
+        if (customFilterDaysApply) {
+            customFilterDaysApply.addEventListener("click", applyCustomDaysFilter);
+        }
+
+        if (customFilterDaysInput) {
+            customFilterDaysInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyCustomDaysFilter();
+                }
+            });
+        }
         /*=========================================
 TASK LIST TOOLBAR DROPDOWNS
 =========================================*/
@@ -1386,7 +1565,4 @@ TASK LIST TOOLBAR DROPDOWNS
 
         }
     </script>
-
-</body>
-
-</html>
+{% endblock %}

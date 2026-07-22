@@ -1,13 +1,10 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
-    <title>Login | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Login | CypherCrew{% endblock %}
 
-<body class="auth-body">
+{% block body_class %}auth-body{% endblock %}
+
+{% block body %}
 
     <div class="auth-card">
 
@@ -45,6 +42,10 @@
         </form>
 
     </div>
+
+{% endblock %}
+
+{% block scripts %}
     <script>
         const loginPassword = document.getElementById("loginPassword");
         const togglePassword = document.getElementById("togglePassword");
@@ -61,6 +62,4 @@
             });
         }
     </script>
-</body>
-
-</html>
+{% endblock %}

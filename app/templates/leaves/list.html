@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Leaves | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Leaves | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="page-header">
 
             <div>
@@ -27,7 +14,7 @@
 
                 {% include "partials/notification_widget.html" %}
 
-                <a href="{{ url_for('calendar.index') }}" class="btn">
+                <a href="{{ url_for('calendar.index') }}" class="btn btn-secondary">
                     Back to Calendar
                 </a>
 
@@ -193,10 +180,5 @@
 
         </div>
 
-    </main>
-
-</div>
-
-</body>
-
-</html>
+    
+{% endblock %}

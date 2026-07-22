@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>{{ meeting.title }} | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}{{ meeting.title }} | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="page-header">
 
             <div>
@@ -26,7 +13,7 @@
             <div class="top-actions">
                 {% include "partials/notification_widget.html" %}
 
-                <a href="{{ url_for('meetings.list_meetings') }}" class="btn">
+                <a href="{{ url_for('meetings.list_meetings') }}" class="btn btn-secondary">
                     Back
                 </a>
             </div>
@@ -128,10 +115,10 @@
 
         </div>
 
-    </main>
+    
+{% endblock %}
 
-</div>
-
+{% block scripts %}
 <script>
 const copyAgendaBtn = document.getElementById("copyAgendaBtn");
 const meetingAgendaText = document.getElementById("meetingAgendaText");
@@ -148,7 +135,4 @@ if (copyAgendaBtn && meetingAgendaText) {
     });
 }
 </script>
-
-</body>
-
-</html>
+{% endblock %}

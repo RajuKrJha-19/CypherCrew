@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.utils.timezone import ist_now
 from app.utils.permissions import has_permission
+from app.utils import task_status
 from app.extensions import db
 from app.models import Task,User,Client,TaskActivity,Meeting,Holiday,Leave
 
@@ -156,11 +157,14 @@ def employee():
 
 def build_workload():
 
+    # On Hold is intentionally left out: the work is blocked by an
+    # external party, so it is not load the employee can act on.
+    # Void is excluded everywhere by definition.
     active_statuses = [
-        "Assigned",
-        "In Progress",
-        "Core Review",
-        "Client Review"
+        task_status.ASSIGNED,
+        task_status.IN_PROGRESS,
+        task_status.CORE_REVIEW,
+        task_status.CLIENT_REVIEW
     ]
 
     employees = User.query.filter(
@@ -232,7 +236,7 @@ def build_company_health():
 
     overdue = Task.query.filter(
         Task.deadline < ist_now(),
-        Task.status.in_(["Assigned", "In Progress", "Paused"])
+        Task.status.in_(task_status.OVERDUE_STATUSES)
     ).count()
 
     return {
@@ -463,11 +467,20 @@ def build_overview():
     else:
         last_month_start = date(today.year, today.month - 1, 1)
 
+    # Voided tasks were cancelled by the client. Counting them in the
+    # denominator would drag the completion rate down for work the
+    # team never got to finish, so they are excluded outright - which
+    # includes the month-on-month figures, otherwise the headline and
+    # its own sub-label would disagree.
+    not_void = Task.status.notin_(task_status.EXCLUDED_FROM_METRICS)
+
     this_month_tasks = Task.query.filter(
+        not_void,
         db.func.date(Task.created_at) >= current_month_start
     ).count()
 
     last_month_tasks = Task.query.filter(
+        not_void,
         db.func.date(Task.created_at) >= last_month_start,
         db.func.date(Task.created_at) < current_month_start
     ).count()
@@ -477,18 +490,21 @@ def build_overview():
         last_month_tasks
     )
 
-    total_tasks = Task.query.count()
+    total_tasks = Task.query.filter(not_void).count()
 
     completed_tasks = Task.query.filter(
+        not_void,
         Task.employee_completed == True
     ).count()
 
     this_month_completed = Task.query.filter(
+        not_void,
         Task.employee_completed == True,
         db.func.date(Task.employee_completed_at) >= current_month_start
     ).count()
 
     last_month_completed = Task.query.filter(
+        not_void,
         Task.employee_completed == True,
         db.func.date(Task.employee_completed_at) >= last_month_start,
         db.func.date(Task.employee_completed_at) < current_month_start
@@ -555,16 +571,26 @@ def build_today_snapshot():
     today = ist_now().date()
     now = ist_now()
 
+    not_void = Task.status.notin_(task_status.EXCLUDED_FROM_METRICS)
+
     tasks_due_today = Task.query.filter(
+        not_void,
         db.func.date(Task.deadline) == today
     ).count()
 
+    # On Hold is left out: the delay is on the client's side, so the
+    # assignee should not be shown as running late for it.
     overdue_tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status.in_(["Assigned", "In Progress", "Paused"])
+        Task.status.in_([
+            task_status.ASSIGNED,
+            task_status.IN_PROGRESS,
+            task_status.PAUSED
+        ])
     ).count()
 
     completed_today = Task.query.filter(
+        not_void,
         db.func.date(Task.employee_completed_at) == today
     ).count()
 
@@ -618,7 +644,8 @@ def build_month_chart():
     completed = []
     pending = []
     in_progress = []
-    hold = []
+    paused = []
+    on_hold = []
     core_review = []
     client_review = []
     published = []
@@ -633,6 +660,7 @@ def build_month_chart():
 
         created.append(
             Task.query.filter(
+                Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
                 db.func.date(Task.created_at) == current_date
             ).count()
         )
@@ -658,10 +686,17 @@ def build_month_chart():
             ).count()
         )
 
-        hold.append(
+        paused.append(
             Task.query.filter(
                 db.func.date(Task.created_at) == current_date,
-                Task.status == "Paused"
+                Task.status == task_status.PAUSED
+            ).count()
+        )
+
+        on_hold.append(
+            Task.query.filter(
+                db.func.date(Task.created_at) == current_date,
+                Task.status == task_status.ON_HOLD
             ).count()
         )
 
@@ -693,7 +728,8 @@ def build_month_chart():
         "completed": completed,
         "pending": pending,
         "in_progress": in_progress,
-        "hold": hold,
+        "paused": paused,
+        "on_hold": on_hold,
         "core_review": core_review,
         "client_review": client_review,
         "published": published
@@ -706,7 +742,7 @@ def build_overdue_tasks():
 
     tasks = Task.query.filter(
         Task.deadline < now,
-        Task.status.in_(["Assigned", "In Progress", "Paused"])
+        Task.status.in_(task_status.OVERDUE_STATUSES)
     ).order_by(
         Task.deadline.asc()
     ).limit(5).all()
@@ -869,13 +905,13 @@ def build_upcoming_events():
 
 def build_task_stats(tasks):
 
-    status_order = [
-        "Assigned",
-        "In Progress",
-        "Paused",
-        "Core Review",
-        "Client Review",
-        "Published"
+    status_order = task_status.BOARD_STATUSES
+
+    # Voided work is cancelled, not delivered and not outstanding -
+    # it is kept out of the chart and every figure below.
+    tasks = [
+        task for task in tasks
+        if task.status not in task_status.EXCLUDED_FROM_METRICS
     ]
 
     status_counts = {
@@ -888,24 +924,29 @@ def build_task_stats(tasks):
 
         status_counts[task.status] = (
             status_counts.get(task.status, 0) + 1
-        )   
+        )
 
         if task.employee_completed:
             employee_completed += 1
 
+    # On Hold is blocked externally, so the assignee is not late.
     overdue = [
         task for task in tasks
         if task.deadline
         and task.deadline < ist_now()
-        and task.status in ["Assigned", "In Progress", "Paused"]
+        and task.status in [
+            task_status.ASSIGNED,
+            task_status.IN_PROGRESS,
+            task_status.PAUSED
+        ]
     ]
 
     return {
         "total": len(tasks),
-        "published": status_counts.get("Published", 0),
+        "published": status_counts.get(task_status.PUBLISHED, 0),
         "employee_completed": employee_completed,
-        "in_review": status_counts.get("Core Review", 0)
-        + status_counts.get("Client Review", 0),
+        "in_review": status_counts.get(task_status.CORE_REVIEW, 0)
+        + status_counts.get(task_status.CLIENT_REVIEW, 0),
         "overdue": len(overdue),
         "status_counts": status_counts,
         "status_order": status_order,

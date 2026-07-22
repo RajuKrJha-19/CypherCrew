@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
+from app.utils import task_status
 
 
 tasks_bp = Blueprint("tasks", __name__, url_prefix="/tasks")
@@ -104,35 +105,33 @@ def record_status_time(task, new_status):
         (now - task.status_started_at).total_seconds()
     )
 
-    if task.status == "Assigned":
-        task.pending_seconds = (
-            task.pending_seconds or 0
-        ) + elapsed
+    # Driven by the status table rather than an if/elif chain, so a
+    # new status can never be added without a bucket to bank its time
+    # in - that is exactly how the old "Hold" status silently dropped
+    # every second a task spent in it.
+    field = task_status.duration_field(task.status)
 
-    elif task.status == "In Progress":
-        task.in_progress_seconds = (
-            task.in_progress_seconds or 0
-        ) + elapsed
+    if field:
+        setattr(
+            task,
+            field,
+            (getattr(task, field) or 0) + elapsed
+        )
 
-    elif task.status == "Paused":
-        task.hold_seconds = (
-            task.hold_seconds or 0
-        ) + elapsed
+    # Leaving On Hold or Void must drop the reason that put it there.
+    # Every status change funnels through here, so doing it at this
+    # one point stops a stale reason surviving into the next status.
+    if task.status == task_status.ON_HOLD \
+            and new_status != task_status.ON_HOLD:
+        task.hold_reason = None
+        task.held_at = None
+        task.held_by_id = None
 
-    elif task.status == "Core Review":
-        task.core_review_seconds = (
-            task.core_review_seconds or 0
-        ) + elapsed
-
-    elif task.status == "Client Review":
-        task.client_review_seconds = (
-            task.client_review_seconds or 0
-        ) + elapsed
-
-    elif task.status == "Published":
-        task.published_seconds = (
-            task.published_seconds or 0
-        ) + elapsed
+    if task.status == task_status.VOID \
+            and new_status != task_status.VOID:
+        task.void_reason = None
+        task.voided_at = None
+        task.voided_by_id = None
 
     task.status = new_status
     task.status_started_at = now
@@ -314,6 +313,15 @@ def list_tasks():
             Task.created_at >= today - timedelta(days=90)
         )
 
+    elif filter_by == "custom_days":
+
+        custom_days_value = request.args.get("days", "").strip()
+
+        if custom_days_value.isdigit() and int(custom_days_value) > 0:
+            query = query.filter(
+                Task.created_at >= today - timedelta(days=int(custom_days_value))
+            )
+
     if assigned_to:
 
         query = query.filter(
@@ -394,20 +402,47 @@ def list_tasks():
 
         query = query.order_by(Task.title.desc())
 
+    elif sort_by == "file_size_desc":
+
+        file_size_sum = db.func.coalesce(db.func.sum(TaskFile.file_size), 0)
+
+        query = (
+            query
+            .outerjoin(
+                TaskFile,
+                db.and_(
+                    TaskFile.task_id == Task.id,
+                    TaskFile.folder_type == "submission"
+                )
+            )
+            .group_by(Task.id)
+            .order_by(file_size_sum.desc())
+        )
+
+    elif sort_by == "file_size_asc":
+
+        file_size_sum = db.func.coalesce(db.func.sum(TaskFile.file_size), 0)
+
+        query = (
+            query
+            .outerjoin(
+                TaskFile,
+                db.and_(
+                    TaskFile.task_id == Task.id,
+                    TaskFile.folder_type == "submission"
+                )
+            )
+            .group_by(Task.id)
+            .order_by(file_size_sum.asc())
+        )
+
     else:
 
         query = query.order_by(Task.id.desc())
 
     tasks = query.all()
 
-    statuses = [
-        "Assigned",
-        "In Progress",
-        "Paused",
-        "Core Review",
-        "Client Review",
-        "Published"
-    ]
+    statuses = task_status.ALL_STATUSES
 
     priorities = [
         "Low",
@@ -418,30 +453,58 @@ def list_tasks():
 
     board_columns = {
         status: []
-        for status in statuses
+        for status in task_status.BOARD_STATUSES
     }
 
-    for task in tasks:
-        board_columns.setdefault(task.status, []).append(task)
+    # Void is deliberately not a board column - cancelled work should
+    # not sit in the flow competing for attention. Those tasks stay
+    # reachable through the status filter instead.
+    voided_tasks = []
 
-    total_tasks = len(tasks)
+    for task in tasks:
+        if task.status == task_status.VOID:
+            voided_tasks.append(task)
+        else:
+            board_columns.setdefault(task.status, []).append(task)
+
+    # A voided task was cancelled by the client, so counting it either
+    # way would misrepresent the team: it is neither delivered work nor
+    # outstanding work. It is left out of every figure below.
+    counted_tasks = [
+        task for task in tasks
+        if task.status not in task_status.EXCLUDED_FROM_METRICS
+    ]
+
+    total_tasks = len(counted_tasks)
 
     completed_tasks = len([
-        task for task in tasks
+        task for task in counted_tasks
         if task.employee_completed
     ])
 
     review_tasks = len([
-        task for task in tasks
-        if task.status in ["Core Review", "Client Review"]
+        task for task in counted_tasks
+        if task.status in [
+            task_status.CORE_REVIEW,
+            task_status.CLIENT_REVIEW
+        ]
     ])
 
+    # An on-hold task is blocked by someone outside the team, so it is
+    # not the assignee's fault that the deadline is passing - it does
+    # not count as overdue while it is parked.
     overdue_tasks = len([
-        task for task in tasks
+        task for task in counted_tasks
         if task.deadline
         and task.deadline < ist_now()
-            and task.status in ["Assigned", "In Progress", "Paused"]
+        and task.status in [
+            task_status.ASSIGNED,
+            task_status.IN_PROGRESS,
+            task_status.PAUSED
+        ]
     ])
+
+    void_tasks = len(voided_tasks)
 
     task_ids = [task.id for task in tasks]
 
@@ -483,6 +546,8 @@ def list_tasks():
         completed_tasks=completed_tasks,
         review_tasks=review_tasks,
         overdue_tasks=overdue_tasks,
+        void_tasks=void_tasks,
+        voided_tasks=voided_tasks,
         file_counts=file_counts
     )
 
@@ -522,6 +587,10 @@ def task_files_panel(task_id, folder_type):
             "is_image": bool(
                 task_file.mime_type
                 and task_file.mime_type.startswith("image/")
+            ),
+            "is_video": bool(
+                task_file.mime_type
+                and task_file.mime_type.startswith("video/")
             ),
             "preview_url": url_for(
                 "tasks.preview_task_file",
@@ -1479,14 +1548,9 @@ def edit_task(task_id):
         new_priority = request.form.get("priority")
         new_status = request.form.get("status")
 
-        allowed_statuses = [
-            "Assigned",
-            "In Progress",
-            "Paused",
-            "Core Review",
-            "Client Review",
-            "Published"
-        ]
+        # Void and On Hold are set from the task page, where a reason
+        # can be captured, so they are not offered in this dropdown.
+        allowed_statuses = task_status.SELECTABLE_STATUSES
 
         if new_status not in allowed_statuses:
             flash(
@@ -1709,7 +1773,8 @@ def edit_task(task_id):
         task=task,
         clients=clients,
         deliverables=deliverables,
-        employees=employees
+        employees=employees,
+        task_status=task_status
     )
 
 @tasks_bp.route("/<int:task_id>/start", methods=["POST"])
@@ -1868,6 +1933,276 @@ def pause_task(task_id):
     )
 
 
+@tasks_bp.route("/<int:task_id>/hold", methods=["POST"])
+@login_required
+def hold_task(task_id):
+    """Park a task that is blocked by something outside the team."""
+
+    task = Task.query.get_or_404(task_id)
+
+    # Unlike Paused, this is not the assignee's call: a task goes on
+    # hold because a client or another external party is blocking it,
+    # and only a manager can judge when that block has cleared.
+    if not has_permission(current_user, "manage_tasks"):
+        flash(
+            "Only a manager can put a task on hold.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    if not task_status.can_move(
+        task.status, task_status.ON_HOLD, True
+    ):
+        flash(
+            f"A task in {task.status} cannot be put on hold.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    reason = request.form.get("reason", "").strip()
+
+    if len(reason) < 10:
+        flash(
+            "Please give a reason of at least 10 characters "
+            "so the team knows what this task is waiting on.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    pause_timer(task)
+
+    task.hold_reason = reason
+    task.held_at = datetime.utcnow()
+    task.held_by_id = current_user.id
+
+    old_status = record_status_time(task, task_status.ON_HOLD)
+
+    add_activity(
+        task,
+        action="held",
+        message=f"Put On Hold by {current_user.name}: {reason}",
+        old_status=old_status,
+        new_status=task_status.ON_HOLD
+    )
+
+    if task.assigned_to_id and task.assigned_to_id != current_user.id:
+        create_notification(
+            user_id=task.assigned_to_id,
+            title="Task put on hold",
+            message=(
+                f"{current_user.name} put "
+                f"{task.title} on hold: {reason}"
+            ),
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+
+    flash("Task put on hold.", "success")
+
+    return redirect(
+        request.referrer
+        or url_for("tasks.task_detail", task_id=task.id)
+    )
+
+
+@tasks_bp.route("/<int:task_id>/resume", methods=["POST"])
+@login_required
+def resume_task(task_id):
+    """Bring a task back from On Hold once the blocker has cleared."""
+
+    task = Task.query.get_or_404(task_id)
+
+    if not has_permission(current_user, "manage_tasks"):
+        flash(
+            "Only a manager can take a task off hold.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    if task.status != task_status.ON_HOLD:
+        flash("This task is not on hold.", "error")
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    # Back to Assigned rather than straight into In Progress: the
+    # assignee decides when to actually pick the work back up, and
+    # starting their timer for them would be wrong.
+    old_status = record_status_time(task, task_status.ASSIGNED)
+
+    task.hold_reason = None
+    task.held_at = None
+    task.held_by_id = None
+
+    add_activity(
+        task,
+        action="resumed",
+        message=f"Taken off hold by {current_user.name}",
+        old_status=old_status,
+        new_status=task_status.ASSIGNED
+    )
+
+    if task.assigned_to_id and task.assigned_to_id != current_user.id:
+        create_notification(
+            user_id=task.assigned_to_id,
+            title="Task off hold",
+            message=(
+                f"{task.title} is off hold "
+                "and ready to pick up again."
+            ),
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+
+    flash("Task taken off hold.", "success")
+
+    return redirect(
+        request.referrer
+        or url_for("tasks.task_detail", task_id=task.id)
+    )
+
+
+@tasks_bp.route("/<int:task_id>/void", methods=["POST"])
+@login_required
+def void_task(task_id):
+    """Close a task the client cancelled part-way through."""
+
+    task = Task.query.get_or_404(task_id)
+
+    if not has_permission(current_user, "manage_tasks"):
+        flash(
+            "Only a manager can void a task.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    if not task_status.can_move(
+        task.status, task_status.VOID, True
+    ):
+        flash(
+            f"A task in {task.status} cannot be voided.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    reason = request.form.get("reason", "").strip()
+
+    if len(reason) < 10:
+        flash(
+            "Please record why this task was cancelled - a voided "
+            "task with no reason is impossible to audit later.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    pause_timer(task)
+
+    task.void_reason = reason
+    task.voided_at = datetime.utcnow()
+    task.voided_by_id = current_user.id
+
+    old_status = record_status_time(task, task_status.VOID)
+
+    add_activity(
+        task,
+        action="voided",
+        message=f"Voided by {current_user.name}: {reason}",
+        old_status=old_status,
+        new_status=task_status.VOID
+    )
+
+    if task.assigned_to_id and task.assigned_to_id != current_user.id:
+        create_notification(
+            user_id=task.assigned_to_id,
+            title="Task voided",
+            message=(
+                f"{current_user.name} voided "
+                f"{task.title}: {reason}"
+            ),
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id
+        )
+
+    db.session.commit()
+
+    flash(
+        "Task voided. It is excluded from performance figures.",
+        "success"
+    )
+
+    return redirect(
+        request.referrer
+        or url_for("tasks.task_detail", task_id=task.id)
+    )
+
+
+@tasks_bp.route("/<int:task_id>/restore", methods=["POST"])
+@login_required
+def restore_task(task_id):
+    """Undo a void. Rare, but voiding by mistake must be recoverable."""
+
+    task = Task.query.get_or_404(task_id)
+
+    if not has_permission(current_user, "manage_tasks"):
+        flash(
+            "Only a manager can restore a voided task.",
+            "error"
+        )
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    if task.status != task_status.VOID:
+        flash("This task is not voided.", "error")
+        return redirect(
+            url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    old_status = record_status_time(task, task_status.ASSIGNED)
+
+    task.void_reason = None
+    task.voided_at = None
+    task.voided_by_id = None
+
+    add_activity(
+        task,
+        action="restored",
+        message=f"Void reversed by {current_user.name}",
+        old_status=old_status,
+        new_status=task_status.ASSIGNED
+    )
+
+    db.session.commit()
+
+    flash("Task restored to Assigned.", "success")
+
+    return redirect(
+        request.referrer
+        or url_for("tasks.task_detail", task_id=task.id)
+    )
+
+
 @tasks_bp.route("/<int:task_id>/submit-review", methods=["POST"])
 @login_required
 def submit_review(task_id):
@@ -1950,19 +2285,6 @@ def kanban_update_status():
     # -------------------------------------------------
 
     if (
-        task.assigned_to_id == current_user.id
-        and task.status == "Core Review"
-    ):
-        employee_allowed_statuses = [
-            "Assigned",
-            "In Progress",
-            "Hold",
-        ]
-
-        if new_status in employee_allowed_statuses:
-            pass
-
-    if (
         task.assigned_to_id != current_user.id
         and
         not has_permission(current_user, "manage_tasks")
@@ -1974,62 +2296,7 @@ def kanban_update_status():
             }
         ), 403
 
-    allowed_status = [
-        "Assigned",
-        "In Progress",
-        "Paused",
-        "Core Review",
-        "Client Review",
-        "Published",
-    ]
-
-    # ---------------------------------------
-    # Employee Drag Rules
-    # ---------------------------------------
-
-    if not has_permission(current_user, "manage_tasks"):
-
-        allowed_moves = {
-
-            "Assigned": [
-                "In Progress"
-            ],
-
-            "In Progress": [
-                "Paused",
-                "Core Review"
-            ],
-
-            "Paused": [
-                "In Progress"
-            ],
-
-            # Employee can pull back a mistaken submission
-            "Core Review": [
-                "Assigned",
-                "In Progress",
-                "Paused",
-            ],
-
-            "Client Review": [],
-
-            "Published": []
-
-        }
-
-        if new_status not in allowed_moves.get(task.status, []):
-
-            return jsonify({
-
-                "success": False,
-
-                "message": (
-                    "You cannot move this task to that status."
-                )
-
-            }), 403
-
-    if new_status not in allowed_status:
+    if new_status not in task_status.ALL_STATUSES:
 
         return jsonify(
             {
@@ -2037,6 +2304,41 @@ def kanban_update_status():
                 "message": "Invalid status."
             }
         ), 400
+
+    can_manage = has_permission(current_user, "manage_tasks")
+
+    # ---------------------------------------
+    # Drag rules
+    # ---------------------------------------
+
+    if not task_status.can_move(task.status, new_status, can_manage):
+
+        return jsonify({
+            "success": False,
+            "message": (
+                "You cannot move this task to that status."
+            )
+        }), 403
+
+    # Both need a written reason and the board has nowhere to type
+    # one, so a drag can never produce either status - they are set
+    # from the task page. Checking an existing reason would not do:
+    # the reason has to describe this hold, not a previous one.
+    if new_status in task_status.REASON_REQUIRED_STATUSES \
+            or new_status == task_status.ON_HOLD:
+
+        verb = (
+            "void it"
+            if new_status == task_status.VOID
+            else "put it on hold"
+        )
+
+        return jsonify({
+            "success": False,
+            "message": (
+                f"Open the task to {verb} - a reason is required."
+            )
+        }), 400
 
     old_status = task.status
     previous_task = None
@@ -2495,9 +2797,12 @@ def task_detail(task_id):
         live_seconds=live_seconds,
         pending_time=format_seconds(task.pending_seconds),
         in_progress_time=format_seconds(task.in_progress_seconds),
-        hold_time=format_seconds(task.hold_seconds),
+        paused_time=format_seconds(task.paused_seconds),
+        on_hold_time=format_seconds(task.on_hold_seconds),
         core_review_time=format_seconds(task.core_review_seconds),
         client_review_time=format_seconds(task.client_review_seconds),
+        task_status=task_status,
+        can_manage_tasks=has_permission(current_user, "manage_tasks"),
         current_status_seconds=current_status_seconds,
         current_status=task.status,
         timer_status_label=timer_status_label,
@@ -2653,6 +2958,89 @@ def download_task_file(file_id):
         download_url
     )
 
+
+@tasks_bp.route("/files/<int:file_id>/delete", methods=["POST"])
+@login_required
+def delete_task_file(file_id):
+
+    task_file = TaskFile.query.get_or_404(file_id)
+    task = task_file.task
+
+    can_delete = (
+        has_permission(current_user, "manage_tasks")
+        or task_file.uploaded_by_id == current_user.id
+    )
+
+    if not can_delete:
+        flash(
+            "You are not allowed to delete this file.",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    filename = task_file.original_filename
+    object_key = task_file.object_key
+
+    try:
+        db.session.delete(task_file)
+
+        add_activity(
+            task,
+            action="file_deleted",
+            message=f'{current_user.name} deleted file "{filename}".',
+        )
+
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Unable to delete task file %s.",
+            file_id,
+        )
+
+        flash(
+            "Unable to delete the file. Please try again.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "tasks.task_detail",
+                task_id=task.id,
+            )
+        )
+
+    try:
+        StorageService().delete(object_key=object_key)
+
+    except Exception:
+        current_app.logger.exception(
+            "Unable to remove storage object for deleted "
+            "task file %s: %s",
+            file_id,
+            object_key,
+        )
+
+    flash(
+        "File deleted.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "tasks.task_detail",
+            task_id=task.id,
+        )
+    )
+
+
 @tasks_bp.route("/<int:task_id>/upload-submission", methods=["POST"])
 @login_required
 def upload_submission(task_id):
@@ -2788,6 +3176,237 @@ def upload_submission(task_id):
             task_id=task.id,
         )
     )
+
+
+def _require_submission_uploader(task):
+
+    if task.assigned_to_id != current_user.id:
+        return jsonify(
+            success=False,
+            message="Only the assigned employee can upload submission files.",
+        ), 403
+
+    return None
+
+
+@tasks_bp.route(
+    "/<int:task_id>/multipart/initiate",
+    methods=["POST"],
+)
+@login_required
+def initiate_submission_multipart_upload(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+
+    filename = data.get("filename")
+    content_type = data.get("content_type")
+
+    storage = StorageService()
+
+    try:
+        upload_session = storage.initiate_task_file_multipart_upload(
+            task=task,
+            filename=filename,
+            folder_type="submission",
+            uploaded_by_id=current_user.id,
+            content_type=content_type,
+        )
+
+    except StorageServiceError as error:
+        return jsonify(
+            success=False,
+            message=str(error),
+        ), 400
+
+    return jsonify(
+        success=True,
+        upload_id=upload_session["upload_id"],
+        object_key=upload_session["object_key"],
+        stored_filename=upload_session["stored_filename"],
+        original_filename=upload_session["original_filename"],
+    )
+
+
+@tasks_bp.route(
+    "/<int:task_id>/multipart/part-url",
+    methods=["POST"],
+)
+@login_required
+def get_submission_multipart_part_url(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+
+    object_key = data.get("object_key")
+    upload_id = data.get("upload_id")
+    part_number = data.get("part_number")
+
+    storage = StorageService()
+
+    try:
+        part_url = storage.get_multipart_part_url(
+            object_key=object_key,
+            upload_id=upload_id,
+            part_number=part_number,
+        )
+
+    except StorageServiceError as error:
+        return jsonify(
+            success=False,
+            message=str(error),
+        ), 400
+
+    return jsonify(
+        success=True,
+        url=part_url,
+    )
+
+
+@tasks_bp.route(
+    "/<int:task_id>/multipart/complete",
+    methods=["POST"],
+)
+@login_required
+def complete_submission_multipart_upload(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+
+    object_key = data.get("object_key")
+    upload_id = data.get("upload_id")
+    parts = data.get("parts")
+    original_filename = data.get("original_filename")
+    stored_filename = data.get("stored_filename")
+
+    storage = StorageService()
+
+    try:
+        complete_result = storage.complete_task_file_multipart_upload(
+            object_key=object_key,
+            upload_id=upload_id,
+            parts=parts,
+            task=task,
+            uploaded_by_id=current_user.id,
+            folder_type="submission",
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            is_final=False,
+        )
+
+        task_file = complete_result["task_file"]
+
+        add_activity(
+            task,
+            action="submission_uploaded",
+            message=(
+                f"{current_user.name} uploaded "
+                f"submission file: {task_file.original_filename}"
+            ),
+        )
+
+        if task.created_by_id != current_user.id:
+
+            create_notification(
+                user_id=task.created_by_id,
+                title="Task submission uploaded",
+                message=(
+                    f"{current_user.name} uploaded files for "
+                    f"'{task.title}'."
+                ),
+                link=url_for(
+                    "tasks.task_detail",
+                    task_id=task.id,
+                ),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+
+        db.session.commit()
+
+    except StorageServiceError as error:
+
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Submission multipart upload completion failed."
+        )
+
+        return jsonify(
+            success=False,
+            message=str(error),
+        ), 400
+
+    return jsonify(
+        success=True,
+        file={
+            "id": task_file.id,
+            "filename": task_file.original_filename,
+            "preview_url": url_for(
+                "tasks.preview_task_file",
+                file_id=task_file.id,
+            ),
+            "download_url": url_for(
+                "tasks.download_task_file",
+                file_id=task_file.id,
+            ),
+        },
+    )
+
+
+@tasks_bp.route(
+    "/<int:task_id>/multipart/abort",
+    methods=["POST"],
+)
+@login_required
+def abort_submission_multipart_upload(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+
+    object_key = data.get("object_key")
+    upload_id = data.get("upload_id")
+
+    storage = StorageService()
+
+    try:
+        storage.abort_task_file_multipart_upload(
+            object_key=object_key,
+            upload_id=upload_id,
+        )
+
+    except StorageServiceError as error:
+        return jsonify(
+            success=False,
+            message=str(error),
+        ), 400
+
+    return jsonify(success=True)
+
 
 @tasks_bp.route(
     "/<int:task_id>/comment",

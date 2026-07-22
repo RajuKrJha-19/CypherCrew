@@ -144,8 +144,25 @@ class Task(db.Model):
         default=0
     )
 
-    hold_seconds = db.Column(
+    # Named hold_seconds in the DB but it has always accumulated
+    # time spent in "Paused"; mapped to a truthful attribute name
+    # so it cannot be confused with the separate On Hold bucket.
+    paused_seconds = db.Column(
+        "hold_seconds",
         db.Integer,
+        default=0
+    )
+
+    on_hold_seconds = db.Column(
+        db.Integer,
+        default=0
+    )
+
+    # already present in the DB as NOT NULL DEFAULT 0
+    void_seconds = db.Column(
+        db.Integer,
+        nullable=False,
+        server_default="0",
         default=0
     )
 
@@ -162,6 +179,54 @@ class Task(db.Model):
     published_seconds = db.Column(
         db.Integer,
         default=0
+    )
+
+    # ===========================
+    # On Hold / Void context
+    #
+    # Both statuses stop the work for a reason that lives outside
+    # the team, so the reason has to travel with the task - without
+    # it nobody can tell why a task stalled weeks later.
+    # ===========================
+
+    hold_reason = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    held_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    held_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id")
+    )
+
+    void_reason = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    voided_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    voided_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id")
+    )
+
+    held_by = db.relationship(
+        "User",
+        foreign_keys=[held_by_id]
+    )
+
+    voided_by = db.relationship(
+        "User",
+        foreign_keys=[voided_by_id]
     )
 
     status_started_at = db.Column(

@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Trash Notes | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Trash Notes | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="page-header">
             <div>
                 <h1>Trash</h1>
@@ -23,7 +10,7 @@
             </div>
 
             <div class="top-actions">
-                <a href="{{ url_for('notes.list_notes') }}" class="btn">
+                <a href="{{ url_for('notes.list_notes') }}" class="btn btn-secondary">
                     Back to Notes
                 </a>
             </div>
@@ -49,10 +36,5 @@
             {% endfor %}
         </div>
 
-    </main>
-
-</div>
-
-</body>
-
-</html>
+    
+{% endblock %}

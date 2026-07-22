@@ -323,3 +323,217 @@ class R2StorageProvider(BaseStorageProvider):
             raise RuntimeError(
                 f"Unable to connect to R2 bucket: {self.bucket_name}"
             ) from error
+
+    def create_multipart_upload(
+        self,
+        *,
+        object_key,
+        content_type=None,
+    ):
+        """
+        Start a multipart upload session on Cloudflare R2.
+
+        Returns the upload id needed for subsequent part
+        upload URLs and the final complete/abort call.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise ValueError(
+                "object_key is required."
+            )
+
+        clean_object_key = str(
+            object_key
+        ).strip().lstrip("/")
+
+        create_kwargs = {
+            "Bucket": self.bucket_name,
+            "Key": clean_object_key,
+        }
+
+        if content_type:
+            create_kwargs["ContentType"] = content_type
+
+        try:
+            response = self.client.create_multipart_upload(
+                **create_kwargs
+            )
+
+            return {
+                "bucket_name": self.bucket_name,
+                "object_key": clean_object_key,
+                "upload_id": response.get("UploadId"),
+            }
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                "Unable to create multipart upload for: "
+                f"{clean_object_key}"
+            ) from error
+
+    def generate_part_upload_url(
+        self,
+        *,
+        object_key,
+        upload_id,
+        part_number,
+        expires_in=600,
+    ):
+        """
+        Generate a temporary signed URL for uploading a single
+        part of a multipart upload.
+
+        Default validity: 10 minutes.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise ValueError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise ValueError(
+                "upload_id is required."
+            )
+
+        if not part_number:
+            raise ValueError(
+                "part_number is required."
+            )
+
+        clean_object_key = str(
+            object_key
+        ).strip().lstrip("/")
+
+        try:
+            return self.client.generate_presigned_url(
+                ClientMethod="upload_part",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": clean_object_key,
+                    "UploadId": upload_id,
+                    "PartNumber": int(part_number),
+                },
+                ExpiresIn=int(expires_in),
+            )
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                "Unable to generate part upload URL for: "
+                f"{clean_object_key}"
+            ) from error
+
+    def complete_multipart_upload(
+        self,
+        *,
+        object_key,
+        upload_id,
+        parts,
+    ):
+        """
+        Complete a multipart upload by combining the uploaded parts.
+
+        `parts` must be a list of dicts with "ETag" and "PartNumber",
+        ordered by part number.
+
+        Returns basic provider metadata.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise ValueError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise ValueError(
+                "upload_id is required."
+            )
+
+        if not parts:
+            raise ValueError(
+                "parts is required."
+            )
+
+        clean_object_key = str(
+            object_key
+        ).strip().lstrip("/")
+
+        try:
+            self.client.complete_multipart_upload(
+                Bucket=self.bucket_name,
+                Key=clean_object_key,
+                UploadId=upload_id,
+                MultipartUpload={
+                    "Parts": parts,
+                },
+            )
+
+            metadata = self.client.head_object(
+                Bucket=self.bucket_name,
+                Key=clean_object_key,
+            )
+
+            return {
+                "bucket_name": self.bucket_name,
+                "object_key": clean_object_key,
+                "content_type": metadata.get(
+                    "ContentType"
+                ),
+                "content_length": metadata.get(
+                    "ContentLength"
+                ),
+                "etag": (
+                    metadata.get("ETag", "")
+                    .strip('"')
+                ),
+                "last_modified": metadata.get(
+                    "LastModified"
+                ),
+            }
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                "Unable to complete multipart upload for: "
+                f"{clean_object_key}"
+            ) from error
+
+    def abort_multipart_upload(
+        self,
+        *,
+        object_key,
+        upload_id,
+    ):
+        """
+        Abort an in-progress multipart upload and discard its parts.
+
+        Returns True when the abort request completes successfully.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise ValueError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise ValueError(
+                "upload_id is required."
+            )
+
+        clean_object_key = str(
+            object_key
+        ).strip().lstrip("/")
+
+        try:
+            self.client.abort_multipart_upload(
+                Bucket=self.bucket_name,
+                Key=clean_object_key,
+                UploadId=upload_id,
+            )
+
+            return True
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                "Unable to abort multipart upload for: "
+                f"{clean_object_key}"
+            ) from error

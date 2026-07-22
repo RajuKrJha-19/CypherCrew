@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>My Tasks | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}My Tasks | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="page-header">
                 <div>
                     <h1>My Tasks</h1>
@@ -71,10 +58,11 @@
 
             </div>
 
-        </main>
+        
+{% endblock %}
 
-    </div>
-    <script>
+{% block scripts %}
+<script>
         function toggleReviewRejectBox(button) {
             const card = button.closest(".review-task-card");
             if (!card) return;
@@ -124,6 +112,4 @@
             sessionStorage.removeItem("review_to_status");
         });
     </script>
-</body>
-
-</html>
+{% endblock %}

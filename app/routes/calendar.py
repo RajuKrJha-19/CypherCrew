@@ -8,6 +8,7 @@ from flask import (
 )
 
 from flask_login import login_required
+from app.utils import task_status
 
 from app.models import (
     Task,
@@ -205,14 +206,7 @@ def index():
         User.name.asc()
     ).all()
 
-    statuses = [
-    "Pending",
-    "In Progress",
-    "Hold",
-    "Core Review",
-    "Client Review",
-    "Published"
-]
+    statuses = task_status.ALL_STATUSES
 
     month_name = calendar.month_name[month]
 

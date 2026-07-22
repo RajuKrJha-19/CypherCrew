@@ -1,23 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Add Task | CypherCrew</title>
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='css/style.css') }}"
-    >
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Add Task | CypherCrew{% endblock %}
 
-<body>
-
-    <div class="layout">
-
-        {% include "partials/sidebar.html" %}
-
-        <main class="main">
-
+{% block content %}
             <div class="form-card add-task-card">
                 <h1>Add Task</h1>
                 <p>Create a task linked with client deliverable</p>
@@ -212,11 +197,11 @@
                 </form>
             </div>
 
-        </main>
+        
+{% endblock %}
 
-    </div>
-
-    <script>
+{% block scripts %}
+<script>
         const clientSelect = document.getElementById(
             "clientSelect"
         );
@@ -442,7 +427,4 @@
             }
         );
     </script>
-
-</body>
-
-</html>
+{% endblock %}

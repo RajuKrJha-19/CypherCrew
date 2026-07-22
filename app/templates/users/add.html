@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Add User | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% extends "base_app.html" %}
 
-<body>
+{% block title %}Add User | CypherCrew{% endblock %}
 
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="form-card">
             <h1>Add User</h1>
             <p>Create admin or employee account</p>
@@ -55,9 +43,5 @@
             </form>
         </div>
 
-    </main>
-
-</div>
-
-</body>
-</html>
+    
+{% endblock %}

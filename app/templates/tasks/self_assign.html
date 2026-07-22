@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Self Assign Task | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Self Assign Task | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-    {% include "partials/sidebar.html" %}
-
-    <main class="main">
-
+{% block content %}
         <div class="form-card add-task-card">
 
             <h1>Self Assign Task</h1>
@@ -115,10 +102,10 @@
 
         </div>
 
-    </main>
+    
+{% endblock %}
 
-</div>
-
+{% block scripts %}
 <script>
 const clientSelect = document.getElementById("clientSelect");
 const deliverableSelect = document.getElementById("deliverableSelect");
@@ -155,7 +142,4 @@ function filterDeliverablesByClient() {
 clientSelect.addEventListener("change", filterDeliverablesByClient);
 filterDeliverablesByClient();
 </script>
-
-</body>
-
-</html>
+{% endblock %}

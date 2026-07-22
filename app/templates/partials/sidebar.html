@@ -4,6 +4,8 @@
 
     <h2>CypherCrew</h2>
 
+    <nav class="sidebar-nav">
+
     <a href="{{ url_for('dashboard.index') }}"
        class="{% if endpoint == 'dashboard.index' %}active{% endif %}">
         <i class="fa-solid fa-house"></i>
@@ -110,6 +112,8 @@
         <i class="fa-solid fa-right-from-bracket"></i>
         <span>Logout</span>
     </a>
+
+    </nav>
 
     <button
         type="button"

@@ -333,6 +333,290 @@ class StorageService:
                 f"Unable to save task file: {original_filename}"
             ) from error
 
+    def initiate_task_file_multipart_upload(
+        self,
+        *,
+        task,
+        filename,
+        folder_type="reference",
+        uploaded_by_id,
+        content_type=None,
+    ):
+        """
+        Start a multipart upload session for a task file.
+
+        Builds the object key using the same convention as
+        upload_task_file, then opens a multipart upload on R2.
+
+        Returns the identifiers the caller needs to request part
+        upload URLs and later complete the upload.
+        """
+
+        if task is None or task.id is None:
+            raise StorageServiceError(
+                "Task must be saved before uploading files."
+            )
+
+        if not uploaded_by_id:
+            raise StorageServiceError(
+                "Uploader ID is required."
+            )
+
+        if folder_type not in self.ALLOWED_FOLDER_TYPES:
+            raise StorageServiceError(
+                "Invalid task storage folder type."
+            )
+
+        original_filename = str(
+            filename or ""
+        ).strip()
+
+        if not original_filename:
+            raise StorageServiceError(
+                "Uploaded file must have a filename."
+            )
+
+        safe_filename = secure_filename(
+            original_filename
+        )
+
+        if not safe_filename:
+            raise StorageServiceError(
+                "Uploaded filename is invalid."
+            )
+
+        unique_prefix = uuid4().hex[:12]
+
+        stored_filename = (
+            f"{unique_prefix}_{safe_filename}"
+        )
+
+        object_key = self._build_task_object_key(
+            task=task,
+            folder_type=folder_type,
+            stored_filename=stored_filename,
+        )
+
+        try:
+            upload_result = self.provider.create_multipart_upload(
+                object_key=object_key,
+                content_type=content_type,
+            )
+
+            return {
+                "upload_id": upload_result["upload_id"],
+                "object_key": upload_result["object_key"],
+                "stored_filename": stored_filename,
+                "original_filename": original_filename,
+            }
+
+        except StorageServiceError:
+            raise
+
+        except Exception as error:
+            raise StorageServiceError(
+                f"Unable to initiate multipart upload: {original_filename}"
+            ) from error
+
+    def get_multipart_part_url(
+        self,
+        *,
+        object_key,
+        upload_id,
+        part_number,
+        expires_in=600,
+    ):
+        """
+        Generate a presigned URL for uploading a single multipart part.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise StorageServiceError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise StorageServiceError(
+                "upload_id is required."
+            )
+
+        if not part_number:
+            raise StorageServiceError(
+                "part_number is required."
+            )
+
+        try:
+            return self.provider.generate_part_upload_url(
+                object_key=object_key,
+                upload_id=upload_id,
+                part_number=part_number,
+                expires_in=expires_in,
+            )
+
+        except StorageServiceError:
+            raise
+
+        except Exception as error:
+            raise StorageServiceError(
+                f"Unable to generate part upload URL for: {object_key}"
+            ) from error
+
+    def complete_task_file_multipart_upload(
+        self,
+        *,
+        object_key,
+        upload_id,
+        parts,
+        task,
+        uploaded_by_id,
+        folder_type="reference",
+        original_filename,
+        stored_filename,
+        is_final=False,
+    ):
+        """
+        Complete a multipart upload for a task file.
+
+        The parts are combined into the final object on R2, then
+        a TaskFile metadata record is added to the current
+        SQLAlchemy session.
+
+        Database commit remains the caller's responsibility.
+        """
+
+        if task is None or task.id is None:
+            raise StorageServiceError(
+                "Task must be saved before uploading files."
+            )
+
+        if not uploaded_by_id:
+            raise StorageServiceError(
+                "Uploader ID is required."
+            )
+
+        if folder_type not in self.ALLOWED_FOLDER_TYPES:
+            raise StorageServiceError(
+                "Invalid task storage folder type."
+            )
+
+        if not object_key or not str(object_key).strip():
+            raise StorageServiceError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise StorageServiceError(
+                "upload_id is required."
+            )
+
+        if not parts:
+            raise StorageServiceError(
+                "parts is required."
+            )
+
+        original_filename = str(
+            original_filename or ""
+        ).strip()
+
+        if not original_filename:
+            raise StorageServiceError(
+                "Uploaded file must have a filename."
+            )
+
+        if not stored_filename or not str(stored_filename).strip():
+            raise StorageServiceError(
+                "stored_filename is required."
+            )
+
+        try:
+            upload_result = self.provider.complete_multipart_upload(
+                object_key=object_key,
+                upload_id=upload_id,
+                parts=parts,
+            )
+
+            task_file = TaskFile(
+                task_id=task.id,
+                bucket_name=upload_result["bucket_name"],
+                storage_provider="r2",
+                object_key=upload_result["object_key"],
+                original_filename=original_filename,
+                stored_filename=stored_filename,
+                mime_type=upload_result.get("content_type"),
+                file_size=(
+                    upload_result.get("content_length")
+                    or 0
+                ),
+                folder_type=folder_type,
+                version=1,
+                is_final=is_final,
+                uploaded_by_id=uploaded_by_id,
+            )
+
+            db.session.add(
+                task_file
+            )
+
+            return {
+                "task_file": task_file,
+                "provider_metadata": upload_result,
+            }
+
+        except StorageServiceError:
+            raise
+
+        except Exception as error:
+            try:
+                if self.provider.file_exists(
+                    object_key=object_key
+                ):
+                    self.provider.delete_file(
+                        object_key=object_key
+                    )
+            except Exception:
+                current_app.logger.exception(
+                    "Unable to remove orphan R2 object: %s",
+                    object_key,
+                )
+
+            raise StorageServiceError(
+                f"Unable to save task file: {original_filename}"
+            ) from error
+
+    def abort_task_file_multipart_upload(
+        self,
+        *,
+        object_key,
+        upload_id,
+    ):
+        """
+        Abort an in-progress multipart upload for a task file.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise StorageServiceError(
+                "object_key is required."
+            )
+
+        if not upload_id or not str(upload_id).strip():
+            raise StorageServiceError(
+                "upload_id is required."
+            )
+
+        try:
+            return self.provider.abort_multipart_upload(
+                object_key=object_key,
+                upload_id=upload_id,
+            )
+
+        except StorageServiceError:
+            raise
+
+        except Exception as error:
+            raise StorageServiceError(
+                f"Unable to abort multipart upload for: {object_key}"
+            ) from error
+
     def delete(
         self,
         *,

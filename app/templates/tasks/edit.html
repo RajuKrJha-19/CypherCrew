@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base_app.html" %}
 
-<head>
-    <title>Manage #{{ task.task_code }} | CypherCrew</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-</head>
+{% block title %}Manage #{{ task.task_code }} | CypherCrew{% endblock %}
 
-<body>
-
-<div class="layout">
-
-{% include "partials/sidebar.html" %}
-
-<main class="main">
-
+{% block content %}
     <div class="page-header">
         <div>
             <h1>Manage Task</h1>
@@ -24,7 +11,7 @@
 
         <div class="top-actions">
             {% include "partials/notification_widget.html" %}
-            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="btn">
+            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="btn btn-secondary">
                 Back
             </a>
         </div>
@@ -146,12 +133,27 @@
             </select>
 
             <label>Status</label>
+            {#
+                Comes from task_status.SELECTABLE_STATUSES, which is what
+                the route validates against. The list was hard-coded here
+                and had drifted - it offered "Pause", a value the server
+                would have rejected.
+
+                On Hold and Void are absent on purpose: both need a written
+                reason, so they are set from the task page instead.
+            #}
             <select name="status">
-                {% for status in ["Assigned", "In Progress", "Pause", "Core Review", "Client Review", "Published"] %}
+                {% for status in task_status.SELECTABLE_STATUSES %}
                     <option value="{{ status }}" {% if task.status == status %}selected{% endif %}>
                         {{ status }}
                     </option>
                 {% endfor %}
+
+                {% if task.status in task_status.REASON_REQUIRED_STATUSES %}
+                <option value="{{ task.status }}" selected disabled>
+                    {{ task.status }} (change this from the task page)
+                </option>
+                {% endif %}
             </select>
 
             <label>Deadline</label>
@@ -168,11 +170,9 @@
         </form>
 
     </div>
+{% endblock %}
 
-</main>
-
-</div>
-
+{% block scripts %}
 <script>
 const clientSelect = document.getElementById("clientSelect");
 const deliverableSelect = document.getElementById("deliverableSelect");
@@ -274,7 +274,4 @@ selectedVisibility.addEventListener("click", function (e) {
 
 updateSelectedVisibility();
 </script>
-
-</body>
-
-</html>
+{% endblock %}
