@@ -2552,6 +2552,20 @@ def approve_task(task_id):
     )
 
 
+# Matches the reference_file input's accept="..." attribute in
+# tasks/detail.html. This upload is saved straight to local disk and
+# served back through Flask's static handler, which infers
+# Content-Type from the file extension - so an unchecked upload named
+# e.g. "x.html" or "x.svg" would be served as live, executable HTML
+# from the app's own origin the moment anyone opened the reference
+# file link (same-origin stored XSS, not just an isolated R2 domain).
+REJECTION_FILE_ALLOWED_EXTENSIONS = {
+    "png", "jpg", "jpeg", "gif", "webp", "bmp",
+    "mp4", "webm", "mov", "avi", "mkv",
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+}
+
+
 @tasks_bp.route("/<int:task_id>/reject", methods=["POST"])
 @login_required
 def reject_task(task_id):
@@ -2615,6 +2629,24 @@ def reject_task(task_id):
         safe_name = secure_filename(
             reference_file.filename
         )
+
+        file_extension = (
+            safe_name.rsplit(".", 1)[-1].lower()
+            if "." in safe_name else ""
+        )
+
+        if file_extension not in REJECTION_FILE_ALLOWED_EXTENSIONS:
+            flash(
+                "Reference file type not allowed. Please upload an "
+                "image, video, PDF, Word, Excel or PowerPoint file.",
+                "error"
+            )
+            return redirect(
+                request.referrer or url_for(
+                    "tasks.task_detail",
+                    task_id=task.id
+                )
+            )
 
         file_name = f"task_{task.id}_{safe_name}"
 

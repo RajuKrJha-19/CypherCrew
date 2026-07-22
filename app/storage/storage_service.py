@@ -31,6 +31,61 @@ class StorageService:
         "final",
     }
 
+    # Content-types R2 is allowed to store as-is. Anything else -
+    # including text/html, image/svg+xml, application/xhtml+xml -
+    # gets remapped to a generic download type before it ever reaches
+    # R2. Preview URLs are served with ResponseContentDisposition=
+    # inline using whatever content-type is stored, and content_type
+    # for the multipart flow comes straight from the client's JSON
+    # body with no other validation, so an unrecognised or
+    # browser-executable type would otherwise let an uploaded file
+    # render as a live HTML/SVG document (stored XSS) the moment
+    # anyone previews it.
+    _SAFE_CONTENT_TYPE_PREFIXES = (
+        "image/",
+        "video/",
+        "audio/",
+    )
+
+    _SAFE_CONTENT_TYPES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/zip",
+        "application/x-zip-compressed",
+        "application/x-rar-compressed",
+        "text/plain",
+        "text/csv",
+    }
+
+    _UNSAFE_IMAGE_CONTENT_TYPES = {
+        "image/svg+xml",
+    }
+
+    _FALLBACK_CONTENT_TYPE = "application/octet-stream"
+
+    @classmethod
+    def _sanitize_content_type(cls, content_type):
+        value = str(content_type or "").strip().lower()
+
+        if not value:
+            return cls._FALLBACK_CONTENT_TYPE
+
+        if value in cls._UNSAFE_IMAGE_CONTENT_TYPES:
+            return cls._FALLBACK_CONTENT_TYPE
+
+        if value in cls._SAFE_CONTENT_TYPES:
+            return value
+
+        if value.startswith(cls._SAFE_CONTENT_TYPE_PREFIXES):
+            return value
+
+        return cls._FALLBACK_CONTENT_TYPE
+
     def __init__(self):
         self.provider = R2StorageProvider()
 
@@ -198,7 +253,7 @@ class StorageService:
             return self.provider.upload_file(
                 file_obj=file_obj,
                 object_key=object_key,
-                content_type=content_type,
+                content_type=self._sanitize_content_type(content_type),
             )
 
         except Exception as error:
@@ -400,7 +455,7 @@ class StorageService:
         try:
             upload_result = self.provider.create_multipart_upload(
                 object_key=object_key,
-                content_type=content_type,
+                content_type=self._sanitize_content_type(content_type),
             )
 
             return {
