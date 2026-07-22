@@ -261,6 +261,43 @@ class StorageService:
                 f"Unable to upload object: {object_key}"
             ) from error
 
+    def read_bytes(self, object_key):
+        """
+        Read an object's raw bytes. Used by thumbnail generation.
+        """
+
+        try:
+            return self.provider.get_bytes(
+                object_key=object_key,
+            )
+
+        except Exception as error:
+            raise StorageServiceError(
+                f"Unable to read object: {object_key}"
+            ) from error
+
+    def put_bytes(self, *, data, object_key, content_type=None):
+        """
+        Store raw bytes at `object_key`.
+
+        For derived assets the app generates itself (thumbnails), as
+        opposed to upload(), which takes a file from a client.
+        """
+
+        import io
+
+        try:
+            return self.provider.upload_file(
+                file_obj=io.BytesIO(data),
+                object_key=object_key,
+                content_type=self._sanitize_content_type(content_type),
+            )
+
+        except Exception as error:
+            raise StorageServiceError(
+                f"Unable to write object: {object_key}"
+            ) from error
+
     def upload_task_file(
         self,
         *,

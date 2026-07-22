@@ -1,3 +1,5 @@
+import threading
+
 import boto3
 from botocore.config import Config
 from flask import current_app
@@ -15,6 +17,43 @@ class R2StorageProvider(BaseStorageProvider):
     Uses the S3-compatible API via boto3.
     """
 
+    # A boto3 client is expensive to build - it loads and parses
+    # botocore's service model - and this provider is instantiated per
+    # request, once per file. A gallery page of 40 tiles was paying for
+    # 40 of them. The client is thread-safe once created, so it is
+    # built once per (endpoint, key) and shared.
+    _clients = {}
+    _clients_lock = threading.Lock()
+
+    @classmethod
+    def _get_client(cls, endpoint_url, access_key, secret_key):
+
+        cache_key = (endpoint_url, access_key)
+
+        client = cls._clients.get(cache_key)
+
+        if client is not None:
+            return client
+
+        with cls._clients_lock:
+            # Another thread may have built it while we waited.
+            client = cls._clients.get(cache_key)
+
+            if client is None:
+                client = boto3.client(
+                    "s3",
+                    endpoint_url=endpoint_url,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name="auto",
+                    config=Config(
+                        signature_version="s3v4"
+                    ),
+                )
+                cls._clients[cache_key] = client
+
+        return client
+
     def __init__(self):
         self.account_id = current_app.config["R2_ACCOUNT_ID"]
         self.bucket_name = current_app.config["R2_BUCKET_NAME"]
@@ -22,15 +61,10 @@ class R2StorageProvider(BaseStorageProvider):
         self.access_key = current_app.config["R2_ACCESS_KEY_ID"]
         self.secret_key = current_app.config["R2_SECRET_ACCESS_KEY"]
 
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
-            region_name="auto",
-            config=Config(
-                signature_version="s3v4"
-            ),
+        self.client = self._get_client(
+            self.endpoint_url,
+            self.access_key,
+            self.secret_key,
         )
 
     def upload_file(
@@ -144,6 +178,41 @@ class R2StorageProvider(BaseStorageProvider):
         except (ClientError, BotoCoreError) as error:
             raise RuntimeError(
                 f"Unable to delete object: {clean_object_key}"
+            ) from error
+
+    def get_bytes(
+        self,
+        *,
+        object_key,
+    ):
+        """
+        Read an object out of R2 into memory.
+
+        Used by thumbnail generation, which needs the actual pixels
+        rather than a URL. Callers are expected to keep this to files
+        small enough to hold in memory.
+        """
+
+        if not object_key or not str(object_key).strip():
+            raise ValueError(
+                "object_key is required."
+            )
+
+        clean_object_key = str(
+            object_key
+        ).strip().lstrip("/")
+
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key=clean_object_key,
+            )
+
+            return response["Body"].read()
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                f"Unable to read object: {clean_object_key}"
             ) from error
 
     def file_exists(

@@ -20,6 +20,13 @@ def create_app():
     login_manager.init_app(app)
 
     from app import models
+
+    # Newly uploaded images get a thumbnail generated in the background.
+    # Registered once, on the session, so every upload path is covered.
+    from app.services import thumbnails
+    thumbnails.register_events(db.session)
+    thumbnails.register_cli(app)
+
     from app.routes.auth import auth_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.users import users_bp

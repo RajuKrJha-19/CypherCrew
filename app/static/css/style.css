@@ -9094,3 +9094,51 @@ body.sidebar-collapsed .sidebar-logout{
     border-top:none;
     padding-top:12px;
 }
+
+
+/* ==========================================================
+   VIDEO POSTER TILES
+   Grids no longer embed a <video> just to borrow a poster
+   frame - that pulled the whole clip. A static poster stands
+   in; the file streams only when opened.
+   ========================================================== */
+
+.gallery-video-poster,
+.file-video-poster{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+    background:
+        linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color:rgba(255,255,255,.92);
+    pointer-events:none;
+}
+
+.gallery-video-poster i,
+.file-video-poster i{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:38px;
+    height:38px;
+    border-radius:var(--radius-full);
+    background:rgba(255,255,255,.16);
+    font-size:13px;
+    padding-left:3px;
+}
+
+/* The small variants in file lists and the kanban popup */
+.task-file-thumb.file-video-poster i,
+.file-popup-thumb.file-video-poster i{
+    width:24px;
+    height:24px;
+    font-size:9px;
+    padding-left:2px;
+}
+
+.file-popup-thumb.file-video-poster{
+    height:90px;
+    border-radius:8px;
+}

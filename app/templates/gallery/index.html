@@ -58,20 +58,30 @@
 
                             {% set is_video = file.mime_type and file.mime_type.startswith("video/") %}
 
-                            <div class="gallery-thumb-box">
+                            <div class="gallery-thumb-box {% if is_video %}is-video{% endif %}">
 
                                 {% if is_image %}
-                                <img class="gallery-thumb" src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}" alt="{{ file.original_filename }}" loading="lazy">
+                                {#
+                                    A generated thumbnail, not the original. Pointing tiles at the
+                                    full-size file meant a page of 21 files pulled about a gigabyte
+                                    from R2 to paint 150px squares.
+                                #}
+                                <img class="gallery-thumb"
+                                     src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                     alt="{{ file.original_filename }}"
+                                     loading="lazy" decoding="async">
                                 {% elif is_video %}
                                 {#
-                                    No server-side image processing is set up (no Pillow/ffmpeg in
-                                    requirements.txt), so the poster frame is the browser's own
-                                    first decoded video frame rather than a pre-generated image.
-                                    preload="metadata" keeps this to a small range-request against
-                                    R2 rather than pulling the whole file.
+                                    Deliberately not a <video> element. It used to load the clip
+                                    with preload="metadata" purely to borrow a poster frame, which
+                                    on a 266 MB file cost more than the rest of the page combined.
+                                    ffmpeg is not a dependency here, so there is no server-side
+                                    frame to offer either - the tile is a poster, and the file only
+                                    streams when someone actually opens it.
                                 #}
-                                <video class="gallery-thumb video-thumb" src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}" preload="metadata" muted playsinline></video>
-                                <span class="video-thumb-badge"><i class="fa-solid fa-play"></i></span>
+                                <div class="gallery-video-poster">
+                                    <i class="fa-solid fa-play"></i>
+                                </div>
                                 {% else %}
                                 <div class="gallery-icon">
                                     {% if file.mime_type and file.mime_type.startswith("audio/") %}
@@ -141,20 +151,6 @@
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
 
-<script>
-    // Video thumbnails show the browser's own first decoded frame - there
-    // is no server-side thumbnail generator. Chrome/Safari usually paint
-    // frame 0 as soon as metadata loads; Firefox stays blank until playback
-    // starts or currentTime is nudged, so this nudges it uniformly.
-    document.querySelectorAll(".video-thumb").forEach(function (video) {
-        video.addEventListener("loadedmetadata", function () {
-            try {
-                video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
-            } catch (err) {}
-        }, { once: true });
-    });
-</script>
-
 <!-- CONTEXT MENU -->
     <div id="galleryContextMenu" class="gallery-context-menu">
         <button type="button" data-action="open">Open</button>
@@ -208,7 +204,7 @@
 
                 // Video tiles already open on a single click below; letting
                 // dblclick through as well would re-open and restart them.
-                if (item.querySelector(".video-thumb")) return;
+                if (item.querySelector(".gallery-thumb-box.is-video")) return;
 
                 viewItem(item);
 
@@ -243,7 +239,7 @@
                 // lands on the thumb box - match that and check what it holds.
                 const thumbBox = event.target.closest(".gallery-thumb-box");
 
-                if (thumbBox && thumbBox.querySelector(".video-thumb")) {
+                if (thumbBox && thumbBox.classList.contains("is-video")) {
                     const item = thumbBox.closest(".gallery-item");
                     if (item) viewItem(item);
                 }

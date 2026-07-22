@@ -1135,21 +1135,16 @@
                         item.className = "file-popup-item";
 
                         if (file.is_image) {
-                            item.innerHTML = `<img class="file-popup-thumb" src="${file.preview_url}" alt="${file.filename}">`;
+                            item.innerHTML = `<img class="file-popup-thumb" src="${file.thumb_url}" alt="${file.filename}" loading="lazy" decoding="async">`;
                         } else if (file.is_video) {
+                            // A poster, not the clip. Loading the video to
+                            // borrow a frame pulled the entire file for a
+                            // 90px tile; it streams when opened instead.
                             item.innerHTML = `<div class="file-popup-video-wrap">` +
-                                `<video class="file-popup-thumb video-thumb" src="${file.preview_url}" preload="metadata" muted playsinline></video>` +
-                                `<span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>` +
+                                `<div class="file-popup-thumb file-video-poster">` +
+                                `<i class="fa-solid fa-play"></i>` +
+                                `</div>` +
                                 `</div>`;
-
-                            // Chrome/Safari paint frame 0 once metadata loads;
-                            // Firefox needs a nudge to actually show a frame.
-                            const videoEl = item.querySelector(".video-thumb");
-                            videoEl.addEventListener("loadedmetadata", function () {
-                                try {
-                                    videoEl.currentTime = Math.min(0.1, (videoEl.duration || 1) / 2);
-                                } catch (err) {}
-                            }, { once: true });
                         } else {
                             item.innerHTML = `<div class="file-popup-icon">${iconForMime(file.mime_type)}</div>`;
                         }

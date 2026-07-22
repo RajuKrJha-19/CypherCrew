@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     redirect,
@@ -42,7 +43,14 @@ from app.storage.storage_service import (
     StorageServiceError,
 )
 
+from app.services import thumbnails
+
 from app.models import TaskFile
+
+#: How long a signed thumbnail URL - and the browser's cache of it -
+#: stays valid. Longer than a preview URL because a thumbnail is small,
+#: immutable for a given file, and requested dozens at a time.
+THUMBNAIL_URL_TTL = 3600
 
 
 def generate_task_code():
@@ -598,6 +606,11 @@ def task_files_panel(task_id, folder_type):
             ),
             "preview_url": url_for(
                 "tasks.preview_task_file",
+                file_id=task_file.id
+            ),
+            # Tiles use this; preview_url is for actually opening the file.
+            "thumb_url": url_for(
+                "tasks.task_file_thumbnail",
                 file_id=task_file.id
             ),
             "download_url": url_for(
@@ -2878,6 +2891,79 @@ def task_detail(task_id):
         final_files=final_files,
         submission_files=submission_files,
     )
+
+def _can_view_task_file(task_file):
+    """Same rule the preview and download routes apply."""
+
+    if has_permission(current_user, "manage_tasks"):
+        return True
+
+    task = task_file.task
+
+    return (
+        task.assigned_to_id == current_user.id
+        or current_user in task.visible_to
+    )
+
+
+@tasks_bp.route("/files/<int:file_id>/thumb")
+@login_required
+def task_file_thumbnail(file_id):
+    """Small derived image for grids and file lists.
+
+    Falls back to the original only when there is genuinely no
+    thumbnail to serve (a format Pillow can't read). Generation is
+    normally done by the background worker at upload time; doing it
+    here as well means files that predate thumbnails, or that the
+    worker missed, heal themselves the first time they are shown.
+    """
+
+    task_file = TaskFile.query.get_or_404(file_id)
+
+    if not _can_view_task_file(task_file):
+        abort(403)
+
+    if (
+        task_file.thumbnail_state == thumbnails.STATE_PENDING
+        and thumbnails.supports(task_file)
+    ):
+        thumbnails.generate(task_file.id)
+        db.session.refresh(task_file)
+
+    key = task_file.thumbnail_key
+
+    if task_file.thumbnail_state != thumbnails.STATE_READY or not key:
+        # Nothing renderable was produced. Sending the original keeps
+        # the tile working; it is only reached for formats Pillow
+        # could not decode, never for the common ones.
+        key = task_file.object_key
+
+    try:
+        storage = StorageService()
+
+        url = storage.preview_url(
+            object_key=key,
+            expires_in=THUMBNAIL_URL_TTL,
+        )
+
+    except StorageServiceError:
+        current_app.logger.exception(
+            "Unable to generate thumbnail URL for task file %s.",
+            task_file.id,
+        )
+        abort(404)
+
+    response = redirect(url)
+
+    # The thumbnail for a given file id never changes content, so let
+    # the browser keep it rather than re-walking this route for every
+    # tile on every visit. Kept under the signed URL's own lifetime.
+    response.headers["Cache-Control"] = (
+        f"private, max-age={THUMBNAIL_URL_TTL - 60}"
+    )
+
+    return response
+
 
 @tasks_bp.route("/files/<int:file_id>/preview")
 @login_required

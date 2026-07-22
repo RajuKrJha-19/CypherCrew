@@ -369,20 +369,17 @@
                                             {% if file.mime_type and file.mime_type.startswith("image/") %}
                                             <img
                                                 class="task-file-thumb"
-                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
                                                 alt="{{ file.original_filename }}"
-                                                loading="lazy"
+                                                loading="lazy" decoding="async"
                                             >
 
                                             {% elif file.mime_type and file.mime_type.startswith("video/") %}
-                                            <video
-                                                class="task-file-thumb video-thumb"
-                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
-                                                preload="metadata"
-                                                muted
-                                                playsinline
-                                            ></video>
-                                            <span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>
+                                            {# A poster, not the clip. Loading the video just to borrow a
+                                               frame pulled the whole file for a 44px square. #}
+                                            <div class="task-file-thumb file-video-poster">
+                                                <i class="fa-solid fa-play"></i>
+                                            </div>
 
                                             {% elif file.mime_type and file.mime_type.startswith("audio/") %}
                                             🎵
@@ -607,19 +604,16 @@ Submission Files
                                             {% if file.mime_type and file.mime_type.startswith("image/") %}
                                             <img
                                                 class="task-file-thumb"
-                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
+                                                src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
                                                 alt="{{ file.original_filename }}"
-                                                loading="lazy"
+                                                loading="lazy" decoding="async"
                                             >
                                             {% elif file.mime_type and file.mime_type.startswith("video/") %}
-                                            <video
-                                                class="task-file-thumb video-thumb"
-                                                src="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
-                                                preload="metadata"
-                                                muted
-                                                playsinline
-                                            ></video>
-                                            <span class="video-thumb-badge video-thumb-badge-sm"><i class="fa-solid fa-play"></i></span>
+                                            {# A poster, not the clip. Loading the video just to borrow a
+                                               frame pulled the whole file for a 44px square. #}
+                                            <div class="task-file-thumb file-video-poster">
+                                                <i class="fa-solid fa-play"></i>
+                                            </div>
                                             {% else %}
                                             📄
                                             {% endif %}
@@ -1125,29 +1119,16 @@ Submission Files
             return;
         }
 
-        // The video thumbnail carries a play badge, so clicking it should
-        // start playback rather than doing nothing. The <video> and the
-        // badge are both pointer-events:none, so the click lands on the
-        // surrounding icon box - match that and check what it holds.
+        // The video poster carries a play badge, so clicking it should
+        // start playback rather than doing nothing. The poster is
+        // pointer-events:none, so the click lands on the surrounding
+        // icon box - match that and check what it holds.
         const iconBox = event.target.closest(".task-file-icon");
 
-        if (iconBox && iconBox.querySelector(".video-thumb")) {
+        if (iconBox && iconBox.querySelector(".file-video-poster")) {
             const preview = iconBox.closest(".task-file-item")?.querySelector("[data-media-preview]");
             if (preview) preview.click();
         }
-    });
-</script>
-<script>
-    // Video thumbnails show the browser's own first decoded frame - there
-    // is no server-side thumbnail generator. Chrome/Safari usually paint
-    // frame 0 as soon as metadata loads; Firefox stays blank until playback
-    // starts or currentTime is nudged, so this nudges it uniformly.
-    document.querySelectorAll(".video-thumb").forEach(function (video) {
-        video.addEventListener("loadedmetadata", function () {
-            try {
-                video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
-            } catch (err) {}
-        }, { once: true });
     });
 </script>
 <script>

@@ -84,6 +84,30 @@ class TaskFile(db.Model):
         nullable=False
     )
 
+    # ---- Thumbnails -------------------------------------------------
+    #
+    # The gallery used to point its <img> and <video> tags straight at
+    # the original file, so a grid of 150px tiles pulled the full-size
+    # originals - about a gigabyte for a single page. A small derived
+    # image is generated instead and stored alongside the original in
+    # R2 under a thumbnails/ prefix.
+
+    #: R2 key of the generated thumbnail, or None until there is one.
+    thumbnail_key = db.Column(
+        db.String(1000)
+    )
+
+    #: pending | ready | skipped | failed
+    #: "skipped" is a decision, not an error - videos and documents
+    #: have nothing this app can render without ffmpeg, so they are
+    #: marked once and never retried.
+    thumbnail_state = db.Column(
+        db.String(16),
+        default="pending",
+        nullable=False,
+        index=True
+    )
+
     task = db.relationship(
         "Task",
         backref=db.backref(
