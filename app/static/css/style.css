@@ -7803,16 +7803,23 @@ TASK LIST TOOLBAR
 }
 
 .file-popup-close{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:32px;
+    height:32px;
     border:none;
+    border-radius:var(--radius-sm);
     background:transparent;
-    font-size:24px;
+    font-size:22px;
     line-height:1;
     cursor:pointer;
     color:var(--color-text-muted);
+    transition:background .15s ease, color .15s ease;
 }
 
 .file-popup-close:hover{
-    background:transparent !important;
+    background:var(--color-surface-muted) !important;
     color:var(--color-neutral);
 }
 
