@@ -28,9 +28,30 @@
     const MIN_WIDTH = 460;
     const DEFAULT_WIDTH = 720;
 
-    // Matches /tasks/12 but deliberately not /tasks/add, /tasks/12/edit
-    // or any of the file/action sub-routes.
+    // A task detail page. Deliberately not /tasks/12/edit or any of the
+    // file/action sub-routes.
     const TASK_URL = /^\/tasks\/(\d+)\/?$/;
+
+    // The two task creation forms open in the drawer as well, so a task
+    // can be raised without losing the board behind it. Everything else
+    // under /tasks/ still navigates normally.
+    const FORM_URLS = ["/tasks/add", "/tasks/self-assign"];
+
+    function isFormPath(pathname) {
+        return FORM_URLS.indexOf(pathname.replace(/\/$/, "")) !== -1;
+    }
+
+    // The drawer's identity for a URL: the task id for a detail page,
+    // the path itself for a form. Used to tell "still showing what we
+    // asked for" from "the panel navigated somewhere else".
+    function panelKey(pathname) {
+
+        const match = TASK_URL.exec(pathname);
+
+        if (match) return match[1];
+
+        return isFormPath(pathname) ? pathname.replace(/\/$/, "") : null;
+    }
 
     let root = null;
     let drawerBody = null;
@@ -46,8 +67,9 @@
     let dirty = false;
     let ignoreNextLoad = false;
     let pushedHistory = false;
-    let pendingReload = false;
+    let originUrl = null;
     let lastFocused = null;
+    let frameLabel = "Task details";
 
     function onFrameLoad() {
 
@@ -105,7 +127,7 @@
 
         frame = document.createElement("iframe");
         frame.className = "task-drawer-frame";
-        frame.title = "Task details";
+        frame.title = frameLabel;
         frame.setAttribute("allowfullscreen", "");
         frame.addEventListener("load", onFrameLoad);
 
@@ -156,9 +178,7 @@
 
         if (url.origin !== window.location.origin) return null;
 
-        const match = TASK_URL.exec(url.pathname);
-
-        return match ? match[1] : null;
+        return panelKey(url.pathname);
     }
 
     function storedWidth() {
@@ -322,7 +342,8 @@
 
             const id = taskIdFromHref(link.getAttribute("href"));
 
-            if (id && ids.indexOf(id) === -1) ids.push(id);
+            // Forms aren't part of the sequence you step through.
+            if (id && !isFormPath(id) && ids.indexOf(id) === -1) ids.push(id);
         });
 
         return ids;
@@ -330,7 +351,12 @@
 
     function syncStepper() {
 
+        const stepper = root.querySelector(".task-drawer-stepper");
         const index = siblings.indexOf(currentId);
+
+        // There is nothing to page through from a "new task" form, so the
+        // stepper is hidden rather than shown permanently disabled.
+        stepper.hidden = isFormPath(currentId || "");
 
         if (index === -1 || siblings.length < 2) {
             positionLabel.textContent = "";
@@ -363,12 +389,22 @@
 
         currentId = String(taskId);
 
+        // A task key is an id, a form key is already a path.
+        const isForm = isFormPath(currentId);
+        const url = isForm ? currentId : "/tasks/" + currentId;
+
+        const label = !isForm ? "Task details"
+            : currentId === "/tasks/add" ? "Add task"
+            : "Self assign task";
+
+        root.querySelector(".task-drawer").setAttribute("aria-label", label);
+        frameLabel = label;
+
         loader.classList.add("show");
-        navigateFrame("/tasks/" + currentId + "?panel=1");
+        navigateFrame(url + "?panel=1");
 
-        openFullLink.href = "/tasks/" + currentId;
+        openFullLink.href = url;
 
-        const url = "/tasks/" + currentId;
         const state = { cypherTaskDrawer: currentId };
 
         if (options.fromHistory) {
@@ -392,6 +428,8 @@
 
         if (!root.classList.contains("show")) {
             lastFocused = document.activeElement;
+            // Where to put the user back when the drawer closes.
+            originUrl = window.location.href;
             siblings = collectSiblings();
             dirty = false;
             // Reopening via Forward lands on an entry that already exists,
@@ -428,20 +466,29 @@
         // is showing stale status/columns - reload it on the way out.
         const shouldReload = dirty;
         dirty = false;
+        pushedHistory = false;
 
-        if (pushedHistory && !options.fromHistory) {
-            // Step off the drawer's history entry first, so a reload lands
-            // on the page we came from rather than on /tasks/<id>. The
-            // reload is deferred to the popstate handler so it can't race
-            // the navigation.
-            pushedHistory = false;
-            pendingReload = shouldReload;
-            history.back();
+        /*
+            Deliberately not history.back().
+
+            Submitting a form inside the panel is a navigation in the
+            iframe, and an iframe navigation adds an entry to the joint
+            session history. After one status change or a failed
+            validation, back() steps onto that entry instead of the page
+            the drawer was opened from - it looks like the close simply
+            didn't work. Restoring the remembered URL outright is immune
+            to however many entries the panel racked up.
+        */
+        if (!originUrl) return;
+
+        if (shouldReload) {
+            // Fixes the URL and refreshes the stale board in one go.
+            window.location.replace(originUrl);
             return;
         }
 
-        if (shouldReload) {
-            window.location.reload();
+        if (!options.fromHistory) {
+            history.replaceState(null, "", originUrl);
         }
     }
 
@@ -497,13 +544,6 @@
         if (root && root.classList.contains("show")) {
             pushedHistory = false;
             close({ fromHistory: true });
-        }
-
-        // close() asked for a refresh on its way out; now that we're back
-        // on the originating page, actually do it.
-        if (pendingReload) {
-            pendingReload = false;
-            window.location.reload();
         }
     });
 

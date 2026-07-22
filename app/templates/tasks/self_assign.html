@@ -1,4 +1,5 @@
-{% extends "base_app.html" %}
+{# Rendered full-page, or (with ?panel=1) inside the task drawer. #}
+{% extends "base_panel.html" if panel_mode else "base_app.html" %}
 
 {% block title %}Self Assign Task | CypherCrew{% endblock %}
 
@@ -9,9 +10,13 @@
                 <p>Create a task for yourself</p>
             </div>
 
+            {# The drawer has its own chrome, and the bell is already
+               on the page behind it. #}
+            {% if not panel_mode %}
             <div class="top-actions">
                 {% include "partials/notification_widget.html" %}
             </div>
+            {% endif %}
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}

@@ -8581,6 +8581,13 @@ body.task-drawer-resizing .task-drawer-frame{
     gap:2px;
 }
 
+/* display:flex above outranks the UA sheet's [hidden]{display:none};
+   the stepper is hidden on the "new task" forms, which have nothing
+   to page through. */
+.task-drawer-stepper[hidden]{
+    display:none;
+}
+
 .task-drawer-position{
     min-width:46px;
     font-size:12px;

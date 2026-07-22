@@ -748,9 +748,30 @@ def task_suggestions():
     })
 
 
+def in_panel():
+    """True when this page is being rendered inside the task drawer.
+
+    The drawer loads pages with ?panel=1. Both task forms post to their
+    own URL (no action attribute), so the flag survives the POST - but a
+    validation redirect built with url_for() would drop it and render
+    the full app shell, sidebar and all, inside the drawer. Redirects
+    that go back to a form therefore have to carry it along.
+    """
+    return request.args.get("panel") == "1"
+
+
+def panel_args():
+    """url_for() kwargs that keep the drawer flag on a redirect."""
+    return {"panel": "1"} if in_panel() else {}
+
+
 @tasks_bp.route("/add", methods=["GET", "POST"])
 @login_required
 def add_task():
+
+    # Rebuilt on every redirect back to this form so the drawer flag,
+    # if there is one, survives the round trip.
+    form_url = url_for("tasks.add_task", **panel_args())
 
     if not has_permission(current_user, "manage_tasks"):
         flash(
@@ -762,7 +783,7 @@ def add_task():
         )
 
         return redirect(
-            url_for("tasks.self_assign_task")
+            url_for("tasks.self_assign_task", **panel_args())
         )
 
     clients = (
@@ -818,7 +839,7 @@ def add_task():
                 )
 
                 return redirect(
-                    url_for("tasks.add_task")
+                    form_url
                 )
 
         try:
@@ -844,7 +865,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         try:
@@ -866,7 +887,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         if quantity <= 0 or estimated_time <= 0:
@@ -879,7 +900,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         title = request.form.get(
@@ -894,7 +915,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         deliverable = db.session.get(
@@ -909,7 +930,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         if not deliverable.monthly_target:
@@ -922,7 +943,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         if (
@@ -938,7 +959,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         assigned_user = (
@@ -957,7 +978,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         reference_files = [
@@ -1147,7 +1168,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         except Exception:
@@ -1183,7 +1204,7 @@ def add_task():
             )
 
             return redirect(
-                url_for("tasks.add_task")
+                form_url
             )
 
         flash(
@@ -1202,6 +1223,7 @@ def add_task():
 
     return render_template(
         "tasks/add.html",
+        panel_mode=in_panel(),
         clients=clients,
         deliverables=deliverables,
         employees=employees,
@@ -1211,6 +1233,9 @@ def add_task():
 @tasks_bp.route("/self-assign", methods=["GET", "POST"])
 @login_required
 def self_assign_task():
+
+    # See add_task: keeps the drawer flag across validation redirects.
+    form_url = url_for("tasks.self_assign_task", **panel_args())
 
     clients = Client.query.filter_by(
         status="active"
@@ -1241,7 +1266,7 @@ def self_assign_task():
 
         except (TypeError, ValueError):
             flash("Please select client and deliverable.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         try:
             quantity = float(request.form.get("quantity") or 1)
@@ -1249,27 +1274,27 @@ def self_assign_task():
 
         except (TypeError, ValueError):
             flash("Quantity and estimated time must be valid.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         if quantity <= 0 or estimated_time <= 0:
             flash("Quantity and estimated time must be greater than zero.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         deliverable = ClientDeliverable.query.get(deliverable_id)
 
         if not deliverable or not deliverable.monthly_target:
             flash("Invalid deliverable selected.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         if deliverable.monthly_target.client_id != client_id:
             flash("Selected deliverable does not belong to selected client.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         title = request.form.get("title", "").strip()
 
         if not title:
             flash("Task title is required.", "error")
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         reference_files = [
             uploaded_file
@@ -1355,7 +1380,7 @@ def self_assign_task():
                 "error",
             )
 
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         except Exception:
             db.session.rollback()
@@ -1379,7 +1404,7 @@ def self_assign_task():
                 "error",
             )
 
-            return redirect(url_for("tasks.self_assign_task"))
+            return redirect(form_url)
 
         flash("Task self assigned successfully.", "success")
 
@@ -1394,6 +1419,7 @@ def self_assign_task():
 
     return render_template(
         "tasks/self_assign.html",
+        panel_mode=in_panel(),
         clients=clients,
         deliverables=deliverables,
         deadline_default=deadline_default
