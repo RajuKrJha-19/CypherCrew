@@ -913,10 +913,16 @@ input[type="file"]::file-selector-button:hover{
     padding:6px 10px;
     border-radius:7px;
     font-size:12px;
-    background:var(--color-neutral);
+    font-weight:600;
+    background:var(--color-primary);
     color:var(--color-surface);
     border:none;
     cursor:pointer;
+    transition:background .15s ease;
+}
+
+.mini-action:hover{
+    background:var(--color-primary-hover);
 }
 
 .stat-actions{
@@ -934,6 +940,7 @@ input[type="file"]::file-selector-button:hover{
     border-radius:7px;
     background:#eef2ff;
     color:var(--color-primary-hover);
+    transition:background .15s ease;
 }
 
 .mini-link:hover{
