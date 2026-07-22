@@ -138,6 +138,9 @@
 
 {% block scripts %}
 
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+
 <script>
     // Video thumbnails show the browser's own first decoded frame - there
     // is no server-side thumbnail generator. Chrome/Safari usually paint
@@ -188,13 +191,26 @@
                 activeItem = null;
             }
 
+            function viewItem(item) {
+                CypherMediaViewer.open({
+                    url: item.dataset.previewUrl,
+                    downloadUrl: item.dataset.downloadUrl,
+                    filename: item.dataset.filename,
+                    mime: item.dataset.mime
+                });
+            }
+
             document.addEventListener("dblclick", function (event) {
 
                 const item = event.target.closest(".gallery-item");
 
                 if (!item) return;
 
-                window.open(item.dataset.previewUrl, "_blank");
+                // Video tiles already open on a single click below; letting
+                // dblclick through as well would re-open and restart them.
+                if (item.querySelector(".video-thumb")) return;
+
+                viewItem(item);
 
             });
 
@@ -220,6 +236,18 @@
                     hideContextMenu();
                 }
 
+                // A play badge sits on top of every video tile, so a single
+                // click on it should start playback like the badge implies.
+                // Other file types still need a double-click. The <video>
+                // and badge are pointer-events:none, so the click actually
+                // lands on the thumb box - match that and check what it holds.
+                const thumbBox = event.target.closest(".gallery-thumb-box");
+
+                if (thumbBox && thumbBox.querySelector(".video-thumb")) {
+                    const item = thumbBox.closest(".gallery-item");
+                    if (item) viewItem(item);
+                }
+
             });
 
             contextMenu.addEventListener("click", function (event) {
@@ -231,7 +259,7 @@
                 const action = button.dataset.action;
 
                 if (action === "open") {
-                    window.open(activeItem.dataset.previewUrl, "_blank");
+                    viewItem(activeItem);
                 }
 
                 if (action === "download") {

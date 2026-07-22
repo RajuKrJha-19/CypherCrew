@@ -566,6 +566,7 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
 <script>
     (function () {
         const STORAGE_KEY = "cypher_task_view";
@@ -1159,9 +1160,29 @@
                         });
                         item.appendChild(downloadLink);
 
-                        item.addEventListener("dblclick", function () {
-                            window.open(file.preview_url, "_blank");
-                        });
+                        function viewFile() {
+                            CypherMediaViewer.open({
+                                url: file.preview_url,
+                                downloadUrl: file.download_url,
+                                filename: file.filename,
+                                mime: file.mime_type
+                            });
+                        }
+
+                        // Video tiles carry a play badge, so a single click
+                        // starts playback straight away. Everything else
+                        // keeps the existing double-click behaviour. Only
+                        // one of the two is bound per tile, otherwise a
+                        // double-click on a video would fire click twice
+                        // plus dblclick and restart the video each time.
+                        if (file.is_video) {
+                            item.addEventListener("click", function (e) {
+                                if (e.target.closest(".file-popup-download")) return;
+                                viewFile();
+                            });
+                        } else {
+                            item.addEventListener("dblclick", viewFile);
+                        }
 
                         grid.appendChild(item);
 

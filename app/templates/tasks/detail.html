@@ -405,7 +405,11 @@
                                         <a href="{{ url_for(
                         'tasks.preview_task_file',
                         file_id=file.id
-                    ) }}" target="_blank" rel="noopener noreferrer" class="task-file-btn task-file-preview-btn">
+                    ) }}" target="_blank" rel="noopener noreferrer" class="task-file-btn task-file-preview-btn"
+                                            data-media-preview
+                                            data-filename="{{ file.original_filename }}"
+                                            data-mime="{{ file.mime_type or '' }}"
+                                            data-download-url="{{ url_for('tasks.download_task_file', file_id=file.id) }}">
                                             <span>👁</span>
                                             Preview
                                         </a>
@@ -571,7 +575,12 @@ Submission Files
                                     <div class="task-file-actions">
 
                                         <a href="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
-                                            target="_blank" class="task-file-btn task-file-preview-btn">
+                                            target="_blank" rel="noopener noreferrer"
+                                            class="task-file-btn task-file-preview-btn"
+                                            data-media-preview
+                                            data-filename="{{ file.original_filename }}"
+                                            data-mime="{{ file.mime_type or '' }}"
+                                            data-download-url="{{ url_for('tasks.download_task_file', file_id=file.id) }}">
                                             Preview
                                         </a>
 
@@ -1009,6 +1018,44 @@ Submission Files
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+<script>
+    // Preview opens in the in-page viewer instead of a new tab. The anchor
+    // keeps its href and target so middle-click / "open in new tab" still
+    // work, and the plain-link behaviour survives if JS fails to load.
+    document.addEventListener("click", function (event) {
+
+        const trigger = event.target.closest("[data-media-preview]");
+
+        if (trigger) {
+
+            // Let the browser handle modified clicks (new tab/window).
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+
+            event.preventDefault();
+
+            CypherMediaViewer.open({
+                url: trigger.getAttribute("href"),
+                downloadUrl: trigger.dataset.downloadUrl,
+                filename: trigger.dataset.filename,
+                mime: trigger.dataset.mime
+            });
+
+            return;
+        }
+
+        // The video thumbnail carries a play badge, so clicking it should
+        // start playback rather than doing nothing. The <video> and the
+        // badge are both pointer-events:none, so the click lands on the
+        // surrounding icon box - match that and check what it holds.
+        const iconBox = event.target.closest(".task-file-icon");
+
+        if (iconBox && iconBox.querySelector(".video-thumb")) {
+            const preview = iconBox.closest(".task-file-item")?.querySelector("[data-media-preview]");
+            if (preview) preview.click();
+        }
+    });
+</script>
 <script>
     // Video thumbnails show the browser's own first decoded frame - there
     // is no server-side thumbnail generator. Chrome/Safari usually paint

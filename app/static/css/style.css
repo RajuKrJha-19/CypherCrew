@@ -8134,3 +8134,330 @@ TASK LIST TOOLBAR
 .custom-filter-days-box button:hover{
     background:var(--color-primary-hover);
 }
+
+/* ==========================================================
+   IN-PAGE MEDIA VIEWER
+   Shared overlay used by the gallery, the kanban file popup
+   and the task detail Preview buttons so previewing a file
+   (especially video) no longer means opening a new tab.
+   Sits under .toast-container (100000) so toasts stay visible.
+   ========================================================== */
+
+.media-viewer{
+    position:fixed;
+    inset:0;
+    z-index:99999;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:rgba(15,23,42,0.88);
+}
+
+.media-viewer.show{
+    display:flex;
+}
+
+body.media-viewer-open{
+    overflow:hidden;
+}
+
+.media-viewer-panel{
+    display:flex;
+    flex-direction:column;
+    width:min(1100px,100%);
+    max-height:100%;
+    overflow:hidden;
+    border-radius:var(--radius-lg);
+    background:var(--color-surface);
+    box-shadow:var(--shadow-lg);
+}
+
+.media-viewer-bar{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex:0 0 auto;
+    padding:12px 14px;
+    border-bottom:1px solid var(--color-border);
+    background:var(--color-surface);
+}
+
+.media-viewer-title{
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+    font-size:14px;
+    font-weight:700;
+    color:var(--color-neutral);
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.media-viewer-tools{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    flex:0 0 auto;
+}
+
+.media-viewer-tool{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;
+    height:34px;
+    border:none;
+    border-radius:var(--radius-sm);
+    background:transparent;
+    color:var(--color-neutral);
+    font-size:15px;
+    cursor:pointer;
+    transition:background .15s ease;
+}
+
+.media-viewer-tool:hover{
+    background:var(--color-surface-muted);
+}
+
+.media-viewer-tool[hidden]{
+    display:none;
+}
+
+/* Three-dot overflow menu */
+.media-viewer-menu{
+    position:absolute;
+    top:52px;
+    right:12px;
+    z-index:2;
+    display:none;
+    flex-direction:column;
+    min-width:216px;
+    padding:6px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md);
+    background:var(--color-surface);
+    box-shadow:var(--shadow-lg);
+}
+
+.media-viewer-menu.show{
+    display:flex;
+}
+
+.media-viewer-menu hr{
+    height:1px;
+    margin:6px 4px;
+    border:none;
+    background:var(--color-border);
+}
+
+.media-viewer-menu-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    padding:9px 10px;
+    border:none;
+    border-radius:var(--radius-sm);
+    background:transparent;
+    color:var(--color-neutral);
+    font-size:13px;
+    font-weight:600;
+    text-align:left;
+    cursor:pointer;
+}
+
+.media-viewer-menu-item:hover{
+    background:var(--color-surface-muted);
+}
+
+.media-viewer-menu-item i{
+    width:16px;
+    color:var(--color-text-muted);
+    font-size:13px;
+    text-align:center;
+}
+
+.media-viewer-menu-item.checked{
+    color:var(--color-primary);
+}
+
+.media-viewer-menu-item.checked i{
+    color:var(--color-primary);
+}
+
+.media-viewer-menu-item.checked::after{
+    content:"\f00c";
+    margin-left:auto;
+    font-family:"Font Awesome 6 Free";
+    font-weight:900;
+    font-size:11px;
+}
+
+/* Playback speed chips */
+.media-viewer-menu-speeds{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    padding:6px 10px 8px;
+}
+
+.media-viewer-menu-label{
+    margin-right:auto;
+    font-size:11px;
+    font-weight:700;
+    color:var(--color-text-muted);
+    letter-spacing:.4px;
+    text-transform:uppercase;
+}
+
+.media-viewer-speed{
+    min-width:34px;
+    height:26px;
+    padding:0 7px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-sm);
+    background:var(--color-surface);
+    color:var(--color-neutral);
+    font-size:11px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.media-viewer-speed:hover{
+    background:var(--color-surface-muted);
+}
+
+.media-viewer-speed.active{
+    border-color:var(--color-primary);
+    background:var(--color-primary);
+    color:var(--color-surface);
+}
+
+/* Stage - the actual media */
+.media-viewer-stage{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:1 1 auto;
+    min-height:0;
+    padding:14px;
+    background:#0b1220;
+}
+
+.media-viewer-video,
+.media-viewer-image{
+    display:block;
+    max-width:100%;
+    max-height:calc(100vh - 160px);
+    border-radius:var(--radius-sm);
+    object-fit:contain;
+}
+
+.media-viewer-audio{
+    width:min(560px,100%);
+}
+
+.media-viewer-frame{
+    width:100%;
+    height:calc(100vh - 160px);
+    border:none;
+    border-radius:var(--radius-sm);
+    background:var(--color-surface);
+}
+
+/* Fullscreen: the panel becomes the whole screen, so let the media
+   use all of it instead of staying capped to the windowed height. */
+.media-viewer-panel:fullscreen{
+    width:100%;
+    max-height:none;
+    border-radius:0;
+}
+
+.media-viewer-panel:fullscreen .media-viewer-video,
+.media-viewer-panel:fullscreen .media-viewer-image{
+    max-height:calc(100vh - 60px);
+}
+
+.media-viewer-panel:fullscreen .media-viewer-frame{
+    height:calc(100vh - 60px);
+}
+
+/* Non-renderable types (zip, docx, xlsx ...) */
+.media-viewer-fallback{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:44px 20px;
+    color:var(--color-surface);
+    text-align:center;
+}
+
+.media-viewer-fallback i{
+    margin-bottom:6px;
+    font-size:34px;
+    opacity:.55;
+}
+
+.media-viewer-fallback strong{
+    font-size:15px;
+}
+
+.media-viewer-fallback p{
+    margin:0;
+    font-size:13px;
+    opacity:.7;
+}
+
+.media-viewer-fallback-actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+}
+
+@media(max-width:700px){
+
+    .media-viewer{
+        padding:0;
+    }
+
+    .media-viewer-panel{
+        width:100%;
+        height:100%;
+        max-height:none;
+        border-radius:0;
+    }
+
+    .media-viewer-menu{
+        right:8px;
+        left:8px;
+        min-width:0;
+    }
+
+    .media-viewer-video,
+    .media-viewer-image{
+        max-height:calc(100vh - 130px);
+    }
+
+    .media-viewer-frame{
+        height:calc(100vh - 130px);
+    }
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .media-viewer-tool{
+        transition:none;
+    }
+}
+
+/* Video tiles open the in-page viewer on a single click, so show that
+   they are clickable. :has() is cosmetic only here - browsers without
+   it just keep the default cursor and the click still works. */
+.gallery-thumb-box:has(.video-thumb),
+.task-file-icon:has(.video-thumb),
+.file-popup-video-wrap{
+    cursor:pointer;
+}
