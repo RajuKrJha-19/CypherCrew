@@ -19,11 +19,36 @@ def list_clients():
     if not has_permission(current_user, "manage_clients"):
         return redirect(url_for("dashboard.index"))
 
-    clients = Client.query.order_by(Client.id.desc()).all()
+    search = request.args.get("q", "").strip()
+    selected_status = request.args.get("status", "").strip()
+
+    query = Client.query
+
+    if search:
+
+        like = f"%{search}%"
+
+        query = query.filter(
+            db.or_(
+                Client.client_name.ilike(like),
+                Client.company_name.ilike(like),
+                Client.industry.ilike(like),
+            )
+        )
+
+    if selected_status:
+        query = query.filter(Client.status == selected_status)
+
+    clients = query.order_by(Client.id.desc()).all()
+
+    is_filtered = bool(search or selected_status)
 
     return render_template(
         "clients/list.html",
-        clients=clients
+        clients=clients,
+        search=search,
+        selected_status=selected_status,
+        is_filtered=is_filtered
     )
 
 

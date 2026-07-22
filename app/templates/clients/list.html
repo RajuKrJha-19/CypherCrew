@@ -24,6 +24,26 @@
         {% endif %}
     {% endwith %}
 
+    <form method="GET" class="filter-bar" id="clientFilterForm">
+
+        <input type="text" name="q" value="{{ search }}" placeholder="Search by name, company or industry">
+
+        <select name="status">
+            <option value="">All Statuses</option>
+            <option value="active" {% if selected_status=="active" %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if selected_status=="inactive" %}selected{% endif %}>Inactive</option>
+        </select>
+
+        <button type="submit">
+            Filter
+        </button>
+
+        <a href="{{ url_for('clients.list_clients') }}" class="mini-link">
+            Reset
+        </a>
+
+    </form>
+
     <div class="table-card">
         <table>
             <thead>
@@ -51,7 +71,14 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5">No clients found.</td>
+                    <td colspan="5">
+                        {% if is_filtered %}
+                        No clients match these filters.
+                        <a href="{{ url_for('clients.list_clients') }}" class="mini-link">Clear filters</a>
+                        {% else %}
+                        No clients found.
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
