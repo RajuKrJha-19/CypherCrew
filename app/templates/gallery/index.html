@@ -118,7 +118,7 @@
             {% endif %}
 
             {% if pagination.pages > 1 %}
-            <div class="gallery-pagination">
+            <div class="list-pagination">
 
                 {% if pagination.has_prev %}
                 <a href="{{ url_for('gallery.index', q=search, page=pagination.prev_num) }}" class="mini-link">← Prev</a>

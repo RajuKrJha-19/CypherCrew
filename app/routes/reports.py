@@ -117,12 +117,18 @@ def list_reports():
     if to_date:
         query = query.filter(DailyReport.report_date <= to_date)
 
-    reports = query.order_by(
+    page = request.args.get("page", 1, type=int)
+
+    pagination = query.order_by(
         DailyReport.report_date.desc(),
         DailyReport.created_at.desc()
-    ).all()
+    ).paginate(
+        page=page,
+        per_page=25,
+        error_out=False
+    )
 
-    report_rows = build_report_rows(reports)
+    report_rows = build_report_rows(pagination.items)
 
     employees = []
 
@@ -140,6 +146,7 @@ def list_reports():
     return render_template(
         "reports/list.html",
         report_rows=report_rows,
+        pagination=pagination,
         can_view_all=can_view_all,
         employees=employees,
         selected_employee=selected_employee,

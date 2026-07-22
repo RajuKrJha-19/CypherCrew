@@ -7860,7 +7860,9 @@ TASK LIST TOOLBAR
     color:var(--color-text-muted);
 }
 
-.gallery-pagination{
+/* Shared by any paginated list (Gallery, Reports, ...) - nothing
+   about these properties is gallery-specific. */
+.list-pagination{
     display:flex;
     align-items:center;
     justify-content:center;
