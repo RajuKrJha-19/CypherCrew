@@ -100,5 +100,21 @@
                 </table>
             </div>
 
-        
+            {% if pagination.pages > 1 %}
+            <div class="list-pagination">
+
+                {% if pagination.has_prev %}
+                <a href="{{ url_for('users.list_users', q=search, role=selected_role, status=selected_status, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
+                {% endif %}
+
+                <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+
+                {% if pagination.has_next %}
+                <a href="{{ url_for('users.list_users', q=search, role=selected_role, status=selected_status, page=pagination.next_num) }}" class="mini-link">Next →</a>
+                {% endif %}
+
+            </div>
+            {% endif %}
+
+
 {% endblock %}

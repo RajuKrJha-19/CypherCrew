@@ -50,15 +50,22 @@ def list_users():
     if selected_status:
         query = query.filter(User.status == selected_status)
 
-    users = query.order_by(
+    page = request.args.get("page", 1, type=int)
+
+    pagination = query.order_by(
         User.id.desc()
-    ).all()
+    ).paginate(
+        page=page,
+        per_page=25,
+        error_out=False
+    )
 
     is_filtered = bool(search or selected_role or selected_status)
 
     return render_template(
         "users/list.html",
-        users=users,
+        users=pagination.items,
+        pagination=pagination,
         search=search,
         selected_role=selected_role,
         selected_status=selected_status,

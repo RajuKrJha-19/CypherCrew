@@ -39,13 +39,20 @@ def list_clients():
     if selected_status:
         query = query.filter(Client.status == selected_status)
 
-    clients = query.order_by(Client.id.desc()).all()
+    page = request.args.get("page", 1, type=int)
+
+    pagination = query.order_by(Client.id.desc()).paginate(
+        page=page,
+        per_page=25,
+        error_out=False
+    )
 
     is_filtered = bool(search or selected_status)
 
     return render_template(
         "clients/list.html",
-        clients=clients,
+        clients=pagination.items,
+        pagination=pagination,
         search=search,
         selected_status=selected_status,
         is_filtered=is_filtered
