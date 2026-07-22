@@ -24,3 +24,4 @@ dist/
 *.egg-info/
 app/static/uploads/*
 !app/static/uploads/.gitkeep
+pw_shots/
