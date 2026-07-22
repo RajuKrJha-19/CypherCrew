@@ -3,10 +3,26 @@
 {% block title %}Add Client | CypherCrew{% endblock %}
 
 {% block content %}
-            <div class="form-card">
-                <h1>Add Client</h1>
-                <p>Create internal client profile</p>
+            <div class="page-header">
+                <div>
+                    <h1>Add Client</h1>
+                    <p>Create internal client profile</p>
+                </div>
 
+                <div class="top-actions">
+                    {% include "partials/notification_widget.html" %}
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="form-card">
                 <form method="POST">
 
                     <label>Client Name</label>

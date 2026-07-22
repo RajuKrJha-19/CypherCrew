@@ -3,11 +3,26 @@
 {% block title %}Permissions{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ user.name }}</h1>
+        <p>Manage user permissions</p>
+    </div>
+
+    <div class="top-actions">
+        {% include "partials/notification_widget.html" %}
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
 <div class="form-card">
-
-<h1>{{ user.name }}</h1>
-
-<p>Manage user permissions</p>
 
 <form method="POST">
 
