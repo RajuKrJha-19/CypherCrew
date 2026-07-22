@@ -4910,10 +4910,6 @@ MEETING EMPLOYEE SELECT
 SKETCH STYLE DISCUSSION UI
 =========================== */
 
-.discussion-card {
-    margin-top: 18px;
-}
-
 .comment-form {
     display: flex;
     align-items: center;
@@ -8725,6 +8721,151 @@ body.panel-mode .main-panel{
     }
 
     .task-drawer-tool{
+        transition:none;
+    }
+}
+
+
+/* ==========================================================
+   BRIEF + DISCUSSION
+   The description and the conversation about it now live in
+   one card, so the requirement and the questions about it
+   read as a single thread instead of sitting in opposite
+   columns (and, under 1000px, screens apart).
+   ========================================================== */
+
+/* Clamp a long brief so it can't bury the discussion below it.
+   The toggle is revealed by JS only when it actually overflows. */
+.task-description-wrap{
+    position:relative;
+    max-height:260px;
+    overflow:hidden;
+}
+
+.task-description-wrap.expanded{
+    max-height:none;
+}
+
+/* Only when the brief is genuinely cut off - see sync() in detail.html.
+   Gating this on :not(.expanded) instead would fade the bottom of every
+   short description too. */
+.task-description-wrap.is-clamped::after{
+    content:"";
+    position:absolute;
+    right:0;
+    bottom:0;
+    left:0;
+    height:64px;
+    pointer-events:none;
+    background:linear-gradient(
+        to bottom,
+        rgba(255,255,255,0),
+        var(--color-surface)
+    );
+}
+
+.description-toggle{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-top:10px;
+    padding:6px 10px;
+    border:none;
+    border-radius:var(--radius-sm);
+    background:transparent;
+    color:var(--color-primary);
+    font-size:12.5px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+/* display:flex above outranks the UA sheet's [hidden]{display:none},
+   so the toggle has to opt back out explicitly. */
+.description-toggle[hidden]{
+    display:none;
+}
+
+.description-toggle:hover{
+    background:var(--color-primary-soft);
+}
+
+.description-toggle i{
+    font-size:10px;
+}
+
+/* Separator between the brief and the conversation */
+.task-discussion{
+    margin-top:26px;
+    padding-top:22px;
+    border-top:1px solid var(--color-border);
+}
+
+.discussion-head{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    margin-bottom:18px;
+}
+
+.discussion-head h3{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    margin:0;
+    font-size:15px;
+    font-weight:700;
+    color:var(--color-neutral);
+}
+
+.discussion-head h3 i{
+    color:var(--color-text-muted);
+    font-size:14px;
+}
+
+.discussion-count{
+    min-width:22px;
+    height:20px;
+    padding:0 7px;
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    font-size:11.5px;
+    font-weight:700;
+    line-height:20px;
+    font-variant-numeric:tabular-nums;
+    text-align:center;
+}
+
+/* Composer now sits under the thread, matching the oldest-to-newest
+   order the thread is rendered in and where new comments are appended. */
+.task-discussion .comment-form{
+    align-items:flex-end;
+    margin-top:20px;
+    margin-bottom:0;
+}
+
+.task-discussion .comment-form textarea{
+    max-height:180px;
+    padding-right:14px;
+    overflow-y:auto;
+    resize:none;
+}
+
+.task-discussion .comment-thread:empty + .comment-form{
+    margin-top:0;
+}
+
+/* The work card that now follows the brief - its first files panel
+   would otherwise carry the divider meant to separate stacked panels. */
+.task-work-card > .task-files-panel:first-child{
+    margin-top:0;
+    padding-top:0;
+    border-top:none;
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .description-toggle{
         transition:none;
     }
 }

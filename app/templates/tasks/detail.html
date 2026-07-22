@@ -247,9 +247,74 @@
                             </button>
                         </div>
 
-                        <pre class="task-description"
-                            id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify }}</pre>
+                        <div class="task-description-wrap" id="taskDescriptionWrap">
+                            <pre class="task-description"
+                                id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify }}</pre>
+                        </div>
 
+                        {# Only revealed by JS when the brief actually
+                           overflows, so a long spec can't bury the
+                           conversation underneath it. #}
+                        <button type="button" class="description-toggle" id="descriptionToggle"
+                            aria-expanded="false" aria-controls="taskDescriptionWrap" hidden>
+                            <i class="fa-solid fa-chevron-down"></i>
+                            <span>Show more</span>
+                        </button>
+
+                        {#
+                            Discussion sits with the brief instead of in the
+                            far column. Reading the requirement and asking
+                            about it is one motion, and below 1000px - which
+                            includes the task drawer - the second column
+                            stacks underneath, putting the conversation
+                            several screens away from the thing it is about.
+                        #}
+                        <div class="task-discussion">
+
+                            <div class="discussion-head">
+                                <h3>
+                                    <i class="fa-regular fa-comments"></i>
+                                    Discussion
+                                </h3>
+
+                                <span class="discussion-count" id="commentCount">{{ comments|length }}</span>
+                            </div>
+
+                            <div class="comment-thread" id="commentThread">
+
+                                {% for comment in comments %}
+                                {% include "tasks/_comment.html" %}
+                                {% else %}
+                                <p class="empty-text">
+                                    No comments yet. Ask a question or leave an update for the team.
+                                </p>
+                                {% endfor %}
+
+                            </div>
+
+                            {# Composer below the thread: comments read oldest
+                               to newest and new ones are appended to the
+                               bottom, so this is where the conversation
+                               actually continues. #}
+                            <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
+                                class="comment-form" id="commentForm">
+
+                                <textarea name="message" rows="1" id="commentInput"
+                                    placeholder="Write a comment...   (Ctrl + Enter to post)" required></textarea>
+
+                                <button type="submit" title="Post comment (Ctrl + Enter)">
+                                    Comment
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </div>
+
+                    {# The work itself - files, feedback and the review
+                       decision - kept in its own card below the brief. #}
+                    <div class="table-card task-work-card">
 
                         <!-- ==========================
      Reference Files
@@ -905,32 +970,8 @@ Submission Files
                         </div>
                     </div>
 
-                    <div class="table-card discussion-card">
-
-                        <h2 class="card-title">Discussion</h2>
-
-                        <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
-                            class="comment-form" id="commentForm">
-                            <textarea name="message" rows="4" placeholder="Write a comment..." required></textarea>
-
-                            <button type="submit">
-                                Comment
-                            </button>
-                        </form>
-
-                        <div class="comment-thread" id="commentThread">
-
-                            {% for comment in comments %}
-                            {% include "tasks/_comment.html" %}
-                            {% else %}
-                            <p class="empty-text">
-                                No comments yet. Start the discussion.
-                            </p>
-                            {% endfor %}
-
-                        </div>
-
-                    </div>
+                    {# Discussion moved up next to the description - see the
+                       comment there. #}
 
                     <div class="table-card activity-card">
                         <h2 class="card-title">Activity Timeline</h2>
@@ -1243,6 +1284,101 @@ Submission Files
     </script>
 
     <script>
+        /*
+            The brief sits directly above the discussion now, so a long
+            spec would otherwise push the conversation off screen. Clamp
+            it and offer "Show more" - but only when it genuinely
+            overflows, so short briefs get no pointless control.
+        */
+        (function () {
+
+            const wrap = document.getElementById("taskDescriptionWrap");
+            const toggle = document.getElementById("descriptionToggle");
+
+            if (!wrap || !toggle) return;
+
+            const label = toggle.querySelector("span");
+
+            function sync() {
+
+                const expanded = wrap.classList.contains("expanded");
+                const overflows = wrap.scrollHeight > wrap.clientHeight + 4;
+
+                // Keep the control once expanded, otherwise it would
+                // vanish the moment the clamp is lifted.
+                const needsToggle = overflows || expanded;
+
+                toggle.hidden = !needsToggle;
+
+                // Drives the fade overlay. Tied to real overflow rather
+                // than to "not expanded", so a short brief doesn't get a
+                // gradient washing out text that was never cut off.
+                wrap.classList.toggle("is-clamped", needsToggle && !expanded);
+            }
+
+            toggle.addEventListener("click", function () {
+
+                const expanded = wrap.classList.toggle("expanded");
+
+                toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+                label.textContent = expanded ? "Show less" : "Show more";
+                toggle.querySelector("i").classList.toggle("fa-chevron-up", expanded);
+                toggle.querySelector("i").classList.toggle("fa-chevron-down", !expanded);
+
+                sync();
+            });
+
+            sync();
+            window.addEventListener("resize", sync);
+        })();
+    </script>
+
+    <script>
+        /*
+            Composer conveniences. The submit itself stays with the
+            existing AJAX handler further down - this only adds the
+            keyboard shortcut and lets the box grow with the message
+            instead of scrolling inside two lines.
+        */
+        (function () {
+
+            const input = document.getElementById("commentInput");
+            const form = document.getElementById("commentForm");
+
+            if (!input || !form) return;
+
+            const MAX_HEIGHT = 180;
+
+            function autoGrow() {
+                input.style.height = "auto";
+                input.style.height = Math.min(input.scrollHeight, MAX_HEIGHT) + "px";
+            }
+
+            input.addEventListener("input", autoGrow);
+
+            input.addEventListener("keydown", function (event) {
+
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                    event.preventDefault();
+
+                    if (input.value.trim()) {
+                        // requestSubmit fires the submit event, so the
+                        // AJAX handler runs exactly as it does on click.
+                        form.requestSubmit();
+                    }
+                }
+            });
+
+            // Reset the grown height after a successful post clears the box.
+            form.addEventListener("submit", function () {
+                setTimeout(autoGrow, 0);
+            });
+
+            autoGrow();
+        })();
+    </script>
+
+    <script>
         function toggleReply(id) {
             const form = document.getElementById("reply-form-" + id);
 
@@ -1445,6 +1581,12 @@ Submission Files
                         "beforeend",
                         createCommentHTML(data.comment)
                     );
+
+                    const countEl = document.getElementById("commentCount");
+
+                    if (countEl) {
+                        countEl.textContent = (parseInt(countEl.textContent, 10) || 0) + 1;
+                    }
 
                     textarea.value = "";
 
