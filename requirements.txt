@@ -5,6 +5,9 @@ Flask-Migrate==4.1.0
 SQLAlchemy==2.0.51
 Werkzeug==3.1.8
 Jinja2==3.1.6
+# Imported directly by app/utils/text_filters.py, so it is declared
+# rather than relied on as a Jinja2 transitive dependency.
+MarkupSafe==3.0.3
 python-dotenv==1.2.2
 gunicorn==23.0.0
 psycopg[binary]==3.3.4

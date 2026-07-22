@@ -9440,3 +9440,57 @@ body.panel-mode .task-detail-right{
     max-height:none;
     overflow:visible;
 }
+
+
+/* ==========================================================
+   RECENT ACTIVITY - DENSER
+   Each entry was a bordered card with the message and the
+   timestamp stacked, so a row ran ~79px with its entire right
+   half blank and ten entries filled the viewport. The feed is
+   a list now: message left, time right, one line each, on a
+   divider instead of a card.
+
+   Scoped to .activity-feed - .activity-row is also used by the
+   Recent Tasks list, which stacks deliberately.
+   ========================================================== */
+
+.activity-feed{
+    gap:0;
+}
+
+.activity-feed .activity-row{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:18px;
+
+    padding:9px 4px;
+
+    border:none;
+    border-bottom:1px solid var(--color-border);
+    border-radius:0;
+    background:transparent;
+}
+
+.activity-feed .activity-row:last-child{
+    border-bottom:none;
+}
+
+.activity-feed .activity-row strong{
+    min-width:0;
+    font-size:13px;
+    font-weight:600;
+
+    /* Long messages truncate rather than wrapping to two lines
+       and undoing the compaction. Full text is in the title. */
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.activity-feed .activity-row span{
+    flex-shrink:0;
+    font-size:11.5px;
+    color:var(--color-text-muted);
+    font-variant-numeric:tabular-nums;
+}

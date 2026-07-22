@@ -176,12 +176,16 @@
 
                 <div class="activity-feed">
 
+                    {#
+                        Message and time on one line. Stacked in a boxed
+                        card each row ran ~79px with the whole right half
+                        empty, so ten entries filled the screen and said
+                        very little.
+                    #}
                     {% for activity in recent_activities %}
                     <div class="activity-row">
-                        <div>
-                            <strong>{{ activity.message }}</strong>
-                            <span>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</span>
-                        </div>
+                        <strong title="{{ activity.message }}">{{ activity.message }}</strong>
+                        <span>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</span>
                     </div>
                     {% else %}
                     <p class="empty-text">No recent activity.</p>
