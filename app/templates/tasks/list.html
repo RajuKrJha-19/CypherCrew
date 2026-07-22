@@ -839,7 +839,16 @@
 
             customizerBtn.onclick = function (e) {
                 e.stopPropagation();
-                dropdown.classList.toggle("show");
+
+                const willShow = !dropdown.classList.contains("show");
+
+                const sortMenuEl = document.getElementById("sortDropdownMenu");
+                const filterMenuEl = document.getElementById("filterDropdownMenu");
+
+                if (sortMenuEl) sortMenuEl.classList.remove("show");
+                if (filterMenuEl) filterMenuEl.classList.remove("show");
+
+                dropdown.classList.toggle("show", willShow);
             };
 
             document.addEventListener("click", function () {
@@ -1624,6 +1633,11 @@ TASK LIST TOOLBAR DROPDOWNS
         const sortMenu = document.getElementById("sortDropdownMenu");
         const filterMenu = document.getElementById("filterDropdownMenu");
 
+        // Closes all three toolbar dropdowns (Sort / Date Range /
+        // Columns) - previously each had its own independent open
+        // state with no idea the other two existed, so opening
+        // Columns while Date Range was still open left both showing
+        // at once, overlapping.
         function closeToolbarMenus() {
 
             if (sortMenu) {
@@ -1634,6 +1648,10 @@ TASK LIST TOOLBAR DROPDOWNS
                 filterMenu.classList.remove("show");
             }
 
+            if (dropdown) {
+                dropdown.classList.remove("show");
+            }
+
         }
 
         if (sortBtn && sortMenu) {
@@ -1642,11 +1660,13 @@ TASK LIST TOOLBAR DROPDOWNS
 
                 e.stopPropagation();
 
-                if (filterMenu) {
-                    filterMenu.classList.remove("show");
-                }
+                const willShow = !sortMenu.classList.contains("show");
 
-                sortMenu.classList.toggle("show");
+                closeToolbarMenus();
+
+                if (willShow) {
+                    sortMenu.classList.add("show");
+                }
 
             });
 
@@ -1658,11 +1678,13 @@ TASK LIST TOOLBAR DROPDOWNS
 
                 e.stopPropagation();
 
-                if (sortMenu) {
-                    sortMenu.classList.remove("show");
-                }
+                const willShow = !filterMenu.classList.contains("show");
 
-                filterMenu.classList.toggle("show");
+                closeToolbarMenus();
+
+                if (willShow) {
+                    filterMenu.classList.add("show");
+                }
 
             });
 
