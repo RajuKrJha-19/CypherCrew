@@ -289,13 +289,41 @@ def backfill(limit=None, retry_failed=False):
 
 
 def register_cli(app):
-    """`flask thumbnails-backfill` - one-off for the existing library."""
+    """`flask thumbnails-backfill` - one-off for the existing library.
+
+    Entirely optional: a file with no thumbnail still generates one the
+    first time it is viewed. Running this just does the work up front
+    instead of making the first viewer wait.
+    """
+    import click
 
     @app.cli.command("thumbnails-backfill")
-    def _backfill_command():
-        counts = backfill()
+    @click.option(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most this many files, so a large library can "
+             "be done in batches rather than one long run.",
+    )
+    @click.option(
+        "--retry-failed",
+        is_flag=True,
+        default=False,
+        help="Also retry files previously marked failed.",
+    )
+    def _backfill_command(limit, retry_failed):
+        counts = backfill(limit=limit, retry_failed=retry_failed)
+
+        if not counts:
+            print("nothing to do - no files are pending")
+            return
 
         for state, count in sorted(counts.items(), key=lambda kv: str(kv[0])):
             print(f"{state}: {count}")
 
-        print("done")
+        remaining = (
+            TaskFile.query
+            .filter(TaskFile.thumbnail_state == STATE_PENDING)
+            .count()
+        )
+        print(f"still pending: {remaining}")
