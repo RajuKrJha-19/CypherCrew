@@ -17,19 +17,19 @@
             <div class="stats-grid">
                 <div class="metric-card">
                     <span>My Tasks</span>
-                    <strong>{{ stats.total }}</strong>
+                    <strong data-live-stat="total">{{ stats.total }}</strong>
                 </div>
                 <div class="metric-card">
                     <span>In Review</span>
-                    <strong>{{ stats.in_review }}</strong>
+                    <strong data-live-stat="in_review">{{ stats.in_review }}</strong>
                 </div>
                 <div class="metric-card">
                     <span>Published</span>
-                    <strong>{{ stats.published }}</strong>
+                    <strong data-live-stat="published">{{ stats.published }}</strong>
                 </div>
                 <div class="metric-card warning">
                     <span>Overdue</span>
-                    <strong>{{ stats.overdue }}</strong>
+                    <strong data-live-stat="overdue">{{ stats.overdue }}</strong>
                 </div>
             </div>
 
@@ -73,5 +73,12 @@
                 <p>No extra permissions assigned.</p>
                 {% endif %}
             </div>
-        
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.CYPHER_LIVE_STATS_API = "{{ url_for('dashboard.api_my_stats') }}";
+</script>
+<script src="{{ url_for('static', filename='js/dashboard-live.js') }}"></script>
 {% endblock %}

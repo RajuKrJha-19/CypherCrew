@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
 from app.utils.timezone import ist_now
-from flask import Blueprint, render_template, redirect, url_for
+from flask import Blueprint, render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.utils.timezone import ist_now
@@ -100,6 +100,78 @@ def admin():
         status_chart=status_chart,
         month_chart=month_chart
     )
+
+@dashboard_bp.route("/api/overview")
+@login_required
+def api_overview():
+
+    # Deliberately the cheap half of the dashboard only - build_overview()
+    # is a handful of plain .count() queries, unlike build_workload(),
+    # build_company_health() or build_top_employees()/build_top_clients(),
+    # which loop and issue one query per employee/client. Polling those
+    # every few seconds is exactly the slowdown a live-refresh feature
+    # should not introduce, so only this cheap overview is exposed here.
+    if current_user.role not in ["admin", "super_admin"]:
+        return jsonify(success=False), 403
+
+    overview = build_overview()
+
+    return jsonify(
+        success=True,
+        total_tasks=overview["total_tasks"],
+        completed_tasks=overview["completed_tasks"],
+        pending_tasks=overview["pending_tasks"],
+        active_clients=overview["active_clients"],
+        active_employees=overview["active_employees"],
+        meetings_today=overview["meetings_today"],
+    )
+
+
+@dashboard_bp.route("/api/my-stats")
+@login_required
+def api_my_stats():
+
+    # Mirrors build_task_stats()'s numbers for the current employee,
+    # but as direct COUNT queries instead of loading every task row
+    # into Python - the cheap shape this polls every few seconds.
+    not_void = Task.status.notin_(task_status.EXCLUDED_FROM_METRICS)
+
+    base_query = Task.query.filter(
+        Task.assigned_to_id == current_user.id,
+        not_void
+    )
+
+    total = base_query.count()
+
+    published = base_query.filter(
+        Task.status == task_status.PUBLISHED
+    ).count()
+
+    in_review = base_query.filter(
+        Task.status.in_([
+            task_status.CORE_REVIEW,
+            task_status.CLIENT_REVIEW
+        ])
+    ).count()
+
+    overdue = base_query.filter(
+        Task.deadline.isnot(None),
+        Task.deadline < ist_now(),
+        Task.status.in_([
+            task_status.ASSIGNED,
+            task_status.IN_PROGRESS,
+            task_status.PAUSED
+        ])
+    ).count()
+
+    return jsonify(
+        success=True,
+        total=total,
+        published=published,
+        in_review=in_review,
+        overdue=overdue,
+    )
+
 
 @dashboard_bp.route("/my-tasks")
 @login_required

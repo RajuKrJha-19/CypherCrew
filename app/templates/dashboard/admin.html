@@ -21,7 +21,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
                 <div class="kpi-content">
                     <span>Total Tasks</span>
-                    <h2>{{ overview.total_tasks }}</h2>
+                    <h2 data-live-stat="total_tasks">{{ overview.total_tasks }}</h2>
                     <p class="{{ overview.task_growth.class }}">
                         {{ overview.task_growth.arrow }} {{ overview.task_growth.text }}
                     </p>
@@ -32,7 +32,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-check"></i></div>
                 <div class="kpi-content">
                     <span>Completed Tasks</span>
-                    <h2>{{ overview.completed_tasks }}</h2>
+                    <h2 data-live-stat="completed_tasks">{{ overview.completed_tasks }}</h2>
                     <p class="{{ overview.completed_growth.class }}">
                         {{ overview.completed_growth.arrow }} {{ overview.completed_growth.text }}
                     </p>
@@ -43,7 +43,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
                 <div class="kpi-content">
                     <span>Pending Tasks</span>
-                    <h2>{{ overview.pending_tasks }}</h2>
+                    <h2 data-live-stat="pending_tasks">{{ overview.pending_tasks }}</h2>
                     <p class="{{ overview.pending_note.class }}">
                         {{ overview.pending_note.arrow }} {{ overview.pending_note.text }}
                     </p>
@@ -54,7 +54,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-building"></i></div>
                 <div class="kpi-content">
                     <span>Active Clients</span>
-                    <h2>{{ overview.active_clients }}</h2>
+                    <h2 data-live-stat="active_clients">{{ overview.active_clients }}</h2>
                     <p class="{{ overview.client_note.class }}">
                         {{ overview.client_note.arrow }} {{ overview.client_note.text }}
                     </p>
@@ -65,7 +65,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
                 <div class="kpi-content">
                     <span>Active Employees</span>
-                    <h2>{{ overview.active_employees }}</h2>
+                    <h2 data-live-stat="active_employees">{{ overview.active_employees }}</h2>
                     <p class="{{ overview.employee_note.class }}">
                         {{ overview.employee_note.arrow }} {{ overview.employee_note.text }}
                     </p>
@@ -76,7 +76,7 @@
                 <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
                 <div class="kpi-content">
                     <span>Meetings Today</span>
-                    <h2>{{ overview.meetings_today }}</h2>
+                    <h2 data-live-stat="meetings_today">{{ overview.meetings_today }}</h2>
                     <p>
                         <a href="{{ url_for('calendar.index') }}">
                             View calendar
@@ -248,6 +248,10 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+    window.CYPHER_LIVE_STATS_API = "{{ url_for('dashboard.api_overview') }}";
+</script>
+<script src="{{ url_for('static', filename='js/dashboard-live.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
