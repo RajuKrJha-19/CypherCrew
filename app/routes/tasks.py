@@ -322,19 +322,19 @@ def list_tasks():
                 Task.created_at >= today - timedelta(days=int(custom_days_value))
             )
 
-    if assigned_to:
+    if assigned_to and assigned_to.isdigit():
 
         query = query.filter(
             Task.assigned_to_id == int(assigned_to)
         )
 
-    if assigned_by:
+    if assigned_by and assigned_by.isdigit():
 
         query = query.filter(
             Task.created_by_id == int(assigned_by)
         )
 
-    if client_id:
+    if client_id and client_id.isdigit():
 
         query = query.filter(
             Task.client_id == int(client_id)

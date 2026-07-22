@@ -63,6 +63,9 @@ def user_permissions(user_id):
 
         for permission_id in selected_permissions:
 
+            if not permission_id.isdigit():
+                continue
+
             db.session.add(
                 UserPermission(
                     user_id=user.id,
