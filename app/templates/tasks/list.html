@@ -553,6 +553,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script>
         document.addEventListener("DOMContentLoaded", function () {
             const cards = document.querySelectorAll(".task-card");
@@ -1142,7 +1143,7 @@
                     .then(function (data) {
 
                         if (!data.success) {
-                            alert(data.message || "Unable to load files.");
+                            showToast(data.message || "Unable to load files.", "error");
                             return;
                         }
 
@@ -1155,7 +1156,7 @@
 
                     })
                     .catch(function () {
-                        alert("Unable to load files.");
+                        showToast("Unable to load files. Check your connection and try again.", "error");
                     });
 
             });
@@ -1390,7 +1391,7 @@
                             syncColumnChrome(oldColumn);
                             syncColumnChrome(column);
 
-                            alert(data.message);
+                            showToast(data.message || "Unable to update task status.", "error");
 
                             return;
 
@@ -1398,7 +1399,7 @@
 
                         if (data.message) {
 
-                            alert(data.message);
+                            showToast(data.message, "success");
 
                         }
 
@@ -1412,7 +1413,7 @@
                         syncColumnChrome(oldColumn);
                         syncColumnChrome(column);
 
-                        alert("Unable to update task.");
+                        showToast("Unable to update task. Check your connection and try again.", "error");
 
                     });
 
