@@ -131,8 +131,19 @@ def add_deliverable(client_id):
 
     client = Client.query.get_or_404(client_id)
 
-    month = int(request.form.get("month"))
-    year = int(request.form.get("year"))
+    try:
+        month = int(request.form.get("month"))
+        year = int(request.form.get("year"))
+        completed_count = int(request.form.get("completed_count") or 0)
+        target_count = int(request.form.get("target_count") or 0)
+
+    except (TypeError, ValueError):
+        flash(
+            "Please provide valid numbers for month, year, "
+            "completed count and target count.",
+            "error"
+        )
+        return redirect(url_for("clients.client_detail", client_id=client_id))
 
     monthly_target = ClientMonthlyTarget.query.filter_by(
         client_id=client.id,
@@ -153,8 +164,8 @@ def add_deliverable(client_id):
         monthly_target_id=monthly_target.id,
         service_name=request.form.get("service_name"),
         deliverable_name=request.form.get("deliverable_name"),
-        completed_count=int(request.form.get("completed_count") or 0),
-        target_count=int(request.form.get("target_count") or 0)
+        completed_count=completed_count,
+        target_count=target_count
     )
 
     db.session.add(deliverable)
@@ -182,10 +193,26 @@ def edit_deliverable(deliverable_id):
 
     if request.method == "POST":
 
+        try:
+            completed_count = int(request.form.get("completed_count") or 0)
+            target_count = int(request.form.get("target_count") or 0)
+
+        except (TypeError, ValueError):
+            flash(
+                "Completed count and target count must be valid numbers.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "clients.edit_deliverable",
+                    deliverable_id=deliverable.id
+                )
+            )
+
         deliverable.service_name = request.form.get("service_name")
         deliverable.deliverable_name = request.form.get("deliverable_name")
-        deliverable.completed_count = int(request.form.get("completed_count") or 0)
-        deliverable.target_count = int(request.form.get("target_count") or 0)
+        deliverable.completed_count = completed_count
+        deliverable.target_count = target_count
 
         db.session.commit()
 
