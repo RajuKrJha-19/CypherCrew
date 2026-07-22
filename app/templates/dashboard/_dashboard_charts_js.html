@@ -1,0 +1,258 @@
+{#
+    Chart.js setup for the two admin dashboards: the tasks-by-status
+    doughnut with its clickable legend, and the task-trend line chart.
+
+    Extracted because both dashboards carried their own copy and the
+    copies had already drifted - admin.html's statusColors listed six
+    colours for seven board statuses, so every status from On Hold
+    onwards was drawn in the next status's colour and Published fell
+    off the end of the array. Exactly the failure mode task_status.py
+    was written to stop, one layer up.
+#}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        const statusLabels = {{ status_chart["labels"]| tojson }};
+        const statusValues = {{ status_chart["values"]| tojson }};
+        const statusTotal = statusValues.reduce((a, b) => a + b, 0);
+
+        // Order matches task_status.BOARD_STATUSES. On Hold is slate
+        // rather than another warm colour: it is parked work, not
+        // work in flight, and it should read that way at a glance.
+        const statusColors = [
+            "#2563EB",   // Assigned
+            "#EC4899",   // In Progress
+            "#FB923C",   // Paused
+            "#94A3B8",   // On Hold
+            "#FACC15",   // Core Review
+            "#14B8A6",   // Client Review
+            "#10B981"    // Published
+        ];
+
+        const centerTextPlugin = {
+            id: "centerText",
+            beforeDraw(chart) {
+                const { width, height, ctx } = chart;
+
+                ctx.save();
+                ctx.font = "700 26px Arial";
+                ctx.fillStyle = "#0F172A";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(statusTotal, width / 2, height / 2 - 8);
+
+                ctx.font = "400 13px Arial";
+                ctx.fillStyle = "#64748B";
+                ctx.fillText("Total", width / 2, height / 2 + 18);
+                ctx.restore();
+            }
+        };
+
+        const statusCtx = document.getElementById("statusChart");
+
+        if (statusCtx) {
+            new Chart(statusCtx, {
+                type: "doughnut",
+                data: {
+                    labels: statusLabels,
+                    datasets: [{
+                        data: statusValues,
+                        backgroundColor: statusColors,
+                        borderColor: "#ffffff",
+                        borderWidth: 4,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: "58%",
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.raw || 0;
+                                    const percent = statusTotal ? Math.round((value / statusTotal) * 100) : 0;
+                                    return context.label + ": " + value + " (" + percent + "%)";
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [centerTextPlugin]
+            });
+        }
+
+        const statusLegend = document.getElementById("statusLegend");
+
+        if (statusLegend) {
+            statusLegend.innerHTML = statusLabels.map(function (label, index) {
+                const value = statusValues[index] || 0;
+                const percent = statusTotal ? Math.round((value / statusTotal) * 100) : 0;
+
+                return `
+<a
+    href="/tasks?status=${encodeURIComponent(label)}"
+    class="status-legend-row dashboard-status-link"
+>
+    <div class="status-legend-left">
+        <span style="background:${statusColors[index]}"></span>
+        <p>${label}</p>
+    </div>
+
+    <strong>
+        ${value}
+        <em>(${percent}%)</em>
+    </strong>
+</a>
+`;
+            }).join("");
+        }
+
+        const trendCtx = document.getElementById("taskTrendChart");
+
+        if (trendCtx) {
+            new Chart(trendCtx, {
+                type: "line",
+                data: {
+                    labels: {{ month_chart.labels | tojson }},
+        datasets: [
+            {
+                label: "Created",
+                data: {{ month_chart.created | tojson }},
+            borderColor: "#2563EB",
+            backgroundColor: "rgba(37, 99, 235, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Completed",
+                data: {{ month_chart.completed | tojson }},
+            borderColor: "#22C55E",
+            backgroundColor: "rgba(34, 197, 94, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Pending",
+                data: {{ month_chart.pending | tojson }},
+            borderColor: "#F97316",
+            backgroundColor: "rgba(249, 115, 22, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "In Progress",
+                data: {{ month_chart.in_progress | tojson }},
+            borderColor: "#8B5CF6",
+            backgroundColor: "rgba(139, 92, 246, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Paused",
+                data: {{ month_chart.paused | tojson }},
+            borderColor: "#FB923C",
+            backgroundColor: "rgba(251, 146, 60, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "On Hold",
+                data: {{ month_chart.on_hold | tojson }},
+            borderColor: "#94A3B8",
+            backgroundColor: "rgba(148, 163, 184, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Core Review",
+                data: {{ month_chart.core_review | tojson }},
+            borderColor: "#EAB308",
+            backgroundColor: "rgba(234, 179, 8, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Client Review",
+                data: {{ month_chart.client_review | tojson }},
+            borderColor: "#14B8A6",
+            backgroundColor: "rgba(20, 184, 166, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                },
+            {
+                label: "Published",
+                data: {{ month_chart.published | tojson }},
+            borderColor: "#111827",
+            backgroundColor: "rgba(17, 24, 39, 0.10)",
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5
+                }
+        ]
+        },
+        options: {
+            responsive: true,
+                maintainAspectRatio: false,
+                    interaction: {
+                mode: "index",
+                    intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: "top",
+                        labels: {
+                        usePointStyle: true,
+                            boxWidth: 8,
+                                font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: "#64748B",
+                            maxTicksLimit: 7
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                        ticks: {
+                        precision: 0,
+                            color: "#64748B"
+                    },
+                    grid: {
+                        color: "#EEF2F7"
+                    }
+                }
+            }
+        }
+    });
+}
+    </script>

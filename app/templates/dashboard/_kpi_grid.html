@@ -1,0 +1,74 @@
+{#
+    Headline counters, shared by the super admin and admin dashboards.
+
+    Extracted from the two admin dashboards, which were 89% identical.
+#}
+<div class="dashboard-kpi-grid">
+
+    <a href="{{ url_for('tasks.list_tasks') }}" class="kpi-card kpi-blue dashboard-card-link">
+        <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
+        <div class="kpi-content">
+            <span>Total Tasks</span>
+            <h2 data-live-stat="total_tasks">{{ overview.total_tasks }}</h2>
+            <p class="{{ overview.task_growth.class }}">
+                {{ overview.task_growth.arrow }} {{ overview.task_growth.text }}
+            </p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tasks.list_tasks', status='Published') }}"
+        class="kpi-card kpi-green dashboard-card-link">
+        <div class="kpi-icon"><i class="fa-solid fa-check"></i></div>
+        <div class="kpi-content">
+            <span>Completed Tasks</span>
+            <h2 data-live-stat="completed_tasks">{{ overview.completed_tasks }}</h2>
+            <p class="{{ overview.completed_growth.class }}">
+                {{ overview.completed_growth.arrow }} {{ overview.completed_growth.text }}
+            </p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tasks.list_tasks', status='Pending') }}"
+        class="kpi-card kpi-purple dashboard-card-link">
+        <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+        <div class="kpi-content">
+            <span>Pending Tasks</span>
+            <h2 data-live-stat="pending_tasks">{{ overview.pending_tasks }}</h2>
+            <p class="{{ overview.pending_note.class }}">
+                {{ overview.pending_note.arrow }} {{ overview.pending_note.text }}
+            </p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('clients.list_clients') }}" class="kpi-card kpi-orange dashboard-card-link">
+        <div class="kpi-icon"><i class="fa-solid fa-building"></i></div>
+        <div class="kpi-content">
+            <span>Active Clients</span>
+            <h2 data-live-stat="active_clients">{{ overview.active_clients }}</h2>
+            <p class="{{ overview.client_note.class }}">
+                {{ overview.client_note.arrow }} {{ overview.client_note.text }}
+            </p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('users.list_users') }}" class="kpi-card kpi-sky dashboard-card-link">
+        <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+        <div class="kpi-content">
+            <span>Active Employees</span>
+            <h2 data-live-stat="active_employees">{{ overview.active_employees }}</h2>
+            <p class="{{ overview.employee_note.class }}">
+                {{ overview.employee_note.arrow }} {{ overview.employee_note.text }}
+            </p>
+        </div>
+    </a>
+
+    <div class="kpi-card kpi-red">
+        <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
+        <div class="kpi-content">
+            <span>Meetings Today</span>
+            <h2 data-live-stat="meetings_today">{{ overview.meetings_today }}</h2>
+            <p><a href="{{ url_for('calendar.index') }}">View calendar</a></p>
+        </div>
+    </div>
+
+</div>

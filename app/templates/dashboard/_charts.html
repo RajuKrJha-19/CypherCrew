@@ -1,0 +1,37 @@
+{#
+    Tasks-by-status and task-trend charts. The canvases are here; the
+    Chart.js setup lives in _dashboard_charts_js.html.
+
+    Extracted from the two admin dashboards, which were 89% identical.
+#}
+<div class="dashboard-middle">
+
+        <div class="chart-card status-chart-card">
+            <div class="card-header">
+                <div>
+                    <h3>Tasks by Status</h3>
+                    <p>Overall workflow status</p>
+                </div>
+            </div>
+
+            <div class="status-chart-layout">
+                <div class="status-chart-box">
+                    <canvas id="statusChart"></canvas>
+                </div>
+
+                <div class="status-chart-legend" id="statusLegend"></div>
+            </div>
+        </div>
+
+        <div class="chart-card trend-chart-card">
+            <div class="card-header">
+                <div>
+                    <h3>Task Trend</h3>
+                    <p>Status-wise task trend</p>
+                </div>
+            </div>
+
+            <canvas id="taskTrendChart"></canvas>
+        </div>
+
+</div>
