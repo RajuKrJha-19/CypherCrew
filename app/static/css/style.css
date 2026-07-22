@@ -1874,8 +1874,8 @@ body{
 }
 
 .progress-track span.active{
-    background:var(--color-neutral);
-    border-color:var(--color-neutral);
+    background:var(--color-primary);
+    border-color:var(--color-primary);
     color:var(--color-surface);
 }
 
@@ -1933,7 +1933,7 @@ body{
 }
 
 .reject-submit-btn{
-    background:var(--color-neutral);
+    background:var(--color-danger);
     color:var(--color-surface);
 }
 
@@ -3762,7 +3762,7 @@ grid-template-columns:repeat(2,1fr);
     padding: 0 10px;
     margin-bottom: 14px;
     border-radius: 9px;
-    background: var(--color-neutral);
+    background: var(--color-primary);
     color: var(--color-surface);
     text-decoration: none;
     font-size: 13px;
@@ -3770,7 +3770,7 @@ grid-template-columns:repeat(2,1fr);
 }
 
 .calendar-create-task-btn:hover {
-    background: var(--color-neutral-hover);
+    background: var(--color-primary-hover);
 }
 
 
@@ -4940,7 +4940,7 @@ SKETCH STYLE DISCUSSION UI
     min-width: 42px !important;
     border-radius: 50% !important;
     border: none !important;
-    background: var(--color-neutral) !important;
+    background: var(--color-primary) !important;
     color: var(--color-surface) !important;
     font-size: 0 !important;
     position: relative;
@@ -5085,7 +5085,7 @@ SKETCH STYLE DISCUSSION UI
     padding: 0 14px;
     border: none;
     border-radius: 18px;
-    background: var(--color-neutral);
+    background: var(--color-primary);
     color: var(--color-surface);
     font-size: 13px;
     font-weight: 700;
@@ -5132,7 +5132,7 @@ SKETCH STYLE DISCUSSION UI
     min-width: 38px !important;
 
     border-radius: 50% !important;
-    background: var(--color-neutral) !important;
+    background: var(--color-primary) !important;
     color: var(--color-surface) !important;
 
     font-size: 0 !important;
@@ -5237,7 +5237,7 @@ SKETCH STYLE DISCUSSION UI
 }
 
 .comment-edit-actions button:first-child{
-    background:var(--color-neutral) !important;
+    background:var(--color-primary) !important;
     color:var(--color-surface) !important;
 }
 
@@ -6427,7 +6427,7 @@ body.sidebar-collapsed .task-page-sticky-header{
     height:52px;
     border:0;
     border-radius:16px;
-    background:var(--color-neutral);
+    background:var(--color-primary);
     color:var(--color-surface);
     font-size:15px;
     font-weight:600;
@@ -6435,7 +6435,7 @@ body.sidebar-collapsed .task-page-sticky-header{
 }
 
 .report-submit-btn:hover{
-    background:var(--color-neutral-hover);
+    background:var(--color-primary-hover);
 }
 
 @media(max-width:900px){
@@ -8124,7 +8124,7 @@ TASK LIST TOOLBAR
     padding:0 14px;
     border:none;
     border-radius:8px;
-    background:var(--color-neutral);
+    background:var(--color-primary);
     color:var(--color-surface);
     font-size:12px;
     font-weight:700;
@@ -8132,5 +8132,5 @@ TASK LIST TOOLBAR
 }
 
 .custom-filter-days-box button:hover{
-    background:var(--color-neutral-hover);
+    background:var(--color-primary-hover);
 }
