@@ -44,13 +44,20 @@ def list_meetings():
             flash("Meeting title and date are required.", "error")
             return redirect(url_for("meetings.list_meetings"))
 
-        meeting = Meeting(
-            title=title,
-            client_id=int(client_id) if client_id else None,
-            meeting_date=datetime.strptime(
+        try:
+            parsed_client_id = int(client_id) if client_id else None
+            parsed_meeting_date = datetime.strptime(
                 meeting_date,
                 "%Y-%m-%dT%H:%M"
-            ),
+            )
+        except ValueError:
+            flash("Please select a valid client and meeting date.", "error")
+            return redirect(url_for("meetings.list_meetings"))
+
+        meeting = Meeting(
+            title=title,
+            client_id=parsed_client_id,
+            meeting_date=parsed_meeting_date,
             agenda=agenda
         )
 

@@ -28,9 +28,15 @@ def list_holidays():
             flash("Holiday title and date are required.", "error")
             return redirect(url_for("holidays.list_holidays"))
 
+        try:
+            parsed_date = datetime.strptime(holiday_date, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Holiday date must be a valid date.", "error")
+            return redirect(url_for("holidays.list_holidays"))
+
         holiday = Holiday(
             title=title,
-            holiday_date=datetime.strptime(holiday_date, "%Y-%m-%d").date(),
+            holiday_date=parsed_date,
             description=description
         )
 

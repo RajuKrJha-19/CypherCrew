@@ -34,10 +34,18 @@ def list_leaves():
             flash("Employee, start date and end date are required.", "error")
             return redirect(url_for("leaves.list_leaves"))
 
+        try:
+            parsed_user_id = int(user_id)
+            parsed_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            parsed_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Please select a valid employee and valid dates.", "error")
+            return redirect(url_for("leaves.list_leaves"))
+
         leave = Leave(
-            user_id=int(user_id),
-            start_date=datetime.strptime(start_date, "%Y-%m-%d").date(),
-            end_date=datetime.strptime(end_date, "%Y-%m-%d").date(),
+            user_id=parsed_user_id,
+            start_date=parsed_start_date,
+            end_date=parsed_end_date,
             reason=reason
         )
 

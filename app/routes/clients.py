@@ -96,8 +96,12 @@ def client_detail(client_id):
 
     client = Client.query.get_or_404(client_id)
 
-    selected_month = int(request.args.get("month", date.today().month))
-    selected_year = int(request.args.get("year", date.today().year))
+    try:
+        selected_month = int(request.args.get("month", date.today().month))
+        selected_year = int(request.args.get("year", date.today().year))
+    except (TypeError, ValueError):
+        flash("Invalid month or year in the URL.", "error")
+        return redirect(url_for("clients.client_detail", client_id=client_id))
 
     monthly_target = ClientMonthlyTarget.query.filter_by(
         client_id=client.id,
