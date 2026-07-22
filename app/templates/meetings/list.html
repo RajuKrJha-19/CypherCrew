@@ -30,8 +30,11 @@
             {% endif %}
         {% endwith %}
 
-        <div class="dashboard-grid">
+        {% set can_manage = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
 
+        <div class="dashboard-grid {% if not can_manage %}dashboard-grid-single{% endif %}">
+
+            {% if can_manage %}
             <div class="form-card">
 
                 <h1>Add Meeting</h1>
@@ -92,6 +95,7 @@
                 </form>
 
             </div>
+            {% endif %}
 
             <div class="table-card">
 
@@ -160,6 +164,7 @@
                                         View
                                     </a>
 
+                                    {% if can_manage %}
                                     <form
                                         method="POST"
                                         action="{{ url_for('meetings.delete_meeting', meeting_id=meeting.id) }}"
@@ -169,6 +174,7 @@
                                             Delete
                                         </button>
                                     </form>
+                                    {% endif %}
 
                                 </div>
                             </td>

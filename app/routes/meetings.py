@@ -19,6 +19,7 @@ from app.models import (
     User,
     Notification
 )
+from app.utils.permissions import has_permission
 
 
 meetings_bp = Blueprint(
@@ -28,11 +29,22 @@ meetings_bp = Blueprint(
 )
 
 
+def can_manage_meetings():
+    return (
+        has_permission(current_user, "manage_tasks")
+        or current_user.role in ["admin", "super_admin"]
+    )
+
+
 @meetings_bp.route("/", methods=["GET", "POST"])
 @login_required
 def list_meetings():
 
     if request.method == "POST":
+
+        if not can_manage_meetings():
+            flash("You are not allowed to schedule meetings.", "error")
+            return redirect(url_for("meetings.list_meetings"))
 
         title = request.form.get("title")
         client_id = request.form.get("client_id")
@@ -146,6 +158,10 @@ def meeting_detail(meeting_id):
 @meetings_bp.route("/<int:meeting_id>/delete", methods=["POST"])
 @login_required
 def delete_meeting(meeting_id):
+
+    if not can_manage_meetings():
+        flash("You are not allowed to delete meetings.", "error")
+        return redirect(url_for("meetings.list_meetings"))
 
     meeting = Meeting.query.get_or_404(meeting_id)
 
