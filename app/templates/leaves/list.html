@@ -30,8 +30,11 @@
         {% endif %}
         {% endwith %}
 
-        <div class="dashboard-grid">
+        {% set can_manage = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
 
+        <div class="dashboard-grid {% if not can_manage %}dashboard-grid-single{% endif %}">
+
+            {% if can_manage %}
             <div class="form-card">
 
                 <h1>Add Leave</h1>
@@ -88,6 +91,7 @@
                 </form>
 
             </div>
+            {% endif %}
 
             <div class="table-card">
 
@@ -117,7 +121,9 @@
 
                             <th>Reason</th>
 
+                            {% if can_manage %}
                             <th>Action</th>
+                            {% endif %}
 
                         </tr>
 
@@ -145,6 +151,7 @@
                                 {{ leave.reason or "-" }}
                             </td>
 
+                            {% if can_manage %}
                             <td>
 
                                 <form
@@ -163,6 +170,7 @@
                                 </form>
 
                             </td>
+                            {% endif %}
 
                         </tr>
 
@@ -170,7 +178,7 @@
 
                         <tr>
 
-                            <td colspan="5">
+                            <td colspan="{{ 5 if can_manage else 4 }}">
 
                                 No leaves added.
 

@@ -1423,6 +1423,13 @@ input[type="file"]::file-selector-button:hover{
     gap:18px;
 }
 
+/* When the add-form column is hidden (no permission), let the
+   remaining table take the full row instead of sitting in the
+   narrower first track. */
+.dashboard-grid-single{
+    grid-template-columns:1fr;
+}
+
 .activity-row{
     display:flex;
     justify-content:space-between;

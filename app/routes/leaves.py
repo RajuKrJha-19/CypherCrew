@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import Leave, User
+from app.utils.permissions import has_permission
 
 
 leaves_bp = Blueprint(
@@ -12,6 +13,13 @@ leaves_bp = Blueprint(
     __name__,
     url_prefix="/leaves"
 )
+
+
+def can_manage_leaves():
+    return (
+        has_permission(current_user, "manage_tasks")
+        or current_user.role in ["admin", "super_admin"]
+    )
 
 
 @leaves_bp.route("/", methods=["GET", "POST"])
@@ -24,6 +32,10 @@ def list_leaves():
     ).order_by(User.name.asc()).all()
 
     if request.method == "POST":
+
+        if not can_manage_leaves():
+            flash("You are not allowed to manage employee leaves.", "error")
+            return redirect(url_for("leaves.list_leaves"))
 
         user_id = request.form.get("user_id")
         start_date = request.form.get("start_date")
@@ -81,6 +93,10 @@ def list_leaves():
 @leaves_bp.route("/<int:leave_id>/delete", methods=["POST"])
 @login_required
 def delete_leave(leave_id):
+
+    if not can_manage_leaves():
+        flash("You are not allowed to manage employee leaves.", "error")
+        return redirect(url_for("leaves.list_leaves"))
 
     leave = Leave.query.get_or_404(leave_id)
 

@@ -27,8 +27,11 @@
             {% endif %}
         {% endwith %}
 
-        <div class="dashboard-grid">
+        {% set can_manage = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
 
+        <div class="dashboard-grid {% if not can_manage %}dashboard-grid-single{% endif %}">
+
+            {% if can_manage %}
             <div class="form-card">
                 <h1>Add Holiday</h1>
                 <p>Create a company holiday entry</p>
@@ -63,6 +66,7 @@
 
                 </form>
             </div>
+            {% endif %}
 
             <div class="table-card">
                 <div class="section-heading">
@@ -78,7 +82,9 @@
                             <th>Holiday</th>
                             <th>Date</th>
                             <th>Description</th>
+                            {% if can_manage %}
                             <th>Action</th>
+                            {% endif %}
                         </tr>
                     </thead>
 
@@ -88,6 +94,7 @@
                                 <td>{{ holiday.title }}</td>
                                 <td>{{ holiday.holiday_date.strftime("%d %b %Y") }}</td>
                                 <td>{{ holiday.description or "-" }}</td>
+                                {% if can_manage %}
                                 <td>
                                     <form
                                         method="POST"
@@ -99,10 +106,11 @@
                                         </button>
                                     </form>
                                 </td>
+                                {% endif %}
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="4">
+                                <td colspan="{{ 4 if can_manage else 3 }}">
                                     No holidays added yet.
                                 </td>
                             </tr>

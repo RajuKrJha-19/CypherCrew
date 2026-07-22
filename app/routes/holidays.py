@@ -1,10 +1,11 @@
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import Holiday
+from app.utils.permissions import has_permission
 
 
 holidays_bp = Blueprint(
@@ -14,11 +15,22 @@ holidays_bp = Blueprint(
 )
 
 
+def can_manage_holidays():
+    return (
+        has_permission(current_user, "manage_tasks")
+        or current_user.role in ["admin", "super_admin"]
+    )
+
+
 @holidays_bp.route("/", methods=["GET", "POST"])
 @login_required
 def list_holidays():
 
     if request.method == "POST":
+
+        if not can_manage_holidays():
+            flash("You are not allowed to manage holidays.", "error")
+            return redirect(url_for("holidays.list_holidays"))
 
         title = request.form.get("title")
         holiday_date = request.form.get("holiday_date")
@@ -67,6 +79,10 @@ def list_holidays():
 @holidays_bp.route("/<int:holiday_id>/delete", methods=["POST"])
 @login_required
 def delete_holiday(holiday_id):
+
+    if not can_manage_holidays():
+        flash("You are not allowed to manage holidays.", "error")
+        return redirect(url_for("holidays.list_holidays"))
 
     holiday = Holiday.query.get_or_404(holiday_id)
 
