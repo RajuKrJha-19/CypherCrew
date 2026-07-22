@@ -656,6 +656,75 @@ select:focus{
     color:#166534;
 }
 
+/* Toast - same error/success colors as .alert above, fixed in the
+   corner instead of inline, for feedback that doesn't come from a
+   full-page form submit (AJAX comment/reply/upload failures). */
+.toast-container{
+    position:fixed;
+    bottom:24px;
+    right:24px;
+    z-index:100000;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    max-width:360px;
+}
+
+.toast{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:12px 14px;
+    border-radius:var(--radius-md);
+    box-shadow:var(--shadow-lg);
+    font-size:var(--text-base);
+    font-weight:600;
+    opacity:0;
+    transform:translateY(8px);
+    transition:opacity .2s ease, transform .2s ease;
+}
+
+.toast-show{
+    opacity:1;
+    transform:translateY(0);
+}
+
+.toast-error{
+    background:#fee2e2;
+    color:#991b1b;
+}
+
+.toast-success{
+    background:#dcfce7;
+    color:#166534;
+}
+
+.toast-message{
+    flex:1;
+    line-height:1.4;
+}
+
+.toast-close{
+    border:none;
+    background:transparent;
+    color:inherit;
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    padding:0;
+    opacity:.7;
+}
+
+.toast-close:hover{
+    opacity:1;
+}
+
+@media (prefers-reduced-motion: reduce){
+    .toast{
+        transition:none;
+    }
+}
+
 .table-link{
     color:var(--color-primary);
     text-decoration:none;

@@ -1008,6 +1008,7 @@ Submission Files
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script>
     // Video thumbnails show the browser's own first decoded frame - there
     // is no server-side thumbnail generator. Chrome/Safari usually paint
@@ -1371,7 +1372,7 @@ Submission Files
                     const data = await response.json();
 
                     if (!data.success) {
-                        alert(data.message || "Comment failed.");
+                        showToast(data.message || "Comment failed.", "error");
                         return;
                     }
 
@@ -1402,7 +1403,7 @@ Submission Files
 
                 } catch (error) {
                     console.log(error);
-                    alert("Something went wrong while adding comment.");
+                    showToast("Couldn't post your comment. Check your connection and try again.", "error");
                 } finally {
                     submitBtn.disabled = false;
                 }
@@ -1551,7 +1552,7 @@ Submission Files
                 const data = await response.json();
 
                 if (!data.success) {
-                    alert(data.message || "Reply failed.");
+                    showToast(data.message || "Reply failed.", "error");
                     return;
                 }
 
@@ -1596,7 +1597,7 @@ Submission Files
 
             } catch (error) {
                 console.log(error);
-                alert("Something went wrong while adding reply.");
+                showToast("Couldn't post your reply. Check your connection and try again.", "error");
             } finally {
                 submitBtn.disabled = false;
             }
@@ -1875,7 +1876,7 @@ Submission Files
                     currentController = null;
 
                     if (!wasCancelled) {
-                        alert("Upload failed.");
+                        showToast("Upload failed. Check your connection and try again.", "error");
                     }
 
                 }
@@ -1926,7 +1927,7 @@ Submission Files
 
                         if (!data.success) {
 
-                            alert(data.message);
+                            showToast(data.message || "Unable to update task status.", "error");
                             return;
 
                         }
@@ -1939,7 +1940,7 @@ Submission Files
 
                         console.log(error);
 
-                        alert("Unable to update task status.");
+                        showToast("Unable to update task status. Check your connection and try again.", "error");
 
                     }
 
