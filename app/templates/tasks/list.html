@@ -108,6 +108,33 @@
 
             </form>
 
+            <div class="task-view-switcher" role="group" aria-label="Task view">
+
+                <button
+                    type="button"
+                    class="view-switch-btn"
+                    id="kanbanViewBtn"
+                    data-view="kanban"
+                    aria-pressed="true"
+                >
+                    <i class="fa-solid fa-table-columns"></i>
+                    Board
+                </button>
+
+                <button
+                    type="button"
+                    class="view-switch-btn"
+                    id="listViewBtn"
+                    data-view="list"
+                    aria-pressed="false"
+                >
+                    <i class="fa-solid fa-list"></i>
+                    List
+                </button>
+
+            </div>
+
+            <div class="task-view-panel" id="kanbanViewPanel" data-view-panel="kanban">
             <div class="board-shell">
                 {% for status, column_tasks in board_columns.items() %}
 
@@ -237,6 +264,7 @@
 
                 {% endfor %}
             </div>
+            </div>
 
             <div class="file-popup-overlay" id="filePopupOverlay">
 
@@ -253,6 +281,8 @@
                 </div>
 
             </div>
+
+            <div class="task-view-panel" id="listViewPanel" data-view-panel="list">
 
             <div class="section-heading">
 
@@ -547,13 +577,52 @@
                 </div>
 
             </div>
+
+            </div>
     </div>
 
-    
+
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script>
+    (function () {
+        const STORAGE_KEY = "cypher_task_view";
+
+        const kanbanBtn = document.getElementById("kanbanViewBtn");
+        const listBtn = document.getElementById("listViewBtn");
+        const kanbanPanel = document.getElementById("kanbanViewPanel");
+        const listPanel = document.getElementById("listViewPanel");
+
+        if (!kanbanBtn || !listBtn || !kanbanPanel || !listPanel) return;
+
+        function applyView(view) {
+            const isKanban = view !== "list";
+
+            kanbanPanel.classList.toggle("active", isKanban);
+            listPanel.classList.toggle("active", !isKanban);
+
+            kanbanBtn.classList.toggle("active", isKanban);
+            listBtn.classList.toggle("active", !isKanban);
+
+            kanbanBtn.setAttribute("aria-pressed", String(isKanban));
+            listBtn.setAttribute("aria-pressed", String(!isKanban));
+        }
+
+        kanbanBtn.addEventListener("click", function () {
+            localStorage.setItem(STORAGE_KEY, "kanban");
+            applyView("kanban");
+        });
+
+        listBtn.addEventListener("click", function () {
+            localStorage.setItem(STORAGE_KEY, "list");
+            applyView("list");
+        });
+
+        applyView(localStorage.getItem(STORAGE_KEY) || "kanban");
+    })();
+</script>
 <script>
         document.addEventListener("DOMContentLoaded", function () {
             const cards = document.querySelectorAll(".task-card");
