@@ -508,7 +508,7 @@
                         {% else %}
 
                         <tr>
-                            <td colspan="9">
+                            <td colspan="10">
                                 No tasks found.
                             </td>
                         </tr>
@@ -923,6 +923,18 @@
                 return;
             }
 
+            // Sort/Filter/Search all reload the page (see the two
+            // blocks below), which used to silently reset "Show rows"
+            // back to 10 every time - so remember the last choice the
+            // same way the column customizer already does.
+            const savedRowsPerPage = localStorage.getItem("task_table_rows");
+
+            if (savedRowsPerPage && Array.from(rowsSelect.options).some(function (opt) {
+                return opt.value === savedRowsPerPage;
+            })) {
+                rowsSelect.value = savedRowsPerPage;
+            }
+
             const allRows = Array.from(
                 tableBody.querySelectorAll("tr[data-task-id]")
             );
@@ -984,6 +996,7 @@
             }
 
             rowsSelect.addEventListener("change", function () {
+                localStorage.setItem("task_table_rows", rowsSelect.value);
                 currentPage = 1;
                 renderPage();
             });
@@ -1564,5 +1577,22 @@ TASK LIST TOOLBAR DROPDOWNS
             });
 
         }
+
+        // Escape closes whichever of the three toolbar dropdowns
+        // (Sort / Filter / Columns) is open - previously only a
+        // click outside the menu would close them.
+        document.addEventListener("keydown", function (event) {
+
+            if (event.key !== "Escape") {
+                return;
+            }
+
+            closeToolbarMenus();
+
+            if (dropdown) {
+                dropdown.classList.remove("show");
+            }
+
+        });
     </script>
 {% endblock %}
