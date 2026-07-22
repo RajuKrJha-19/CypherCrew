@@ -49,9 +49,14 @@ def api_notifications():
                 "message": item.message,
                 "link": item.link or "#",
                 "is_read": item.is_read,
+                # Kept for anything relying on the old absolute string;
+                # the widget itself now renders a relative time client-
+                # side from created_at_iso so "2h ago" stays accurate
+                # without needing another server round-trip.
                 "created_at": (
                     item.created_at + timedelta(hours=5, minutes=30)
-                ).strftime("%d %b, %I:%M %p")
+                ).strftime("%d %b, %I:%M %p"),
+                "created_at_iso": item.created_at.isoformat() + "Z"
             }
             for item in notifications
         ]
@@ -74,3 +79,21 @@ def mark_read():
     return jsonify({
         "success": True
     })
+
+
+@notifications_bp.route("/<int:notification_id>/mark-read", methods=["POST"])
+@login_required
+def mark_one_read(notification_id):
+
+    notification = Notification.query.filter_by(
+        id=notification_id,
+        user_id=current_user.id
+    ).first()
+
+    if not notification:
+        return jsonify(success=False), 404
+
+    notification.is_read = True
+    db.session.commit()
+
+    return jsonify(success=True)

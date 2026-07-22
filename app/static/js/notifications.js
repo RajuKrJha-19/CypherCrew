@@ -26,6 +26,35 @@
             .replaceAll("'", "&#039;");
     }
 
+    // "2h ago" reads instantly where an absolute timestamp needs a
+    // moment of arithmetic - the standard notification-feed
+    // convention (Slack, GitHub, Linear). Falls back to the
+    // preformatted absolute string once it's more than a week old,
+    // where a date is more useful than "7d ago".
+    function timeAgo(isoString, fallback) {
+        if (!isoString) return fallback || "";
+
+        const then = new Date(isoString);
+
+        if (isNaN(then.getTime())) return fallback || "";
+
+        const seconds = Math.round((Date.now() - then.getTime()) / 1000);
+
+        if (seconds < 30) return "Just now";
+        if (seconds < 60) return seconds + "s ago";
+
+        const minutes = Math.round(seconds / 60);
+        if (minutes < 60) return minutes + "m ago";
+
+        const hours = Math.round(minutes / 60);
+        if (hours < 24) return hours + "h ago";
+
+        const days = Math.round(hours / 24);
+        if (days < 7) return days === 1 ? "Yesterday" : days + "d ago";
+
+        return fallback || (days + "d ago");
+    }
+
     function unlockSound() {
         soundAllowed = true;
 
@@ -59,9 +88,11 @@
     function render(items) {
         if (!items.length) {
             list.innerHTML = `
-                <p class="notification-empty">
-                    No notifications
-                </p>
+                <div class="notification-empty">
+                    <i class="fa-regular fa-bell-slash"></i>
+                    <strong>You're all caught up</strong>
+                    <span>New activity on your tasks will show up here.</span>
+                </div>
             `;
             return;
         }
@@ -69,12 +100,18 @@
         list.innerHTML = items.map(function (item) {
             const unreadClass = item.is_read ? "" : " unread";
             const link = item.link || "#";
+            const timeLabel = timeAgo(item.created_at_iso, item.created_at);
 
             return `
-                <a class="notification-item${unreadClass}" href="${escapeHtml(link)}">
+                <a
+                    class="notification-item${unreadClass}"
+                    href="${escapeHtml(link)}"
+                    data-notification-id="${item.id}"
+                >
+                    ${item.is_read ? "" : '<span class="notification-dot" aria-hidden="true"></span>'}
                     <strong>${escapeHtml(item.title)}</strong>
                     <span>${escapeHtml(item.message || "")}</span>
-                    <small>${escapeHtml(item.created_at)}</small>
+                    <small>${escapeHtml(timeLabel)}</small>
                 </a>
             `;
         }).join("");
@@ -95,6 +132,10 @@
 
             badge.textContent = count;
             badge.style.display = count > 0 ? "flex" : "none";
+
+            if (markReadBtn) {
+                markReadBtn.disabled = count === 0;
+            }
 
             render(data.notifications || []);
 
@@ -144,6 +185,26 @@
 
     panel.addEventListener("click", function (event) {
         event.stopPropagation();
+    });
+
+    // Clicking an unread notification marks just that one as read in
+    // the background - doesn't block the navigation the link already
+    // triggers, so opening a notification behaves the way every other
+    // link on the page does.
+    list.addEventListener("click", function (event) {
+        const item = event.target.closest(".notification-item.unread");
+
+        if (!item) return;
+
+        const id = item.dataset.notificationId;
+
+        if (!id) return;
+
+        fetch("/notifications/" + id + "/mark-read", {
+            method: "POST"
+        }).catch(function (error) {
+            console.log("Mark-one-read failed:", error);
+        });
     });
 
     document.addEventListener("click", function () {

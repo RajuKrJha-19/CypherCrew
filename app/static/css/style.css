@@ -2061,20 +2061,27 @@ body{
 .notification-panel-head button,
 #markNotificationsRead{
     border:0 !important;
-    background:var(--color-neutral) !important;
-    color:var(--color-surface) !important;
-    padding:9px 9px !important;
-    border-radius:12px !important;
+    background:transparent !important;
+    color:var(--color-primary) !important;
+    padding:6px 10px !important;
+    border-radius:8px !important;
     cursor:pointer;
-    font-size:14px;
-    font-weight:500;
+    font-size:13px;
+    font-weight:600;
     opacity:1 !important;
     height:auto;
 }
 
 .notification-panel-head button:hover,
 #markNotificationsRead:hover{
-    background:var(--color-neutral-hover) !important;
+    background:var(--color-primary-soft) !important;
+}
+
+.notification-panel-head button:disabled,
+#markNotificationsRead:disabled{
+    color:var(--color-text-subtle) !important;
+    cursor:default;
+    pointer-events:none;
 }
 
 .notification-list,
@@ -2088,6 +2095,7 @@ body{
 }
 
 .notification-item{
+    position:relative;
     display:block !important;
     color:var(--color-neutral) !important;
     padding:15px 18px !important;
@@ -2095,6 +2103,16 @@ body{
     border-bottom:1px solid #edf0f4;
     background:var(--color-surface) !important;
     transition:background .2s ease;
+}
+
+.notification-dot{
+    position:absolute;
+    top:18px;
+    right:16px;
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--color-primary);
 }
 
 .notification-item:hover{
@@ -2137,9 +2155,21 @@ body{
 }
 
 .notification-empty{
-    padding:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:44px 20px;
     color:var(--color-text-muted);
+    font-size:13px;
+    text-align:center;
     margin:0;
+}
+
+.notification-empty i{
+    font-size:22px;
+    color:var(--color-text-subtle);
+    margin-bottom:4px;
 }
 
 #notificationList::-webkit-scrollbar{
