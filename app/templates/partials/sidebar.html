@@ -2,6 +2,25 @@
 
     {% set endpoint = request.endpoint or "" %}
 
+    {#
+        Computed once so every nav item is rendered exactly once.
+        Previously "task manager" (permission/role) and "employee"
+        (role only) were two independent {% if %} blocks, so a user
+        who was role=employee AND held the manage_tasks permission
+        (a real combination - see permissions/user_permissions.html)
+        matched both and saw Tasks/Calendar/Reports duplicated, one
+        of the two "My Tasks" links pointing to a different route
+        than the other, and a "My Tasks" link that could redirect
+        straight back to the dashboard for anyone without
+        approve_tasks. tasks.list_tasks and reports.list_reports
+        both already self-scope to "mine" server-side when the
+        viewer lacks manage_tasks / view_reports, so one link with
+        a permission-aware label is enough - no second route needed.
+    #}
+    {% set can_manage_tasks = has_permission(current_user,"manage_tasks") or current_user.role in ["admin", "super_admin"] %}
+    {% set can_review_tasks = current_user.role in ["admin", "super_admin"] or has_permission(current_user,"approve_tasks") %}
+    {% set can_view_reports = has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
+
     <h2>CypherCrew</h2>
 
     <nav class="sidebar-nav">
@@ -11,6 +30,10 @@
         <i class="fa-solid fa-house"></i>
         <span>Dashboard</span>
     </a>
+
+    {% if has_permission(current_user,"manage_users") or has_permission(current_user,"manage_permissions") or has_permission(current_user,"manage_clients") %}
+    <span class="sidebar-nav-label">Company</span>
+    {% endif %}
 
     {% if has_permission(current_user,"manage_users") %}
     <a href="{{ url_for('users.list_users') }}"
@@ -36,19 +59,21 @@
     </a>
     {% endif %}
 
-    {% if has_permission(current_user,"manage_tasks") or current_user.role in ["admin", "super_admin"] %}
+    <span class="sidebar-nav-label">Work</span>
 
     <a href="{{ url_for('tasks.list_tasks') }}"
        class="{% if endpoint.startswith('tasks.') %}active{% endif %}">
         <i class="fa-solid fa-list-check"></i>
-        <span>Tasks</span>
+        <span>{% if can_manage_tasks %}Tasks{% else %}My Tasks{% endif %}</span>
     </a>
 
+    {% if can_review_tasks %}
     <a href="{{ url_for('dashboard.my_tasks') }}"
        class="{% if endpoint == 'dashboard.my_tasks' %}active{% endif %}">
         <i class="fa-solid fa-user-check"></i>
-        <span>My Tasks</span>
+        <span>Review Queue</span>
     </a>
+    {% endif %}
 
     <a href="{{ url_for('calendar.index') }}"
        class="{% if endpoint.startswith('calendar.') %}active{% endif %}">
@@ -56,13 +81,21 @@
         <span>Calendar</span>
     </a>
 
+    {% if can_manage_tasks %}
     <a href="{{ url_for('holidays.list_holidays') }}"
        class="{% if endpoint.startswith('holidays.') %}active{% endif %}">
         <i class="fa-solid fa-umbrella-beach"></i>
         <span>Holidays</span>
     </a>
-
     {% endif %}
+
+    <a href="{{ url_for('reports.list_reports') }}"
+       class="{% if endpoint.startswith('reports.') %}active{% endif %}">
+        <i class="fa-solid fa-chart-column"></i>
+        <span>{% if can_view_reports %}Reports{% else %}My Reports{% endif %}</span>
+    </a>
+
+    <span class="sidebar-nav-label">Workspace</span>
 
     <a href="{{ url_for('notes.list_notes') }}"
        class="{% if endpoint.startswith('notes.') %}active{% endif %}">
@@ -76,39 +109,8 @@
         <span>Gallery</span>
     </a>
 
-    {% if has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
-
-    <a href="{{ url_for('reports.list_reports') }}"
-       class="{% if endpoint.startswith('reports.') %}active{% endif %}">
-        <i class="fa-solid fa-chart-column"></i>
-        <span>Reports</span>
-    </a>
-
-    {% endif %}
-
-    {% if current_user.role == "employee" %}
-
-    <a href="{{ url_for('tasks.list_tasks') }}"
-       class="{% if endpoint.startswith('tasks.') %}active{% endif %}">
-        <i class="fa-solid fa-list-check"></i>
-        <span>My Tasks</span>
-    </a>
-
-    <a href="{{ url_for('calendar.index') }}"
-       class="{% if endpoint.startswith('calendar.') %}active{% endif %}">
-        <i class="fa-solid fa-calendar-days"></i>
-        <span>Calendar</span>
-    </a>
-
-    <a href="{{ url_for('reports.list_reports') }}"
-       class="{% if endpoint.startswith('reports.') %}active{% endif %}">
-        <i class="fa-solid fa-chart-column"></i>
-        <span>My Reports</span>
-    </a>
-
-    {% endif %}
-
-    <a href="{{ url_for('auth.logout') }}">
+    <a href="{{ url_for('auth.logout') }}"
+       onclick="return confirm('Log out of CypherCrew?')">
         <i class="fa-solid fa-right-from-bracket"></i>
         <span>Logout</span>
     </a>
