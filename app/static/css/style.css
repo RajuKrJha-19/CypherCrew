@@ -4330,6 +4330,17 @@ grid-template-columns:repeat(2,1fr);
 
 .task-search-wrap input {
     width: 100%;
+    padding-left: 36px;
+}
+
+.task-search-icon{
+    position:absolute;
+    left:13px;
+    top:50%;
+    transform:translateY(-50%);
+    color:var(--color-text-subtle);
+    font-size:13px;
+    pointer-events:none;
 }
 
 .task-search-suggestions {
@@ -7478,11 +7489,14 @@ TASK LIST TOOLBAR
 }
 
 .toolbar-dropdown-btn{
+    display:flex;
+    align-items:center;
+    gap:8px;
     background:#eef2ff;
-    /* border:1px solid #d9dce3; */
+    border:1px solid transparent;
     border-radius:10px;
     height:40px;
-    padding:5px 9px;
+    padding:5px 12px;
     font-size:12px;
     font-weight:600;
     color:var(--color-primary-hover);
@@ -7490,9 +7504,23 @@ TASK LIST TOOLBAR
     transition:.2s;
 }
 
+.toolbar-dropdown-btn i{
+    font-size:10px;
+    opacity:.7;
+}
+
 .toolbar-dropdown-btn:hover{
     background:#f7f8fb;
     border-color:#c6cbd8;
+}
+
+/* Set once a non-default sort/date-range is applied, so the button
+   itself signals "this is filtering right now" without opening it -
+   the exact ambiguity that made these two easy to confuse with the
+   .filter-bar's own Status/Priority selects above them. */
+.toolbar-dropdown-btn.has-value{
+    background:var(--color-primary-soft);
+    border-color:var(--color-primary);
 }
 
 .task-list-toolbar .column-customizer{
@@ -7523,8 +7551,24 @@ TASK LIST TOOLBAR
     display:block;
 }
 
-.toolbar-dropdown-menu button{
+.toolbar-dropdown-group-label{
     display:block;
+    padding:8px 12px 4px;
+    color:var(--color-text-subtle);
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+}
+
+.toolbar-dropdown-group-label:first-child{
+    padding-top:4px;
+}
+
+.toolbar-dropdown-menu button{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
     width:100%;
     padding:10px 12px;
     background:transparent;
@@ -7541,11 +7585,43 @@ TASK LIST TOOLBAR
     background:#f5f7fb;
 }
 
+.toolbar-dropdown-menu button.active{
+    background:var(--color-primary-soft);
+    color:var(--color-primary-hover);
+    font-weight:700;
+}
+
+.toolbar-dropdown-menu button.active::after{
+    content:"\f00c";
+    font-family:"Font Awesome 6 Free";
+    font-weight:900;
+    font-size:11px;
+}
+
 .toolbar-dropdown-menu hr{
     margin:8px 0;
     border:none;
     border-top:1px solid #eceff5;
 
+}
+
+.toolbar-clear-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:40px;
+    height:40px;
+    margin-left:6px;
+    border-radius:10px;
+    color:var(--color-text-muted);
+    text-decoration:none;
+    font-size:13px;
+    transition:background .15s, color .15s;
+}
+
+.toolbar-clear-btn:hover{
+    background:var(--color-danger-soft);
+    color:var(--color-danger);
 }
 
 

@@ -72,13 +72,15 @@
             <form method="GET" class="filter-bar" id="taskFilterForm">
 
                 <div class="task-search-wrap">
+                    <i class="fa-solid fa-magnifying-glass task-search-icon"></i>
+
                     <input type="text" name="q" id="taskSearchInput" value="{{ search }}"
                         placeholder="Search by Task ID, title, client, employee, status" autocomplete="off">
 
                     <div class="task-search-suggestions" id="taskSearchSuggestions"></div>
                 </div>
 
-                <select name="status" id="taskStatusFilter">
+                <select name="status" id="taskStatusFilter" data-auto-submit>
                     <option value="">All Statuses</option>
 
                     {% for status in statuses %}
@@ -88,7 +90,7 @@
                     {% endfor %}
                 </select>
 
-                <select name="priority" id="taskPriorityFilter">
+                <select name="priority" id="taskPriorityFilter" data-auto-submit>
                     <option value="">All Priorities</option>
 
                     {% for priority in priorities %}
@@ -102,9 +104,11 @@
                     Filter
                 </button>
 
+                {% if search or selected_status or selected_priority %}
                 <a href="{{ url_for('tasks.list_tasks') }}" class="mini-link">
                     Reset
                 </a>
+                {% endif %}
 
             </form>
 
@@ -298,65 +302,43 @@
                         <!-- SORT -->
                         <div class="task-toolbar-dropdown">
 
-                            <button type="button" class="toolbar-dropdown-btn" id="sortDropdownBtn">
-                                Sort By ▼
+                            <button type="button" class="toolbar-dropdown-btn" id="sortDropdownBtn" data-default-label="Sort By">
+                                Sort By <i class="fa-solid fa-chevron-down"></i>
                             </button>
 
                             <div class="toolbar-dropdown-menu" id="sortDropdownMenu">
 
+                                <span class="toolbar-dropdown-group-label">Date</span>
                                 <button type="button" data-sort="newest">Newest First</button>
-
                                 <button type="button" data-sort="oldest">Oldest First</button>
+                                <button type="button" data-sort="deadline_asc">Deadline (Earliest)</button>
+                                <button type="button" data-sort="deadline_desc">Deadline (Latest)</button>
 
-                                <button type="button" data-sort="deadline_asc">
-                                    Deadline (Earliest)
-                                </button>
+                                <span class="toolbar-dropdown-group-label">Priority</span>
+                                <button type="button" data-sort="priority_high">Priority (High → Low)</button>
+                                <button type="button" data-sort="priority_low">Priority (Low → High)</button>
 
-                                <button type="button" data-sort="deadline_desc">
-                                    Deadline (Latest)
-                                </button>
+                                <span class="toolbar-dropdown-group-label">Task ID</span>
+                                <button type="button" data-sort="taskid_asc">Task ID (Ascending)</button>
+                                <button type="button" data-sort="taskid_desc">Task ID (Descending)</button>
 
-                                <button type="button" data-sort="priority_high">
-                                    Priority (High → Low)
-                                </button>
+                                <span class="toolbar-dropdown-group-label">Title</span>
+                                <button type="button" data-sort="title_asc">A → Z</button>
+                                <button type="button" data-sort="title_desc">Z → A</button>
 
-                                <button type="button" data-sort="priority_low">
-                                    Priority (Low → High)
-                                </button>
-
-                                <button type="button" data-sort="taskid_asc">
-                                    Task ID (Ascending)
-                                </button>
-
-                                <button type="button" data-sort="taskid_desc">
-                                    Task ID (Descending)
-                                </button>
-
-                                <button type="button" data-sort="title_asc">
-                                    A → Z
-                                </button>
-
-                                <button type="button" data-sort="title_desc">
-                                    Z → A
-                                </button>
-
-                                <button type="button" data-sort="file_size_desc">
-                                    File Size (Largest First)
-                                </button>
-
-                                <button type="button" data-sort="file_size_asc">
-                                    File Size (Smallest First)
-                                </button>
+                                <span class="toolbar-dropdown-group-label">File Size</span>
+                                <button type="button" data-sort="file_size_desc">Largest First</button>
+                                <button type="button" data-sort="file_size_asc">Smallest First</button>
 
                             </div>
 
                         </div>
 
-                        <!-- FILTER -->
+                        <!-- DATE RANGE -->
                         <div class="task-toolbar-dropdown">
 
-                            <button type="button" class="toolbar-dropdown-btn" id="filterDropdownBtn">
-                                Filter By ▼
+                            <button type="button" class="toolbar-dropdown-btn" id="filterDropdownBtn" data-default-label="Date Range">
+                                Date Range <i class="fa-solid fa-chevron-down"></i>
                             </button>
 
                             <div class="toolbar-dropdown-menu" id="filterDropdownMenu">
@@ -400,16 +382,14 @@
                                 </div>
 
                             </div>
-                            {# .mini-link{
-                            display:inline-block;
-                            text-decoration:none;
-                            font-size:12px;
-                            font-weight:600;
-                            padding:5px 9px;
-                            border-radius:7px;
-                            background:#eef2ff;
-                            color:#1d4ed8;
-                            } #}
+
+                            {% if filter_by %}
+                            <a href="{{ url_for('tasks.list_tasks', q=search, status=selected_status, priority=selected_priority, sort=sort_by) }}"
+                                class="toolbar-clear-btn" title="Clear date range">
+                                <i class="fa-solid fa-xmark"></i>
+                            </a>
+                            {% endif %}
+
                         </div>
 
                     </div>
@@ -1569,6 +1549,72 @@
                 }
             });
         }
+        /*=========================================
+        TOOLBAR STATE: reflect the sort/date-range that's
+        actually applied right now, instead of a static label
+        that gives no clue whether anything is selected.
+        =========================================*/
+        (function () {
+
+            const currentSort = "{{ sort_by }}";
+            const currentFilter = "{{ filter_by }}";
+            const currentDays = "{{ request.args.get('days', '') }}";
+
+            const sortBtnEl = document.getElementById("sortDropdownBtn");
+            const filterBtnEl = document.getElementById("filterDropdownBtn");
+
+            function setButtonLabel(btn, text) {
+                const label = text || btn.dataset.defaultLabel;
+                btn.innerHTML = label + ' <i class="fa-solid fa-chevron-down"></i>';
+            }
+
+            if (sortBtnEl && currentSort) {
+
+                const activeBtn = document.querySelector(
+                    '#sortDropdownMenu button[data-sort="' + currentSort + '"]'
+                );
+
+                if (activeBtn) {
+                    activeBtn.classList.add("active");
+                    setButtonLabel(sortBtnEl, "Sort: " + activeBtn.textContent.trim());
+                    sortBtnEl.classList.add("has-value");
+                }
+            }
+
+            if (filterBtnEl && currentFilter) {
+
+                let label = "";
+
+                if (currentFilter === "custom_days" && currentDays) {
+                    label = "Last " + currentDays + " Days";
+                } else {
+                    const activeBtn = document.querySelector(
+                        '#filterDropdownMenu button[data-filter="' + currentFilter + '"]'
+                    );
+
+                    if (activeBtn) {
+                        activeBtn.classList.add("active");
+                        label = activeBtn.textContent.trim();
+                    }
+                }
+
+                if (label) {
+                    setButtonLabel(filterBtnEl, label);
+                    filterBtnEl.classList.add("has-value");
+                }
+            }
+        })();
+        /*=========================================
+        AUTO-SUBMIT: Status/Priority apply immediately on
+        change, same interaction model as the toolbar dropdowns
+        above, instead of requiring a separate Filter click only
+        for these two fields.
+        =========================================*/
+        document.querySelectorAll("[data-auto-submit]").forEach(function (field) {
+            field.addEventListener("change", function () {
+                this.form.submit();
+            });
+        });
         /*=========================================
 TASK LIST TOOLBAR DROPDOWNS
 =========================================*/

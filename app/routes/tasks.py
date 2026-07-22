@@ -542,6 +542,8 @@ def list_tasks():
         selected_status=selected_status,
         selected_priority=selected_priority,
         search=search,
+        sort_by=sort_by,
+        filter_by=filter_by,
         total_tasks=total_tasks,
         completed_tasks=completed_tasks,
         review_tasks=review_tasks,
