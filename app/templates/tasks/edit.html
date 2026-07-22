@@ -72,7 +72,7 @@
                 <label>Visibility</label>
 
                 <div class="visibility-dropdown">
-                    <div class="visibility-btn" id="visibilityBtn">
+                    <div class="visibility-btn" id="visibilityBtn" tabindex="0" role="button" aria-haspopup="true">
                         <span id="visibilityText">Select Employees</span>
                     </div>
 
@@ -219,6 +219,15 @@ const visibilityText = document.getElementById("visibilityText");
 
 visibilityBtn.addEventListener("click", function () {
     visibilityMenu.classList.toggle("show");
+});
+
+// visibilityBtn is a div, not a <button>, so Enter/Space activation
+// has to be wired up by hand.
+visibilityBtn.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        visibilityMenu.classList.toggle("show");
+    }
 });
 
 document.addEventListener("click", function (e) {

@@ -1429,6 +1429,7 @@ body{
 
 .visibility-select:focus{
     border-color:var(--color-primary);
+    box-shadow:0 0 0 3px var(--color-primary-soft);
 }
 
 .field-hint{
@@ -1577,6 +1578,15 @@ body{
     border-bottom:1.5px solid var(--color-neutral);
     transform:rotate(45deg);
     margin-right:-4px;
+}
+
+/* visibility-btn is a div (not a <button>), so it never had a
+   focus-visible rule at all - now that it also carries tabindex="0",
+   it needs one. */
+.visibility-btn:focus-visible{
+    outline:none;
+    border-color:var(--color-primary);
+    box-shadow:0 0 0 3px var(--color-primary-soft);
 }
 
 /* USER PERFORMANCE PAGE */
@@ -5446,6 +5456,7 @@ body.sidebar-collapsed .task-page-sticky-header{
 
 .note-title-input:focus{
     border-color:var(--color-primary);
+    box-shadow:0 0 0 3px var(--color-primary-soft);
 }
 
 #noteEditor{
@@ -6228,6 +6239,7 @@ body.sidebar-collapsed .task-page-sticky-header{
 .report-section textarea:focus,
 .report-section input:focus{
     border-color:var(--color-primary);
+    box-shadow:0 0 0 3px var(--color-primary-soft);
 }
 
 .report-submit-btn{
