@@ -1556,7 +1556,22 @@ input[type="file"]::file-selector-button:hover{
 html,
 body{
     width:100%;
+
+    /*
+        clip, not hidden.
+
+        overflow-x:hidden makes the body a scroll container, and that
+        silently disables position:sticky for every descendant - the
+        task detail's pinned column among them, which computed as
+        sticky and then scrolled away like static. overflow:clip
+        suppresses the same horizontal overflow without establishing
+        a scroll container.
+
+        The hidden declaration stays first as a fallback for browsers
+        that don't support clip; they keep the old behaviour.
+    */
     overflow-x:hidden;
+    overflow-x:clip;
 }
 
 .layout,
@@ -9247,4 +9262,181 @@ body.sidebar-collapsed .sidebar-logout{
     .gallery-search-btn{
         flex:1 1 100%;
     }
+}
+
+
+/* ==========================================================
+   KANBAN CARD - COMPACT
+   The card was 266px tall on a 555px column, so two of a
+   column's six tasks were visible. 81px of that was the
+   description: a bordered, monospace <pre> carrying 46px of
+   top padding purely to clear an absolutely positioned Copy
+   button, so "1111111" occupied as much room as the title,
+   client, assignee and actions combined. Another 74px was
+   margins between six stacked rows.
+
+   The description is a preview here, not the content - the
+   full text is one click away in the task panel - so it is
+   two clamped lines of ordinary prose, and the row spacing
+   is tightened. Nothing is removed from the card.
+   ========================================================== */
+
+.kanban-description-box{
+    margin-top:6px;
+    position:relative;
+}
+
+.kanban-description{
+    /* Was: 46px top padding, a box, and monospace. */
+    margin:0;
+    padding:0 54px 0 0;
+    border:none;
+    background:transparent;
+
+    /* It is a <pre>, so it defaults to monospace and a brief
+       ends up looking like a code sample. */
+    font-family:inherit;
+    font-size:12.5px;
+    line-height:1.5;
+    color:var(--color-text-muted);
+
+    white-space:pre-wrap;
+    word-break:break-word;
+
+    /* Two lines, then ellipsis. */
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    line-clamp:2;
+    -webkit-box-orient:vertical;
+    max-height:none;
+    overflow:hidden;
+}
+
+/* Copy is still there, just not paying for itself in layout:
+   it appears on hover and on keyboard focus. The description
+   reserves room on the right so text never sits under it. */
+.kanban-copy-btn{
+    top:-2px;
+    right:0;
+    height:22px;
+    min-width:0;
+    padding:0 8px;
+    font-size:11px;
+    opacity:0;
+    transition:opacity .12s ease;
+}
+
+.task-card:hover .kanban-copy-btn,
+.kanban-copy-btn:focus-visible{
+    opacity:1;
+}
+
+/* ---- tighter rows ---- */
+
+.kanban-task-title{
+    margin-top:8px;
+    font-size:14px;
+    line-height:1.35;
+}
+
+.kanban-client{
+    margin-top:8px;
+    margin-bottom:0;
+    font-size:12px;
+
+    /* One line: a long client + deliverable pair used to wrap
+       to three and push the actions off the card. */
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.task-card-meta{
+    margin-top:6px;
+}
+
+.kanban-file-badges{
+    margin:8px 0 0;
+    gap:6px;
+}
+
+.kanban-file-btn{
+    padding:4px 9px;
+    font-size:11.5px;
+}
+
+.kanban-card-actions{
+    margin-top:10px;
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .kanban-copy-btn{
+        transition:none;
+    }
+}
+
+
+/* ==========================================================
+   TASK DETAIL - STICKY REFERENCE COLUMN
+   The two columns are inherently uneven: the left one carries
+   the brief, the discussion and every file, the right one
+   carries time tracking and the activity log. Measured on a
+   real task that was 1694px against 1153px, leaving 541px of
+   dead rail once the right column ran out.
+
+   The gap is content-dependent, so no fixed rearrangement
+   fixes it. Pinning the right column does: scrolling through
+   files and comments now keeps the timings and the history in
+   view instead of scrolling them away, which is exactly what
+   you want while reviewing a submission.
+   ========================================================== */
+
+@media(min-width:1001px){
+
+    .task-detail-right{
+        position:sticky;
+        top:20px;
+
+        /* Without this the column stretches to the row height
+           and sticky has nothing to do. */
+        align-self:start !important;
+
+        /* It is usually taller than the window, so it scrolls
+           within itself rather than being cut off. */
+        max-height:calc(100vh - 40px);
+        overflow-y:auto;
+
+        /* Room for the scrollbar so it doesn't sit on the cards. */
+        padding-right:4px;
+    }
+
+    /* The activity card had its own max-height and scroller.
+       Inside a scrolling column that nests two scrollbars, and
+       the inner one traps the wheel. Let the column own it. */
+    .task-detail-right .activity-card{
+        max-height:none !important;
+        overflow-y:visible !important;
+    }
+
+    .task-detail-right::-webkit-scrollbar{
+        width:8px;
+    }
+
+    .task-detail-right::-webkit-scrollbar-thumb{
+        background:var(--color-border-strong);
+        border-radius:20px;
+    }
+
+    .task-detail-right::-webkit-scrollbar-track{
+        background:transparent;
+    }
+}
+
+/* The drawer is its own scroll container and is narrow enough that
+   the layout is single-column there anyway. */
+body.panel-mode .task-detail-right{
+    position:static;
+    max-height:none;
+    overflow:visible;
 }
