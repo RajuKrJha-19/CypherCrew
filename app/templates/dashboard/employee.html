@@ -2,6 +2,8 @@
 
 {% block title %}Employee | CypherCrew{% endblock %}
 
+{% block body_class %}ds-screen{% endblock %}
+
 {% block content %}
             <div class="page-header">
                 <div>
@@ -62,11 +64,11 @@
                 </div>
             </div>
 
-            <div class="table-card" style="margin-top:18px;">
-                <h2 style="font-size:18px; margin-bottom:10px;">My Permissions</h2>
+            <div class="table-card section-gap-top">
+                <h2 class="my-permissions-title">My Permissions</h2>
 
                 {% if user_permissions %}
-                <p style="margin-bottom:10px;">You can:</p>
+                <p class="my-permissions-intro">You can:</p>
 
                 {% for permission in user_permissions %}
                 <span class="tag">{{ permission }}</span>

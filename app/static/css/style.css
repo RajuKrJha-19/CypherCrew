@@ -11679,3 +11679,60 @@ body.ds-screen .task-suggestion-empty{
     font-size:var(--ds-font-13);
     color:var(--ds-text-muted);
 }
+
+/* ---- Employee dashboard (dashboard/employee.html) ---- */
+
+body.ds-screen .metric-card.warning strong{
+    color:var(--ds-danger);
+}
+
+body.ds-screen .stat-line{
+    border-bottom-color:var(--ds-border);
+}
+
+body.ds-screen .stat-line span{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .stat-line strong{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .activity-row{
+    border-bottom-color:var(--ds-border);
+}
+
+body.ds-screen .activity-row a{
+    color:var(--ds-text);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .activity-row a:hover{
+    color:var(--ds-accent);
+}
+
+body.ds-screen .activity-row span{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .my-permissions-title{
+    font-size:var(--ds-font-15);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+    margin-bottom:var(--ds-space-3);
+}
+
+body.ds-screen .my-permissions-intro{
+    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-13);
+    margin-bottom:var(--ds-space-3);
+}
+
+body.ds-screen .section-gap-top{
+    margin-top:var(--ds-space-5);
+}
