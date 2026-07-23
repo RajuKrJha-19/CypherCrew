@@ -11517,3 +11517,74 @@ body.ds-screen .ql-editor{
 body.ds-screen .ql-editor.ql-blank::before{
     color:var(--ds-text-muted);
 }
+
+/* ---- Task manage form (tasks/edit.html) ---- */
+
+body.ds-screen .form-hint{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .work-estimate-field label{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .work-estimate-field input{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    font-size:var(--ds-font-13);
+    background:var(--ds-surface);
+}
+
+body.ds-screen .work-estimate-field input:focus{
+    border-color:var(--ds-accent);
+    box-shadow:var(--ds-focus-ring);
+}
+
+body.ds-screen .visibility-btn{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface) !important;
+    color:var(--ds-text) !important;
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-normal);
+}
+
+body.ds-screen .visibility-btn::after{
+    border-color:var(--ds-text-secondary);
+}
+
+body.ds-screen .visibility-btn:focus-visible{
+    border-color:var(--ds-accent);
+    box-shadow:var(--ds-focus-ring);
+}
+
+body.ds-screen .visibility-menu{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface);
+}
+
+body.ds-screen .visibility-option{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text);
+}
+
+body.ds-screen .visibility-option:hover{
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .visibility-chip{
+    background:var(--ds-surface-sunken);
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    color:var(--ds-text);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .visibility-chip button{
+    background:var(--ds-text-muted);
+    color:var(--ds-text-inverse);
+}
