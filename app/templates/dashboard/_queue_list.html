@@ -1,0 +1,42 @@
+{#
+    Prioritised actionable queue. Expects `queue` (from build_my_queue):
+    each row carries a priority dot, due-date chip and an inline
+    start/resume button. Shared by the employee dashboard and the
+    manager "My Work" band.
+#}
+<div class="queue-list">
+    {% for item in queue %}
+    <div class="queue-row">
+        <span class="prio-dot prio-{{ item.priority|lower }}"
+              title="{{ item.priority }} priority"></span>
+
+        <div class="queue-body">
+            <a href="{{ url_for('tasks.task_detail', task_id=item.task.id) }}"
+               class="queue-title">{{ item.task.title }}</a>
+            <span class="queue-meta">
+                {{ item.client }} <span class="dot-sep">·</span> {{ item.status }}
+            </span>
+        </div>
+
+        {% if item.deadline %}
+        <span class="due-chip due-{{ item.deadline.class }}">{{ item.deadline.text }}</span>
+        {% endif %}
+
+        {% if item.can_start %}
+        <form method="POST" action="{{ url_for('tasks.start_task', task_id=item.task.id) }}">
+            <button type="submit" class="queue-start"
+                    title="{% if item.status == 'Assigned' %}Start this task{% else %}Resume this task{% endif %}">
+                <i class="fa-solid fa-play"></i>
+            </button>
+        </form>
+        {% else %}
+        <span class="queue-running" title="Timer running"><i class="fa-solid fa-bolt"></i></span>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="panel-empty">
+        <i class="fa-regular fa-circle-check"></i>
+        <p>Your queue is clear.</p>
+    </div>
+    {% endfor %}
+</div>

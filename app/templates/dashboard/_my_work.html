@@ -1,0 +1,42 @@
+{#
+    "My Work" band for admins and super admins who also carry tasks.
+    Reuses the employee focus card and queue, so a manager who executes
+    work sees their own next action first - then the team overview
+    below. Rendered only when they actually have work (the including
+    template guards on my_focus / my_queue), so pure-oversight managers
+    never see an empty personal section.
+
+    my_focus / my_queue come in under those names to avoid colliding
+    with any `focus`/`queue` the page might use; they are aliased to the
+    names the shared partials expect just before each include.
+#}
+<section class="my-work-band">
+
+    <div class="section-head my-work-head">
+        <div>
+            <h2>My Work</h2>
+            <p>Your assigned tasks</p>
+        </div>
+        <a href="{{ url_for('tasks.list_tasks', assigned_to=current_user.id) }}"
+           class="section-head-link">View all</a>
+    </div>
+
+    {% if my_focus %}
+    {% set focus = my_focus %}
+    {% include "dashboard/_focus_card.html" %}
+    {% endif %}
+
+    {% if my_queue %}
+    <div class="table-card my-work-queue">
+        <div class="section-head">
+            <div>
+                <h2>Up Next</h2>
+                <p>Highest priority first</p>
+            </div>
+        </div>
+        {% set queue = my_queue %}
+        {% include "dashboard/_queue_list.html" %}
+    </div>
+    {% endif %}
+
+</section>

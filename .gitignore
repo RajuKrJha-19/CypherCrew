@@ -13,6 +13,7 @@ instance/
 logs/
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
 Desktop.ini

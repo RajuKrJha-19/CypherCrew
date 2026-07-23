@@ -1,0 +1,105 @@
+{% extends "base_app.html" %}
+
+{% block title %}Search | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% set type_icons = {
+    "task": "fa-list-check",
+    "client": "fa-building",
+    "user": "fa-user",
+    "note": "fa-note-sticky"
+} %}
+
+{% block content %}
+
+    <div class="page-header">
+        <div>
+            <h1>Search</h1>
+            <p>Tasks, clients, people and your notes</p>
+        </div>
+    </div>
+
+    {# Big, prefilled search box - the results page doubles as the
+       place to refine a query. #}
+    <form class="search-page-box" method="get" action="{{ url_for('search.results') }}" autocomplete="off">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="search" name="q" value="{{ term }}"
+               placeholder="Search…" aria-label="Search" autofocus>
+        {% if active_type != 'all' %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
+        <button type="submit" class="btn">Search</button>
+    </form>
+
+    {% if term|length < min_query %}
+    <div class="search-hint">
+        <i class="fa-regular fa-keyboard"></i>
+        <p>Type at least {{ min_query }} characters to search. Tip: press
+           <kbd>/</kbd> anywhere to jump here.</p>
+    </div>
+    {% else %}
+
+    {# Entity tabs - narrow the result set, Asana-style. Counts come
+       from the same fetch as the sections, so they never lie. #}
+    <div class="search-tabs">
+        {% set tabs = [("all", "All"), ("task", "Tasks"), ("client", "Clients"),
+                       ("user", "People"), ("note", "Notes")] %}
+        {% for key, label in tabs %}
+        {% set count = counts.get(key, 0) %}
+        {% if key == 'all' or count > 0 %}
+        <a href="{{ url_for('search.results', q=term, type=key) }}"
+           class="search-tab {% if active_type == key %}is-active{% endif %}">
+            {{ label }}
+            <span class="search-tab-count">{{ count }}</span>
+        </a>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    {% set ns = namespace(total=0) %}
+    {% for section in sections %}{% set ns.total = ns.total + section['items']|length %}{% endfor %}
+
+    {% if ns.total == 0 %}
+    <div class="search-hint">
+        <i class="fa-regular fa-face-frown"></i>
+        <p>No matches for “{{ term }}”. Try a task code, client name or a
+           different keyword.</p>
+    </div>
+    {% else %}
+
+    {% for section in sections %}
+    {% if section['items'] %}
+    <div class="table-card search-section">
+        <div class="section-head">
+            <div>
+                <h2>{{ section.label }}</h2>
+                <p>{{ section['items']|length }} result{{ '' if section['items']|length == 1 else 's' }}</p>
+            </div>
+        </div>
+
+        <div class="search-result-list">
+            {% for item in section['items'] %}
+            <a class="search-result" href="{{ item.url }}">
+                <span class="search-result-icon sr-{{ item.type }}">
+                    <i class="fa-solid {{ type_icons.get(item.type, 'fa-magnifying-glass') }}"></i>
+                </span>
+                <span class="search-result-body">
+                    <span class="search-result-title">
+                        {% if item.code %}<span class="gs-code">{{ item.code }}</span>{% endif %}
+                        {{ item.title }}
+                    </span>
+                    <span class="search-result-sub">{{ item.subtitle }}</span>
+                </span>
+                {% if item.status %}
+                <span class="gs-badge gs-badge-{{ item.type }}">{{ item.status }}</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% endif %}
+    {% endif %}
+
+{% endblock %}

@@ -2,6 +2,13 @@
 
 {% block title %}Gallery | CypherCrew{% endblock %}
 
+{% block head %}
+{{ super() }}
+{# Heavy page (media viewer, context menu, lazy video): opt out of
+   client-side swaps so it always loads fresh. #}
+<meta name="turbo-visit-control" content="reload">
+{% endblock %}
+
 {% block content %}
             <div class="page-header">
                 <div>
@@ -10,7 +17,6 @@
                 </div>
 
                 <div class="top-actions">
-                    {% include "partials/notification_widget.html" %}
                 </div>
             </div>
 
@@ -127,6 +133,9 @@
 
                         <div
                             class="gallery-item"
+                            role="button"
+                            tabindex="0"
+                            aria-label="Preview {{ file.original_filename }}"
                             data-preview-url="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
                             data-download-url="{{ url_for('tasks.download_task_file', file_id=file.id) }}"
                             data-filename="{{ file.original_filename }}"
@@ -287,25 +296,47 @@
                 activeItem = null;
             }
 
-            function viewItem(item) {
-                CypherMediaViewer.open({
+            function fileFrom(item) {
+                return {
                     url: item.dataset.previewUrl,
                     downloadUrl: item.dataset.downloadUrl,
                     filename: item.dataset.filename,
                     mime: item.dataset.mime
+                };
+            }
+
+            // Opening one file hands the viewer the whole page of results,
+            // so prev/next walks the grid in the order it is shown - date
+            // groups included, since the headings only split one list.
+            // Deliberately this page only: stepping past the last tile
+            // would otherwise have to fetch page 2 mid-preview, and the
+            // pager below is the honest way to cross that boundary.
+            function viewItem(item) {
+
+                const tiles = Array.from(
+                    document.querySelectorAll(".gallery-item")
+                );
+
+                CypherMediaViewer.open({
+                    items: tiles.map(fileFrom),
+                    index: Math.max(0, tiles.indexOf(item))
                 });
             }
 
-            document.addEventListener("dblclick", function (event) {
+            // Tiles are reachable by keyboard as well, now that a tile is
+            // the primary control on this page rather than a hint that a
+            // double-click might do something.
+            document.addEventListener("keydown", function (event) {
 
-                const item = event.target.closest(".gallery-item");
+                if (event.key !== "Enter" && event.key !== " ") return;
+
+                const item = event.target.closest
+                    ? event.target.closest(".gallery-item")
+                    : null;
 
                 if (!item) return;
 
-                // Video tiles already open on a single click below; letting
-                // dblclick through as well would re-open and restart them.
-                if (item.querySelector(".gallery-thumb-box.is-video")) return;
-
+                event.preventDefault();
                 viewItem(item);
 
             });
@@ -328,21 +359,26 @@
 
             document.addEventListener("click", function (event) {
 
+                // An open context menu swallows the click that dismisses it,
+                // the way every desktop menu does - you should not have to
+                // aim around a menu you are closing.
+                const menuWasOpen = contextMenu.classList.contains("show");
+
                 if (!event.target.closest("#galleryContextMenu")) {
                     hideContextMenu();
                 }
 
-                // A play badge sits on top of every video tile, so a single
-                // click on it should start playback like the badge implies.
-                // Other file types still need a double-click. The <video>
-                // and badge are pointer-events:none, so the click actually
-                // lands on the thumb box - match that and check what it holds.
-                const thumbBox = event.target.closest(".gallery-thumb-box");
+                if (menuWasOpen) return;
 
-                if (thumbBox && thumbBox.classList.contains("is-video")) {
-                    const item = thumbBox.closest(".gallery-item");
-                    if (item) viewItem(item);
-                }
+                // Modified clicks belong to the browser, not to us.
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+                // One click opens, for every file type. The thumbnail, the
+                // play badge and the filename are all part of the same
+                // target, so anything inside the tile counts.
+                const item = event.target.closest(".gallery-item");
+
+                if (item) viewItem(item);
 
             });
 

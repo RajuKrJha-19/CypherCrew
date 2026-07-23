@@ -1,0 +1,107 @@
+{#
+    Performance band - the one part of the dashboard scoped to a date
+    window. The picker lives on this section's own header so it is
+    unambiguous that it drives *only* the throughput below, and not the
+    live KPIs, team panel or status doughnut, which are always "now".
+
+    Presets are plain links (no JS needed) that reload the page with a
+    ?period= query; the server resolves the window. Custom uses a native
+    <details> popover with two date inputs, so it degrades gracefully
+    and needs no script either.
+#}
+
+{% set p = period %}
+
+<section class="activity-band">
+
+    <div class="activity-head">
+        <div class="activity-head-text">
+            <h3>Performance</h3>
+            <p>{{ p.label }} <span class="activity-vs">· vs previous period</span></p>
+        </div>
+
+        <div class="period-toggle" role="group" aria-label="Select time period">
+
+            <a href="{{ url_for(request.endpoint, period='today') }}"
+               class="period-opt {% if p.key == 'today' %}is-active{% endif %}">Today</a>
+
+            <a href="{{ url_for(request.endpoint, period='yesterday') }}"
+               class="period-opt {% if p.key == 'yesterday' %}is-active{% endif %}">Yesterday</a>
+
+            <a href="{{ url_for(request.endpoint, period='7d') }}"
+               class="period-opt {% if p.key == '7d' %}is-active{% endif %}">7 days</a>
+
+            <a href="{{ url_for(request.endpoint, period='30d') }}"
+               class="period-opt {% if p.key == '30d' %}is-active{% endif %}">30 days</a>
+
+            <details class="period-custom" {% if p.key == 'custom' %}open{% endif %}>
+                <summary class="period-opt {% if p.key == 'custom' %}is-active{% endif %}">
+                    <i class="fa-solid fa-calendar-day"></i>
+                    {% if p.key == 'custom' %}{{ p.label }}{% else %}Custom{% endif %}
+                </summary>
+
+                <form method="get" action="{{ url_for(request.endpoint) }}" class="period-custom-pop">
+                    <input type="hidden" name="period" value="custom">
+
+                    <label>
+                        <span>From</span>
+                        <input type="date" name="from" value="{{ p['from'] }}" max="{{ p.today }}" required>
+                    </label>
+
+                    <label>
+                        <span>To</span>
+                        <input type="date" name="to" value="{{ p.to }}" max="{{ p.today }}" required>
+                    </label>
+
+                    <button type="submit" class="btn btn-sm">Apply</button>
+                </form>
+            </details>
+
+        </div>
+    </div>
+
+    <div class="activity-tiles">
+
+        <a href="{{ url_for('tasks.list_tasks') }}" class="activity-tile">
+            <span class="activity-tile-label">Created</span>
+            <strong class="activity-tile-value">{{ activity.created }}</strong>
+            <span class="activity-delta {{ activity.created_delta.class }}">
+                {{ activity.created_delta.arrow }} {{ activity.created_delta.text }}
+            </span>
+        </a>
+
+        <a href="{{ url_for('tasks.list_tasks') }}" class="activity-tile">
+            <span class="activity-tile-label">Completed</span>
+            <strong class="activity-tile-value">{{ activity.completed }}</strong>
+            <span class="activity-delta {{ activity.completed_delta.class }}">
+                {{ activity.completed_delta.arrow }} {{ activity.completed_delta.text }}
+            </span>
+        </a>
+
+        <a href="{{ url_for('tasks.list_tasks', status='Published') }}" class="activity-tile">
+            <span class="activity-tile-label">Published</span>
+            <strong class="activity-tile-value">{{ activity.published }}</strong>
+            <span class="activity-delta {{ activity.published_delta.class }}">
+                {{ activity.published_delta.arrow }} {{ activity.published_delta.text }}
+            </span>
+        </a>
+
+        <div class="activity-tile">
+            <span class="activity-tile-label">Avg Turnaround</span>
+            <strong class="activity-tile-value">{{ activity.turnaround }}</strong>
+            <span class="activity-delta neutral">create → publish</span>
+        </div>
+
+    </div>
+
+    <div class="chart-card activity-chart-card">
+        <div class="card-header">
+            <div>
+                <h3>Throughput</h3>
+                <p>Created vs completed vs published, per day</p>
+            </div>
+        </div>
+        <canvas id="activityChart"></canvas>
+    </div>
+
+</section>

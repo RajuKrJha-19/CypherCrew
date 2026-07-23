@@ -1,0 +1,129 @@
+{#
+    Focus hero - the single task to act on right now. Expects `focus`
+    (from build_my_focus): the running timer, the paused task to resume,
+    or the top of the queue to start. Shared by the employee dashboard
+    and the manager "My Work" band so both behave identically.
+#}
+{% if focus %}
+{% set state_label = {"working": "In progress", "paused": "Paused", "next": "Up next"} %}
+<section class="focus-card focus-{{ focus.state }}">
+
+    <div class="focus-main">
+        <div class="focus-eyebrow">
+            <span class="focus-state">
+                <span class="focus-state-dot"></span>
+                {{ state_label.get(focus.state) }}
+            </span>
+            {% if focus.deadline %}
+            <span class="due-chip due-{{ focus.deadline.class }}">
+                <i class="fa-regular fa-clock"></i> {{ focus.deadline.text }}
+            </span>
+            {% endif %}
+        </div>
+
+        <h2 class="focus-title">
+            <a href="{{ url_for('tasks.task_detail', task_id=focus.task.id) }}">
+                {{ focus.task.title }}
+            </a>
+        </h2>
+
+        <p class="focus-meta">
+            {{ focus.client or "Internal" }}
+            <span class="dot-sep">·</span>
+            {{ focus.task.priority }} priority
+        </p>
+
+        <div class="focus-progress">
+            <div class="focus-progress-track">
+                <span class="focus-progress-fill {% if focus.over_estimate %}is-over{% endif %}"
+                      style="width: {{ focus.progress if focus.progress else 2 }}%"></span>
+            </div>
+            <div class="focus-progress-legend">
+                <strong class="focus-timer"
+                        data-live-seconds="{{ focus.live_seconds }}"
+                        {% if focus.state == 'working' %}data-ticking="1"{% endif %}>
+                    {{ focus.live_time }}
+                </strong>
+                <span>
+                    of {{ focus.estimated_time }} est
+                    {% if focus.over_estimate %}
+                    · <span class="focus-over">over estimate</span>
+                    {% else %}
+                    · {{ focus.remaining_time }} left
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="focus-actions">
+        {% if focus.state == 'working' %}
+        <form method="POST" action="{{ url_for('tasks.pause_task', task_id=focus.task.id) }}">
+            <button type="submit" class="btn btn-secondary">
+                <i class="fa-solid fa-pause"></i> Pause
+            </button>
+        </form>
+        {% if focus.task.status == 'In Progress' %}
+        <form method="POST" action="{{ url_for('tasks.submit_review', task_id=focus.task.id) }}">
+            <button type="submit" class="btn">
+                <i class="fa-solid fa-paper-plane"></i> Submit
+            </button>
+        </form>
+        {% endif %}
+        {% elif focus.state == 'paused' %}
+        <form method="POST" action="{{ url_for('tasks.start_task', task_id=focus.task.id) }}">
+            <button type="submit" class="btn">
+                <i class="fa-solid fa-play"></i> Resume
+            </button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('tasks.start_task', task_id=focus.task.id) }}">
+            <button type="submit" class="btn">
+                <i class="fa-solid fa-play"></i> Start task
+            </button>
+        </form>
+        {% endif %}
+
+        <a href="{{ url_for('tasks.task_detail', task_id=focus.task.id) }}"
+           class="btn btn-ghost">Open</a>
+    </div>
+
+</section>
+{% else %}
+<section class="focus-card focus-empty">
+    <div class="focus-empty-icon"><i class="fa-solid fa-mug-hot"></i></div>
+    <div>
+        <h2>You're all caught up</h2>
+        <p>No active or assigned work right now. Pick something from
+           <a href="{{ url_for('tasks.self_assign_task') }}">self-assign</a>
+           or check <a href="{{ url_for('tasks.list_tasks') }}">all tasks</a>.</p>
+    </div>
+</section>
+{% endif %}
+
+{% if focus and focus.state == 'working' %}
+<script>
+    /* Tick the focus card's elapsed timer once a second while the task
+       is actually running, mirroring the server's live_seconds. Lives
+       with the partial so every page that shows the card gets it. */
+    (function () {
+        const el = document.querySelector('.focus-timer[data-ticking="1"]');
+        if (!el) return;
+
+        function hms(s) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return [h, m, sec].map(n => String(n).padStart(2, "0")).join(":");
+        }
+
+        // Tracked so the tick stops when the page is left under
+        // client-side navigation instead of leaking a 1s timer.
+        (window.App ? window.App.setInterval : window.setInterval)(function () {
+            const next = Number(el.dataset.liveSeconds || 0) + 1;
+            el.dataset.liveSeconds = next;
+            el.textContent = hms(next);
+        }, 1000);
+    })();
+</script>
+{% endif %}

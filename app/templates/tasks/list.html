@@ -6,6 +6,13 @@
    this class keep the older styling until they are migrated. #}
 {% block body_class %}ds-screen{% endblock %}
 
+{% block head %}
+{{ super() }}
+{# Heavy page (kanban drag-drop, filters, media viewer): opt out of
+   client-side swaps so it always loads fresh. #}
+<meta name="turbo-visit-control" content="reload">
+{% endblock %}
+
 {% block content %}
             <div class="page-header task-page-sticky-header">
                 <div>
@@ -14,7 +21,6 @@
                 </div>
 
                 <div class="top-actions">
-                    {% include "partials/notification_widget.html" %}
 
                     {% if has_permission(current_user, "manage_tasks") %}
                     <a href="{{ url_for('tasks.add_task') }}" class="btn">
@@ -43,7 +49,7 @@
                 <a href="{{ url_for('tasks.filtered_tasks', filter_type='all') }}" class="metric-card metric-card-link">
 
                     <span>Total Tasks</span>
-                    <strong>{{ total_tasks }}</strong>
+                    <strong data-live-count="total">{{ total_tasks }}</strong>
 
                 </a>
 
@@ -51,7 +57,7 @@
                     class="metric-card metric-card-link">
 
                     <span>In Review</span>
-                    <strong>{{ review_tasks }}</strong>
+                    <strong data-live-count="review">{{ review_tasks }}</strong>
 
                 </a>
 
@@ -59,7 +65,7 @@
                     class="metric-card metric-card-link">
 
                     <span>Completed</span>
-                    <strong>{{ completed_tasks }}</strong>
+                    <strong data-live-count="completed">{{ completed_tasks }}</strong>
 
                 </a>
 
@@ -67,7 +73,7 @@
                     class="metric-card metric-card-link warning">
 
                     <span>Overdue</span>
-                    <strong>{{ overdue_tasks }}</strong>
+                    <strong data-live-count="overdue">{{ overdue_tasks }}</strong>
 
                 </a>
 
@@ -1775,5 +1781,150 @@ TASK LIST TOOLBAR DROPDOWNS
             }
 
         });
+    </script>
+
+    {#
+        Live board / list refresh. Polls a cheap, filter-scoped snapshot
+        (/tasks/live-state) every ~12s and reconciles the DOM in place -
+        so when an employee moves a task (e.g. In Progress -> submitted
+        for review), the card slides to the right column and the list
+        status updates on your side without a reload. Fully self-contained
+        (does not depend on the drag code above); pauses while you are
+        dragging; new tasks it has no HTML for surface a "refresh" nudge.
+    #}
+    <script>
+    (function () {
+        var kanbanPanel = document.getElementById("kanbanViewPanel");
+        var listTable = document.getElementById("taskListTable");
+        if (!kanbanPanel && !listTable) return;
+
+        var POLL_MS = 12000;
+        var dragging = false;
+
+        // Never reconcile mid-drag - it would fight the user's own move.
+        document.addEventListener("dragstart", function (e) {
+            if (e.target && e.target.closest && e.target.closest(".task-card")) dragging = true;
+        }, true);
+        document.addEventListener("dragend", function () { dragging = false; }, true);
+
+        function columnFor(status) {
+            if (!kanbanPanel) return null;
+            return kanbanPanel.querySelector(
+                '.board-column[data-status="' + String(status).replace(/["\\]/g, "\\$&") + '"]'
+            );
+        }
+
+        function syncColumn(col) {
+            if (!col) return;
+            var count = col.querySelectorAll(".task-card").length;
+            var span = col.querySelector(".board-column-header span");
+            if (span) span.textContent = count;
+            var placeholder = col.querySelector(".empty-column");
+            if (count === 0 && !placeholder) {
+                var e = document.createElement("div");
+                e.className = "empty-column";
+                e.textContent = "No tasks here.";
+                col.appendChild(e);
+            } else if (count > 0 && placeholder) {
+                placeholder.remove();
+            }
+        }
+
+        function pulse(el, cls) {
+            el.classList.remove(cls);
+            void el.offsetWidth;
+            el.classList.add(cls);
+        }
+
+        var banner = null;
+        function showNewBanner(n) {
+            if (!banner) {
+                banner = document.createElement("button");
+                banner.type = "button";
+                banner.className = "live-new-banner";
+                banner.addEventListener("click", function () { window.location.reload(); });
+                document.body.appendChild(banner);
+            }
+            banner.textContent = "\u21BB " + n + " new task" + (n === 1 ? "" : "s") + " \u00B7 Refresh";
+            banner.classList.add("show");
+        }
+
+        function reconcile(data) {
+            if (dragging) return;
+            var polled = data.tasks || {};
+            var touched = {};
+            var seen = {};
+
+            document.querySelectorAll("[data-task-id]").forEach(function (el) {
+                var isCard = el.classList.contains("task-card");
+                var isRow = el.tagName === "TR";
+                if (!isCard && !isRow) return;   // skip inner buttons
+
+                var id = el.getAttribute("data-task-id");
+                seen[id] = true;
+                var info = polled[id];
+
+                if (!info) {
+                    // Left the visible set (filtered out / deleted) - drop it.
+                    if (isCard) { var c = el.parentElement; el.remove(); if (c) touched[c.dataset.status] = c; }
+                    else { el.remove(); }
+                    return;
+                }
+
+                if (isCard) {
+                    if (el.getAttribute("data-task-status") !== info.status) {
+                        var old = el.parentElement;
+                        el.setAttribute("data-task-status", info.status);
+                        var target = columnFor(info.status);
+                        if (target && target !== old) {
+                            target.appendChild(el);
+                            pulse(el, "kanban-card-moved");
+                            touched[info.status] = target;
+                            if (old) touched[old.dataset.status] = old;
+                        } else if (!target) {
+                            // No column for this status (e.g. Void) - off the board.
+                            el.remove();
+                            if (old) touched[old.dataset.status] = old;
+                        }
+                    }
+                } else {
+                    var pill = el.querySelector('[data-column="status"] .status-pill');
+                    if (pill && pill.textContent.trim() !== info.status) {
+                        pill.textContent = info.status;
+                        pulse(pill, "live-pill-flash");
+                    }
+                }
+            });
+
+            Object.keys(touched).forEach(function (k) { syncColumn(touched[k]); });
+
+            var newCount = 0;
+            Object.keys(polled).forEach(function (id) {
+                if (!seen[id] && !polled[id].void) newCount++;
+            });
+            if (newCount > 0) showNewBanner(newCount);
+
+            var counts = data.counts || {};
+            Object.keys(counts).forEach(function (key) {
+                document.querySelectorAll('[data-live-count="' + key + '"]').forEach(function (el) {
+                    if (el.textContent.trim() !== String(counts[key])) {
+                        el.textContent = counts[key];
+                        pulse(el, "live-pill-flash");
+                    }
+                });
+            });
+        }
+
+        function poll() {
+            if (dragging) return;
+            fetch("/tasks/live-state" + window.location.search, { cache: "no-store" })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) { if (data) reconcile(data); })
+                .catch(function () {});
+        }
+
+        // App.setInterval (Turbo) clears this on navigation; plain interval otherwise.
+        (window.App ? window.App.setInterval : window.setInterval)(poll, POLL_MS);
+    })();
     </script>
 {% endblock %}

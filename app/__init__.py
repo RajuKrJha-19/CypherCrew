@@ -41,6 +41,7 @@ def create_app():
     from app.routes.meetings import meetings_bp
     from app.routes.leaves import leaves_bp
     from app.routes.gallery import gallery_bp
+    from app.routes.search import search_bp
 
 
     app.register_blueprint(auth_bp)
@@ -57,6 +58,7 @@ def create_app():
     app.register_blueprint(meetings_bp)
     app.register_blueprint(leaves_bp)
     app.register_blueprint(gallery_bp)
+    app.register_blueprint(search_bp)
 
     with app.app_context():
         if app.config.get("AUTO_SEED", True):

@@ -1,0 +1,52 @@
+{#
+    Upcoming - the dashboard's only forward-looking panel. Deadlines,
+    meetings, holidays and leave for the next seven days, merged and
+    date-ordered by build_upcoming_events(). It sits where a second
+    created-vs-completed trend used to duplicate the Performance chart.
+#}
+
+{% set event_meta = {
+    "Task Deadline": {"icon": "fa-solid fa-flag", "cls": "deadline"},
+    "Meeting":       {"icon": "fa-solid fa-video", "cls": "meeting"},
+    "Holiday":       {"icon": "fa-solid fa-umbrella-beach", "cls": "holiday"},
+    "Leave":         {"icon": "fa-solid fa-plane-departure", "cls": "leave"}
+} %}
+
+<div class="chart-card upcoming-card">
+
+    <div class="card-header">
+        <div>
+            <h3>Upcoming</h3>
+            <p>Next 7 days</p>
+        </div>
+        <a href="{{ url_for('calendar.index') }}" class="upcoming-link">
+            Calendar <i class="fa-solid fa-arrow-right"></i>
+        </a>
+    </div>
+
+    <div class="upcoming-list">
+
+        {% for event in upcoming %}
+        {% set m = event_meta.get(event.type, {"icon": "fa-regular fa-calendar", "cls": "deadline"}) %}
+        <div class="upcoming-row">
+            <span class="upcoming-icon upcoming-{{ m.cls }}">
+                <i class="{{ m.icon }}"></i>
+            </span>
+
+            <div class="upcoming-body">
+                <strong title="{{ event.title }}">{{ event.title }}</strong>
+                <span>{{ event.type }} · {{ event.subtitle }}</span>
+            </div>
+
+            <span class="upcoming-date">{{ event.date }}</span>
+        </div>
+        {% else %}
+        <div class="upcoming-empty">
+            <i class="fa-regular fa-calendar-check"></i>
+            <p>Nothing scheduled for the next 7 days.</p>
+        </div>
+        {% endfor %}
+
+    </div>
+
+</div>

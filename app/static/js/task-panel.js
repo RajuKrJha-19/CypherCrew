@@ -24,6 +24,11 @@
 
     "use strict";
 
+    // Loaded once from base_app's head; this guard is insurance against a
+    // stray second include re-binding the global listeners.
+    if (window.__cypherTaskPanelBooted) return;
+    window.__cypherTaskPanelBooted = true;
+
     const WIDTH_KEY = "cypher_task_drawer_width";
     const MIN_WIDTH = 460;
     const DEFAULT_WIDTH = 720;
@@ -492,6 +497,10 @@
         }
     }
 
+    // Capture phase, so this runs BEFORE Turbo's own bubble-phase click
+    // handler. When we open the drawer we preventDefault(), and Turbo
+    // skips clicks whose default is already prevented - so the drawer
+    // wins the task links and Turbo never tries to navigate to them.
     document.addEventListener("click", function (event) {
 
         // Leave modified clicks to the browser so "open in new tab",
@@ -505,6 +514,7 @@
         if (link.target && link.target !== "_self") return;
         if (link.hasAttribute("download")) return;
         if (link.dataset.noDrawer !== undefined) return;
+        if (link.dataset.turbo === "false") return;
         if (link.closest(".task-drawer-root")) return;
 
         const taskId = taskIdFromHref(link.getAttribute("href"));
@@ -513,7 +523,7 @@
 
         event.preventDefault();
         open(taskId);
-    });
+    }, true);
 
     document.addEventListener("keydown", function (event) {
 

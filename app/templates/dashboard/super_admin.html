@@ -16,12 +16,17 @@
                 </div>
 
                 <div class="top-actions">
-                    {% include "partials/notification_widget.html" %}
                     <a href="{{ url_for('tasks.list_tasks') }}" class="btn">Open Tasks</a>
                 </div>
             </div>
 
+            {% if my_focus or my_queue %}
+            {% include "dashboard/_my_work.html" %}
+            {% endif %}
+
             {% include "dashboard/_kpi_grid.html" %}
+
+            {% include "dashboard/_activity_band.html" %}
 
             {% include "dashboard/_charts.html" %}
 
@@ -81,7 +86,7 @@
             );
         }
 
-        setInterval(function () {
+        (window.App ? window.App.setInterval : window.setInterval)(function () {
             cells.forEach(function (el) {
                 const next = Number(el.dataset.liveSeconds || 0) + 1;
                 el.dataset.liveSeconds = next;

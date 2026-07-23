@@ -3,6 +3,8 @@
 
 {% block title %}Self Assign Task | CypherCrew{% endblock %}
 
+{% block head %}{{ super() }}<meta name="turbo-visit-control" content="reload">{% endblock %}
+
 {% block body_class %}{% if panel_mode %}panel-mode ds-screen{% else %}ds-screen{% endif %}{% endblock %}
 
 {% block content %}
@@ -16,7 +18,6 @@
                on the page behind it. #}
             {% if not panel_mode %}
             <div class="top-actions">
-                {% include "partials/notification_widget.html" %}
             </div>
             {% endif %}
         </div>

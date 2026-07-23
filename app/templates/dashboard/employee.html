@@ -1,82 +1,169 @@
 {% extends "base_app.html" %}
 
-{% block title %}Employee | CypherCrew{% endblock %}
+{% block title %}My Work | CypherCrew{% endblock %}
 
 {% block body_class %}ds-screen{% endblock %}
 
 {% block content %}
-            <div class="page-header">
+
+    <div class="page-header">
+        <div>
+            <h1>{{ greet(current_user) }}</h1>
+            <p>{{ today_label() }}</p>
+        </div>
+        <div class="top-actions">
+            <a href="{{ url_for('tasks.list_tasks') }}" class="btn">My Tasks</a>
+        </div>
+    </div>
+
+    {#
+        Focus - the hero. Whatever the employee should pick up right
+        now, rendered by the shared focus-card partial.
+    #}
+    {% include "dashboard/_focus_card.html" %}
+
+    {#
+        Live counters. data-live-stat keys match api_my_stats, so these
+        refresh in place every few seconds without a reload.
+    #}
+    <div class="dashboard-kpi-grid emp-kpi-grid">
+
+        <a href="{{ url_for('tasks.list_tasks', status='In Progress') }}"
+           class="kpi-card dashboard-card-link">
+            <div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+            <div class="kpi-content">
+                <span>In Progress</span>
+                <h2 data-live-stat="in_progress">{{ counts.in_progress }}</h2>
+                <p class="neutral">Being worked</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('calendar.index') }}"
+           class="kpi-card dashboard-card-link">
+            <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
+            <div class="kpi-content">
+                <span>Due Today</span>
+                <h2 data-live-stat="due_today">{{ counts.due_today }}</h2>
+                <p class="neutral">Deadline is today</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('tasks.list_tasks', status='Core Review') }}"
+           class="kpi-card dashboard-card-link">
+            <div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div>
+            <div class="kpi-content">
+                <span>In Review</span>
+                <h2 data-live-stat="in_review">{{ counts.in_review }}</h2>
+                <p class="neutral">Awaiting sign-off</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('tasks.filtered_tasks', filter_type='overdue') }}"
+           class="kpi-card dashboard-card-link {% if counts.overdue %}kpi-alert{% endif %}">
+            <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="kpi-content">
+                <span>Overdue</span>
+                <h2 data-live-stat="overdue">{{ counts.overdue }}</h2>
+                <p class="{% if counts.overdue %}down{% else %}neutral{% endif %}">
+                    {% if counts.overdue %}Needs attention{% else %}All on time{% endif %}
+                </p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('tasks.list_tasks', status='Published') }}"
+           class="kpi-card dashboard-card-link">
+            <div class="kpi-icon"><i class="fa-solid fa-check"></i></div>
+            <div class="kpi-content">
+                <span>Done Today</span>
+                <h2 data-live-stat="completed_today">{{ counts.completed_today }}</h2>
+                <p class="neutral">Completed today</p>
+            </div>
+        </a>
+
+    </div>
+
+    <div class="dashboard-split">
+
+        {# What to work on next - the prioritised queue. #}
+        <div class="table-card">
+            <div class="section-head">
                 <div>
-                    {# Greeting as the heading: the old title repeated what the
-                       sidebar already says, and the date is at least useful. #}
-                    <h1>{{ greet(current_user) }}</h1>
-                    <p>{{ today_label() }}</p>
+                    <h2>My Queue</h2>
+                    <p>What to work on next</p>
                 </div>
-                <div class="top-actions">
-                    {% include "partials/notification_widget.html" %}
-                    <a href="{{ url_for('tasks.list_tasks') }}" class="btn">My Tasks</a>
-                </div>
+                <a href="{{ url_for('tasks.list_tasks') }}" class="section-head-link">All tasks</a>
             </div>
 
-            <div class="stats-grid">
-                <div class="metric-card">
-                    <span>My Tasks</span>
-                    <strong data-live-stat="total">{{ stats.total }}</strong>
+            {% include "dashboard/_queue_list.html" %}
+        </div>
+
+        {# Deadlines to plan the day around. #}
+        <div class="table-card">
+            <div class="section-head">
+                <div>
+                    <h2>Deadlines</h2>
+                    <p>Due in the next 7 days</p>
                 </div>
-                <div class="metric-card">
-                    <span>In Review</span>
-                    <strong data-live-stat="in_review">{{ stats.in_review }}</strong>
-                </div>
-                <div class="metric-card">
-                    <span>Published</span>
-                    <strong data-live-stat="published">{{ stats.published }}</strong>
-                </div>
-                <div class="metric-card warning">
-                    <span>Overdue</span>
-                    <strong data-live-stat="overdue">{{ stats.overdue }}</strong>
-                </div>
+                <a href="{{ url_for('calendar.index') }}" class="section-head-link">Calendar</a>
             </div>
 
-            <div class="dashboard-grid">
-                <div class="table-card">
-                    <h2 class="card-title">My Workflow</h2>
-                    {% for status in stats.status_order %}
-                    <div class="stat-line">
-                        <span>{{ status }}</span>
-                        <strong>{{ stats.status_counts.get(status, 0) }}</strong>
+            <div class="queue-list">
+                {% for item in deadlines %}
+                <div class="queue-row">
+                    <span class="due-chip due-{{ item.deadline.class }} due-chip-lead">{{ item.deadline.text }}</span>
+
+                    <div class="queue-body">
+                        <a href="{{ url_for('tasks.task_detail', task_id=item.task.id) }}"
+                           class="queue-title">{{ item.task.title }}</a>
+                        <span class="queue-meta">
+                            {{ item.client }} <span class="dot-sep">·</span> {{ item.status }}
+                        </span>
                     </div>
-                    {% endfor %}
                 </div>
-
-                <div class="table-card">
-                    <h2 class="card-title">Latest Assigned Work</h2>
-                    {% for task in stats.recent_tasks %}
-                    <div class="activity-row">
-                        <div>
-                            <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">{{ task.title }}</a>
-                            <span>{{ task.client.client_name }} - {{ task.status }}</span>
-                        </div>
-                        <span class="status-pill">{{ task.priority }}</span>
-                    </div>
-                    {% else %}
-                    <p>No tasks assigned yet.</p>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div class="table-card section-gap-top">
-                <h2 class="my-permissions-title">My Permissions</h2>
-
-                {% if user_permissions %}
-                <p class="my-permissions-intro">You can:</p>
-
-                {% for permission in user_permissions %}
-                <span class="tag">{{ permission }}</span>
-                {% endfor %}
                 {% else %}
-                <p>No extra permissions assigned.</p>
-                {% endif %}
+                <div class="panel-empty">
+                    <i class="fa-regular fa-calendar-check"></i>
+                    <p>No deadlines in the next 7 days.</p>
+                </div>
+                {% endfor %}
             </div>
+        </div>
+
+    </div>
+
+    {# Today's meetings only render when there are any - no empty card. #}
+    {% if meetings_today %}
+    <div class="table-card section-gap-top">
+        <div class="section-head">
+            <div>
+                <h2>Today's Meetings</h2>
+                <p>You're a participant</p>
+            </div>
+        </div>
+        <div class="queue-list">
+            {% for meeting in meetings_today %}
+            <div class="queue-row">
+                <span class="meeting-time">{{ meeting.time }}</span>
+                <div class="queue-body">
+                    <span class="queue-title">{{ meeting.title }}</span>
+                    <span class="queue-meta">{{ meeting.client }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if user_permissions %}
+    <div class="table-card permissions-strip">
+        <h3>My Permissions</h3>
+        <div class="permission-chips">
+            {% for permission in user_permissions %}
+            <span class="tag">{{ permission }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
 {% endblock %}
 

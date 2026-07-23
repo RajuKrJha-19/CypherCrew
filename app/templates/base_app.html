@@ -6,24 +6,83 @@
     base.html directly instead.
 #}
 
+{% block head %}
+{{ super() }}
+{#
+    Client-side navigation (Hotwire Turbo Drive): links and forms swap
+    the page without a full reload. Loaded here in base_app's head - so
+    it runs once per tab and is NEVER present in the task-drawer iframe
+    (that uses base_panel.html, which extends base.html directly).
+
+    Kill-switch: set TURBO_ENABLED=False in config to disable app-wide.
+    Everything degrades to normal full-page loads; turbo-app's helpers
+    fall back to DOMContentLoaded, and data-turbo-permanent / data-turbo
+    attributes become inert.
+#}
+{% if config.get('TURBO_ENABLED', True) %}
+<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.13/dist/turbo.es2017-umd.min.js"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/turbo-app.js') }}"></script>
+
+{#
+    Global shell scripts, moved out of the body so they bind their
+    document/window listeners exactly once instead of re-stacking on
+    every navigation. task-panel intercepts /tasks/<id> links to open the
+    drawer; global-search backs the top-bar omni-search.
+#}
+<script src="{{ url_for('static', filename='js/task-panel.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/global-search.js') }}" defer></script>
+
+{# Always fetch fresh; teardown still runs on before-render so no
+   pollers leak, and no stale snapshot is ever shown. #}
+<meta name="turbo-cache-control" content="no-cache">
+{% endblock %}
+
 {% block body %}
 <div class="layout">
 
     {% include "partials/sidebar.html" %}
+
+    {#
+        Global top bar - spans the content column and stays put while the
+        page scrolls. Search on the left, notifications and the account
+        menu on the right, the way Asana/Linear lay their top bar out.
+        The notification widget and account menu live here once, globally,
+        instead of being repeated in every page header.
+    #}
+    <header class="topbar" id="app-topbar" data-turbo-permanent>
+
+        <div class="topbar-left">
+            <form class="global-search"
+                  role="search"
+                  method="get"
+                  action="{{ url_for('search.results') }}"
+                  autocomplete="off">
+                <i class="fa-solid fa-magnifying-glass global-search-icon" aria-hidden="true"></i>
+                <input type="search"
+                       name="q"
+                       id="globalSearchInput"
+                       class="global-search-input"
+                       placeholder="Search tasks, clients, people, notes…"
+                       aria-label="Search tasks, clients, people, notes"
+                       autocomplete="off">
+                <kbd class="global-search-kbd">/</kbd>
+                <div class="global-search-dropdown" id="globalSearchDropdown" role="listbox" hidden></div>
+            </form>
+        </div>
+
+        <div class="topbar-right">
+            {% include "partials/quick_create.html" %}
+            {% include "partials/theme_toggle.html" %}
+            {% include "partials/notification_widget.html" %}
+            {% include "partials/account_menu.html" %}
+        </div>
+
+    </header>
 
     <main class="main">
         {% block content %}{% endblock %}
     </main>
 
 </div>
-
-{#
-    Loaded for every signed-in page rather than per-template: task links
-    live on the board, the list, the dashboards, the calendar, reports
-    and the review queue, and all of them should open the side panel.
-    Not included in base_panel.html, so the drawer can never nest inside
-    itself. Placed here instead of in {% block scripts %} because pages
-    override that block wholesale.
-#}
-<script src="{{ url_for('static', filename='js/task-panel.js') }}" defer></script>
 {% endblock %}

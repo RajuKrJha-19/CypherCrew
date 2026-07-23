@@ -8,13 +8,23 @@
     overlay on the same page instead, with fullscreen and an overflow
     menu for the actions that used to be the only reason to open a tab.
 
-    Usage:
+    Usage - a single file:
         CypherMediaViewer.open({
             url: "/tasks/files/12/preview",     // required
             downloadUrl: "/tasks/files/12/download",
             filename: "final-cut.mp4",
             mime: "video/mp4"
         });
+
+    Usage - a set you can step through without closing the overlay
+    (arrow keys, the on-stage chevrons, or a swipe on touch):
+        CypherMediaViewer.open({
+            items: [file, file, file],          // same shape as above
+            index: 4                            // which one to show first
+        });
+
+    Callers that pass a single file get no navigation chrome at all, so
+    the two forms can coexist on the same page.
 
     The overlay markup is built once on first open and reused, so
     including this script costs nothing on pages where it never fires.
@@ -28,8 +38,21 @@ window.CypherMediaViewer = (function () {
     let menu = null;
     let menuBtn = null;
     let fullscreenBtn = null;
+    let prevBtn = null;
+    let nextBtn = null;
+    let counterEl = null;
     let currentFile = null;
     let lastFocused = null;
+    let openedAt = 0;
+
+    //: The set being stepped through. A single-file open() is just a set
+    //: of one, which keeps every code path below identical.
+    let items = [];
+    let index = 0;
+
+    //: Neighbouring images already pulled into the browser cache, so
+    //: arrowing along a row of photos doesn't flash empty on each step.
+    const preloaded = new Set();
 
     function kindOf(mime, url) {
 
@@ -68,6 +91,8 @@ window.CypherMediaViewer = (function () {
 
                     <div class="media-viewer-title" id="mediaViewerTitle"></div>
 
+                    <div class="media-viewer-count" id="mediaViewerCount" aria-live="polite" hidden></div>
+
                     <div class="media-viewer-tools">
 
                         <button type="button" class="media-viewer-tool" data-mv="fullscreen"
@@ -91,7 +116,21 @@ window.CypherMediaViewer = (function () {
 
                 </div>
 
-                <div class="media-viewer-stage" id="mediaViewerStage"></div>
+                <div class="media-viewer-body">
+
+                    <button type="button" class="media-viewer-nav prev" data-mv="prev"
+                        aria-label="Previous file" title="Previous (←)" hidden>
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+
+                    <div class="media-viewer-stage" id="mediaViewerStage"></div>
+
+                    <button type="button" class="media-viewer-nav next" data-mv="next"
+                        aria-label="Next file" title="Next (→)" hidden>
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+
+                </div>
 
             </div>
         `;
@@ -103,9 +142,24 @@ window.CypherMediaViewer = (function () {
         menu = overlay.querySelector("#mediaViewerMenu");
         menuBtn = overlay.querySelector('[data-mv="menu"]');
         fullscreenBtn = overlay.querySelector('[data-mv="fullscreen"]');
+        prevBtn = overlay.querySelector('[data-mv="prev"]');
+        nextBtn = overlay.querySelector('[data-mv="next"]');
+        counterEl = overlay.querySelector("#mediaViewerCount");
 
         overlay.querySelector('[data-mv="close"]').addEventListener("click", close);
         fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+        prevBtn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            go(-1);
+        });
+
+        nextBtn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            go(1);
+        });
+
+        bindSwipe();
 
         menuBtn.addEventListener("click", function (event) {
             event.stopPropagation();
@@ -122,9 +176,17 @@ window.CypherMediaViewer = (function () {
         });
 
         overlay.addEventListener("click", function (event) {
-            if (event.target === overlay && pressedBackdrop) {
+
+            // Callers open on a single click, so an old double-click habit
+            // lands its second click on a backdrop that was not there when
+            // the gesture started. A click that arrives this soon after
+            // opening was never meant to dismiss anything.
+            const settled = Date.now() - openedAt > 350;
+
+            if (event.target === overlay && pressedBackdrop && settled) {
                 close();
             }
+
             setMenuOpen(false);
         });
 
@@ -146,6 +208,19 @@ window.CypherMediaViewer = (function () {
                 return;
             }
 
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+
+                // Arrows belong to the player while a clip has focus -
+                // that is how people scrub - and to a text box while one
+                // is being typed in. Everywhere else they step files.
+                if (isTypingTarget(event.target)) return;
+
+                event.preventDefault();
+                setMenuOpen(false);
+                go(event.key === "ArrowRight" ? 1 : -1);
+                return;
+            }
+
             if (event.key === " " || event.key === "k") {
                 const video = stage.querySelector("video, audio");
                 if (video && event.target === document.body) {
@@ -162,6 +237,120 @@ window.CypherMediaViewer = (function () {
         if (!menu) return;
         menu.classList.toggle("show", open);
         menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function isTypingTarget(target) {
+
+        if (!target || !target.tagName) return false;
+
+        const tag = target.tagName.toLowerCase();
+
+        return (
+            tag === "video" ||
+            tag === "audio" ||
+            tag === "input" ||
+            tag === "textarea" ||
+            tag === "select" ||
+            target.isContentEditable === true
+        );
+    }
+
+    function bindSwipe() {
+
+        let startX = 0;
+        let startY = 0;
+        let tracking = false;
+
+        stage.addEventListener("touchstart", function (event) {
+
+            // One finger only, so pinch-zooming a photo is never read as a
+            // swipe. A <video> owns its own gestures, so leave those alone.
+            if (event.touches.length !== 1 || event.target.closest("video, audio")) {
+                tracking = false;
+                return;
+            }
+
+            tracking = true;
+            startX = event.touches[0].clientX;
+            startY = event.touches[0].clientY;
+
+        }, { passive: true });
+
+        stage.addEventListener("touchend", function (event) {
+
+            if (!tracking) return;
+
+            tracking = false;
+
+            const touch = event.changedTouches[0];
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            // Far enough to not be a stray tap, and clearly sideways rather
+            // than the start of a scroll.
+            if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+            go(dx < 0 ? 1 : -1);
+
+        }, { passive: true });
+    }
+
+    function go(delta) {
+
+        if (items.length < 2) return;
+
+        const target = index + delta;
+
+        // Deliberately no wrap-around: hitting a hard stop at either end
+        // is how people can tell they have seen everything, and it matches
+        // every desktop file previewer people already know.
+        if (target < 0 || target >= items.length) return;
+
+        showAt(target);
+    }
+
+    function updateNav() {
+
+        const many = items.length > 1;
+
+        prevBtn.hidden = !many;
+        nextBtn.hidden = !many;
+        counterEl.hidden = !many;
+
+        if (!many) return;
+
+        counterEl.textContent = (index + 1) + " of " + items.length;
+
+        const atStart = index === 0;
+        const atEnd = index === items.length - 1;
+
+        // Hand focus over before disabling, otherwise the button someone
+        // just pressed goes dead under them and focus falls back to <body>,
+        // which strands keyboard users outside the dialog.
+        if (atStart && document.activeElement === prevBtn) nextBtn.focus();
+        if (atEnd && document.activeElement === nextBtn) prevBtn.focus();
+
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+    }
+
+    function preloadNeighbours() {
+
+        [index - 1, index + 1].forEach(function (position) {
+
+            const file = items[position];
+
+            if (!file || preloaded.has(file.url)) return;
+
+            // Only images: fetching the neighbouring 200 MB video ahead of
+            // time would cost far more than the wait it saves.
+            if (kindOf(file.mime, file.url) !== "image") return;
+
+            preloaded.add(file.url);
+
+            const warm = new Image();
+            warm.src = file.url;
+        });
     }
 
     function syncFullscreenBtn() {
@@ -367,19 +556,17 @@ window.CypherMediaViewer = (function () {
         stage.appendChild(fallback);
     }
 
-    function open(file) {
+    function showAt(position) {
 
-        if (!file || !file.url) return;
+        teardownStage();
 
-        if (!overlay) build();
+        index = position;
+        currentFile = items[position];
 
-        currentFile = file;
-        lastFocused = document.activeElement;
+        const kind = kindOf(currentFile.mime, currentFile.url);
 
-        const kind = kindOf(file.mime, file.url);
-
-        titleEl.textContent = file.filename || "Preview";
-        titleEl.title = file.filename || "";
+        titleEl.textContent = currentFile.filename || "Preview";
+        titleEl.title = currentFile.filename || "";
 
         renderStage(kind);
         buildMenu(kind);
@@ -388,8 +575,57 @@ window.CypherMediaViewer = (function () {
         // Fullscreen only makes sense for something actually rendered.
         fullscreenBtn.hidden = kind === "other";
 
+        // Re-trigger the fade on every step, so moving through a set reads
+        // as one file replacing another rather than the panel flickering.
+        stage.classList.remove("is-entering");
+        void stage.offsetWidth;
+        stage.classList.add("is-entering");
+
+        updateNav();
+        preloadNeighbours();
+    }
+
+    function open(input) {
+
+        if (!input) return;
+
+        if (!overlay) build();
+
+        // Two accepted shapes: one file, or { items, index }. Normalising
+        // to a list here means nothing below has to care which was used.
+        const list = Array.isArray(input.items)
+            ? input.items.filter(function (file) { return file && file.url; })
+            : (input.url ? [input] : []);
+
+        if (!list.length) return;
+
+        items = list;
+        lastFocused = document.activeElement;
+        openedAt = Date.now();
+        preloaded.clear();
+
+        const wanted = Number.isInteger(input.index) ? input.index : 0;
+
+        showAt(Math.min(Math.max(wanted, 0), items.length - 1));
+
         overlay.classList.add("show");
         document.body.classList.add("media-viewer-open");
+    }
+
+    function teardownStage() {
+
+        // Clearing src stops the media element from continuing to stream
+        // the file from R2 in the background - on close, and equally on
+        // every step to the next file.
+        const media = stage.querySelector("video, audio");
+
+        if (media) {
+            media.pause();
+            media.removeAttribute("src");
+            media.load();
+        }
+
+        stage.innerHTML = "";
     }
 
     function close() {
@@ -400,21 +636,15 @@ window.CypherMediaViewer = (function () {
             document.exitFullscreen().catch(function () {});
         }
 
-        // Clearing src stops the media element from continuing to stream
-        // the file from R2 in the background after the overlay is hidden.
-        const media = stage.querySelector("video, audio");
-
-        if (media) {
-            media.pause();
-            media.removeAttribute("src");
-            media.load();
-        }
-
-        stage.innerHTML = "";
+        teardownStage();
         setMenuOpen(false);
         overlay.classList.remove("show");
         document.body.classList.remove("media-viewer-open");
+
         currentFile = null;
+        items = [];
+        index = 0;
+        preloaded.clear();
 
         if (lastFocused && typeof lastFocused.focus === "function") {
             lastFocused.focus();

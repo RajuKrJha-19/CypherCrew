@@ -1,0 +1,49 @@
+{#
+    Light/dark toggle. A quiet ghost icon in the top bar - the standard,
+    discoverable home for it. The actual theme is resolved before paint
+    by the inline script in base.html; this just flips and persists it.
+#}
+<button type="button"
+        class="theme-toggle"
+        id="themeToggle"
+        aria-label="Toggle dark mode"
+        title="Toggle light / dark">
+    <i class="fa-solid fa-moon theme-icon-dark"></i>
+    <i class="fa-solid fa-sun theme-icon-light"></i>
+</button>
+
+<script>
+    (function () {
+        const btn = document.getElementById("themeToggle");
+        if (!btn) return;
+
+        const root = document.documentElement;
+
+        function apply(theme, animate) {
+            if (animate) {
+                root.classList.add("theme-switching");
+                window.setTimeout(function () {
+                    root.classList.remove("theme-switching");
+                }, 300);
+            }
+            root.setAttribute("data-theme", theme);
+            btn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+        }
+
+        btn.addEventListener("click", function () {
+            const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            try { localStorage.setItem("theme", next); } catch (e) {}
+            apply(next, true);
+        });
+
+        // Until the user picks a side, keep following the OS setting live.
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        media.addEventListener("change", function (event) {
+            let saved = null;
+            try { saved = localStorage.getItem("theme"); } catch (e) {}
+            if (!saved) apply(event.matches ? "dark" : "light", true);
+        });
+
+        apply(root.getAttribute("data-theme") || "light", false);
+    })();
+</script>

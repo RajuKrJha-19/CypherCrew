@@ -2,6 +2,8 @@
 
 {% block title %}Manage #{{ task.task_code }} | CypherCrew{% endblock %}
 
+{% block head %}{{ super() }}<meta name="turbo-visit-control" content="reload">{% endblock %}
+
 {% block body_class %}ds-screen{% endblock %}
 
 {% block content %}
@@ -12,7 +14,6 @@
         </div>
 
         <div class="top-actions">
-            {% include "partials/notification_widget.html" %}
             <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="btn btn-secondary">
                 Back
             </a>

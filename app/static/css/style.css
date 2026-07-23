@@ -67,14 +67,16 @@
     --ds-neutral-bg:#f1f2f6;
 
     /* ---- Sidebar -------------------------------------------------------
-       Its own ramp: the workspace palette does not work on a dark ground. */
-    --ds-nav-bg:#15171f;
-    --ds-nav-border:#252834;
-    --ds-nav-text:#a8adbd;        /* resting nav item */
-    --ds-nav-text-hover:#e8eaf0;
-    --ds-nav-active-bg:#22252f;   /* subtle fill, accent carried by the rail */
-    --ds-nav-active-text:#ffffff;
-    --ds-nav-section:#666d80;     /* COMPANY / WORK group labels */
+       Light mode: a light shell that reads as part of the same surface
+       as the top bar and content, not a dark slab bolted to the side.
+       Dark mode swaps these back to a dark ramp (see [data-theme="dark"]). */
+    --ds-nav-bg:#ffffff;          /* continuous with the white top bar */
+    --ds-nav-border:#e5e7f0;      /* matches the content-side divider */
+    --ds-nav-text:#5a6172;        /* resting nav item */
+    --ds-nav-text-hover:#1c1f26;
+    --ds-nav-active-bg:#eef1f6;   /* subtle fill, accent carried by the rail */
+    --ds-nav-active-text:#1c1f26;
+    --ds-nav-section:#8a90a0;     /* COMPANY / WORK group labels */
 
     /* ---- Type ----------------------------------------------------------
        Restrained on purpose. Body sits at 13-14, meta at 11-12, and the
@@ -246,6 +248,128 @@
 }
 
 
+/* ==========================================================================
+   DARK THEME
+   Dark mode flips the design tokens, not the components. Every surface,
+   text, border and status token gets a dark value here, so anything built
+   on them adapts for free. The sidebar keeps its own dark ramp (it was
+   always dark) - only the content column changes ground.
+
+   --color-neutral is the one overloaded token: 80-odd rules use it as dark
+   ink, five use it as a dark fill. It is remapped to light ink here (the
+   common case) and the five fills are restored just below.
+   ========================================================================== */
+:root[data-theme="dark"]{
+
+    /* Surfaces */
+    --ds-canvas:#0e1014;
+    --ds-surface:#171a21;
+    --ds-surface-hover:#1d212a;
+    --ds-surface-sunken:#22262f;
+    --color-bg:#0e1014;
+    --color-surface:#171a21;
+    --color-surface-muted:#1d212a;
+    --color-surface-sunken:#22262f;
+
+    /* Text */
+    --ds-text:#e6e8ee;
+    --ds-text-secondary:#b2b7c4;
+    --ds-text-muted:#868d9e;
+    --color-text:#e6e8ee;
+    --color-text-muted:#8b92a3;
+    --color-text-subtle:#6b7280;
+    --color-neutral:#e6e8ee;
+    --color-neutral-hover:#f3f4f7;
+    --ds-neutral:#b2b7c4;
+
+    /* Borders */
+    --ds-border:#282d37;
+    --ds-border-strong:#3a4150;
+    --color-border:#282d37;
+    --color-border-strong:#3a4150;
+
+    /* Accent - indigo lifted a step for contrast on a dark ground */
+    --ds-accent:#6366f1;
+    --ds-accent-hover:#7d80f6;
+    --ds-accent-soft:#1e2140;
+    --ds-accent-border:#34386b;
+    --ds-accent-text:#a5b4fc;
+    --color-primary:#6366f1;
+    --color-primary-hover:#7d80f6;
+    --color-primary-active:#8b8ef8;
+    --color-primary-soft:#1e2140;
+    --color-primary-soft-hover:#262a4d;
+    --color-primary-border:#34386b;
+    --color-primary-contrast:#ffffff;
+    --color-accent:#38bdf8;
+    --color-accent-soft:#0c2b3a;
+
+    /* Status - text lifted, backgrounds darkened to tinted ink */
+    --ds-success:#34d399; --ds-success-bg:#10251c;
+    --ds-warning:#fbbf24; --ds-warning-bg:#2a2110;
+    --ds-danger:#f87171;  --ds-danger-bg:#2b1717;
+    --ds-neutral-bg:#22262f;
+    --color-success:#34d399; --color-success-soft:#10251c; --color-success-border:#1f5140;
+    --color-warning:#fbbf24; --color-warning-soft:#2a2110; --color-warning-border:#5a4412;
+    --color-danger:#f87171;  --color-danger-soft:#2b1717;  --color-danger-border:#5a2a2a;
+
+    /* Sidebar - back to a dark ramp, sitting a touch below the content
+       surface so it still reads as the shell's edge. */
+    --ds-nav-bg:#131620;
+    --ds-nav-border:#252a35;
+    --ds-nav-text:#a8adbd;
+    --ds-nav-text-hover:#e8eaf0;
+    --ds-nav-active-bg:#222834;
+    --ds-nav-active-text:#ffffff;
+    --ds-nav-section:#666d80;
+
+    /* Shadows read deeper on a dark ground */
+    --shadow-xs:0 1px 2px rgba(0,0,0,.40);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.40), 0 1px 3px rgba(0,0,0,.30);
+    --shadow-md:0 4px 8px -2px rgba(0,0,0,.50), 0 2px 4px -2px rgba(0,0,0,.35);
+    --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55), 0 4px 8px -4px rgba(0,0,0,.35);
+    --shadow-xl:0 24px 48px -12px rgba(0,0,0,.62), 0 8px 16px -8px rgba(0,0,0,.40);
+
+    /* Native controls (scrollbars, form widgets) follow suit. */
+    color-scheme:dark;
+}
+
+:root[data-theme="light"]{
+    color-scheme:light;
+}
+
+/* The five places that used --color-neutral as a dark FILL (not ink):
+   restore a sensible dark treatment so remapping the token to light ink
+   doesn't turn them pale. */
+:root[data-theme="dark"] .visibility-chip button,
+:root[data-theme="dark"] .file-popup-download{
+    background:var(--color-primary);
+    color:#fff;
+}
+
+:root[data-theme="dark"] .performance-hero{
+    background:#1b1e26;
+    color:var(--color-text);
+}
+
+:root[data-theme="dark"] .auth-body{
+    background:#0b0d11;
+}
+
+/* One-time smooth cross-fade when the theme is toggled. Applied only
+   for the moment of the switch so there is no permanent repaint cost. */
+html.theme-switching,
+html.theme-switching *{
+    transition:background-color .25s ease, border-color .25s ease, color .25s ease !important;
+}
+
+@media(prefers-reduced-motion:reduce){
+    html.theme-switching,
+    html.theme-switching *{
+        transition:none !important;
+    }
+}
+
 *{
     margin:0;
     padding:0;
@@ -319,7 +443,18 @@ input{
     border-radius:var(--radius-sm);
     outline:none;
     font-size:var(--text-md);
+    background:var(--color-surface);
+    color:var(--color-text);
     transition:border-color .15s, box-shadow .15s;
+}
+
+/* Bind the other form controls to the surface/ink tokens too, so they
+   follow the theme instead of rendering browser-default white in dark
+   mode. Identical to the defaults in light mode. */
+select,
+textarea{
+    background:var(--color-surface);
+    color:var(--color-text);
 }
 
 input:focus{
@@ -382,9 +517,318 @@ button:disabled{
   effect and the rest was dead code.
 =========================================*/
 
+/* Block, not flex: the fixed sidebar is out of flow, so the top bar
+   and .main simply stack in the content column, each clearing the
+   sidebar with the same left margin. */
 .layout{
-    display:flex;
+    display:block;
     min-height:100vh;
+}
+
+/* Sticky global top bar. Sits to the right of the fixed sidebar and
+   holds the omni-search. */
+.topbar{
+    position:sticky;
+    top:0;
+    z-index:900;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    height:60px;
+    margin-left:var(--sidebar-width);
+    padding:0 26px;
+    background:var(--color-surface);
+    border-bottom:1px solid var(--color-border);
+    transition:margin-left .25s ease;
+}
+
+body.sidebar-collapsed .topbar{
+    margin-left:var(--sidebar-width-collapsed);
+}
+
+.topbar-left{
+    flex:1;
+    min-width:0;
+    display:flex;
+    align-items:center;
+}
+
+.topbar-right{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+}
+
+/* Turbo Drive's navigation progress bar (shown on slower loads),
+   brand-coloured instead of the default blue. */
+.turbo-progress-bar{
+    height:3px;
+    background:var(--color-primary);
+}
+
+/* Live board/list refresh: a brief ring when a status pill or a count
+   updates itself (a ring, so the element's own background is untouched),
+   and the "new tasks available" nudge. */
+@keyframes livePillFlash{
+    0%{ box-shadow:0 0 0 3px var(--color-primary-soft); }
+    100%{ box-shadow:0 0 0 0 transparent; }
+}
+.live-pill-flash{
+    animation:livePillFlash 1.1s ease;
+    border-radius:var(--ds-radius-sm);
+}
+
+.live-new-banner{
+    position:fixed;
+    bottom:22px;
+    left:50%;
+    z-index:1400;
+    display:none;
+    padding:9px 16px;
+    background:var(--color-primary);
+    color:#fff;
+    border:none;
+    border-radius:var(--ds-radius-full);
+    font-size:var(--text-base);
+    font-weight:600;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+    cursor:pointer;
+    opacity:0;
+    transform:translateX(-50%) translateY(8px);
+    transition:opacity .2s ease, transform .2s ease;
+}
+.live-new-banner.show{
+    display:inline-block;
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+}
+.live-new-banner:hover{
+    background:var(--color-primary-hover);
+}
+
+/* --- Theme toggle (top bar) --- */
+.theme-toggle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:38px;
+    height:38px;
+    padding:0;
+    background:transparent;
+    border:none;
+    border-radius:var(--ds-radius-md);
+    color:var(--color-text-muted);
+    font-size:16px;
+    cursor:pointer;
+    transition:background var(--ds-transition), color var(--ds-transition);
+}
+
+.theme-toggle:hover{
+    background:var(--color-surface-muted);
+    color:var(--color-text);
+}
+
+/* Show the icon for the mode you'll switch TO: moon in light, sun in
+   dark. Only one is ever visible. */
+.theme-icon-light{ display:none; }
+.theme-icon-dark{ display:inline-block; }
+
+:root[data-theme="dark"] .theme-icon-dark{ display:none; }
+:root[data-theme="dark"] .theme-icon-light{ display:inline-block; }
+
+/* --- Quick Create (top bar primary action) --- */
+.quick-create{
+    position:relative;
+}
+
+.quick-create-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    height:38px;
+    padding:0 14px;
+}
+
+.quick-create-caret{
+    font-size:10px;
+    opacity:.85;
+}
+
+.quick-create-menu{
+    position:absolute;
+    top:calc(100% + 8px);
+    right:0;
+    width:210px;
+    padding:6px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--ds-radius-md);
+    box-shadow:0 16px 40px rgba(15,23,42,.18);
+    z-index:1200;
+}
+
+@media(max-width:640px){
+    .quick-create-label,
+    .quick-create-caret{
+        display:none;
+    }
+    .quick-create-btn{
+        padding:0 11px;
+    }
+}
+
+/* --- Account menu (top-right identity) --- */
+.account-menu{
+    position:relative;
+}
+
+.account-trigger{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:5px 8px 5px 6px;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:var(--ds-radius-full);
+    cursor:pointer;
+    transition:background var(--ds-transition), border-color var(--ds-transition);
+}
+
+.account-trigger:hover{
+    background:var(--color-surface-muted);
+}
+
+.account-trigger[aria-expanded="true"]{
+    background:var(--color-surface-muted);
+    border-color:var(--color-border);
+}
+
+.account-avatar{
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--color-primary);
+    color:#fff;
+    font-size:var(--text-base);
+    font-weight:700;
+    flex-shrink:0;
+}
+
+.account-meta{
+    display:flex;
+    flex-direction:column;
+    line-height:1.2;
+    text-align:left;
+    max-width:150px;
+}
+
+.account-name{
+    font-size:var(--text-base);
+    font-weight:600;
+    color:var(--color-text);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.account-role{
+    font-size:var(--text-xs);
+    color:var(--color-text-muted);
+    white-space:nowrap;
+}
+
+.account-caret{
+    font-size:11px;
+    color:var(--color-text-muted);
+    flex-shrink:0;
+}
+
+.account-dropdown{
+    position:absolute;
+    top:calc(100% + 8px);
+    right:0;
+    width:250px;
+    padding:6px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--ds-radius-md);
+    box-shadow:0 16px 40px rgba(15,23,42,.18);
+    z-index:1200;
+}
+
+.account-dropdown-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    margin-bottom:4px;
+    border-bottom:1px solid var(--color-border);
+}
+
+.account-avatar-lg{
+    width:38px;
+    height:38px;
+    font-size:var(--text-md);
+}
+
+.account-dropdown-id{
+    min-width:0;
+}
+
+.account-dropdown-id .account-name{
+    font-size:var(--text-md);
+}
+
+.account-email{
+    display:block;
+    font-size:var(--text-sm);
+    color:var(--color-text-muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.account-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px;
+    border-radius:var(--ds-radius);
+    font-size:var(--text-base);
+    font-weight:500;
+    color:var(--color-text);
+    text-decoration:none;
+}
+
+.account-item i{
+    width:16px;
+    text-align:center;
+    color:var(--color-text-muted);
+}
+
+.account-item:hover{
+    background:var(--color-surface-muted);
+}
+
+.account-logout{
+    color:var(--color-danger);
+}
+
+.account-logout i{
+    color:var(--color-danger);
+}
+
+/* On a phone the identity text is noise next to the avatar. */
+@media(max-width:640px){
+    .account-meta,
+    .account-caret{
+        display:none;
+    }
 }
 
 .sidebar{
@@ -423,11 +867,49 @@ button:disabled{
     height:0;
 }
 
+/* Brand + collapse toggle on one row, the way Asana/Linear head their
+   sidebar. */
+.sidebar-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    min-height:32px;
+    margin-bottom:20px;
+}
+
+/* Align the sidebar header with the top bar: the same 60px band and a
+   matching bottom divider, so the brand lines up with the top-bar
+   content and the horizontal rule runs unbroken across the whole app -
+   the standard shell alignment in Linear/Asana/Notion. Desktop only;
+   on mobile the sidebar is a stacked full-width strip. */
+@media(min-width:769px){
+    .sidebar-head{
+        height:60px;
+        min-height:0;
+        /* Bleed to the sidebar's edges (cancel its 16px/12px padding) so
+           the band starts at the very top and the divider spans full
+           width. */
+        margin:calc(var(--ds-space-4) * -1) calc(var(--ds-space-3) * -1) var(--ds-space-4);
+        padding:0 var(--ds-space-3);
+        border-bottom:1px solid var(--ds-nav-border);
+    }
+}
+
+/* Wins over both the base and ds-* `.sidebar h2` rules so the brand
+   sits flush in the header row. */
+.sidebar .sidebar-head h2{
+    margin:0;
+    padding:0;
+}
+
 .sidebar h2{
     font-size:var(--text-xl);
     margin-bottom:24px;
     padding:0 10px;
     white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 
 .sidebar a{
@@ -501,65 +983,96 @@ body.sidebar-collapsed .sidebar-nav-label{
 
 body.sidebar-collapsed .sidebar{
     width:var(--sidebar-width-collapsed);
+    /* Let the hover tooltips on the collapsed rail escape the 72px
+       rail instead of being clipped. */
+    overflow:visible;
+}
+
+body.sidebar-collapsed .sidebar-nav{
+    overflow:visible;
 }
 
 body.sidebar-collapsed .main{
     margin-left:var(--sidebar-width-collapsed);
 }
 
-body.sidebar-collapsed .sidebar h2{
-    opacity:0;
-    pointer-events:none;
-}
-
 body.sidebar-collapsed .sidebar a{
     justify-content:center;
-    padding:12px 0;
+    padding:9px 0;
 }
 
-body.sidebar-collapsed .sidebar a span{
-    display:none;
+/* Collapsed-rail chrome is desktop-only: on mobile the sidebar is a
+   full-width horizontal strip that keeps its brand and labels. */
+@media(min-width:769px){
+
+    /* Brand collapses out cleanly (no reserved space); the toggle
+       centres and becomes the expand affordance. */
+    body.sidebar-collapsed .sidebar-head{
+        justify-content:center;
+    }
+
+    body.sidebar-collapsed .sidebar h2{
+        display:none;
+    }
+
+    /* The label turns into a floating tooltip to the right of the icon
+       - the collapsed-rail pattern from Slack/Linear, so an icon-only
+       nav stays legible. */
+    body.sidebar-collapsed .sidebar a > span{
+        position:absolute;
+        left:calc(100% + 10px);
+        top:50%;
+        transform:translateY(-50%) translateX(-4px);
+        padding:6px 10px;
+        background:#20222c;
+        border:1px solid rgba(255,255,255,.12);
+        border-radius:var(--ds-radius);
+        color:#e8eaf0;
+        font-size:var(--ds-font-12);
+        font-weight:var(--ds-weight-medium);
+        line-height:1;
+        white-space:nowrap;
+        box-shadow:0 8px 22px rgba(0,0,0,.32);
+        opacity:0;
+        pointer-events:none;
+        transition:opacity .12s ease, transform .12s ease;
+        z-index:1500;
+    }
+
+    body.sidebar-collapsed .sidebar a:hover > span{
+        opacity:1;
+        transform:translateY(-50%) translateX(0);
+    }
 }
 
 /* ----- collapse toggle ----- */
 
-/* Footer of the sidebar's flex column, outside the scrolling
-   nav. It used to be position:fixed, which floated it over
-   whichever nav item happened to sit at that spot. */
+/* A quiet ghost icon button in the sidebar header, not a floating
+   shadowed pill. The icon (chevrons) flips direction with the state. */
 .sidebar-collapse-btn{
     flex-shrink:0;
-    margin-top:12px;
-
-    display:flex;
+    display:inline-flex;
     align-items:center;
     justify-content:center;
 
-    width:32px;
-    height:32px;
+    width:28px;
+    height:28px;
     padding:0;
-    margin-left:auto;
 
     border:none;
-    border-radius:var(--radius-md);
+    border-radius:var(--radius-sm);
 
-    background:var(--color-surface);
-    color:var(--color-neutral);
+    background:transparent;
+    color:var(--color-border-strong);
     font-size:13px;
 
     cursor:pointer;
-    z-index:1200;
-
-    box-shadow:var(--shadow-lg);
-    transition:transform .25s ease, background .15s;
+    transition:background .15s, color .15s;
 }
 
 .sidebar-collapse-btn:hover{
-    background:var(--color-surface-muted);
-}
-
-body.sidebar-collapsed .sidebar-collapse-btn{
-    margin-left:auto;
-    margin-right:auto;
+    background:var(--color-neutral-hover);
+    color:var(--color-surface);
 }
 
 @media(max-width:768px){
@@ -614,8 +1127,15 @@ body.sidebar-collapsed .sidebar-collapse-btn{
         padding:16px;
     }
 
+    .topbar{
+        margin-left:0;
+        padding:0 16px;
+        gap:10px;
+    }
+
     body.sidebar-collapsed .sidebar,
-    body.sidebar-collapsed .main{
+    body.sidebar-collapsed .main,
+    body.sidebar-collapsed .topbar{
         width:100%;
         margin-left:0;
     }
@@ -4120,6 +4640,228 @@ grid-template-columns:repeat(2,1fr);
     }
 }
 
+/* ============================================================
+   Performance band - the date-scoped section of the dashboard.
+   The picker sits on this section's own header so it visibly
+   governs only the throughput below, not the live KPIs above.
+   ============================================================ */
+
+.activity-band {
+    margin-bottom: 20px;
+}
+
+.activity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.activity-head-text h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: var(--color-text);
+}
+
+.activity-head-text p {
+    margin: 2px 0 0;
+    font-size: var(--text-base);
+    color: var(--color-text-secondary);
+}
+
+.activity-vs {
+    color: var(--color-text-muted);
+}
+
+/* Segmented control. A sunken track with a raised pill for the
+   active option - the standard "this one is selected" read. */
+.period-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--ds-radius-md);
+    position: relative;
+}
+
+.period-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: var(--text-base);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-radius: var(--ds-radius);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--ds-transition), color var(--ds-transition);
+}
+
+.period-opt:hover {
+    color: var(--color-text);
+    background: var(--color-surface);
+}
+
+.period-opt.is-active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Native <details> popover for the custom range - no JS, closes on
+   outside interaction the way a summary toggle does. */
+.period-custom {
+    position: relative;
+}
+
+.period-custom > summary {
+    list-style: none;
+}
+
+.period-custom > summary::-webkit-details-marker {
+    display: none;
+}
+
+.period-custom-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--ds-radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+.period-custom-pop label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.period-custom-pop input[type="date"] {
+    padding: 7px 9px;
+    font-size: var(--text-base);
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--ds-radius);
+}
+
+.period-custom-pop input[type="date"]:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--ds-focus-ring);
+}
+
+/* Four throughput tiles - same visual family as the KPI cards but
+   compact, since they carry a number, a delta and nothing else. */
+.activity-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.activity-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    text-decoration: none;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+a.activity-tile:hover {
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
+}
+
+.activity-tile-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.activity-tile-value {
+    font-size: 26px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--color-text);
+}
+
+.activity-delta {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.activity-delta.up {
+    color: var(--color-success);
+}
+
+.activity-delta.down {
+    color: var(--color-danger);
+}
+
+.activity-delta.neutral {
+    color: var(--color-text-muted);
+}
+
+.activity-chart-card {
+    min-height: auto;
+}
+
+.activity-chart-card canvas {
+    max-height: 240px;
+}
+
+@media (max-width: 900px) {
+    .activity-tiles {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .activity-head {
+        align-items: stretch;
+    }
+
+    /* Let the segmented control scroll rather than wrap into a ragged
+       two-row block on a phone. */
+    .period-toggle {
+        overflow-x: auto;
+        max-width: 100%;
+    }
+
+    .period-custom-pop {
+        right: auto;
+        left: 0;
+    }
+}
+
 .dashboard-chart-grid {
     display: grid;
     grid-template-columns: 0.85fr 1.15fr;
@@ -4230,7 +4972,7 @@ grid-template-columns:repeat(2,1fr);
 }
 
 .status-chart-card,
-.trend-chart-card {
+.upcoming-card {
     min-height: 340px;
 }
 
@@ -4254,9 +4996,138 @@ grid-template-columns:repeat(2,1fr);
     height: 200px !important;
 }
 
-.trend-chart-card canvas {
-    width: 100% !important;
-    height: 245px !important;
+/* Upcoming - forward-looking agenda paired with the status doughnut.
+   A chart-card shell so it matches the doughnut's height in the row. */
+.upcoming-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.upcoming-link {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.upcoming-link i {
+    font-size: 10px;
+    transition: transform var(--ds-transition);
+}
+
+.upcoming-link:hover i {
+    transform: translateX(2px);
+}
+
+.upcoming-list {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.upcoming-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--color-surface-sunken);
+}
+
+.upcoming-row:last-child {
+    border-bottom: none;
+}
+
+.upcoming-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.upcoming-deadline {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+}
+
+.upcoming-meeting {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.upcoming-holiday {
+    background: var(--ds-warning-bg);
+    color: var(--ds-warning);
+}
+
+.upcoming-leave {
+    background: var(--color-surface-muted);
+    color: var(--color-text-secondary);
+}
+
+.upcoming-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.upcoming-body strong {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upcoming-body span {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upcoming-date {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.upcoming-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 1;
+    padding: 30px 16px;
+    color: var(--color-text-muted);
+    text-align: center;
+}
+
+.upcoming-empty i {
+    font-size: 22px;
+    opacity: .5;
+}
+
+.upcoming-empty p {
+    margin: 0;
+    font-size: var(--text-base);
 }
 
 .status-chart-legend {
@@ -4353,7 +5224,7 @@ grid-template-columns:repeat(2,1fr);
     }
 
     .status-chart-card,
-    .trend-chart-card {
+    .upcoming-card {
         min-height: auto;
     }
 }
@@ -8122,6 +8993,13 @@ TASK LIST TOOLBAR
     box-shadow:0 10px 20px rgba(37,99,235,.10);
 }
 
+/* A tile is a real control - one click opens it - so it has to show
+   where the keyboard is, not just where the mouse is. */
+.gallery-item:focus-visible{
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
+
 .gallery-thumb-box{
     position:relative;
     width:130px !important;
@@ -8504,15 +9382,109 @@ body.media-viewer-open{
     color:var(--color-surface);
 }
 
+/* Position in the set, next to the filename. Hidden outright for a
+   single-file preview so nothing reads as "1 of 1". */
+.media-viewer-count{
+    flex:0 0 auto;
+    padding:3px 9px;
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    font-size:11px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:.3px;
+    white-space:nowrap;
+}
+
+.media-viewer-count[hidden]{
+    display:none;
+}
+
+/* Wraps the stage so the prev/next chevrons can sit over its edges
+   without being wiped out when the stage is re-rendered. */
+.media-viewer-body{
+    position:relative;
+    display:flex;
+    flex:1 1 auto;
+    min-height:0;
+}
+
 /* Stage - the actual media */
 .media-viewer-stage{
     display:flex;
     align-items:center;
     justify-content:center;
     flex:1 1 auto;
+    min-width:0;
     min-height:0;
     padding:14px;
     background:#0b1220;
+}
+
+.media-viewer-stage.is-entering > *{
+    animation:mediaViewerEnter .18s ease-out;
+}
+
+@keyframes mediaViewerEnter{
+    from{ opacity:0; }
+    to{ opacity:1; }
+}
+
+/* Step controls. Kept permanently visible rather than revealed on hover:
+   hover does not exist on touch, and a control you have to discover is
+   not a control. */
+.media-viewer-nav{
+    position:absolute;
+    top:50%;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:42px;
+    height:42px;
+    padding:0;
+    transform:translateY(-50%);
+    border:1px solid rgba(255,255,255,.16);
+    border-radius:50%;
+    background:rgba(15,23,42,.66);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    color:#fff;
+    font-size:15px;
+    cursor:pointer;
+    opacity:.9;
+    transition:opacity .15s ease, background .15s ease, transform .15s ease;
+}
+
+.media-viewer-nav.prev{ left:12px; }
+.media-viewer-nav.next{ right:12px; }
+
+.media-viewer-nav:hover{
+    background:rgba(15,23,42,.9);
+    opacity:1;
+}
+
+.media-viewer-nav:active{
+    transform:translateY(-50%) scale(.94);
+}
+
+.media-viewer-nav:focus-visible{
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
+
+/* Disabled at the ends rather than wrapping, so the edge of the set is
+   something you can feel. */
+.media-viewer-nav:disabled{
+    opacity:.28;
+    cursor:default;
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
+}
+
+.media-viewer-nav[hidden]{
+    display:none;
 }
 
 .media-viewer-video,
@@ -8613,12 +9585,32 @@ body.media-viewer-open{
     .media-viewer-frame{
         height:calc(100vh - 130px);
     }
+
+    /* Swiping is the primary gesture at this width, so the chevrons pull
+       in and shrink to a backup rather than sitting on top of the file. */
+    .media-viewer-nav{
+        width:36px;
+        height:36px;
+        font-size:13px;
+    }
+
+    .media-viewer-nav.prev{ left:6px; }
+    .media-viewer-nav.next{ right:6px; }
 }
 
 @media(prefers-reduced-motion:reduce){
 
-    .media-viewer-tool{
+    .media-viewer-tool,
+    .media-viewer-nav{
         transition:none;
+    }
+
+    .media-viewer-nav:active{
+        transform:translateY(-50%);
+    }
+
+    .media-viewer-stage.is-entering > *{
+        animation:none;
     }
 }
 
@@ -9613,6 +10605,686 @@ body.panel-mode .task-detail-right{
 
 
 /* ==========================================================
+   EMPLOYEE DASHBOARD
+   Built around "what should I do right now": a focus hero, live
+   counters, a prioritised queue and the deadlines to plan around.
+   ========================================================== */
+
+/* Five live counters share the KPI card look but their own column
+   count so they sit on one clean row. */
+.emp-kpi-grid {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 1100px) {
+    .emp-kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .emp-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Manager "My Work" band - the focus card and a short queue, set
+   apart from the team overview below it. */
+.my-work-band {
+    margin-bottom: 22px;
+}
+
+.my-work-head {
+    margin-bottom: 12px;
+}
+
+.my-work-queue {
+    margin-top: 14px;
+}
+
+/* --- Focus hero --- */
+.focus-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.focus-working  { border-left-color: var(--color-primary); }
+.focus-paused   { border-left-color: #d97706; }
+.focus-next     { border-left-color: #64748b; }
+
+.focus-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.focus-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.focus-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--color-text-secondary);
+}
+
+.focus-state-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-border-strong);
+}
+
+.focus-working .focus-state-dot {
+    background: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+.focus-paused .focus-state-dot { background: #d97706; }
+.focus-next .focus-state-dot   { background: #64748b; }
+
+.focus-title {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.25;
+}
+
+.focus-title a {
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.focus-title a:hover { color: var(--color-primary); }
+
+.focus-meta {
+    margin: 0 0 14px;
+    font-size: var(--text-md);
+    color: var(--color-text-muted);
+}
+
+.dot-sep { margin: 0 4px; color: var(--color-border-strong); }
+
+.focus-progress {
+    max-width: 460px;
+}
+
+.focus-progress-track {
+    height: 8px;
+    border-radius: var(--ds-radius-full);
+    background: var(--color-surface-sunken);
+    overflow: hidden;
+}
+
+.focus-progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: var(--ds-radius-full);
+    background: var(--color-primary);
+    transition: width .4s ease;
+}
+
+.focus-progress-fill.is-over { background: var(--color-danger); }
+
+.focus-progress-legend {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: var(--text-base);
+    color: var(--color-text-muted);
+}
+
+.focus-timer {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.focus-over { color: var(--color-danger); font-weight: 600; }
+
+.focus-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    min-width: 150px;
+}
+
+.focus-actions form { margin: 0; }
+.focus-actions .btn { width: 100%; }
+
+.focus-empty {
+    align-items: center;
+    gap: 18px;
+}
+
+.focus-empty-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-success-soft);
+    color: var(--color-success);
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.focus-empty h2 { margin: 0 0 2px; font-size: var(--text-lg); }
+.focus-empty p { margin: 0; color: var(--color-text-muted); font-size: var(--text-md); }
+.focus-empty a { color: var(--color-primary); text-decoration: none; font-weight: 600; }
+
+@media (max-width: 640px) {
+    .focus-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .focus-actions { min-width: 0; }
+    .focus-actions { flex-direction: row; }
+    .focus-actions .btn { width: auto; flex: 1; }
+}
+
+/* --- Due-date chips, shared by focus / queue / deadlines --- */
+.due-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: var(--ds-radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.due-overdue { background: var(--ds-danger-bg);  color: var(--ds-danger); }
+.due-today   { background: var(--ds-warning-bg); color: var(--ds-warning); }
+.due-soon    { background: var(--color-primary-soft); color: var(--ds-accent-text); }
+.due-far     { background: var(--color-surface-muted); color: var(--color-text-muted); }
+
+.due-chip-lead {
+    min-width: 74px;
+    justify-content: center;
+}
+
+/* --- Queue / deadline / meeting rows --- */
+.section-head-link {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.queue-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--color-surface-sunken);
+}
+
+.queue-row:last-child { border-bottom: none; }
+
+.prio-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.prio-urgent { background: var(--color-danger); }
+.prio-high   { background: #ea580c; }
+.prio-medium { background: var(--color-primary); }
+.prio-low    { background: #94a3b8; }
+
+.queue-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.queue-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+a.queue-title:hover { color: var(--color-primary); }
+
+.queue-meta {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-start,
+.queue-running {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    border: none;
+}
+
+.queue-start {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: background var(--ds-transition), color var(--ds-transition);
+}
+
+.queue-start:hover {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.queue-running {
+    background: var(--ds-warning-bg);
+    color: var(--ds-warning);
+}
+
+.queue-row form { margin: 0; }
+
+.meeting-time {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-primary);
+    font-variant-numeric: tabular-nums;
+    min-width: 72px;
+    flex-shrink: 0;
+}
+
+.panel-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+.panel-empty i { font-size: 20px; opacity: .5; }
+.panel-empty p { margin: 0; font-size: var(--text-base); }
+
+/* ==========================================================
+   GLOBAL SEARCH
+   Sidebar box + live dropdown, and the full results page.
+   ========================================================== */
+
+/* --- Sidebar box (sits on the dark nav) --- */
+/* Search box, sitting on the left of the top bar - the Asana/Linear
+   omni-search shape. flex-direction is stated explicitly because the
+   base form{} rule lays forms out as a column; without this the icon,
+   input and hint stack vertically. */
+.global-search {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 440px;
+    height: 40px;
+    padding: 0 12px;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    transition: border-color var(--ds-transition), background var(--ds-transition), box-shadow var(--ds-transition);
+}
+
+.global-search:focus-within {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    box-shadow: var(--ds-focus-ring);
+}
+
+.global-search-icon {
+    color: var(--color-text-muted);
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.global-search-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--color-text);
+    font-size: var(--text-md);
+}
+
+.global-search-input::placeholder { color: var(--color-text-muted); }
+
+/* The box already shows a focus ring via :focus-within; keep the base
+   input:focus ring from drawing a second one inside it. */
+.global-search-input:focus,
+.search-page-box input:focus { box-shadow: none; }
+
+.global-search-kbd {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--ds-radius-sm);
+}
+
+/* Fades out once the box is focused - the shortcut hint has done its
+   job and the space reads cleaner without it. */
+.global-search:focus-within .global-search-kbd { display: none; }
+
+/* --- Live dropdown - drops from the input, matching its width --- */
+.global-search-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    max-height: 72vh;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--ds-radius-md);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+    z-index: 1200;
+}
+
+.gs-group-label {
+    padding: 8px 10px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--color-text-muted);
+}
+
+.gs-item,
+.gs-all {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--ds-radius);
+    text-decoration: none;
+    color: var(--color-text);
+}
+
+.gs-item.is-active,
+.gs-item:hover,
+.gs-all.is-active,
+.gs-all:hover {
+    background: var(--color-surface-muted);
+}
+
+.gs-item-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--ds-radius);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.gs-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.gs-item-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gs-item-sub {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gs-code {
+    margin-right: 6px;
+    padding: 1px 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ds-accent-text);
+    background: var(--color-primary-soft);
+    border-radius: var(--ds-radius-sm);
+}
+
+.gs-badge {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-muted);
+    border-radius: var(--ds-radius-full);
+}
+
+.gs-all {
+    justify-content: center;
+    margin-top: 4px;
+    padding: 10px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ds-accent-text);
+    border-top: 1px solid var(--color-border);
+    border-radius: 0;
+}
+
+.gs-empty {
+    padding: 18px;
+    text-align: center;
+    font-size: var(--text-base);
+    color: var(--color-text-muted);
+}
+
+/* --- Full results page --- */
+.search-page-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 720px;
+    margin-bottom: 18px;
+    padding: 8px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.search-page-box > i { color: var(--color-text-muted); }
+
+.search-page-box input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: var(--text-lg);
+    color: var(--color-text);
+}
+
+.search-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.search-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    margin-bottom: -1px;
+    font-size: var(--text-base);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+}
+
+.search-tab:hover { color: var(--color-text); }
+
+.search-tab.is-active {
+    color: var(--color-primary);
+    font-weight: 600;
+    border-bottom-color: var(--color-primary);
+}
+
+.search-tab-count {
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: var(--color-surface-muted);
+    border-radius: var(--ds-radius-full);
+}
+
+.search-tab.is-active .search-tab-count {
+    color: var(--ds-accent-text);
+    background: var(--color-primary-soft);
+}
+
+.search-section { margin-bottom: 16px; }
+
+.search-result-list { display: flex; flex-direction: column; }
+
+.search-result {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 8px;
+    border-bottom: 1px solid var(--color-surface-sunken);
+    text-decoration: none;
+    border-radius: var(--ds-radius);
+}
+
+.search-result:last-child { border-bottom: none; }
+.search-result:hover { background: var(--color-surface-muted); }
+
+.search-result-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.sr-task   { background: var(--color-primary-soft); color: var(--color-primary); }
+.sr-client { background: #e0f2fe; color: #0284c7; }
+.sr-user   { background: #f5f3ff; color: #7c3aed; }
+.sr-note   { background: var(--ds-warning-bg); color: var(--ds-warning); }
+
+.search-result-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.search-result-title {
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-sub {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+.search-hint i { font-size: 26px; opacity: .4; }
+.search-hint p { margin: 0; font-size: var(--text-md); max-width: 420px; }
+.search-hint kbd {
+    padding: 1px 6px;
+    font-family: inherit;
+    font-size: 12px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--ds-radius-sm);
+    background: var(--color-surface-muted);
+}
+
+/* ==========================================================
    RECENT ACTIVITY - DENSER
    Each entry was a bordered card with the message and the
    timestamp stacked, so a row ran ~79px with its entire right
@@ -10369,12 +12041,15 @@ tbody tr:hover{
     background:var(--ds-nav-bg);
     border-right:1px solid var(--ds-nav-border);
     padding:var(--ds-space-4) var(--ds-space-3);
+    /* Adapts with the sidebar ramp so raw text is never white-on-white
+       in light mode. */
+    color:var(--ds-nav-text);
 }
 
 .sidebar h2{
     margin-bottom:var(--ds-space-5);
     padding:0 var(--ds-space-3);
-    color:var(--ds-text-inverse);
+    color:var(--ds-nav-text-hover);
     font-size:var(--ds-font-16);
     font-weight:var(--ds-weight-bold);
     letter-spacing:var(--ds-tracking-tight);
@@ -10437,13 +12112,13 @@ tbody tr:hover{
 }
 
 .sidebar-collapse-btn{
-    background:var(--ds-nav-active-bg);
+    background:transparent;
     color:var(--ds-nav-text);
-    border:1px solid var(--ds-nav-border);
+    border:none;
 }
 
 .sidebar-collapse-btn:hover{
-    background:#2b2f3b;
+    background:var(--ds-nav-active-bg);
     color:var(--ds-nav-text-hover);
 }
 

@@ -18,6 +18,7 @@ from flask import (
 from flask_login import login_required, current_user
 
 from sqlalchemy import or_, cast, String
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.extensions import db
 from app.models import (
@@ -55,17 +56,31 @@ THUMBNAIL_URL_TTL = 3600
 
 def generate_task_code():
 
-    sequence = TaskSequence.query.get(1)
+    # Locked read, so two people saving a task at the same moment queue up
+    # instead of both reading the same last_code and handing out one number
+    # twice.
+    sequence = db.session.get(
+        TaskSequence,
+        1,
+        with_for_update=True,
+    )
 
     if not sequence:
 
-        sequence = TaskSequence(
-            id=1,
-            last_code=1000
+        # First task ever on this database. ON CONFLICT DO NOTHING because a
+        # concurrent request may be inserting the very same seed row - losing
+        # that race is fine, we just re-read what the winner wrote.
+        db.session.execute(
+            pg_insert(TaskSequence.__table__)
+            .values(id=1, last_code=1000)
+            .on_conflict_do_nothing(index_elements=["id"])
         )
 
-        db.session.add(sequence)
-        db.session.flush()
+        sequence = db.session.get(
+            TaskSequence,
+            1,
+            with_for_update=True,
+        )
 
     sequence.last_code += 1
 
@@ -252,6 +267,140 @@ def get_task_base_query():
     )
 
 
+def apply_task_filters(query, args):
+    """Status / priority / search / date-range / assignee / client
+    filters, shared by the task list and its live-refresh endpoint so
+    the poll always scopes to exactly what the page is showing. Sorting
+    is deliberately left out - it belongs only to the rendered page."""
+
+    selected_status = args.get("status", "").strip()
+    selected_priority = args.get("priority", "").strip()
+    search = args.get("q", "").strip()
+    filter_by = args.get("filter", "").strip()
+    assigned_to = args.get("assigned_to", "").strip()
+    assigned_by = args.get("assigned_by", "").strip()
+    client_id = args.get("client", "").strip()
+
+    if selected_status:
+        query = query.filter(Task.status == selected_status)
+
+    if selected_priority:
+        query = query.filter(Task.priority == selected_priority)
+
+    query = apply_task_search(query, search)
+
+    today = ist_now()
+
+    if filter_by == "today":
+        query = query.filter(db.func.date(Task.created_at) == today.date())
+
+    elif filter_by == "yesterday":
+        query = query.filter(
+            db.func.date(Task.created_at) == today.date() - timedelta(days=1)
+        )
+
+    elif filter_by == "last_7_days":
+        query = query.filter(Task.created_at >= today - timedelta(days=7))
+
+    elif filter_by == "last_30_days":
+        query = query.filter(Task.created_at >= today - timedelta(days=30))
+
+    elif filter_by == "this_month":
+        query = query.filter(
+            db.extract("month", Task.created_at) == today.month,
+            db.extract("year", Task.created_at) == today.year
+        )
+
+    elif filter_by == "last_90_days":
+        query = query.filter(Task.created_at >= today - timedelta(days=90))
+
+    elif filter_by == "custom_days":
+        custom_days_value = args.get("days", "").strip()
+        if custom_days_value.isdigit() and int(custom_days_value) > 0:
+            query = query.filter(
+                Task.created_at >= today - timedelta(days=int(custom_days_value))
+            )
+
+    if assigned_to and assigned_to.isdigit():
+        query = query.filter(Task.assigned_to_id == int(assigned_to))
+
+    if assigned_by and assigned_by.isdigit():
+        query = query.filter(Task.created_by_id == int(assigned_by))
+
+    if client_id and client_id.isdigit():
+        query = query.filter(Task.client_id == int(client_id))
+
+    return query
+
+
+@tasks_bp.route("/live-state")
+@login_required
+def live_state():
+    """Compact, filtered snapshot of the visible tasks, polled by the
+    board / list live-refresh. One columns-only query - no joins, no ORM
+    object hydration - so it stays cheap at a ~10s cadence. The client
+    reconciles card moves, removals and new arrivals from this; it never
+    re-renders the page.
+
+    Scoped by the same filters and the same permission base query as the
+    list, so the poll returns exactly the set the page is showing."""
+
+    query = apply_task_filters(get_task_base_query(), request.args)
+
+    rows = query.with_entities(
+        Task.id,
+        Task.status,
+        Task.priority,
+        Task.employee_completed,
+        Task.deadline,
+    ).all()
+
+    now = ist_now()
+
+    tasks = {}
+    completed = review = overdue = 0
+
+    for task_id, status, priority, employee_completed, deadline in rows:
+
+        # Void tasks aren't shown on the board and are excluded from the
+        # headline figures - matching list_tasks().
+        is_void = status in task_status.EXCLUDED_FROM_METRICS
+
+        tasks[str(task_id)] = {"status": status, "priority": priority, "void": is_void}
+
+        if is_void:
+            continue
+
+        if employee_completed:
+            completed += 1
+
+        if status in (task_status.CORE_REVIEW, task_status.CLIENT_REVIEW):
+            review += 1
+
+        if (
+            deadline
+            and deadline < now
+            and status in (
+                task_status.ASSIGNED,
+                task_status.IN_PROGRESS,
+                task_status.PAUSED,
+            )
+        ):
+            overdue += 1
+
+    non_void = sum(1 for t in tasks.values() if not t["void"])
+
+    return jsonify(
+        tasks=tasks,
+        counts={
+            "total": non_void,
+            "completed": completed,
+            "review": review,
+            "overdue": overdue,
+        },
+    )
+
+
 @tasks_bp.route("/")
 @login_required
 def list_tasks():
@@ -266,87 +415,7 @@ def list_tasks():
     assigned_by = request.args.get("assigned_by", "").strip()
     client_id = request.args.get("client", "").strip()
 
-    query = get_task_base_query()
-
-    if selected_status:
-        query = query.filter(Task.status == selected_status)
-
-    if selected_priority:
-        query = query.filter(Task.priority == selected_priority)
-
-    query = apply_task_search(query, search)
-
-        # =====================================
-    # FILTER BY
-    # =====================================
-
-    today = ist_now()
-
-    if filter_by == "today":
-
-        query = query.filter(
-            db.func.date(Task.created_at) == today.date()
-        )
-
-    elif filter_by == "yesterday":
-
-        yesterday = today.date() - timedelta(days=1)
-
-        query = query.filter(
-            db.func.date(Task.created_at) == yesterday
-        )
-
-    elif filter_by == "last_7_days":
-
-        query = query.filter(
-            Task.created_at >= today - timedelta(days=7)
-        )
-
-    elif filter_by == "last_30_days":
-
-        query = query.filter(
-            Task.created_at >= today - timedelta(days=30)
-        )
-
-    elif filter_by == "this_month":
-
-        query = query.filter(
-            db.extract("month", Task.created_at) == today.month,
-            db.extract("year", Task.created_at) == today.year
-        )
-
-    elif filter_by == "last_90_days":
-
-        query = query.filter(
-            Task.created_at >= today - timedelta(days=90)
-        )
-
-    elif filter_by == "custom_days":
-
-        custom_days_value = request.args.get("days", "").strip()
-
-        if custom_days_value.isdigit() and int(custom_days_value) > 0:
-            query = query.filter(
-                Task.created_at >= today - timedelta(days=int(custom_days_value))
-            )
-
-    if assigned_to and assigned_to.isdigit():
-
-        query = query.filter(
-            Task.assigned_to_id == int(assigned_to)
-        )
-
-    if assigned_by and assigned_by.isdigit():
-
-        query = query.filter(
-            Task.created_by_id == int(assigned_by)
-        )
-
-    if client_id and client_id.isdigit():
-
-        query = query.filter(
-            Task.client_id == int(client_id)
-        )
+    query = apply_task_filters(get_task_base_query(), request.args)
 
         # =====================================
     # SORT BY

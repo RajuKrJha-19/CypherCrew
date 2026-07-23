@@ -1,0 +1,83 @@
+{#
+    Quick Create - the top bar's primary action, the way Asana anchors
+    "+ Create". Creating and assigning work is the most frequent thing
+    people do here, so it's one click from anywhere. Items are gated by
+    permission, matching what each create route already enforces, so the
+    menu never offers an action that would just bounce to the dashboard.
+#}
+{% set qc_manage_tasks = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
+{% set qc_manage_clients = has_permission(current_user, "manage_clients") or current_user.role in ["admin", "super_admin"] %}
+{% set qc_manage_users = has_permission(current_user, "manage_users") or current_user.role in ["admin", "super_admin"] %}
+
+<div class="quick-create" id="quickCreate">
+
+    <button type="button"
+            class="btn quick-create-btn"
+            id="quickCreateTrigger"
+            aria-haspopup="true"
+            aria-expanded="false">
+        <i class="fa-solid fa-plus"></i>
+        <span class="quick-create-label">Create</span>
+        <i class="fa-solid fa-chevron-down quick-create-caret"></i>
+    </button>
+
+    <div class="quick-create-menu" id="quickCreateMenu" hidden>
+
+        {% if qc_manage_tasks %}
+        <a href="{{ url_for('tasks.add_task') }}" class="account-item">
+            <i class="fa-solid fa-list-check"></i> New Task
+        </a>
+        {% else %}
+        <a href="{{ url_for('tasks.self_assign_task') }}" class="account-item">
+            <i class="fa-solid fa-list-check"></i> Self-assign Task
+        </a>
+        {% endif %}
+
+        <a href="{{ url_for('reports.add_report') }}" class="account-item">
+            <i class="fa-solid fa-chart-column"></i> New Report
+        </a>
+
+        {% if qc_manage_clients %}
+        <a href="{{ url_for('clients.add_client') }}" class="account-item">
+            <i class="fa-solid fa-building"></i> New Client
+        </a>
+        {% endif %}
+
+        {% if qc_manage_users %}
+        <a href="{{ url_for('users.add_user') }}" class="account-item">
+            <i class="fa-solid fa-user-plus"></i> New User
+        </a>
+        {% endif %}
+
+    </div>
+
+    <script>
+        (function () {
+            const wrap = document.getElementById("quickCreate");
+            const trigger = document.getElementById("quickCreateTrigger");
+            const menu = document.getElementById("quickCreateMenu");
+            if (!wrap || !trigger || !menu) return;
+
+            function close() {
+                menu.hidden = true;
+                trigger.setAttribute("aria-expanded", "false");
+            }
+
+            trigger.addEventListener("click", function (event) {
+                event.stopPropagation();
+                const open = menu.hidden;
+                menu.hidden = !open;
+                trigger.setAttribute("aria-expanded", open ? "true" : "false");
+            });
+
+            document.addEventListener("click", function (event) {
+                if (!wrap.contains(event.target)) close();
+            });
+
+            document.addEventListener("keydown", function (event) {
+                if (event.key === "Escape") close();
+            });
+        })();
+    </script>
+
+</div>

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
-from app.utils.timezone import ist_now
-from flask import Blueprint, render_template, redirect, url_for, jsonify
+from app.utils.timezone import ist_now, IST_OFFSET
+from flask import Blueprint, render_template, redirect, url_for, jsonify, request
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.utils.timezone import ist_now
@@ -93,7 +93,30 @@ def super_admin():
     overview = build_overview()
     today_snapshot = build_today_snapshot()
     status_chart = build_status_chart(stats)
-    month_chart = build_month_chart()
+
+    # Forward-looking agenda for the next seven days - deadlines,
+    # meetings, holidays and leave in one glance. Nothing else on the
+    # dashboard looks ahead, so this is the slot that used to hold a
+    # second, redundant created-vs-completed trend.
+    upcoming = build_upcoming_events()
+
+    # Period-scoped Performance band: throughput for a chosen window,
+    # driven by the date picker on that section. Everything above stays
+    # a live "right now" view.
+    period = resolve_period(request.args)
+    activity = build_activity(period)
+    activity_trend = build_activity_trend(period)
+
+    # A manager who also carries tasks sees their own next action first.
+    # Reuses the employee helpers; the template hides the band entirely
+    # when there is nothing assigned, so pure-oversight roles never see
+    # an empty personal section.
+    my_focus = build_my_focus(current_user)
+    my_queue = build_my_queue(
+        current_user,
+        exclude_id=my_focus["task"].id if my_focus else None,
+        limit=4,
+    )
 
     team = build_team()
 
@@ -110,7 +133,12 @@ def super_admin():
         overview=overview,
         today_snapshot=today_snapshot,
         status_chart=status_chart,
-        month_chart=month_chart,
+        upcoming=upcoming,
+        period=period,
+        activity=activity,
+        activity_trend=activity_trend,
+        my_focus=my_focus,
+        my_queue=my_queue,
     )
 
 
@@ -129,13 +157,24 @@ def admin():
     overview = build_overview()
     today_snapshot = build_today_snapshot()
     status_chart = build_status_chart(stats)
-    month_chart = build_month_chart()
+    upcoming = build_upcoming_events()
 
     team = build_team()
 
     # The admin dashboard had no activity feed, so an admin could not
     # see what the team had just done without opening tasks one by one.
     recent_activities = build_recent_activities()
+
+    period = resolve_period(request.args)
+    activity = build_activity(period)
+    activity_trend = build_activity_trend(period)
+
+    my_focus = build_my_focus(current_user)
+    my_queue = build_my_queue(
+        current_user,
+        exclude_id=my_focus["task"].id if my_focus else None,
+        limit=4,
+    )
 
     return render_template(
         "dashboard/admin.html",
@@ -146,7 +185,12 @@ def admin():
         overview=overview,
         today_snapshot=today_snapshot,
         status_chart=status_chart,
-        month_chart=month_chart
+        upcoming=upcoming,
+        period=period,
+        activity=activity,
+        activity_trend=activity_trend,
+        my_focus=my_focus,
+        my_queue=my_queue,
     )
 
 @dashboard_bp.route("/api/overview")
@@ -179,46 +223,11 @@ def api_overview():
 @login_required
 def api_my_stats():
 
-    # Mirrors build_task_stats()'s numbers for the current employee,
-    # but as direct COUNT queries instead of loading every task row
-    # into Python - the cheap shape this polls every few seconds.
-    not_void = Task.status.notin_(task_status.EXCLUDED_FROM_METRICS)
-
-    base_query = Task.query.filter(
-        Task.assigned_to_id == current_user.id,
-        not_void
-    )
-
-    total = base_query.count()
-
-    published = base_query.filter(
-        Task.status == task_status.PUBLISHED
-    ).count()
-
-    in_review = base_query.filter(
-        Task.status.in_([
-            task_status.CORE_REVIEW,
-            task_status.CLIENT_REVIEW
-        ])
-    ).count()
-
-    overdue = base_query.filter(
-        Task.deadline.isnot(None),
-        Task.deadline < ist_now(),
-        Task.status.in_([
-            task_status.ASSIGNED,
-            task_status.IN_PROGRESS,
-            task_status.PAUSED
-        ])
-    ).count()
-
-    return jsonify(
-        success=True,
-        total=total,
-        published=published,
-        in_review=in_review,
-        overdue=overdue,
-    )
+    # The same counts the employee dashboard renders with, as direct
+    # COUNT queries - the cheap shape the tiles poll every few seconds.
+    # Sharing build_my_counts() keeps the polled numbers and the
+    # server-rendered ones from ever drifting apart.
+    return jsonify(success=True, **build_my_counts(current_user))
 
 
 @dashboard_bp.route("/my-tasks")
@@ -262,16 +271,27 @@ def employee():
         for item in current_user.permissions
     ]
 
-    stats = build_task_stats(
-        Task.query.filter_by(
-            assigned_to_id=current_user.id
-        ).all()
+    # Built around the one question an employee opens this page to
+    # answer - "what should I be doing right now" - rather than a wall
+    # of counts. Focus is the task to pick up, queue is what's next,
+    # deadlines and meetings are the pressure to plan around.
+    counts = build_my_counts(current_user)
+    focus = build_my_focus(current_user)
+    queue = build_my_queue(
+        current_user,
+        exclude_id=focus["task"].id if focus else None
     )
+    deadlines = build_my_deadlines(current_user)
+    meetings_today = build_my_meetings_today(current_user)
 
     return render_template(
         "dashboard/employee.html",
         user_permissions=user_permissions,
-        stats=stats
+        counts=counts,
+        focus=focus,
+        queue=queue,
+        deadlines=deadlines,
+        meetings_today=meetings_today,
     )
 
 
@@ -760,6 +780,256 @@ def build_overview():
 
 
 
+#: Presets offered by the Performance section's date picker, in the
+#: order they render. "custom" is handled separately (it carries its
+#: own from/to), so it is not listed here.
+PERIOD_PRESETS = ["today", "yesterday", "7d", "30d"]
+
+#: A custom range longer than this is clamped from the start end, so a
+#: careless "from 2015" cannot turn the per-day throughput loop into
+#: hundreds of COUNT queries. Three months of daily bars is already the
+#: point past which the chart switches to a line anyway.
+MAX_PERIOD_DAYS = 92
+
+
+def resolve_period(args):
+    """Turn the request's query string into a concrete date window.
+
+    The Performance band answers "what did the team actually produce in
+    this window" - created, completed, published - so it needs a start
+    and an end, a human label for the header, and the matching window
+    immediately before it to draw the up/down deltas against.
+
+    Everything else on the dashboard (live team state, the status
+    doughnut, the In Progress / Overdue / Due Today counters) is a
+    snapshot of *now* and is deliberately left untouched by this.
+    """
+
+    today = ist_now().date()
+    key = (args.get("period") or "7d").lower()
+
+    if key == "today":
+        start = end = today
+        label = "Today"
+
+    elif key == "yesterday":
+        start = end = today - timedelta(days=1)
+        label = "Yesterday"
+
+    elif key == "30d":
+        start, end = today - timedelta(days=29), today
+        label = "Last 30 days"
+
+    elif key == "custom":
+        start = _parse_date(args.get("from")) or today - timedelta(days=6)
+        end = _parse_date(args.get("to")) or today
+
+        # A backwards range is a slip, not an intent - read it the way
+        # the user clearly meant it rather than showing nothing.
+        if start > end:
+            start, end = end, start
+
+        # Keep the per-day loop bounded regardless of what was typed.
+        if (end - start).days > MAX_PERIOD_DAYS - 1:
+            start = end - timedelta(days=MAX_PERIOD_DAYS - 1)
+
+        label = _format_range_label(start, end)
+        key = "custom"
+
+    else:
+        # Unknown or default: last 7 days.
+        key = "7d"
+        start, end = today - timedelta(days=6), today
+        label = "Last 7 days"
+
+    span = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=span - 1)
+
+    return {
+        "key": key,
+        "label": label,
+        "start": start,
+        "end": end,
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "prev_start": prev_start,
+        "prev_end": prev_end,
+        "span_days": span,
+        "today": today.isoformat(),
+    }
+
+
+def _parse_date(value):
+
+    if not value:
+        return None
+
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _format_range_label(start, end):
+
+    if start == end:
+        return start.strftime("%d %b %Y")
+
+    if start.year == end.year:
+        return f"{start.strftime('%d %b')} – {end.strftime('%d %b %Y')}"
+
+    return f"{start.strftime('%d %b %Y')} – {end.strftime('%d %b %Y')}"
+
+
+def _period_delta(current, previous):
+    """A vs-previous-period badge, worded for an arbitrary window.
+
+    get_growth_data() says "this month" in its copy, which is wrong for
+    a Today or a custom range, so the Performance band computes its own.
+    """
+
+    if previous == 0 and current == 0:
+        return {"text": "No change", "class": "neutral", "arrow": "–"}
+
+    if previous == 0:
+        return {"text": "vs 0 before", "class": "up", "arrow": "↑"}
+
+    difference = current - previous
+    percentage = round(abs(difference) / previous * 100)
+
+    if difference > 0:
+        return {"text": f"{percentage}% vs prev", "class": "up", "arrow": "↑"}
+
+    if difference < 0:
+        return {"text": f"{percentage}% vs prev", "class": "down", "arrow": "↓"}
+
+    return {"text": "No change", "class": "neutral", "arrow": "–"}
+
+
+def _format_turnaround(seconds):
+
+    if not seconds or seconds <= 0:
+        return "–"
+
+    hours = seconds / 3600
+
+    if hours < 1:
+        return f"{round(seconds / 60)}m"
+
+    if hours < 24:
+        return f"{round(hours, 1)}h"
+
+    return f"{round(hours / 24, 1)}d"
+
+
+def _count_created(start, end):
+
+    # created_at is stored in UTC (default=datetime.utcnow), which is
+    # the same convention build_overview() compares against - kept
+    # consistent here rather than corrected in one place only.
+    return Task.query.filter(
+        Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
+        db.func.date(Task.created_at) >= start,
+        db.func.date(Task.created_at) <= end,
+    ).count()
+
+
+def _count_completed(start, end):
+
+    # employee_completed_at is stamped with ist_now(), so comparing it
+    # to IST dates is exact.
+    return Task.query.filter(
+        Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
+        Task.employee_completed == True,
+        db.func.date(Task.employee_completed_at) >= start,
+        db.func.date(Task.employee_completed_at) <= end,
+    ).count()
+
+
+def _count_published(start, end):
+
+    # completed_at is stamped at publish time, also with ist_now().
+    return Task.query.filter(
+        Task.status == task_status.PUBLISHED,
+        db.func.date(Task.completed_at) >= start,
+        db.func.date(Task.completed_at) <= end,
+    ).count()
+
+
+def build_activity(period):
+    """Throughput for the selected window, each figure paired with the
+    same-length window before it so the tiles can show a trend."""
+
+    start, end = period["start"], period["end"]
+    prev_start, prev_end = period["prev_start"], period["prev_end"]
+
+    created = _count_created(start, end)
+    completed = _count_completed(start, end)
+    published = _count_published(start, end)
+
+    # Average time from a task being created to it being published, over
+    # the tasks published in this window. created_at is UTC and
+    # completed_at is IST (+5:30), so the raw subtraction runs 5h30 long
+    # - back that offset out, then floor at zero so a clock-skew edge
+    # case can never read as negative turnaround.
+    published_tasks = Task.query.filter(
+        Task.status == task_status.PUBLISHED,
+        db.func.date(Task.completed_at) >= start,
+        db.func.date(Task.completed_at) <= end,
+        Task.created_at.isnot(None),
+        Task.completed_at.isnot(None),
+    ).all()
+
+    turnaround_seconds = 0
+    if published_tasks:
+        total = 0
+        for task in published_tasks:
+            delta = (task.completed_at - task.created_at) - IST_OFFSET
+            total += max(0, delta.total_seconds())
+        turnaround_seconds = total / len(published_tasks)
+
+    return {
+        "created": created,
+        "completed": completed,
+        "published": published,
+        "created_delta": _period_delta(created, _count_created(prev_start, prev_end)),
+        "completed_delta": _period_delta(completed, _count_completed(prev_start, prev_end)),
+        "published_delta": _period_delta(published, _count_published(prev_start, prev_end)),
+        "turnaround": _format_turnaround(turnaround_seconds),
+    }
+
+
+def build_activity_trend(period):
+    """Per-day Created / Completed / Published across the window, for the
+    Performance chart. One bucket per day; a single-day window is one
+    bucket, which the chart draws as a bar group rather than a lone
+    point on a line."""
+
+    start, end = period["start"], period["end"]
+    span = period["span_days"]
+
+    labels = []
+    created = []
+    completed = []
+    published = []
+
+    for offset in range(span):
+        day = start + timedelta(days=offset)
+
+        labels.append(day.strftime("%d %b"))
+        created.append(_count_created(day, day))
+        completed.append(_count_completed(day, day))
+        published.append(_count_published(day, day))
+
+    return {
+        "labels": labels,
+        "created": created,
+        "completed": completed,
+        "published": published,
+    }
+
+
 def build_today_snapshot():
 
     today = ist_now().date()
@@ -824,109 +1094,6 @@ def build_status_chart(stats):
     return {
         "labels": labels,
         "values": values
-    }
-
-
-def build_month_chart():
-
-    today = ist_now().date()
-    start_date = today - timedelta(days=29)
-
-    labels = []
-
-    created = []
-    completed = []
-    pending = []
-    in_progress = []
-    paused = []
-    on_hold = []
-    core_review = []
-    client_review = []
-    published = []
-
-    for i in range(30):
-
-        current_date = start_date + timedelta(days=i)
-
-        labels.append(
-            current_date.strftime("%d %b")
-        )
-
-        created.append(
-            Task.query.filter(
-                Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
-                db.func.date(Task.created_at) == current_date
-            ).count()
-        )
-
-        completed.append(
-    Task.query.filter(
-        Task.employee_completed == True,
-        db.func.date(Task.employee_completed_at) == current_date
-    ).count()
-)
-
-        pending.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == "Assigned"
-            ).count()
-        )
-
-        in_progress.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == "In Progress"
-            ).count()
-        )
-
-        paused.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == task_status.PAUSED
-            ).count()
-        )
-
-        on_hold.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == task_status.ON_HOLD
-            ).count()
-        )
-
-        core_review.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == "Core Review"
-            ).count()
-        )
-
-        client_review.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == "Client Review"
-            ).count()
-        )
-
-        published.append(
-            Task.query.filter(
-                db.func.date(Task.created_at) == current_date,
-                Task.status == "Published"
-            ).count()
-        )
-
-    return {
-        "labels": labels,
-
-        "created": created,
-        "completed": completed,
-        "pending": pending,
-        "in_progress": in_progress,
-        "paused": paused,
-        "on_hold": on_hold,
-        "core_review": core_review,
-        "client_review": client_review,
-        "published": published
     }
 
 
@@ -1150,3 +1317,286 @@ def build_task_stats(tasks):
             reverse=True
         )[:5]
     }
+
+
+# ============================================================
+# Employee dashboard
+#
+# The management dashboards answer "how is the team doing". The
+# employee one answers a narrower, more useful question - "what should
+# I be doing right now" - so it is built from the assignee's own work:
+# the task to pick up, the queue behind it, and the deadlines and
+# meetings to plan around.
+# ============================================================
+
+#: Lower rank sorts first. An unknown priority lands in the middle
+#: rather than at either extreme.
+PRIORITY_RANK = {"Urgent": 0, "High": 1, "Medium": 2, "Low": 3}
+
+#: Statuses the assignee can personally move forward - what belongs in
+#: their queue. Review and On Hold are waiting on someone else.
+MY_ACTIONABLE = [
+    task_status.ASSIGNED,
+    task_status.IN_PROGRESS,
+    task_status.PAUSED,
+]
+
+
+def build_my_counts(user):
+    """The headline counts for one employee, as direct COUNTs so the
+    dashboard and its live poller share exactly one source of truth."""
+
+    now = ist_now()
+    today = now.date()
+
+    not_void = Task.status.notin_(task_status.EXCLUDED_FROM_METRICS)
+    base = Task.query.filter(Task.assigned_to_id == user.id, not_void)
+
+    return {
+        "total": base.count(),
+        "in_progress": base.filter(
+            Task.status == task_status.IN_PROGRESS
+        ).count(),
+        "in_review": base.filter(
+            Task.status.in_([
+                task_status.CORE_REVIEW,
+                task_status.CLIENT_REVIEW,
+            ])
+        ).count(),
+        "published": base.filter(
+            Task.status == task_status.PUBLISHED
+        ).count(),
+        "due_today": base.filter(
+            db.func.date(Task.deadline) == today
+        ).count(),
+        "overdue": base.filter(
+            Task.deadline.isnot(None),
+            Task.deadline < now,
+            Task.status.in_([
+                task_status.ASSIGNED,
+                task_status.IN_PROGRESS,
+                task_status.PAUSED,
+            ])
+        ).count(),
+        "completed_today": base.filter(
+            Task.employee_completed == True,
+            db.func.date(Task.employee_completed_at) == today
+        ).count(),
+    }
+
+
+def _deadline_label(deadline, today):
+    """A short, human due-date chip - "3d overdue", "Today", "in 4d"."""
+
+    if deadline is None:
+        return None
+
+    days = (deadline.date() - today).days
+
+    if days < 0:
+        magnitude = abs(days)
+        text = "1d overdue" if magnitude == 1 else f"{magnitude}d overdue"
+        return {"text": text, "class": "overdue"}
+
+    if days == 0:
+        return {"text": "Today", "class": "today"}
+
+    if days == 1:
+        return {"text": "Tomorrow", "class": "soon"}
+
+    if days <= 7:
+        return {"text": f"in {days}d", "class": "soon"}
+
+    return {"text": deadline.strftime("%d %b"), "class": "far"}
+
+
+def _task_progress(task):
+    """Elapsed vs estimate for a task, in the shape the focus card and
+    queue rows render."""
+
+    live = get_task_live_seconds(task)
+    estimated = get_task_estimated_seconds(task)
+    remaining = estimated - live
+
+    return {
+        "live_seconds": live,
+        "live_time": seconds_to_hms(live),
+        "estimated_time": seconds_to_hms(estimated),
+        "remaining_time": seconds_to_hms(max(remaining, 0)),
+        "over_estimate": remaining < 0,
+        "progress": min(100, round(live / estimated * 100)) if estimated else 0,
+    }
+
+
+def _queue_sort_key(task, now):
+    return (
+        0 if (task.deadline and task.deadline < now) else 1,  # overdue first
+        PRIORITY_RANK.get(task.priority, 2),                  # then priority
+        task.deadline or datetime.max,                        # then soonest
+        task.id,
+    )
+
+
+def _my_actionable_tasks(user):
+    return Task.query.filter(
+        Task.assigned_to_id == user.id,
+        Task.status.in_(MY_ACTIONABLE),
+    ).all()
+
+
+def build_my_focus(user):
+    """The single task to act on now: whatever timer is running, else
+    the most recent paused task, else the top of the queue. Returns
+    None only when the employee has nothing actionable at all."""
+
+    now = ist_now()
+    today = now.date()
+
+    state = None
+
+    # 1. Actually running - a live timer beats everything.
+    task = Task.query.filter(
+        Task.assigned_to_id == user.id,
+        Task.status == task_status.IN_PROGRESS,
+        Task.timer_started_at.isnot(None),
+    ).order_by(Task.timer_started_at.desc()).first()
+
+    if task:
+        state = "working"
+
+    # 2. Paused - explicitly Paused, or In Progress with the timer
+    #    stopped, which is the same thing from the employee's side.
+    if not task:
+        task = Task.query.filter(
+            Task.assigned_to_id == user.id,
+            Task.status == task_status.PAUSED,
+        ).order_by(Task.id.desc()).first()
+
+        if not task:
+            task = Task.query.filter(
+                Task.assigned_to_id == user.id,
+                Task.status == task_status.IN_PROGRESS,
+                Task.timer_started_at.is_(None),
+            ).order_by(Task.id.desc()).first()
+
+        if task:
+            state = "paused"
+
+    # 3. Nothing in flight - surface the highest-priority thing to start.
+    if not task:
+        assigned = [
+            item for item in _my_actionable_tasks(user)
+            if item.status == task_status.ASSIGNED
+        ]
+        assigned.sort(key=lambda item: _queue_sort_key(item, now))
+        task = assigned[0] if assigned else None
+
+        if task:
+            state = "next"
+
+    if not task:
+        return None
+
+    focus = {
+        "task": task,
+        "state": state,
+        "client": task.client.client_name if task.client else None,
+        "overdue": bool(task.deadline and task.deadline < now),
+        "deadline": _deadline_label(task.deadline, today),
+    }
+    focus.update(_task_progress(task))
+    return focus
+
+
+def build_my_queue(user, exclude_id=None, limit=6):
+    """What to work on next: the assignee's actionable tasks, ordered
+    the way they should be picked up - overdue first, then priority,
+    then soonest deadline. The focus task is left out so the hero and
+    the queue do not show the same row twice."""
+
+    now = ist_now()
+    today = now.date()
+
+    tasks = _my_actionable_tasks(user)
+    tasks.sort(key=lambda item: _queue_sort_key(item, now))
+
+    rows = []
+
+    for task in tasks:
+        if exclude_id and task.id == exclude_id:
+            continue
+
+        running = (
+            task.status == task_status.IN_PROGRESS
+            and task.timer_started_at is not None
+        )
+
+        rows.append({
+            "task": task,
+            "priority": task.priority,
+            "status": task.status,
+            "client": task.client.client_name if task.client else "-",
+            "deadline": _deadline_label(task.deadline, today),
+            "running": running,
+            # Anything not already running can be started or resumed
+            # straight from the dashboard.
+            "can_start": not running,
+        })
+
+        if len(rows) >= limit:
+            break
+
+    return rows
+
+
+def build_my_deadlines(user, limit=6):
+    """The assignee's own tasks coming due inside a week, overdue ones
+    included, soonest first - the pressure to plan the day around."""
+
+    now = ist_now()
+    today = now.date()
+    horizon = now + timedelta(days=7)
+
+    tasks = Task.query.filter(
+        Task.assigned_to_id == user.id,
+        Task.deadline.isnot(None),
+        Task.deadline <= horizon,
+        Task.status.in_([
+            task_status.ASSIGNED,
+            task_status.IN_PROGRESS,
+            task_status.PAUSED,
+            task_status.CORE_REVIEW,
+            task_status.CLIENT_REVIEW,
+        ]),
+    ).order_by(Task.deadline.asc()).limit(limit).all()
+
+    return [
+        {
+            "task": task,
+            "client": task.client.client_name if task.client else "-",
+            "status": task.status,
+            "deadline": _deadline_label(task.deadline, today),
+        }
+        for task in tasks
+    ]
+
+
+def build_my_meetings_today(user):
+    """Meetings the employee is a participant in today - the only part
+    of their day that runs on someone else's clock."""
+
+    today = ist_now().date()
+
+    meetings = Meeting.query.filter(
+        db.func.date(Meeting.meeting_date) == today,
+        Meeting.participants.any(User.id == user.id),
+    ).order_by(Meeting.meeting_date.asc()).all()
+
+    return [
+        {
+            "title": meeting.title,
+            "time": meeting.meeting_date.strftime("%I:%M %p"),
+            "client": meeting.client.client_name if meeting.client else "Internal",
+        }
+        for meeting in meetings
+    ]

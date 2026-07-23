@@ -48,5 +48,8 @@
         }
     }
 
-    setInterval(poll, POLL_INTERVAL_MS);
+    // App.setInterval (when Turbo is active) clears this poller on
+    // navigation, so hopping between dashboards never stacks pollers.
+    // Falls back to a plain interval when Turbo is disabled.
+    (window.App ? window.App.setInterval : window.setInterval)(poll, POLL_INTERVAL_MS);
 })();

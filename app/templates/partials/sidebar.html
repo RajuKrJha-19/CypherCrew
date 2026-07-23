@@ -1,4 +1,4 @@
-<aside class="sidebar">
+<aside class="sidebar" id="app-sidebar" data-turbo-permanent>
 
     {% set endpoint = request.endpoint or "" %}
 
@@ -21,7 +21,22 @@
     {% set can_review_tasks = current_user.role in ["admin", "super_admin"] or has_permission(current_user,"approve_tasks") %}
     {% set can_view_reports = has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
 
-    <h2>CypherCrew</h2>
+    {#
+        Header: brand on the left, collapse toggle on the right - the
+        spot every top-tier tool puts it. Collapsed, the brand hides and
+        the toggle centres to become the "expand" affordance.
+    #}
+    <div class="sidebar-head">
+        <h2>CypherCrew</h2>
+        <button
+            type="button"
+            class="sidebar-collapse-btn"
+            id="sidebarCollapseBtn"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar">
+            <i class="fa-solid fa-angles-left"></i>
+        </button>
+    </div>
 
     <nav class="sidebar-nav">
 
@@ -136,19 +151,11 @@
     <a href="{{ url_for('auth.logout') }}"
        class="sidebar-logout"
        title="Sign out of CypherCrew"
+       data-turbo="false"
        onclick="return confirm('Log out of CypherCrew?')">
         <i class="fa-solid fa-right-from-bracket"></i>
         <span>Logout</span>
     </a>
-
-    <button
-        type="button"
-        class="sidebar-collapse-btn"
-        id="sidebarCollapseBtn"
-        aria-label="Collapse sidebar"
-        title="Collapse sidebar">
-        <i class="fa-solid fa-angles-left"></i>
-    </button>
 
     <script>
         const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");

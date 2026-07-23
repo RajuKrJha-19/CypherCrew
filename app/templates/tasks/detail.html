@@ -8,6 +8,14 @@
 
 {% block title %}#{{ task.task_code }} - {{ task.title }} | CypherCrew{% endblock %}
 
+{% block head %}
+{{ super() }}
+{# Heavy, stateful page (live timers, comment/upload fetch forms, media
+   viewer; also the drawer body): opt out of client-side swaps so it
+   always loads fresh. #}
+<meta name="turbo-visit-control" content="reload">
+{% endblock %}
+
 {% block content %}
             <div class="page-header">
                 <div>
@@ -32,7 +40,6 @@
                     {# The drawer supplies its own close/navigation chrome,
                        and the bell already sits on the page behind it. #}
                     {% if not panel_mode %}
-                    {% include "partials/notification_widget.html" %}
                     {% endif %}
 
                     {% if has_permission(current_user, "manage_tasks")
@@ -500,7 +507,7 @@
                                         <a href="{{ url_for(
                         'tasks.download_task_file',
                         file_id=file.id
-                    ) }}" class="task-file-btn task-file-download-btn">
+                    ) }}" class="task-file-btn task-file-download-btn" data-turbo="false">
                                             <span>↓</span>
                                             Download
                                         </a>

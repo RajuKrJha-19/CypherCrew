@@ -2,6 +2,8 @@
 
 {% block title %}{{ page_title }} | CypherCrew{% endblock %}
 
+{% block head %}{{ super() }}<meta name="turbo-visit-control" content="reload">{% endblock %}
+
 {% block body_class %}ds-screen{% endblock %}
 
 {% block content %}
@@ -16,7 +18,6 @@
                 </div>
 
                 <div class="top-actions">
-                    {% include "partials/notification_widget.html" %}
                 </div>
             </div>
 

@@ -12,9 +12,22 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
+        // Wrapped in an IIFE so its top-level declarations are
+        // function-scoped: under client-side navigation this script
+        // re-runs on each dashboard visit, and global `const`s would
+        // throw "already declared" on the second run.
+        (function () {
         const statusLabels = {{ status_chart["labels"]| tojson }};
         const statusValues = {{ status_chart["values"]| tojson }};
         const statusTotal = statusValues.reduce((a, b) => a + b, 0);
+
+        // Read a theme token so the charts match light or dark. Called at
+        // draw time, so it is always current.
+        function cssVar(name, fallback) {
+            const v = getComputedStyle(document.documentElement)
+                .getPropertyValue(name).trim();
+            return v || fallback;
+        }
 
         // Order matches task_status.BOARD_STATUSES. On Hold is slate
         // rather than another warm colour: it is parked work, not
@@ -41,13 +54,13 @@
 
                 ctx.save();
                 ctx.font = "700 26px Arial";
-                ctx.fillStyle = "#0F172A";
+                ctx.fillStyle = cssVar("--color-text", "#0F172A");
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(statusTotal, width / 2, height / 2 - 8);
 
                 ctx.font = "400 13px Arial";
-                ctx.fillStyle = "#646C85";
+                ctx.fillStyle = cssVar("--color-text-muted", "#646C85");
                 ctx.fillText("Total", width / 2, height / 2 + 18);
                 ctx.restore();
             }
@@ -56,14 +69,14 @@
         const statusCtx = document.getElementById("statusChart");
 
         if (statusCtx) {
-            new Chart(statusCtx, {
+            const statusChart = new Chart(statusCtx, {
                 type: "doughnut",
                 data: {
                     labels: statusLabels,
                     datasets: [{
                         data: statusValues,
                         backgroundColor: statusColors,
-                        borderColor: "#ffffff",
+                        borderColor: cssVar("--color-surface", "#ffffff"),
                         borderWidth: 4,
                         hoverOffset: 6
                     }]
@@ -89,6 +102,7 @@
                 },
                 plugins: [centerTextPlugin]
             });
+            if (window.App) window.App.trackChart(statusChart);
         }
 
         const statusLegend = document.getElementById("statusLegend");
@@ -117,147 +131,79 @@
             }).join("");
         }
 
-        const trendCtx = document.getElementById("taskTrendChart");
+        /*
+            Performance / Throughput chart. Driven by the date picker on
+            the Performance band, so its window changes with ?period=.
+            One day per bucket: for short ranges a grouped bar reads best
+            (a single day is one clean group of three bars), and for
+            longer ranges it switches to a line so 30 days do not turn
+            into a wall of bars.
+        */
+        const activityCtx = document.getElementById("activityChart");
 
-        if (trendCtx) {
-            new Chart(trendCtx, {
-                type: "line",
+        if (activityCtx) {
+            const activityLabels = {{ activity_trend.labels | tojson }};
+            const activityCreated = {{ activity_trend.created | tojson }};
+            const activityCompleted = {{ activity_trend.completed | tojson }};
+            const activityPublished = {{ activity_trend.published | tojson }};
+
+            const asBars = activityLabels.length <= 14;
+
+            const activitySeries = [
+                { label: "Created", data: activityCreated, color: "#6366F1" },
+                { label: "Completed", data: activityCompleted, color: "#15A34A" },
+                { label: "Published", data: activityPublished, color: "#111827" }
+            ];
+
+            const activityChart = new Chart(activityCtx, {
+                type: asBars ? "bar" : "line",
                 data: {
-                    labels: {{ month_chart.labels | tojson }},
-        datasets: [
-            {
-                label: "Created",
-                data: {{ month_chart.created | tojson }},
-            borderColor: "#6366F1",
-            backgroundColor: "rgba(37, 99, 235, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
+                    labels: activityLabels,
+                    datasets: activitySeries.map(function (s) {
+                        return {
+                            label: s.label,
+                            data: s.data,
+                            borderColor: s.color,
+                            backgroundColor: asBars ? s.color : "transparent",
+                            borderWidth: asBars ? 0 : 2,
+                            borderRadius: asBars ? 4 : 0,
+                            maxBarThickness: 34,
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: asBars ? 0 : 3,
+                            pointHoverRadius: asBars ? 0 : 5
+                        };
+                    })
                 },
-            {
-                label: "Completed",
-                data: {{ month_chart.completed | tojson }},
-            borderColor: "#15A34A",
-            backgroundColor: "rgba(34, 197, 94, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "Pending",
-                data: {{ month_chart.pending | tojson }},
-            borderColor: "#F59E0B",
-            backgroundColor: "rgba(249, 115, 22, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "In Progress",
-                data: {{ month_chart.in_progress | tojson }},
-            borderColor: "#0EA5E9",
-            backgroundColor: "rgba(139, 92, 246, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "Paused",
-                data: {{ month_chart.paused | tojson }},
-            borderColor: "#FB923C",
-            backgroundColor: "rgba(251, 146, 60, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "On Hold",
-                data: {{ month_chart.on_hold | tojson }},
-            borderColor: "#94A3B8",
-            backgroundColor: "rgba(148, 163, 184, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "Core Review",
-                data: {{ month_chart.core_review | tojson }},
-            borderColor: "#A855F7",
-            backgroundColor: "rgba(234, 179, 8, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "Client Review",
-                data: {{ month_chart.client_review | tojson }},
-            borderColor: "#14B8A6",
-            backgroundColor: "rgba(20, 184, 166, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                },
-            {
-                label: "Published",
-                data: {{ month_chart.published | tojson }},
-            borderColor: "#111827",
-            backgroundColor: "rgba(17, 24, 39, 0.10)",
-            tension: 0.35,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 5
-                }
-        ]
-        },
-        options: {
-            responsive: true,
-                maintainAspectRatio: false,
-                    interaction: {
-                mode: "index",
-                    intersect: false
-            },
-            plugins: {
-                legend: {
-                    position: "top",
-                        labels: {
-                        usePointStyle: true,
-                            boxWidth: 8,
-                                font: {
-                            size: 12
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: "index", intersect: false },
+                    plugins: {
+                        legend: {
+                            position: "top",
+                            align: "end",
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8,
+                                font: { size: 12 }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: "#646C85", maxTicksLimit: 10 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0, color: "#646C85" },
+                            grid: { color: "#E5E7F0" }
                         }
                     }
                 }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: "#646C85",
-                            maxTicksLimit: 7
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                        ticks: {
-                        precision: 0,
-                            color: "#646C85"
-                    },
-                    grid: {
-                        color: "#E5E7F0"
-                    }
-                }
-            }
+            });
+            if (window.App) window.App.trackChart(activityChart);
         }
-    });
-}
+        })();
     </script>
