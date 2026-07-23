@@ -9575,7 +9575,13 @@ body.panel-mode .task-detail-right{
 
 .team-row{
     display:grid;
-    grid-template-columns:10px minmax(120px, 1.1fr) minmax(0, 1.6fr) auto auto;
+
+    /* Bounded, not proportional. With fr units on a 1350px card the
+       name column stretched to ~500px for "Rishu Raj" and the row read
+       as scattered fragments rather than a table. The task column takes
+       whatever is left; the numeric columns are fixed so they line up
+       down the list. */
+    grid-template-columns:10px minmax(140px, 220px) minmax(0, 1fr) 96px 90px;
     align-items:center;
     gap:14px;
 
@@ -9690,4 +9696,35 @@ body.panel-mode .task-detail-right{
     .team-task{
         grid-column:2 / -1;
     }
+}
+
+
+/* Permissions on the admin dashboard: reference, not a headline.
+   It was a full card with an 18px heading and a "You can:" line
+   carrying inline styles, for a list that never changes. */
+.permissions-strip{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px 16px;
+    padding:14px 18px;
+}
+
+.permissions-strip h3{
+    margin:0;
+    font-size:13px;
+    font-weight:700;
+    color:var(--color-text-muted);
+    letter-spacing:.3px;
+    text-transform:uppercase;
+}
+
+.permission-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+}
+
+.permissions-strip .empty-text{
+    margin:0;
 }

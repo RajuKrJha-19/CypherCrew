@@ -19,28 +19,47 @@
 
         {% include "dashboard/_charts.html" %}
 
-        {% include "dashboard/_recent_tasks.html" %}
-
         {# Same merged panel the super admin dashboard uses: live state,
            current task and remaining load in one row per person, instead
            of a workload list that showed only the hours. #}
         {% include "dashboard/_team_panel.html" %}
 
-        <div class="table-card" style="margin-top:18px;">
-            <h2 style="font-size:18px; margin-bottom:10px;">My Permissions</h2>
+        {#
+            The two list panels pair up. Recent Tasks used to take a
+            full-width row on its own, which left a task title on the
+            left and its priority pill 1200px away on the right with
+            nothing in between. Recent Activity is new here - the admin
+            dashboard had no activity feed at all, so there was no way
+            to see what the team had just done without opening tasks
+            one at a time.
+        #}
+        <div class="dashboard-split">
 
-            {% if user_permissions %}
-            <p style="margin-bottom:10px;">You can:</p>
+            {% include "dashboard/_recent_tasks.html" %}
 
-            {% for permission in user_permissions %}
-            <span class="tag">{{ permission }}</span>
-            {% endfor %}
-            {% else %}
-            <p>No extra permissions assigned.</p>
-            {% endif %}
+            {% include "dashboard/_recent_activity.html" %}
+
         </div>
 
-    
+        {# Reference, not a headline: it never changes between visits,
+           so it reads as one quiet line rather than a full card with
+           its own heading block. #}
+        <div class="table-card permissions-strip">
+
+            <h3>My Permissions</h3>
+
+            {% if user_permissions %}
+            <div class="permission-chips">
+                {% for permission in user_permissions %}
+                <span class="tag">{{ permission }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-text">No extra permissions assigned.</p>
+            {% endif %}
+
+        </div>
+
 {% endblock %}
 
 {% block scripts %}

@@ -122,11 +122,16 @@ def admin():
 
     team = build_team()
 
+    # The admin dashboard had no activity feed, so an admin could not
+    # see what the team had just done without opening tasks one by one.
+    recent_activities = build_recent_activities()
+
     return render_template(
         "dashboard/admin.html",
         user_permissions=user_permissions,
         stats=stats,
         team=team,
+        recent_activities=recent_activities,
         overview=overview,
         today_snapshot=today_snapshot,
         status_chart=status_chart,

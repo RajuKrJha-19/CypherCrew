@@ -1,0 +1,33 @@
+{#
+    Latest actions across the company.
+
+    Extracted so the admin dashboard can show it too - it had no
+    activity feed at all, which left an admin with no way to see what
+    the team had just done without opening tasks one by one.
+
+    Message and time sit on one line: stacked in a boxed card each row
+    ran ~79px with its whole right half empty.
+#}
+<div class="table-card operations-card">
+
+    <div class="section-head">
+        <div>
+            <h2>Recent Activity</h2>
+            <p>Latest actions across the company</p>
+        </div>
+    </div>
+
+    <div class="activity-feed">
+
+        {% for activity in recent_activities %}
+        <div class="activity-row">
+            <strong title="{{ activity.message }}">{{ activity.message }}</strong>
+            <span>{{ activity.created_at.strftime("%d %b %Y • %I:%M %p") }}</span>
+        </div>
+        {% else %}
+        <p class="empty-text">No recent activity.</p>
+        {% endfor %}
+
+    </div>
+
+</div>
