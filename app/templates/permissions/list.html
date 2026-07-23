@@ -2,6 +2,8 @@
 
 {% block title %}Permissions{% endblock %}
 
+{% block body_class %}ds-screen{% endblock %}
+
 {% block content %}
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}

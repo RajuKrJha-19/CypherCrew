@@ -10829,3 +10829,173 @@ body.ds-screen .team-load-bar{
 body.ds-screen .team-load-bar.load-steady span{
     background:var(--ds-accent);
 }
+
+
+/* ---------- Phase 1: holidays, leaves, permissions, meetings ---------- */
+
+/* form-card / table-card titles used as a plain <h1>/<h2>, not
+   .card-title - same visual role (the panel's own heading), so the
+   same size. Shared by holidays, leaves and meetings list pages. */
+body.ds-screen .form-card h1,
+body.ds-screen .section-heading h2{
+    font-size:var(--ds-font-15);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:normal;
+    color:var(--ds-text);
+    margin-bottom:2px;
+}
+
+body.ds-screen .form-card p,
+body.ds-screen .section-heading p{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+    margin-bottom:var(--ds-space-4);
+}
+
+
+/* ---------- Phase 1: permissions/user_permissions.html ---------- */
+
+/* .form-note is a <p> inside .form-card on the permission-grant
+   screen, and body.ds-screen .form-card p (added for holidays/leaves/
+   meetings) outranks a single-class .form-note selector - same
+   specificity trap the artifact-design notes warn about. Naming the
+   parent explicitly restores the intended size. */
+body.ds-screen .form-card .form-note{
+    border-color:var(--ds-border);
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+    margin-bottom:20px;
+}
+
+body.ds-screen .form-note i{
+    color:var(--ds-accent);
+}
+
+body.ds-screen .permission-item:hover{
+    border-color:var(--ds-border);
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .permission-item:focus-within{
+    border-color:var(--ds-accent);
+}
+
+body.ds-screen .permission-item input[type="checkbox"]{
+    accent-color:var(--ds-accent);
+}
+
+/* Was 14px - one size above the body scale used everywhere else. */
+body.ds-screen .permission-text strong{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .permission-text small{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+
+/* ---------- Phase 1: meetings/list.html ---------- */
+
+body.ds-screen .employee-select details{
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .employee-select summary{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .employee-option:hover{
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .employee-option input{
+    accent-color:var(--ds-accent);
+}
+
+body.ds-screen .employee-option span{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-secondary);
+}
+
+
+/* ---------- Phase 1: meetings/detail.html ---------- */
+/* .task-detail-layout / .detail-row / .task-description-card are reused
+   by tasks/detail.html too (Phase 8) - written generically here rather
+   than meeting-specific, so that screen extends this instead of
+   duplicating it. */
+
+/* The existing rule uses !important (20px, 18px radius), so overriding
+   it needs !important too - normal-weight specificity cannot win
+   against an !important declaration regardless of selector length. */
+body.ds-screen .task-detail-layout .card-title{
+    font-size:var(--ds-font-15) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+    letter-spacing:normal !important;
+    color:var(--ds-text) !important;
+    margin:0 0 var(--ds-space-4) !important;
+}
+
+body.ds-screen .task-detail-layout .table-card{
+    border-radius:var(--ds-radius-md) !important;
+    border-color:var(--ds-border);
+}
+
+body.ds-screen .detail-row{
+    border-bottom-color:var(--ds-border);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .detail-row span{
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .detail-row strong{
+    color:var(--ds-text);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .copy-description-btn{
+    border-color:var(--ds-border-strong);
+    background:var(--ds-surface);
+    color:var(--ds-text-secondary);
+    border-radius:var(--ds-radius-sm);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .copy-description-btn:hover{
+    background:var(--ds-accent-soft);
+    color:var(--ds-accent-text);
+}
+
+body.ds-screen .task-description-card .task-description{
+    border-color:var(--ds-border);
+    background:var(--ds-surface-sunken);
+    border-radius:var(--ds-radius);
+    color:var(--ds-text-secondary);
+    font-family:inherit;
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .meeting-participant{
+    border-color:var(--ds-border);
+    background:var(--ds-surface-sunken);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .meeting-participant strong{
+    color:var(--ds-text);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .meeting-participant span,
+body.ds-screen .meeting-participant small{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+}
