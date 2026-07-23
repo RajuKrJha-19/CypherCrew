@@ -9,6 +9,124 @@
   those get migrated incrementally.
 =========================================*/
 
+/* ==========================================================================
+   DESIGN TOKENS  (ds-*)
+   ==========================================================================
+   The foundation for the flat, Asana-style direction: dark sidebar, light
+   workspace, one accent, 1px borders, no shadows or gradients.
+
+   These are ADDITIVE. The older color, text and radius tokens below
+   still drive every screen that has not been migrated yet, so adding these
+   changes nothing on its own. Dashboard and the task list opt in; the rest
+   of the app is untouched until it is rolled out screen by screen.
+
+   Accent is indigo. It is the one hue that does not collide with the status
+   colours already in use (green success, amber warning, red danger), it
+   holds contrast on both the white workspace and the dark sidebar, and it
+   reads as tooling rather than consumer software.
+   ========================================================================== */
+
+:root{
+
+    /* ---- Surfaces ------------------------------------------------------
+       Three levels, no more. Depth comes from borders, not shadows. */
+    --ds-canvas:#f7f8fa;          /* page behind the cards */
+    --ds-surface:#ffffff;         /* cards, rows, panels */
+    --ds-surface-hover:#f7f8fa;   /* row hover */
+    --ds-surface-sunken:#f1f2f6;  /* table headers, inset wells */
+
+    /* ---- Text ---------------------------------------------------------- */
+    --ds-text:#1c1f26;            /* headings, primary copy */
+    --ds-text-secondary:#5a6172;  /* supporting copy */
+    --ds-text-muted:#8a90a0;      /* meta, timestamps, captions */
+    --ds-text-inverse:#ffffff;
+
+    /* ---- Borders -------------------------------------------------------
+       One hairline everywhere; -strong only for inputs and dividers that
+       need to hold their own against a filled surface. */
+    --ds-border:#e3e5ec;
+    --ds-border-strong:#cfd2dc;
+
+    /* ---- Accent --------------------------------------------------------- */
+    --ds-accent:#4f46e5;
+    --ds-accent-hover:#4338ca;
+    --ds-accent-active:#3730a3;
+    --ds-accent-soft:#eef2ff;     /* selected rows, soft chips */
+    --ds-accent-border:#c7d2fe;
+    --ds-accent-text:#4338ca;     /* accent text on white, contrast-safe */
+
+    /* ---- Status ---------------------------------------------------------
+       Each is a text/bg pair so chips never need a one-off colour. */
+    --ds-success:#0f7b46;
+    --ds-success-bg:#e7f6ee;
+    --ds-warning:#a15c07;
+    --ds-warning-bg:#fdf3e3;
+    --ds-danger:#b42318;
+    --ds-danger-bg:#fdeceb;
+    --ds-neutral:#5a6172;
+    --ds-neutral-bg:#f1f2f6;
+
+    /* ---- Sidebar -------------------------------------------------------
+       Its own ramp: the workspace palette does not work on a dark ground. */
+    --ds-nav-bg:#15171f;
+    --ds-nav-border:#252834;
+    --ds-nav-text:#a8adbd;        /* resting nav item */
+    --ds-nav-text-hover:#e8eaf0;
+    --ds-nav-active-bg:#22252f;   /* subtle fill, accent carried by the rail */
+    --ds-nav-active-text:#ffffff;
+    --ds-nav-section:#666d80;     /* COMPANY / WORK group labels */
+
+    /* ---- Type ----------------------------------------------------------
+       Restrained on purpose. Body sits at 13-14, meta at 11-12, and the
+       largest heading on any screen is 20 - no decorative display sizes. */
+    --ds-font-11:11px;
+    --ds-font-12:12px;
+    --ds-font-13:13px;
+    --ds-font-14:14px;
+    --ds-font-15:15px;
+    --ds-font-16:16px;
+    --ds-font-18:18px;
+    --ds-font-20:20px;
+
+    --ds-weight-normal:400;
+    --ds-weight-medium:500;
+    --ds-weight-semibold:600;
+    --ds-weight-bold:700;
+
+    --ds-leading-tight:1.3;
+    --ds-leading:1.5;
+    --ds-tracking-tight:-0.01em;
+    --ds-tracking-wide:0.04em;    /* uppercase micro-labels only */
+
+    /* ---- Spacing -------------------------------------------------------
+       4px base. Everything on the migrated screens uses these, so gaps
+       stay in step instead of drifting to whatever looked right. */
+    --ds-space-1:4px;
+    --ds-space-2:8px;
+    --ds-space-3:12px;
+    --ds-space-4:16px;
+    --ds-space-5:20px;
+    --ds-space-6:24px;
+    --ds-space-8:32px;
+    --ds-space-10:40px;
+
+    /* ---- Radius ---------------------------------------------------------
+       Small and consistent. Large radii read as consumer software. */
+    --ds-radius-sm:4px;
+    --ds-radius:6px;
+    --ds-radius-md:8px;
+    --ds-radius-lg:10px;
+    --ds-radius-full:999px;
+
+    /* ---- Focus ---------------------------------------------------------
+       Flat means no shadows for depth, but a focus ring is not decoration. */
+    --ds-focus-ring:0 0 0 3px rgba(79,70,229,.25);
+
+    /* ---- Motion --------------------------------------------------------
+       Colour changes only. No lifts, no entrance animation. */
+    --ds-transition:120ms cubic-bezier(.4, 0, .2, 1);
+}
+
 :root{
 
     /* Typography */
@@ -10231,4 +10349,483 @@ tbody tr:hover{
     .auth-card{
         animation:none;
     }
+}
+
+
+/* ==========================================================================
+   ds-* RESTYLE  -  sidebar (global) + dashboard & task list (scoped)
+   ==========================================================================
+   Flat: 1px borders, no shadows, no gradients, no lifts. Type restrained -
+   body 13-14, meta 11-12, largest heading 20.
+
+   The sidebar is styled globally because it is the app shell, and a
+   half-migrated navigation would look broken on every page. Everything
+   else is scoped to body.ds-screen so untouched screens stay as they are.
+   ========================================================================== */
+
+/* ---------- Sidebar (all pages) ---------- */
+
+.sidebar{
+    background:var(--ds-nav-bg);
+    border-right:1px solid var(--ds-nav-border);
+    padding:var(--ds-space-4) var(--ds-space-3);
+}
+
+.sidebar h2{
+    margin-bottom:var(--ds-space-5);
+    padding:0 var(--ds-space-3);
+    color:var(--ds-text-inverse);
+    font-size:var(--ds-font-16);
+    font-weight:var(--ds-weight-bold);
+    letter-spacing:var(--ds-tracking-tight);
+}
+
+.sidebar-nav-label{
+    margin:var(--ds-space-5) 0 var(--ds-space-2);
+    padding:0 var(--ds-space-3);
+    color:var(--ds-nav-section);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-wide);
+    text-transform:uppercase;
+}
+
+.sidebar a{
+    gap:var(--ds-space-3);
+    padding:7px var(--ds-space-3);
+    margin-bottom:1px;
+    border-radius:var(--ds-radius);
+    color:var(--ds-nav-text);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-medium);
+    transition:background-color var(--ds-transition), color var(--ds-transition);
+}
+
+.sidebar a i{
+    width:16px;
+    font-size:var(--ds-font-13);
+    text-align:center;
+}
+
+.sidebar a:hover{
+    background:var(--ds-nav-active-bg);
+    color:var(--ds-nav-text-hover);
+}
+
+/* Active state: a quiet fill plus an accent rail. A fully saturated accent
+   block for the current page is the loudest thing on screen and competes
+   with the content it is meant to frame. */
+.sidebar a.active{
+    background:var(--ds-nav-active-bg);
+    color:var(--ds-nav-active-text);
+    font-weight:var(--ds-weight-semibold);
+}
+
+.sidebar a.active::before{
+    left:calc(var(--ds-space-3) * -1);
+    width:3px;
+    height:18px;
+    border-radius:0 var(--ds-radius-full) var(--ds-radius-full) 0;
+    background:var(--ds-accent);
+}
+
+.sidebar-logout{
+    padding-top:var(--ds-space-3);
+    border-top:1px solid var(--ds-nav-border);
+    color:var(--ds-nav-text);
+    font-size:var(--ds-font-13);
+}
+
+.sidebar-collapse-btn{
+    background:var(--ds-nav-active-bg);
+    color:var(--ds-nav-text);
+    border:1px solid var(--ds-nav-border);
+}
+
+.sidebar-collapse-btn:hover{
+    background:#2b2f3b;
+    color:var(--ds-nav-text-hover);
+}
+
+/* ---------- Workspace (dashboard + task list only) ---------- */
+
+body.ds-screen{
+    background:var(--ds-canvas);
+    color:var(--ds-text);
+    font-size:var(--ds-font-14);
+}
+
+/* Flat means flat: undo the elevation and entrance motion that the earlier
+   polish layer applies globally. */
+body.ds-screen .main > *{
+    animation:none;
+}
+
+body.ds-screen .table-card,
+body.ds-screen .form-card,
+body.ds-screen .kpi-card,
+body.ds-screen .metric-card,
+body.ds-screen .chart-card,
+body.ds-screen .snapshot-card,
+body.ds-screen .task-card,
+body.ds-screen .board-column{
+    box-shadow:none;
+    border-radius:var(--ds-radius-md);
+    border-color:var(--ds-border);
+}
+
+body.ds-screen .kpi-card.dashboard-card-link:hover,
+body.ds-screen .metric-card-link:hover{
+    transform:none;
+    box-shadow:none;
+    border-color:var(--ds-border-strong);
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .task-card:hover{
+    box-shadow:none;
+    border-color:var(--ds-border-strong);
+}
+
+/* ---- Page header ---- */
+
+body.ds-screen .page-header{
+    padding-bottom:var(--ds-space-4);
+    margin-bottom:var(--ds-space-5);
+    border-bottom:1px solid var(--ds-border);
+}
+
+body.ds-screen .page-header h1{
+    font-size:var(--ds-font-20);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-tight);
+    color:var(--ds-text);
+}
+
+body.ds-screen .page-header > div > p{
+    margin-top:2px;
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+}
+
+/* ---- Headings ---- */
+
+body.ds-screen .card-title,
+body.ds-screen .section-head h2,
+body.ds-screen .table-card h2{
+    font-size:var(--ds-font-15);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-tight);
+    color:var(--ds-text);
+    margin-bottom:var(--ds-space-4) !important;
+}
+
+body.ds-screen .section-head p{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+/* ---- Buttons ---- */
+
+body.ds-screen .btn,
+body.ds-screen button[type="submit"],
+body.ds-screen .mini-action{
+    height:34px;
+    padding:0 var(--ds-space-4);
+    border-radius:var(--ds-radius);
+    background:var(--ds-accent);
+    color:var(--ds-text-inverse);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    box-shadow:none;
+}
+
+body.ds-screen .btn:hover,
+body.ds-screen button[type="submit"]:hover,
+body.ds-screen .mini-action:hover{
+    background:var(--ds-accent-hover);
+}
+
+body.ds-screen .btn-secondary,
+body.ds-screen .view-switch-btn{
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border-strong);
+    color:var(--ds-text-secondary);
+}
+
+body.ds-screen .btn-secondary:hover{
+    background:var(--ds-surface-hover);
+    color:var(--ds-text);
+}
+
+body.ds-screen .mini-link{
+    color:var(--ds-accent-text);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+}
+
+/* ---- Inputs ---- */
+
+body.ds-screen input,
+body.ds-screen select,
+body.ds-screen textarea{
+    border:1px solid var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    font-size:var(--ds-font-13);
+    color:var(--ds-text);
+    background:var(--ds-surface);
+}
+
+body.ds-screen input:focus,
+body.ds-screen select:focus,
+body.ds-screen textarea:focus{
+    border-color:var(--ds-accent);
+    box-shadow:var(--ds-focus-ring);
+}
+
+/* ---- KPI / metric tiles ---- */
+
+body.ds-screen .kpi-card,
+body.ds-screen .metric-card{
+    padding:var(--ds-space-4);
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border);
+}
+
+body.ds-screen .kpi-content span,
+body.ds-screen .metric-card span{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-medium);
+}
+
+/* 26px was a display size for a number that is read, not admired. */
+body.ds-screen .kpi-content h2,
+body.ds-screen .metric-card strong{
+    font-size:var(--ds-font-20);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-tight);
+    color:var(--ds-text);
+}
+
+body.ds-screen .kpi-content p{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .kpi-icon{
+    width:28px;
+    height:28px;
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .kpi-card.kpi-alert{
+    border-color:var(--ds-danger-bg);
+    background:var(--ds-danger-bg);
+}
+
+body.ds-screen .kpi-card.kpi-alert .kpi-icon{
+    background:var(--ds-surface);
+    color:var(--ds-danger);
+}
+
+body.ds-screen .kpi-card.kpi-alert h2{
+    color:var(--ds-danger);
+}
+
+/* ---- Rows and tables ---- */
+
+body.ds-screen thead th{
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-wide);
+    text-transform:uppercase;
+}
+
+body.ds-screen tbody td{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-secondary);
+    border-color:var(--ds-border);
+}
+
+body.ds-screen tbody tr:hover{
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .activity-feed .activity-row strong{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-medium);
+    color:var(--ds-text-secondary);
+}
+
+body.ds-screen .activity-feed .activity-row span{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+/* ---- Status chips ---- */
+
+body.ds-screen .status-pill,
+body.ds-screen .tag{
+    padding:2px var(--ds-space-2);
+    border-radius:var(--ds-radius-sm);
+    background:var(--ds-neutral-bg);
+    color:var(--ds-neutral);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+}
+
+/* ---------- Task board ---------- */
+
+body.ds-screen .board-column{
+    background:var(--ds-surface-sunken);
+    border:1px solid var(--ds-border);
+}
+
+body.ds-screen .board-column-header{
+    background:var(--ds-surface-sunken);
+}
+
+body.ds-screen .board-column-header h2{
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-wide);
+    text-transform:uppercase;
+    color:var(--ds-text-secondary);
+}
+
+body.ds-screen .board-column-header span{
+    height:18px;
+    min-width:18px;
+    border-radius:var(--ds-radius-sm);
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border);
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .task-card{
+    padding:var(--ds-space-3);
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border);
+}
+
+body.ds-screen .kanban-task-id{
+    padding:0;
+    background:transparent;
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .kanban-task-title{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+    line-height:var(--ds-leading-tight);
+}
+
+body.ds-screen .kanban-description{
+    font-size:var(--ds-font-12);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .kanban-client,
+body.ds-screen .task-card-meta{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .priority-dot{
+    padding:2px var(--ds-space-2);
+    border-radius:var(--ds-radius-sm);
+    background:var(--ds-neutral-bg);
+    color:var(--ds-neutral);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .kanban-file-btn{
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius-sm);
+    background:var(--ds-surface);
+    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .kanban-card-actions .mini-action{
+    height:26px;
+    padding:0 var(--ds-space-3);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .kanban-card-actions .mini-link{
+    font-size:var(--ds-font-11);
+}
+
+/* ---- Filter row ---- */
+
+body.ds-screen .filter-bar{
+    padding:var(--ds-space-3);
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .task-view-switcher{
+    background:var(--ds-surface-sunken);
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius);
+}
+
+body.ds-screen .view-switch-btn{
+    border:none;
+    background:transparent;
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .view-switch-btn.active{
+    background:var(--ds-surface);
+    border:1px solid var(--ds-border);
+    color:var(--ds-text);
+}
+
+/* ---- Team panel ---- */
+
+body.ds-screen .team-person strong{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .team-person span,
+body.ds-screen .team-task span,
+body.ds-screen .team-summary{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .team-task a{
+    font-size:var(--ds-font-13);
+    color:var(--ds-accent-text);
+}
+
+body.ds-screen .team-load-figures strong{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .team-load-bar{
+    height:4px;
+    background:var(--ds-surface-sunken);
+}
+
+body.ds-screen .team-load-bar.load-steady span{
+    background:var(--ds-accent);
 }

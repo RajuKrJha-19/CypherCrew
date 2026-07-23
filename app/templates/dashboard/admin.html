@@ -2,6 +2,10 @@
 
 {% block title %}Admin | CypherCrew{% endblock %}
 
+{# Opts this screen into the ds-* design tokens. Screens without
+   this class keep the older styling until they are migrated. #}
+{% block body_class %}ds-screen{% endblock %}
+
 {% block content %}
         <div class="page-header">
             <div>
