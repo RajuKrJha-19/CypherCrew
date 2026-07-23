@@ -11375,3 +11375,98 @@ body.ds-screen .issues-panel .report-text-box{
     background:var(--ds-warning-bg);
     border-color:var(--ds-warning-bg);
 }
+
+/* ---- Notes (notes/list.html) ---- */
+
+body.ds-screen .notes-search-bar input{
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface);
+    border-color:var(--ds-border-strong);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .notes-section-title{
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text-muted);
+    letter-spacing:var(--ds-tracking-wide);
+}
+
+body.ds-screen .note-card{
+    border-radius:var(--ds-radius-md);
+    border-color:var(--ds-border);
+    box-shadow:none;
+    transition:none;
+}
+
+body.ds-screen .note-card:hover{
+    transform:none;
+    box-shadow:none;
+    border-color:var(--ds-border-strong);
+}
+
+body.ds-screen .note-card h3{
+    font-size:var(--ds-font-14);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .note-preview{
+    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .note-card small{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-medium);
+}
+
+body.ds-screen .note-menu-btn{
+    color:var(--ds-text-muted) !important;
+}
+
+body.ds-screen .note-menu-btn:hover{
+    background:var(--ds-surface-sunken) !important;
+    color:var(--ds-text) !important;
+}
+
+body.ds-screen .note-menu-dropdown{
+    border-radius:var(--ds-radius) !important;
+    border:1px solid var(--ds-border);
+    box-shadow:none;
+}
+
+body.ds-screen .note-menu-dropdown a,
+body.ds-screen .note-menu-dropdown button{
+    font-size:var(--ds-font-13) !important;
+    font-weight:var(--ds-weight-medium) !important;
+    color:var(--ds-text) !important;
+}
+
+body.ds-screen .note-menu-dropdown a:hover,
+body.ds-screen .note-menu-dropdown button:hover{
+    background:var(--ds-surface-sunken) !important;
+}
+
+body.ds-screen .note-menu-dropdown .danger,
+body.ds-screen .note-menu-dropdown .danger:hover{
+    color:var(--ds-danger) !important;
+}
+
+body.ds-screen .empty-state{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius-md);
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .empty-state strong{
+    color:var(--ds-text);
+    font-size:var(--ds-font-15);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .empty-state p{
+    font-size:var(--ds-font-13);
+}
