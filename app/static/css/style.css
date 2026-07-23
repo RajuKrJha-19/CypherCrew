@@ -10680,33 +10680,39 @@ body.ds-screen .tag{
     font-weight:var(--ds-weight-semibold);
 }
 
-/* ---------- Task board ---------- */
+/* ---------- Task board ----------
+   !important throughout: an older "kanban drop-target fix" rule
+   (line ~2946) sets .board-column's background/border/radius and
+   .board-column-header h2's font-size with !important, which silently
+   beat this block regardless of its higher specificity - the ds
+   tokens were never actually rendering on the live board view. */
 
 body.ds-screen .board-column{
-    background:var(--ds-surface-sunken);
-    border:1px solid var(--ds-border);
+    background:var(--ds-surface-sunken) !important;
+    border:1px solid var(--ds-border) !important;
+    border-radius:var(--ds-radius-md) !important;
 }
 
 body.ds-screen .board-column-header{
-    background:var(--ds-surface-sunken);
+    background:var(--ds-surface-sunken) !important;
 }
 
 body.ds-screen .board-column-header h2{
-    font-size:var(--ds-font-12);
-    font-weight:var(--ds-weight-semibold);
-    letter-spacing:var(--ds-tracking-wide);
-    text-transform:uppercase;
-    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-12) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+    letter-spacing:var(--ds-tracking-wide) !important;
+    text-transform:uppercase !important;
+    color:var(--ds-text-secondary) !important;
 }
 
 body.ds-screen .board-column-header span{
-    height:18px;
-    min-width:18px;
-    border-radius:var(--ds-radius-sm);
-    background:var(--ds-surface);
-    border:1px solid var(--ds-border);
-    color:var(--ds-text-muted);
-    font-size:var(--ds-font-11);
+    height:18px !important;
+    min-width:18px !important;
+    border-radius:var(--ds-radius-sm) !important;
+    background:var(--ds-surface) !important;
+    border:1px solid var(--ds-border) !important;
+    color:var(--ds-text-muted) !important;
+    font-size:var(--ds-font-11) !important;
 }
 
 body.ds-screen .task-card{
@@ -11735,4 +11741,117 @@ body.ds-screen .my-permissions-intro{
 
 body.ds-screen .section-gap-top{
     margin-top:var(--ds-space-5);
+}
+
+/* ---- Review Queue (dashboard/my_tasks.html) ----
+   Recolored to match the .board-column tokens/spacing from
+   tasks/list.html: sunken column background, uppercase muted column
+   head, small bordered count pill, flat surface cards. Column
+   scroll/sticky-header layout is untouched - only the old system's
+   colors, radii and type scale are replaced with ds-* equivalents. */
+
+body.ds-screen .review-column{
+    background:var(--ds-surface-sunken) !important;
+    border:1px solid var(--ds-border) !important;
+    border-radius:var(--ds-radius-md) !important;
+}
+
+body.ds-screen .review-column-head{
+    background:var(--ds-surface-sunken) !important;
+    border-bottom-color:var(--ds-border) !important;
+}
+
+body.ds-screen .review-column-head h2{
+    font-size:var(--ds-font-12) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+    letter-spacing:var(--ds-tracking-wide) !important;
+    text-transform:uppercase !important;
+    color:var(--ds-text-secondary) !important;
+}
+
+body.ds-screen .review-column-head span{
+    min-width:18px !important;
+    height:18px !important;
+    border-radius:var(--ds-radius-sm) !important;
+    background:var(--ds-surface) !important;
+    border:1px solid var(--ds-border) !important;
+    color:var(--ds-text-muted) !important;
+    font-size:var(--ds-font-11) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+}
+
+body.ds-screen .review-task-card{
+    background:var(--ds-surface) !important;
+    border-color:var(--ds-border) !important;
+    border-radius:var(--ds-radius-md) !important;
+}
+
+body.ds-screen .review-task-top a{
+    font-size:var(--ds-font-13) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+    color:var(--ds-text) !important;
+}
+
+body.ds-screen .review-task-card h3{
+    font-size:var(--ds-font-13) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+    color:var(--ds-text) !important;
+    line-height:var(--ds-leading-tight) !important;
+}
+
+body.ds-screen .review-task-card p{
+    color:var(--ds-text-muted) !important;
+    font-size:var(--ds-font-12) !important;
+}
+
+body.ds-screen .review-task-meta{
+    border-top-color:var(--ds-border) !important;
+    font-size:var(--ds-font-11) !important;
+}
+
+body.ds-screen .review-task-meta span{
+    color:var(--ds-text-muted) !important;
+}
+
+body.ds-screen .review-task-meta strong{
+    color:var(--ds-text) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+}
+
+body.ds-screen .review-approve-btn{
+    background:var(--ds-accent) !important;
+    color:var(--ds-text-inverse) !important;
+    border-radius:var(--ds-radius) !important;
+}
+
+body.ds-screen .review-approve-btn:hover{
+    background:var(--ds-accent-hover) !important;
+}
+
+body.ds-screen .review-reject-toggle{
+    background:var(--ds-danger) !important;
+    color:var(--ds-text-inverse) !important;
+    border-radius:var(--ds-radius) !important;
+}
+
+body.ds-screen .review-reject-form-new textarea{
+    border-color:var(--ds-border-strong) !important;
+    border-radius:var(--ds-radius) !important;
+    font-size:var(--ds-font-13) !important;
+}
+
+body.ds-screen .review-reject-action-row button{
+    border-radius:var(--ds-radius) !important;
+    font-size:var(--ds-font-11) !important;
+    font-weight:var(--ds-weight-semibold) !important;
+}
+
+body.ds-screen .btn-danger{
+    background:var(--ds-danger);
+    color:var(--ds-text-inverse);
+}
+
+body.ds-screen .btn-danger:hover{
+    background:var(--ds-danger);
+    opacity:.9;
 }
