@@ -11171,3 +11171,20 @@ body.ds-screen .edit-pill{
 body.ds-screen .edit-pill:hover{
     background:var(--ds-accent-border);
 }
+
+/* ---- Reports (reports/list.html) ---- */
+
+body.ds-screen .report-count-badge{
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .report-count-badge.completed{
+    background:var(--ds-success-bg);
+    color:var(--ds-success);
+}
+
+body.ds-screen .report-count-badge.progress{
+    background:var(--ds-accent-soft);
+    color:var(--ds-accent-text);
+}
