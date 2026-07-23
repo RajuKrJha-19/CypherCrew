@@ -10999,3 +10999,175 @@ body.ds-screen .meeting-participant small{
     color:var(--ds-text-muted);
     font-size:var(--ds-font-11);
 }
+
+
+/* ---------- Phase 2: users/list.html, clients/list.html ---------- */
+/* .badge (active/inactive) and .list-pagination are shared by both
+   modules' list views. */
+
+body.ds-screen .badge{
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    border-radius:var(--ds-radius-full);
+}
+
+body.ds-screen .badge.active{
+    background:var(--ds-success-bg);
+    color:var(--ds-success);
+}
+
+body.ds-screen .badge.inactive{
+    background:var(--ds-danger-bg);
+    color:var(--ds-danger);
+}
+
+body.ds-screen .list-pagination{
+    font-size:var(--ds-font-12);
+    color:var(--ds-text-muted);
+    font-weight:var(--ds-weight-medium);
+}
+
+
+/* ---------- Phase 2: users/edit.html (disabled email field) ---------- */
+/* No disabled-input rule existed anywhere in the file, so this fell
+   back to whatever the browser defaults to. Made it look intentional
+   instead of accidental. */
+body.ds-screen input:disabled{
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+    cursor:not-allowed;
+}
+
+
+/* ---------- Phase 2: users/performance.html ---------- */
+
+body.ds-screen .performance-filter{
+    background:var(--ds-surface);
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+/* Kept dark - a solid fill is still flat, unlike a shadow or gradient -
+   but the 30px figure was the one genuinely decorative-scale number
+   left after the KPI tiles came down to 20px, so it comes down too. */
+body.ds-screen .performance-hero{
+    background:var(--ds-nav-bg);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .performance-hero span{
+    color:var(--ds-nav-text);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .performance-hero strong{
+    font-size:var(--ds-font-20);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .performance-hero p{
+    color:var(--ds-nav-text);
+    font-size:var(--ds-font-11);
+}
+
+body.ds-screen .performance-card{
+    background:var(--ds-surface);
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .performance-card span{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .performance-card strong{
+    font-size:var(--ds-font-20);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .performance-card p{
+    font-size:var(--ds-font-11);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .performance-card.success strong{
+    color:var(--ds-success);
+}
+
+body.ds-screen .performance-card.danger strong{
+    color:var(--ds-danger);
+}
+
+/* Replaces two inline style="color:#16a34a"/"color:#dc2626" spans in
+   users/performance.html's Employee Completed column - inline hex
+   bypasses the token system entirely regardless of what screen it's on. */
+body.ds-screen .text-success{
+    color:var(--ds-success);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .text-danger{
+    color:var(--ds-danger);
+    font-weight:var(--ds-weight-semibold);
+}
+
+/* ---- Client stats table (clients/detail.html) ---- */
+
+body.ds-screen .client-stats-table{
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .client-stats-head{
+    background:var(--ds-surface-sunken);
+    border-color:var(--ds-border);
+}
+
+body.ds-screen .client-stats-head div{
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-wide);
+    text-transform:uppercase;
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .client-stats-row{
+    background:var(--ds-surface);
+    border-color:var(--ds-border);
+}
+
+body.ds-screen .client-stats-row > div{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-secondary);
+}
+
+body.ds-screen .service-name{
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .deliverable-name{
+    color:var(--ds-text-secondary);
+}
+
+body.ds-screen .target-count span{
+    background:var(--ds-accent-soft);
+    color:var(--ds-accent-text);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+    border-radius:var(--ds-radius-full);
+}
+
+body.ds-screen .edit-pill{
+    background:var(--ds-accent-soft);
+    color:var(--ds-accent-text);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    border-radius:var(--ds-radius-sm);
+}
+
+body.ds-screen .edit-pill:hover{
+    background:var(--ds-accent-border);
+}
