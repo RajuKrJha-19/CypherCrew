@@ -5,8 +5,10 @@
 {% block content %}
         <div class="page-header">
             <div>
-                <h1>Admin Dashboard</h1>
-                <p>Welcome, {{ current_user.name }}</p>
+                {# Greeting as the heading: the old title repeated what the
+                   sidebar already says, and the date is at least useful. #}
+                <h1>{{ greet(current_user) }}</h1>
+                <p>{{ today_label() }}</p>
             </div>
 
             <div class="top-actions">

@@ -63,8 +63,14 @@ def create_app():
             seed_database()
 
     from app.utils.permissions import has_permission
+    from app.utils.greeting import greet, today_label
+
     app.jinja_env.globals.update(
-        has_permission=has_permission
+        has_permission=has_permission,
+        # Registered globally rather than passed from each dashboard
+        # route, so all three headers greet the same way.
+        greet=greet,
+        today_label=today_label,
     )
 
     app.jinja_env.filters["linkify"] = linkify_text
