@@ -20,13 +20,18 @@
         // rather than another warm colour: it is parked work, not
         // work in flight, and it should read that way at a glance.
         const statusColors = [
-            "#2563EB",   // Assigned
-            "#EC4899",   // In Progress
-            "#FB923C",   // Paused
-            "#94A3B8",   // On Hold
-            "#FACC15",   // Core Review
-            "#14B8A6",   // Client Review
-            "#10B981"    // Published
+            // Grouped by what the status means, not spread around the
+            // wheel: waiting is indigo/slate, active is sky, attention
+            // is amber, review is violet/teal, done is green. Assigned
+            // sits one step lighter than the brand indigo so it reads
+            // as part of the palette without competing with it.
+            "#6366F1",   // Assigned      - waiting to start
+            "#0EA5E9",   // In Progress   - active
+            "#F59E0B",   // Paused        - stopped, needs a nudge
+            "#94A3B8",   // On Hold       - parked, not the team's call
+            "#A855F7",   // Core Review   - internal review
+            "#14B8A6",   // Client Review - external review
+            "#15A34A"    // Published     - done
         ];
 
         const centerTextPlugin = {
@@ -42,7 +47,7 @@
                 ctx.fillText(statusTotal, width / 2, height / 2 - 8);
 
                 ctx.font = "400 13px Arial";
-                ctx.fillStyle = "#64748B";
+                ctx.fillStyle = "#646C85";
                 ctx.fillText("Total", width / 2, height / 2 + 18);
                 ctx.restore();
             }
@@ -123,7 +128,7 @@
             {
                 label: "Created",
                 data: {{ month_chart.created | tojson }},
-            borderColor: "#2563EB",
+            borderColor: "#6366F1",
             backgroundColor: "rgba(37, 99, 235, 0.10)",
             tension: 0.35,
             fill: false,
@@ -133,7 +138,7 @@
             {
                 label: "Completed",
                 data: {{ month_chart.completed | tojson }},
-            borderColor: "#22C55E",
+            borderColor: "#15A34A",
             backgroundColor: "rgba(34, 197, 94, 0.10)",
             tension: 0.35,
             fill: false,
@@ -143,7 +148,7 @@
             {
                 label: "Pending",
                 data: {{ month_chart.pending | tojson }},
-            borderColor: "#F97316",
+            borderColor: "#F59E0B",
             backgroundColor: "rgba(249, 115, 22, 0.10)",
             tension: 0.35,
             fill: false,
@@ -153,7 +158,7 @@
             {
                 label: "In Progress",
                 data: {{ month_chart.in_progress | tojson }},
-            borderColor: "#8B5CF6",
+            borderColor: "#0EA5E9",
             backgroundColor: "rgba(139, 92, 246, 0.10)",
             tension: 0.35,
             fill: false,
@@ -183,7 +188,7 @@
             {
                 label: "Core Review",
                 data: {{ month_chart.core_review | tojson }},
-            borderColor: "#EAB308",
+            borderColor: "#A855F7",
             backgroundColor: "rgba(234, 179, 8, 0.10)",
             tension: 0.35,
             fill: false,
@@ -237,7 +242,7 @@
                         display: false
                     },
                     ticks: {
-                        color: "#64748B",
+                        color: "#646C85",
                             maxTicksLimit: 7
                     }
                 },
@@ -245,10 +250,10 @@
                     beginAtZero: true,
                         ticks: {
                         precision: 0,
-                            color: "#64748B"
+                            color: "#646C85"
                     },
                     grid: {
-                        color: "#EEF2F7"
+                        color: "#E5E7F0"
                     }
                 }
             }

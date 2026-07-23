@@ -25,8 +25,23 @@
 
     <nav class="sidebar-nav">
 
+    {#
+        dashboard.index only ever redirects - to super_admin, admin or
+        employee depending on role - so request.endpoint is never
+        "dashboard.index" by the time a page renders, and this item was
+        never highlighted on the one page it points at. Matched against
+        the endpoints that actually render instead. Review Queue lives
+        on dashboard.my_tasks and is deliberately not in this list.
+    #}
+    {% set dashboard_endpoints = [
+        "dashboard.index",
+        "dashboard.super_admin",
+        "dashboard.admin",
+        "dashboard.employee",
+    ] %}
+
     <a href="{{ url_for('dashboard.index') }}"
-       class="{% if endpoint == 'dashboard.index' %}active{% endif %}">
+       class="{% if endpoint in dashboard_endpoints %}active{% endif %}">
         <i class="fa-solid fa-house"></i>
         <span>Dashboard</span>
     </a>
