@@ -11291,3 +11291,87 @@ body.ds-screen .report-submit-btn{
 body.ds-screen .report-submit-btn:hover{
     background:var(--ds-accent-hover);
 }
+
+/* ---- Reports (reports/view.html) ---- */
+
+body.ds-screen .report-profile-card span{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .report-profile-card h2{
+    font-size:var(--ds-font-16);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .report-profile-card p{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .report-kpi-card span{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .report-kpi-card strong{
+    font-size:var(--ds-font-20);
+    color:var(--ds-text);
+}
+
+body.ds-screen .report-panel-head h2{
+    font-size:var(--ds-font-16);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .report-panel-head span{
+    background:var(--ds-accent-soft);
+    color:var(--ds-accent-text);
+    font-weight:var(--ds-weight-semibold);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .report-table-wrap{
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+body.ds-screen .report-detail-table th{
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-11);
+    font-weight:var(--ds-weight-semibold);
+    letter-spacing:var(--ds-tracking-wide);
+}
+
+body.ds-screen .report-detail-table td{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-secondary);
+    border-color:var(--ds-border);
+}
+
+body.ds-screen .report-detail-table td strong{
+    color:var(--ds-text);
+    font-weight:var(--ds-weight-medium);
+}
+
+body.ds-screen .report-detail-table td span{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .report-text-box{
+    background:var(--ds-surface-sunken);
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius);
+    color:var(--ds-text);
+}
+
+body.ds-screen .issues-panel .report-text-box{
+    background:var(--ds-warning-bg);
+    border-color:var(--ds-warning-bg);
+}
