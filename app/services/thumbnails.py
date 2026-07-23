@@ -99,9 +99,23 @@ def _release(file_id):
         _inflight.discard(file_id)
 
 
+class ThumbnailTooLarge(Exception):
+    """Decodes to more pixels than this app is willing to process.
+
+    A decision, not a failure: retrying will never produce a different
+    answer, so the file is marked skipped rather than failed.
+    """
+
+
 def _render(source_bytes):
-    """original bytes -> WEBP bytes. Returns None if undecodable."""
-    from PIL import Image, ImageOps, UnidentifiedImageError
+    """original bytes -> WEBP bytes, or None if it cannot be rendered.
+
+    Raises only ThumbnailTooLarge. Everything else is swallowed and
+    logged, because a thumbnail is a nice-to-have and an exception
+    escaping here leaves the row stuck at "pending" - which means every
+    later view retries the same doomed file.
+    """
+    from PIL import Image, ImageOps
 
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -121,18 +135,44 @@ def _render(source_bytes):
             img.save(out, format="WEBP", quality=80, method=4)
             return out.getvalue()
 
-    except (UnidentifiedImageError, OSError, ValueError):
-        # Truncated upload, not really an image, or a decompression
-        # bomb tripping MAX_IMAGE_PIXELS.
+    except Image.DecompressionBombError as error:
+        # Pillow refused to decode it, which is the guard doing its job.
+        # DecompressionBombError subclasses Exception directly - not
+        # OSError or ValueError - so it used to slip past every except
+        # clause here and in generate(), leaving the row at "pending"
+        # and re-downloading a very large file on every gallery view.
+        raise ThumbnailTooLarge(str(error)) from error
+
+    except MemoryError as error:
+        # Same class of problem, different symptom.
+        raise ThumbnailTooLarge("not enough memory to decode") from error
+
+    except Exception:
+        # Truncated upload, not actually an image, an unsupported mode,
+        # a codec that is not installed. Deliberately broad: the caller
+        # needs an answer, not an exception.
+        current_app.logger.warning(
+            "Could not render thumbnail.", exc_info=True
+        )
         return None
 
 
-def generate(file_id):
+def generate(file_id, retry=False):
     """Build and store the thumbnail for one file.
 
     Safe to call from anywhere: it re-reads the row, decides whether
     there is anything to do, and records the outcome. Returns the
     resulting state.
+
+    Terminal states are honoured, so calling this on a file that has
+    already been decided does no work. That guarantee lives here rather
+    than in the callers: the /thumb route only calls this for pending
+    files, but relying on that meant one careless caller could
+    re-download and re-decode a doomed file on every request.
+
+    `retry` re-attempts a previous failure. Skipped files are never
+    retried - that state means "this cannot be thumbnailed", and the
+    answer will not change.
     """
     task_file = db.session.get(TaskFile, file_id)
 
@@ -141,6 +181,12 @@ def generate(file_id):
 
     if task_file.thumbnail_state == STATE_READY and task_file.thumbnail_key:
         return STATE_READY
+
+    if task_file.thumbnail_state == STATE_SKIPPED:
+        return STATE_SKIPPED
+
+    if task_file.thumbnail_state == STATE_FAILED and not retry:
+        return STATE_FAILED
 
     if not supports(task_file):
         task_file.thumbnail_state = STATE_SKIPPED
@@ -162,9 +208,7 @@ def generate(file_id):
         thumb = _render(source)
 
         if thumb is None:
-            task_file.thumbnail_state = STATE_FAILED
-            db.session.commit()
-            return STATE_FAILED
+            return _record_state(file_id, STATE_FAILED)
 
         key = thumbnail_key_for(task_file)
 
@@ -180,18 +224,52 @@ def generate(file_id):
 
         return STATE_READY
 
-    except (StorageServiceError, OSError):
+    except ThumbnailTooLarge as error:
+        current_app.logger.info(
+            "Skipping thumbnail for task file %s: %s", file_id, error
+        )
+        return _record_state(file_id, STATE_SKIPPED)
+
+    except Exception:
+        # Deliberately broad. Whatever went wrong, the row has to end up
+        # in a terminal state: anything left at "pending" is retried by
+        # the lazy path on every single view, so one bad file turns into
+        # a download-and-fail loop that never stops on its own.
+        # Genuinely transient failures are recoverable with
+        # `flask thumbnails-backfill --retry-failed`.
         current_app.logger.exception(
             "Thumbnail generation failed for task file %s.", file_id
         )
-        db.session.rollback()
-
-        task_file.thumbnail_state = STATE_FAILED
-        db.session.commit()
-        return STATE_FAILED
+        return _record_state(file_id, STATE_FAILED)
 
     finally:
         _release(file_id)
+
+
+def _record_state(file_id, state):
+    """Write a terminal state, on its own transaction.
+
+    Re-reads the row rather than reusing the caller's instance: the
+    failure path may have left the session in a state where that
+    instance is stale or detached.
+    """
+    try:
+        db.session.rollback()
+
+        task_file = db.session.get(TaskFile, file_id)
+
+        if task_file is not None:
+            task_file.thumbnail_state = state
+            db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Could not record thumbnail state %r for task file %s.",
+            state, file_id,
+        )
+
+    return state
 
 
 def _run_in_app(app, file_id):
@@ -282,7 +360,7 @@ def backfill(limit=None, retry_failed=False):
     counts = {}
 
     for task_file in query.all():
-        state = generate(task_file.id)
+        state = generate(task_file.id, retry=retry_failed)
         counts[state] = counts.get(state, 0) + 1
 
     return counts
