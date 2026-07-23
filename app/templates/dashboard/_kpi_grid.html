@@ -1,11 +1,30 @@
 {#
     Headline counters, shared by the super admin and admin dashboards.
 
-    Extracted from the two admin dashboards, which were 89% identical.
+    Rebuilt around what a manager has to act on. The previous six were
+    Total / Completed / Pending / Active Clients / Active Employees /
+    Meetings Today - three of them near-static counts on a small team,
+    and Meetings Today was rendered a second time by the Today's
+    Snapshot block directly underneath. Meanwhile the overdue count was
+    computed on every load and shown nowhere on the page.
+
+    Every figure here comes from data the route already builds; nothing
+    extra is queried. The colour classes are gone: six differently
+    tinted cards gave equal visual weight to everything, so nothing
+    stood out. Only Overdue is allowed to shout, and only when it is
+    non-zero.
 #}
+
+{% set needs_review =
+    stats.status_counts.get("Core Review", 0)
+    + stats.status_counts.get("Client Review", 0)
+%}
+
 <div class="dashboard-kpi-grid">
 
-    <a href="{{ url_for('tasks.list_tasks') }}" class="kpi-card kpi-blue dashboard-card-link">
+    <a href="{{ url_for('tasks.list_tasks') }}"
+       class="kpi-card dashboard-card-link"
+       title="Every task on the board">
         <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
         <div class="kpi-content">
             <span>Total Tasks</span>
@@ -16,59 +35,69 @@
         </div>
     </a>
 
+    <a href="{{ url_for('tasks.list_tasks', status='In Progress') }}"
+       class="kpi-card dashboard-card-link"
+       title="Being worked on right now">
+        <div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="kpi-content">
+            <span>In Progress</span>
+            <h2>{{ stats.status_counts.get("In Progress", 0) }}</h2>
+            <p class="neutral">Actively being worked</p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('tasks.list_tasks', status='Core Review') }}"
+       class="kpi-card dashboard-card-link"
+       title="Finished but not signed off - internal and client review combined">
+        <div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div>
+        <div class="kpi-content">
+            <span>Needs Review</span>
+            <h2>{{ needs_review }}</h2>
+            <p class="neutral">Core + client review</p>
+        </div>
+    </a>
+
+    {# The number nobody could see before: build_today_snapshot() has
+       always carried it, the template just never rendered it. #}
+    <a href="{{ url_for('tasks.filtered_tasks', filter_type='overdue') }}"
+       class="kpi-card dashboard-card-link {% if today_snapshot.overdue_tasks %}kpi-alert{% endif %}"
+       title="Past the deadline and still not delivered">
+        <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="kpi-content">
+            <span>Overdue</span>
+            <h2>{{ today_snapshot.overdue_tasks }}</h2>
+            <p class="{% if today_snapshot.overdue_tasks %}down{% else %}neutral{% endif %}">
+                {% if today_snapshot.overdue_tasks %}
+                Needs attention
+                {% else %}
+                Nothing overdue
+                {% endif %}
+            </p>
+        </div>
+    </a>
+
+    <a href="{{ url_for('calendar.index') }}"
+       class="kpi-card dashboard-card-link"
+       title="Deadline falls today">
+        <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
+        <div class="kpi-content">
+            <span>Due Today</span>
+            <h2>{{ today_snapshot.tasks_due_today }}</h2>
+            <p class="neutral">Deadline is today</p>
+        </div>
+    </a>
+
     <a href="{{ url_for('tasks.list_tasks', status='Published') }}"
-        class="kpi-card kpi-green dashboard-card-link">
+       class="kpi-card dashboard-card-link"
+       title="Approved and delivered">
         <div class="kpi-icon"><i class="fa-solid fa-check"></i></div>
         <div class="kpi-content">
-            <span>Completed Tasks</span>
+            <span>Completed</span>
             <h2 data-live-stat="completed_tasks">{{ overview.completed_tasks }}</h2>
             <p class="{{ overview.completed_growth.class }}">
                 {{ overview.completed_growth.arrow }} {{ overview.completed_growth.text }}
             </p>
         </div>
     </a>
-
-    <a href="{{ url_for('tasks.list_tasks', status='Pending') }}"
-        class="kpi-card kpi-purple dashboard-card-link">
-        <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-        <div class="kpi-content">
-            <span>Pending Tasks</span>
-            <h2 data-live-stat="pending_tasks">{{ overview.pending_tasks }}</h2>
-            <p class="{{ overview.pending_note.class }}">
-                {{ overview.pending_note.arrow }} {{ overview.pending_note.text }}
-            </p>
-        </div>
-    </a>
-
-    <a href="{{ url_for('clients.list_clients') }}" class="kpi-card kpi-orange dashboard-card-link">
-        <div class="kpi-icon"><i class="fa-solid fa-building"></i></div>
-        <div class="kpi-content">
-            <span>Active Clients</span>
-            <h2 data-live-stat="active_clients">{{ overview.active_clients }}</h2>
-            <p class="{{ overview.client_note.class }}">
-                {{ overview.client_note.arrow }} {{ overview.client_note.text }}
-            </p>
-        </div>
-    </a>
-
-    <a href="{{ url_for('users.list_users') }}" class="kpi-card kpi-sky dashboard-card-link">
-        <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
-        <div class="kpi-content">
-            <span>Active Employees</span>
-            <h2 data-live-stat="active_employees">{{ overview.active_employees }}</h2>
-            <p class="{{ overview.employee_note.class }}">
-                {{ overview.employee_note.arrow }} {{ overview.employee_note.text }}
-            </p>
-        </div>
-    </a>
-
-    <div class="kpi-card kpi-red">
-        <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
-        <div class="kpi-content">
-            <span>Meetings Today</span>
-            <h2 data-live-stat="meetings_today">{{ overview.meetings_today }}</h2>
-            <p><a href="{{ url_for('calendar.index') }}">View calendar</a></p>
-        </div>
-    </div>
 
 </div>

@@ -9494,3 +9494,200 @@ body.panel-mode .task-detail-right{
     color:var(--color-text-muted);
     font-variant-numeric:tabular-nums;
 }
+
+
+/* ==========================================================
+   SUPER ADMIN / ADMIN DASHBOARD
+   The page ran to 2379px - 2.6 screens - largely because nine
+   full-width blocks were stacked, three of them answering the
+   same question ("who is working on what") and one showing six
+   tiles that were all zero.
+
+   Panels that are narrow by nature now sit side by side, and
+   the KPI cards drop their six competing tints so that the one
+   card that matters can actually stand out.
+   ========================================================== */
+
+.dashboard-split{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+    gap:20px;
+    margin-bottom:20px;
+    align-items:start;
+}
+
+.dashboard-split > *{
+    margin:0 !important;
+    min-width:0;
+}
+
+@media(max-width:1100px){
+
+    .dashboard-split{
+        grid-template-columns:1fr;
+    }
+}
+
+/* ---- KPI cards ----
+   kpi-blue / green / purple / orange / sky / red gave six cards
+   six different tints, so everything was emphasised and nothing
+   read as urgent. The icons carry the identity now. */
+.dashboard-kpi-grid .kpi-icon{
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+}
+
+.dashboard-kpi-grid .kpi-card:hover .kpi-icon{
+    color:var(--color-primary);
+}
+
+/* The single exception: overdue work, and only while there is any. */
+.kpi-card.kpi-alert{
+    border-color:#fecaca;
+    background:#fffafa;
+}
+
+.kpi-card.kpi-alert .kpi-icon{
+    background:#fee2e2;
+    color:var(--color-danger);
+}
+
+.kpi-card.kpi-alert h2{
+    color:var(--color-danger);
+}
+
+/* ---- Team panel ---- */
+.team-summary{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+}
+
+.team-summary span{
+    color:var(--color-border-strong);
+}
+
+.team-list{
+    display:flex;
+    flex-direction:column;
+}
+
+.team-row{
+    display:grid;
+    grid-template-columns:10px minmax(120px, 1.1fr) minmax(0, 1.6fr) auto auto;
+    align-items:center;
+    gap:14px;
+
+    padding:11px 4px;
+    border-bottom:1px solid var(--color-border);
+}
+
+.team-row:last-child{
+    border-bottom:none;
+}
+
+.team-state-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--color-border-strong);
+}
+
+.team-working .team-state-dot{
+    background:var(--color-success);
+    box-shadow:0 0 0 3px rgba(22,163,74,.15);
+}
+
+.team-paused .team-state-dot{
+    background:#fb923c;
+}
+
+.team-person{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+}
+
+.team-person strong{
+    font-size:13.5px;
+    font-weight:700;
+    color:var(--color-neutral);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.team-person span{
+    font-size:11.5px;
+    color:var(--color-text-muted);
+}
+
+.team-task{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+}
+
+.team-task a{
+    font-size:13px;
+    font-weight:600;
+    color:var(--color-primary);
+    text-decoration:none;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.team-task a:hover{
+    text-decoration:underline;
+}
+
+.team-task span{
+    font-size:11.5px;
+    color:var(--color-text-muted);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.team-task-idle{
+    font-size:13px;
+    font-style:italic;
+}
+
+.team-time,
+.team-load{
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--color-neutral);
+    font-variant-numeric:tabular-nums;
+    text-align:right;
+    white-space:nowrap;
+}
+
+.team-load{
+    min-width:62px;
+    color:var(--color-text-muted);
+}
+
+.team-dash{
+    color:var(--color-border-strong);
+}
+
+/* Over the estimate is worth seeing without reading the numbers. */
+.team-row.over-estimate .team-time{
+    color:var(--color-danger);
+}
+
+@media(max-width:700px){
+
+    .team-row{
+        grid-template-columns:10px 1fr auto;
+        row-gap:4px;
+    }
+
+    .team-task{
+        grid-column:2 / -1;
+    }
+}

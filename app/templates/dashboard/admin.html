@@ -21,36 +21,10 @@
 
         {% include "dashboard/_recent_tasks.html" %}
 
-        {% include "dashboard/_today_snapshot.html" %}
-        <div class="table-card workload-card">
-
-            <div class="section-head">
-                <div>
-                    <h2>Team Workload</h2>
-                    <p>Active tasks assigned to each employee</p>
-                </div>
-            </div>
-
-            <div class="workload-list">
-
-                {% for member in workload %}
-                <div class="workload-row">
-                    <div>
-                        <h4>{{ member.name }}</h4>
-                        <p>{{ member.designation or "Team Member" }}</p>
-                    </div>
-
-                    <strong class="workload-hours">
-                        {{ member.remaining_hours }} hrs
-                    </strong>
-                </div>
-                {% else %}
-                <p class="empty-text">No active employees found.</p>
-                {% endfor %}
-
-            </div>
-
-        </div>
+        {# Same merged panel the super admin dashboard uses: live state,
+           current task and remaining load in one row per person, instead
+           of a workload list that showed only the hours. #}
+        {% include "dashboard/_team_panel.html" %}
 
         <div class="table-card" style="margin-top:18px;">
             <h2 style="font-size:18px; margin-bottom:10px;">My Permissions</h2>

@@ -31,6 +31,45 @@ def index():
     return redirect(url_for("auth.logout"))
 
 
+def build_team():
+    """One row per employee: live state, current task and remaining load.
+
+    The dashboard used to answer "who is doing what" three separate
+    times - Live Employees, Running Tasks and Team Workload - which on
+    a one-person team meant the same person rendered three times in
+    601px. build_live_employees() already carries the state and the
+    current task; the only thing it lacks is the remaining hours, which
+    build_workload() has. Joining them here keeps the template simple.
+    """
+    hours_by_employee = {
+        row["id"]: row["remaining_hours"]
+        for row in build_workload()
+    }
+
+    team = []
+
+    for employee in build_live_employees():
+        row = dict(employee)
+        row["remaining_hours"] = hours_by_employee.get(
+            employee["employee_id"],
+            0,
+        )
+        team.append(row)
+
+    # Whoever is actually working sorts first - that is the part of the
+    # list a manager is looking for.
+    state_order = {"working": 0, "paused": 1, "idle": 2}
+
+    team.sort(
+        key=lambda row: (
+            state_order.get(row["state"], 3),
+            row["employee_name"].lower(),
+        )
+    )
+
+    return team
+
+
 @dashboard_bp.route("/super-admin")
 @login_required
 def super_admin():
@@ -38,37 +77,29 @@ def super_admin():
     tasks = Task.query.all()
 
     stats = build_task_stats(tasks)
-    workload = build_workload()
-    company_health = build_company_health()
-    live_employees = build_live_employees()
-    running_tasks = build_running_tasks()
     recent_activities = build_recent_activities()
 
     overview = build_overview()
     today_snapshot = build_today_snapshot()
     status_chart = build_status_chart(stats)
     month_chart = build_month_chart()
-    overdue_tasks = build_overdue_tasks()
-    top_employees = build_top_employees()
-    top_clients = build_top_clients()
-    upcoming_events = build_upcoming_events()
 
+    team = build_team()
+
+    # build_company_health(), build_overdue_tasks(), build_top_employees()
+    # and build_top_clients() used to be computed here and handed to a
+    # template that referenced none of them - four sets of queries run on
+    # every dashboard load and thrown away. The overdue count the page
+    # actually needed was already in today_snapshot.
     return render_template(
         "dashboard/super_admin.html",
         stats=stats,
-        workload=workload,
-        company_health=company_health,
-        live_employees=live_employees,
-        running_tasks=running_tasks,
+        team=team,
         recent_activities=recent_activities,
         overview=overview,
         today_snapshot=today_snapshot,
         status_chart=status_chart,
         month_chart=month_chart,
-        overdue_tasks=overdue_tasks,
-        top_employees=top_employees,
-        top_clients=top_clients,
-        upcoming_events=upcoming_events
     )
 
 
@@ -84,17 +115,18 @@ def admin():
     tasks = Task.query.all()
 
     stats = build_task_stats(tasks)
-    workload = build_workload()
     overview = build_overview()
     today_snapshot = build_today_snapshot()
     status_chart = build_status_chart(stats)
     month_chart = build_month_chart()
 
+    team = build_team()
+
     return render_template(
         "dashboard/admin.html",
         user_permissions=user_permissions,
         stats=stats,
-        workload=workload,
+        team=team,
         overview=overview,
         today_snapshot=today_snapshot,
         status_chart=status_chart,
