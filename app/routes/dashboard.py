@@ -41,19 +41,30 @@ def build_team():
     current task; the only thing it lacks is the remaining hours, which
     build_workload() has. Joining them here keeps the template simple.
     """
-    hours_by_employee = {
-        row["id"]: row["remaining_hours"]
+    load_by_employee = {
+        row["id"]: row
         for row in build_workload()
+    }
+
+    empty_load = {
+        "remaining_hours": 0,
+        "active_tasks": 0,
+        "overdue_tasks": 0,
+        "in_review": 0,
+        "days": 0,
+        "level": "clear",
+        "load_percent": 0,
     }
 
     team = []
 
     for employee in build_live_employees():
         row = dict(employee)
-        row["remaining_hours"] = hours_by_employee.get(
-            employee["employee_id"],
-            0,
-        )
+        load = load_by_employee.get(employee["employee_id"], empty_load)
+
+        for key in empty_load:
+            row[key] = load[key]
+
         team.append(row)
 
     # Whoever is actually working sorts first - that is the part of the
@@ -264,16 +275,51 @@ def employee():
     )
 
 
-def build_workload():
+#: A working day, used to turn an hours figure into something a person
+#: can actually reason about. "12 hours" means little on its own;
+#: "about a day and a half" means something.
+WORKING_DAY_HOURS = 8
 
-    # On Hold is intentionally left out: the work is blocked by an
-    # external party, so it is not load the employee can act on.
-    # Void is excluded everywhere by definition.
-    active_statuses = [
+#: A full week is treated as a loaded plate - the point at which the
+#: bar is full and the label reads "overloaded".
+WORKLOAD_FULL_HOURS = WORKING_DAY_HOURS * 5
+
+
+def build_workload():
+    """Remaining work per employee, in terms they can act on.
+
+    The old figure was the sum of every estimate on an employee's
+    plate, which was misleading twice over.
+
+    It counted the whole estimate for a task that was nearly finished,
+    because it never looked at worked_seconds - so a task estimated at
+    8 hours with 7 already logged still reported 8 hours of load.
+
+    And it counted Core Review and Client Review, which are somebody
+    else's queue: once work is submitted the assignee cannot move it,
+    so it is not load they can burn down. On Hold was already excluded
+    for exactly that reason; review was left in by oversight.
+
+    So "8.0 hrs" could have meant eight hours of real work, or one
+    task that was 95% done, or one sitting with the client for a week.
+
+    This returns what is genuinely left to do, plus the context needed
+    to read it: how many tasks, how many are overdue, roughly how many
+    days it represents, and how heavy that is.
+    """
+
+    # What the assignee can still act on. Paused counts - they paused
+    # it and can resume it. On Hold and the review states do not:
+    # those are waiting on somebody else.
+    actionable_statuses = [
         task_status.ASSIGNED,
         task_status.IN_PROGRESS,
+        task_status.PAUSED,
+    ]
+
+    review_statuses = [
         task_status.CORE_REVIEW,
-        task_status.CLIENT_REVIEW
+        task_status.CLIENT_REVIEW,
     ]
 
     employees = User.query.filter(
@@ -281,26 +327,65 @@ def build_workload():
         User.status == "active"
     ).order_by(User.name.asc()).all()
 
+    now = datetime.utcnow()
     workload = []
 
     for employee in employees:
+
         tasks = Task.query.filter(
             Task.assigned_to_id == employee.id,
-            Task.status.in_(active_statuses)
+            Task.status.in_(actionable_statuses)
         ).all()
 
-        remaining_hours = 0
+        remaining_hours = 0.0
+        overdue_tasks = 0
 
         for task in tasks:
-            quantity = task.quantity or 1
-            estimated_time = task.estimated_time or 1
-            remaining_hours += quantity * estimated_time
+            estimated = (task.quantity or 1) * (task.estimated_time or 1)
+            worked = (task.worked_seconds or 0) / 3600
+
+            # An overrun is not negative work left; it is zero.
+            remaining_hours += max(0.0, estimated - worked)
+
+            if task.deadline and task.deadline < now:
+                overdue_tasks += 1
+
+        # Their work that is out of their hands, shown separately so
+        # the main figure stays "what you can pick up right now".
+        in_review = Task.query.filter(
+            Task.assigned_to_id == employee.id,
+            Task.status.in_(review_statuses)
+        ).count()
+
+        days = remaining_hours / WORKING_DAY_HOURS
+
+        if remaining_hours <= 0:
+            level = "clear"
+        elif days <= 1:
+            level = "light"
+        elif days <= 3:
+            level = "steady"
+        elif days <= 5:
+            level = "heavy"
+        else:
+            level = "over"
 
         workload.append({
             "id": employee.id,
             "name": employee.name,
             "designation": employee.designation,
-            "remaining_hours": round(remaining_hours, 2)
+            "remaining_hours": round(remaining_hours, 1),
+            "active_tasks": len(tasks),
+            "overdue_tasks": overdue_tasks,
+            "in_review": in_review,
+            "days": round(days, 1),
+            "level": level,
+            # Percentage of a full week, for the bar. Capped so an
+            # extreme outlier cannot overflow its track.
+            "load_percent": min(
+                100,
+                round(remaining_hours / WORKLOAD_FULL_HOURS * 100),
+            ),
         })
 
     workload.sort(

@@ -1,14 +1,17 @@
 {#
-    Who is doing what, once.
+    Who is doing what, and how loaded they are - once.
 
     This replaces three blocks that all answered the same question in
-    601px of stacked cards - Live Employees, Running Tasks and Team
-    Workload - and on a one-person team rendered that person three
-    times over. Running Tasks was a filtered copy of Live Employees;
-    Team Workload added only a remaining-hours figure, which the route
-    now joins on.
+    601px of stacked cards (Live Employees, Running Tasks, Team
+    Workload) and, on a one-person team, rendered that person three
+    times over.
 
-    Sorted working first: that is the part of the list a manager is
+    The load column is a bar rather than a bare number: it fills the
+    slack in the middle of the row that was otherwise dead space, and
+    it makes the figure comparable down the list at a glance, which
+    "8.0 hrs" on its own never was.
+
+    Sorted working first - that is the part of the list a manager is
     scanning for.
 #}
 <div class="table-card team-panel">
@@ -20,8 +23,7 @@
             {#
                 The rest of Today's Snapshot lives here rather than as
                 six mostly-zero tiles of its own. Attached to the team,
-                these read as facts about people; on their own they read
-                as filler.
+                these read as facts about people.
             #}
             <p class="team-summary">
                 {{ team|length }} employee{{ '' if team|length == 1 else 's' }}
@@ -39,39 +41,89 @@
     <div class="team-list">
 
         {% for member in team %}
-        <div class="team-row team-{{ member.state }}{% if member.over_estimate %} over-estimate{% endif %}">
+        <div class="team-row team-{{ member.state }}">
 
             <span class="team-state-dot"
                   title="{% if member.state == 'working' %}Timer running{% elif member.state == 'paused' %}Paused{% else %}No active task{% endif %}"></span>
 
-            <div class="team-person">
-                <strong>{{ member.employee_name }}</strong>
-                <span>{{ member.designation or "-" }}</span>
+            {#
+                Person and current task are one cluster, not two
+                columns. Split across the row they left ~800px of dead
+                middle whenever somebody was idle; together they read
+                as one identity and the row gets a single gutter,
+                like every other list in the app.
+            #}
+            <div class="team-who">
+
+                <div class="team-person">
+                    <strong>{{ member.employee_name }}</strong>
+                    <span class="team-role">{{ member.designation or "Team member" }}</span>
+                </div>
+
+                <div class="team-task">
+                    {% if member.task_id %}
+                    <a href="{{ url_for('tasks.task_detail', task_id=member.task_id) }}"
+                       title="{{ member.task_title }}">{{ member.task_title }}</a>
+                    <span class="team-sep">&middot;</span>
+                    <span>{{ member.client_name }}</span>
+                    {% if member.state == "working" %}
+                    <span class="team-sep">&middot;</span>
+                    <span class="team-live-time"
+                          data-live-seconds="{{ member.live_seconds }}">{{ member.live_time }}</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="team-task-idle">No active task</span>
+                    {% endif %}
+                </div>
+
             </div>
 
-            <div class="team-task">
-                {% if member.task_id %}
-                <a href="{{ url_for('tasks.task_detail', task_id=member.task_id) }}"
-                   title="{{ member.task_title }}">{{ member.task_title }}</a>
-                <span>{{ member.client_name }}</span>
-                {% else %}
-                <span class="team-task-idle">No active task</span>
-                {% endif %}
-            </div>
+            {#
+                Bar and figures are one block, right-aligned, so the row
+                has a single clean gutter after the task rather than
+                slack scattered between four separate columns. The bar
+                is scaled to a full working week for everyone, so the
+                rows are comparable instead of each being scaled to
+                itself.
+            #}
+            <div class="team-load"
+                 title="{{ member.remaining_hours }} hours of work left that {{ member.employee_name }} can act on now - about {{ member.days }} working day{{ '' if member.days == 1 else 's' }}. Excludes anything waiting on a reviewer or blocked on hold.">
 
-            {# Elapsed only means something while a timer is running.
-               data-live-seconds is what the ticker counts up from. #}
-            <div class="team-time" title="Time on the current task">
-                {% if member.state == "working" %}
-                <span class="team-live-time"
-                      data-live-seconds="{{ member.live_seconds }}">{{ member.live_time }}</span>
-                {% else %}
-                <span class="team-dash">&ndash;</span>
-                {% endif %}
-            </div>
+                <div class="team-load-figures">
+                    <strong>
+                        {% if member.remaining_hours %}
+                        {{ member.remaining_hours }}h left
+                        {% else %}
+                        Clear
+                        {% endif %}
+                    </strong>
 
-            <div class="team-load" title="Estimated hours still assigned to this person">
-                {{ member.remaining_hours }} hrs
+                    <span>
+                        {% if member.remaining_hours %}
+                        ~{{ member.days }} day{{ '' if member.days == 1 else 's' }}
+                        <span class="team-sep">&middot;</span>
+                        {% endif %}
+
+                        {{ member.active_tasks }} task{{ '' if member.active_tasks == 1 else 's' }}
+
+                        {% if member.in_review %}
+                        <span class="team-sep">&middot;</span>
+                        {{ member.in_review }} in review
+                        {% endif %}
+
+                        {% if member.overdue_tasks %}
+                        <span class="team-overdue">
+                            <span class="team-sep">&middot;</span>
+                            {{ member.overdue_tasks }} overdue
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="team-load-bar load-{{ member.level }}">
+                    <span style="width: {{ member.load_percent }}%"></span>
+                </div>
+
             </div>
 
         </div>

@@ -9578,14 +9578,14 @@ body.panel-mode .task-detail-right{
 
     /* Bounded, not proportional. With fr units on a 1350px card the
        name column stretched to ~500px for "Rishu Raj" and the row read
-       as scattered fragments rather than a table. The task column takes
-       whatever is left; the numeric columns are fixed so they line up
-       down the list. */
-    grid-template-columns:10px minmax(140px, 220px) minmax(0, 1fr) 96px 90px;
-    align-items:center;
-    gap:14px;
+       as scattered fragments. The load bar takes the slack in the
+       middle that was otherwise dead space. */
+    grid-template-columns: 10px minmax(0, 1fr) 220px;
 
-    padding:11px 4px;
+    align-items:center;
+    gap:16px;
+
+    padding:12px 4px;
     border-bottom:1px solid var(--color-border);
 }
 
@@ -9609,10 +9609,22 @@ body.panel-mode .task-detail-right{
     background:#fb923c;
 }
 
-.team-person{
+.team-who{
     display:flex;
     flex-direction:column;
+    gap:3px;
     min-width:0;
+}
+
+.team-person{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    min-width:0;
+}
+
+.team-role{
+    flex-shrink:0;
 }
 
 .team-person strong{
@@ -9631,8 +9643,11 @@ body.panel-mode .task-detail-right{
 
 .team-task{
     display:flex;
-    flex-direction:column;
+    align-items:baseline;
+    gap:6px;
     min-width:0;
+    overflow:hidden;
+    white-space:nowrap;
 }
 
 .team-task a{
@@ -9662,41 +9677,6 @@ body.panel-mode .task-detail-right{
     font-style:italic;
 }
 
-.team-time,
-.team-load{
-    font-size:12.5px;
-    font-weight:700;
-    color:var(--color-neutral);
-    font-variant-numeric:tabular-nums;
-    text-align:right;
-    white-space:nowrap;
-}
-
-.team-load{
-    min-width:62px;
-    color:var(--color-text-muted);
-}
-
-.team-dash{
-    color:var(--color-border-strong);
-}
-
-/* Over the estimate is worth seeing without reading the numbers. */
-.team-row.over-estimate .team-time{
-    color:var(--color-danger);
-}
-
-@media(max-width:700px){
-
-    .team-row{
-        grid-template-columns:10px 1fr auto;
-        row-gap:4px;
-    }
-
-    .team-task{
-        grid-column:2 / -1;
-    }
-}
 
 
 /* Permissions on the admin dashboard: reference, not a headline.
@@ -9727,4 +9707,103 @@ body.panel-mode .task-detail-right{
 
 .permissions-strip .empty-text{
     margin:0;
+}
+
+
+/* ---- Team load bar ----
+   "8.0 hrs" told you nothing on its own: no sense of whether that is
+   a morning or a fortnight, and nothing to compare against the person
+   below. The bar is scaled to a full working week for everyone, so
+   the rows are comparable, and it fills the horizontal gap in the
+   middle of the row instead of leaving it empty. */
+.team-load{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:7px;
+}
+
+.team-load-bar{
+    width:100%;
+    height:6px;
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    overflow:hidden;
+}
+
+.team-load-bar span{
+    display:block;
+    height:100%;
+    border-radius:999px;
+    background:var(--color-primary);
+}
+
+.team-load-bar.load-clear span{
+    background:var(--color-border-strong);
+}
+
+.team-load-bar.load-light span{
+    background:var(--color-success);
+}
+
+.team-load-bar.load-steady span{
+    background:var(--color-primary);
+}
+
+.team-load-bar.load-heavy span{
+    background:#f59e0b;
+}
+
+.team-load-bar.load-over span{
+    background:var(--color-danger);
+}
+
+.team-load-figures{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    text-align:right;
+    white-space:nowrap;
+}
+
+.team-load-figures strong{
+    font-size:13px;
+    font-weight:700;
+    color:var(--color-neutral);
+    font-variant-numeric:tabular-nums;
+}
+
+.team-load-figures > span{
+    font-size:11.5px;
+    color:var(--color-text-muted);
+    font-variant-numeric:tabular-nums;
+}
+
+.team-sep{
+    color:var(--color-border-strong);
+}
+
+.team-overdue{
+    color:var(--color-danger);
+    font-weight:700;
+}
+
+.team-live-time{
+    font-variant-numeric:tabular-nums;
+}
+
+@media(max-width:1000px){
+
+    .team-row{
+        grid-template-columns:10px minmax(0, 1fr) auto;
+        row-gap:8px;
+    }
+
+    .team-task{
+        grid-column:2 / -1;
+    }
+
+    .team-load-bar{
+        grid-column:2 / 3;
+    }
 }
