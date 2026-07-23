@@ -11470,3 +11470,50 @@ body.ds-screen .empty-state strong{
 body.ds-screen .empty-state p{
     font-size:var(--ds-font-13);
 }
+
+/* ---- Notes (notes/editor.html) ---- */
+
+body.ds-screen .notes-editor-shell{
+    border-radius:var(--ds-radius-md);
+    border-color:var(--ds-border);
+    box-shadow:none;
+}
+
+body.ds-screen .save-status{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-medium);
+}
+
+body.ds-screen .note-title-input{
+    border-bottom-color:var(--ds-border);
+    font-size:var(--ds-font-18);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .note-title-input:focus{
+    border-color:var(--ds-accent);
+    box-shadow:none;
+}
+
+body.ds-screen .ql-toolbar.ql-snow{
+    border-color:var(--ds-border) !important;
+    border-radius:var(--ds-radius-md) var(--ds-radius-md) 0 0 !important;
+    background:var(--ds-surface-sunken);
+}
+
+body.ds-screen .ql-container.ql-snow{
+    border-color:var(--ds-border) !important;
+    border-radius:0 0 var(--ds-radius-md) var(--ds-radius-md) !important;
+    font-family:inherit;
+}
+
+body.ds-screen .ql-editor{
+    font-size:var(--ds-font-14);
+    color:var(--ds-text);
+}
+
+body.ds-screen .ql-editor.ql-blank::before{
+    color:var(--ds-text-muted);
+}
