@@ -11855,3 +11855,48 @@ body.ds-screen .btn-danger:hover{
     background:var(--ds-danger);
     opacity:.9;
 }
+
+/* ---- Add task form (tasks/add.html, tasks/self_assign.html) ----
+   Both panel-aware: rendered full-page (extends base_app.html) or
+   inside the task drawer iframe (extends base_panel.html). In panel
+   mode, body_class must keep "panel-mode" (base_panel.html's own
+   layout hook for .main-panel) alongside "ds-screen" - see the
+   templates' body_class block. */
+
+body.ds-screen .form-help-text{
+    font-size:var(--ds-font-12);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen input[type="file"]{
+    background:var(--ds-surface-sunken);
+}
+
+body.ds-screen input[type="file"]::file-selector-button{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface);
+    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen input[type="file"]::file-selector-button:hover{
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .selected-reference-files{
+    display:flex;
+    flex-direction:column;
+    gap:var(--ds-space-2);
+    margin-top:var(--ds-space-2);
+}
+
+body.ds-screen .selected-reference-file{
+    padding:var(--ds-space-2) var(--ds-space-3);
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface-sunken);
+    color:var(--ds-text-secondary);
+    font-size:var(--ds-font-12);
+}
