@@ -11588,3 +11588,94 @@ body.ds-screen .visibility-chip button{
     background:var(--ds-text-muted);
     color:var(--ds-text-inverse);
 }
+
+/* ---- Filtered task lists (tasks/filtered.html) ---- */
+
+body.ds-screen .filtered-back-btn{
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface);
+    border-color:var(--ds-border);
+    color:var(--ds-text-secondary);
+    font-weight:var(--ds-weight-semibold);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .filtered-back-btn:hover{
+    background:var(--ds-surface-hover);
+}
+
+body.ds-screen .filtered-task-card{
+    padding:var(--ds-space-5);
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius-md);
+    background:var(--ds-surface);
+}
+
+body.ds-screen .filtered-table-wrap{
+    border:1px solid var(--ds-border);
+    border-radius:var(--ds-radius-md);
+    overflow:hidden;
+}
+
+body.ds-screen .filtered-table-wrap table{
+    border:none;
+}
+
+body.ds-screen .reset-btn{
+    color:var(--ds-accent-text);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .filtered-count{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+    margin-top:var(--ds-space-3);
+}
+
+body.ds-screen .empty-table-text{
+    text-align:center;
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .task-search-suggestions{
+    background:var(--ds-surface);
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+    box-shadow:none;
+}
+
+body.ds-screen .task-suggestion-item{
+    color:var(--ds-text);
+    border-bottom-color:var(--ds-border);
+}
+
+body.ds-screen .task-suggestion-item:hover,
+body.ds-screen .task-suggestion-item.active{
+    background:var(--ds-surface-sunken);
+}
+
+body.ds-screen .task-suggestion-code{
+    border-radius:var(--ds-radius-sm);
+    background:var(--ds-accent-soft);
+    border-color:var(--ds-accent-border);
+    color:var(--ds-accent-text);
+    font-size:var(--ds-font-12);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .task-suggestion-item strong{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text);
+}
+
+body.ds-screen .task-suggestion-item small{
+    font-size:var(--ds-font-12);
+    color:var(--ds-text-muted);
+}
+
+body.ds-screen .task-suggestion-empty{
+    font-size:var(--ds-font-13);
+    color:var(--ds-text-muted);
+}
