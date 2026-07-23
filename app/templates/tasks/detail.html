@@ -1898,10 +1898,50 @@ Submission Files
                             return;
                         }
 
+                        /*
+                            Every failure here used to collapse into
+                            "Part upload failed." and then into a toast
+                            saying to check your connection, which is
+                            wrong for the two ways this actually breaks
+                            and left nothing to diagnose from.
+                        */
                         if (xhr.status >= 200 && xhr.status < 300) {
-                            resolve(xhr.getResponseHeader("ETag"));
+
+                            const etag = xhr.getResponseHeader("ETag");
+
+                            /*
+                                The part uploaded, but the browser cannot
+                                read the ETag unless the bucket's CORS
+                                policy lists it in ExposeHeaders. Without
+                                it the completion call sends null ETags
+                                and storage rejects the whole upload -
+                                which looked like a random failure at the
+                                very end of a long upload.
+                            */
+                            if (!etag) {
+                                reject(new Error(
+                                    "Storage accepted the file but did not expose an ETag. " +
+                                    "The bucket's CORS policy needs \"ExposeHeaders\": [\"ETag\"]."
+                                ));
+                                return;
+                            }
+
+                            resolve(etag);
+
+                        } else if (xhr.status === 0) {
+
+                            // Status 0 is the browser refusing to hand the
+                            // response over - almost always CORS, not the
+                            // network.
+                            reject(new Error(
+                                "The browser could not reach storage. This is usually the " +
+                                "bucket's CORS policy not allowing PUT from this site."
+                            ));
+
                         } else {
-                            reject(new Error("Part upload failed."));
+                            reject(new Error(
+                                "Storage rejected the upload (HTTP " + xhr.status + ")."
+                            ));
                         }
 
                     };
@@ -2076,7 +2116,7 @@ Submission Files
 
                 } catch (error) {
 
-                    console.log(error);
+                    console.error("Submission upload failed:", error);
 
                     popup.classList.remove("show");
                     uploadBtn.disabled = false;
@@ -2086,7 +2126,15 @@ Submission Files
                     currentController = null;
 
                     if (!wasCancelled) {
-                        showToast("Upload failed. Check your connection and try again.", "error");
+                        // Show what actually went wrong. The blanket
+                        // "check your connection" was misleading for
+                        // every cause except an actual dropped network.
+                        showToast(
+                            error && error.message
+                                ? error.message
+                                : "Upload failed. Please try again.",
+                            "error"
+                        );
                     }
 
                 }
