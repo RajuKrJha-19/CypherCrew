@@ -11188,3 +11188,106 @@ body.ds-screen .report-count-badge.progress{
     background:var(--ds-accent-soft);
     color:var(--ds-accent-text);
 }
+
+/* ---- Reports card/panel shell (shared by add.html and view.html) ---- */
+
+body.ds-screen .report-summary-grid,
+body.ds-screen .report-kpi-grid{
+    gap:var(--ds-space-3);
+}
+
+body.ds-screen .report-mini-card,
+body.ds-screen .report-section,
+body.ds-screen .report-profile-card,
+body.ds-screen .report-kpi-card,
+body.ds-screen .report-panel{
+    box-shadow:none;
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius-md);
+}
+
+/* ---- Reports (reports/add.html) ---- */
+
+body.ds-screen .report-mini-card span{
+    color:var(--ds-text-muted);
+    font-weight:var(--ds-weight-semibold);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .report-mini-card strong{
+    font-size:var(--ds-font-20);
+    color:var(--ds-text);
+}
+
+body.ds-screen .report-mini-card small{
+    color:var(--ds-text-muted);
+    font-weight:var(--ds-weight-medium);
+}
+
+body.ds-screen .report-section-head h2{
+    font-size:var(--ds-font-15);
+    font-weight:var(--ds-weight-semibold);
+    color:var(--ds-text);
+}
+
+body.ds-screen .report-section-head h2 b{
+    color:var(--ds-danger);
+}
+
+body.ds-screen .report-section-head p{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-12);
+}
+
+body.ds-screen .report-task-item{
+    border-color:var(--ds-border);
+    border-radius:var(--ds-radius);
+    background:var(--ds-surface);
+}
+
+body.ds-screen .report-task-item span{
+    color:var(--ds-accent-text);
+    font-weight:var(--ds-weight-semibold);
+}
+
+body.ds-screen .report-task-item strong{
+    color:var(--ds-text);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .report-task-item em{
+    color:var(--ds-text-muted);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .report-task-item:hover{
+    background:var(--ds-accent-soft);
+    border-color:var(--ds-accent-border);
+}
+
+body.ds-screen .report-empty{
+    background:var(--ds-surface-sunken);
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    color:var(--ds-text-muted);
+    font-weight:var(--ds-weight-medium);
+}
+
+body.ds-screen .report-section textarea,
+body.ds-screen .report-section input{
+    border-color:var(--ds-border-strong);
+    border-radius:var(--ds-radius);
+    font-size:var(--ds-font-13);
+}
+
+body.ds-screen .report-submit-btn{
+    border-radius:var(--ds-radius);
+    background:var(--ds-accent);
+    font-size:var(--ds-font-13);
+    font-weight:var(--ds-weight-semibold);
+    box-shadow:none;
+}
+
+body.ds-screen .report-submit-btn:hover{
+    background:var(--ds-accent-hover);
+}
