@@ -12,12 +12,6 @@
 
 {% set p = period %}
 
-{#
-    Anchored so a period change scrolls back to this section instead of
-    the top of the page. Turbo honours the URL fragment on the preset
-    links and the custom form's action, so the Performance band stays
-    under the cursor when the window is switched.
-#}
 <section class="activity-band" id="perf">
 
     <div class="activity-head">
@@ -28,16 +22,16 @@
 
         <div class="period-toggle" role="group" aria-label="Select time period">
 
-            <a href="{{ url_for(request.endpoint, period='today') }}#perf"
+            <a href="{{ url_for(request.endpoint, period='today') }}"
                class="period-opt {% if p.key == 'today' %}is-active{% endif %}">Today</a>
 
-            <a href="{{ url_for(request.endpoint, period='yesterday') }}#perf"
+            <a href="{{ url_for(request.endpoint, period='yesterday') }}"
                class="period-opt {% if p.key == 'yesterday' %}is-active{% endif %}">Yesterday</a>
 
-            <a href="{{ url_for(request.endpoint, period='7d') }}#perf"
+            <a href="{{ url_for(request.endpoint, period='7d') }}"
                class="period-opt {% if p.key == '7d' %}is-active{% endif %}">7 days</a>
 
-            <a href="{{ url_for(request.endpoint, period='30d') }}#perf"
+            <a href="{{ url_for(request.endpoint, period='30d') }}"
                class="period-opt {% if p.key == '30d' %}is-active{% endif %}">30 days</a>
 
             <details class="period-custom" {% if p.key == 'custom' %}open{% endif %}>
@@ -46,7 +40,7 @@
                     {% if p.key == 'custom' %}{{ p.label }}{% else %}Custom{% endif %}
                 </summary>
 
-                <form method="get" action="{{ url_for(request.endpoint) }}#perf" class="period-custom-pop">
+                <form method="get" action="{{ url_for(request.endpoint) }}" class="period-custom-pop">
                     <input type="hidden" name="period" value="custom">
 
                     <label>
@@ -111,3 +105,61 @@
     </div>
 
 </section>
+
+<script>
+    /*
+        Switching the period reloads the dashboard (the server resolves
+        the window), and Turbo would scroll the fresh page to the top. The
+        picker lives well down the page, so that reads as the whole view
+        jumping up. Instead we remember the exact scroll position the
+        moment a period control is used and put it back once the new page
+        has rendered - so clicking a period leaves the page exactly where
+        it was.
+
+        Bound once at document level (survives Turbo swaps); the capture
+        phase runs before Turbo intercepts the click/submit, and the final
+        rAF re-applies the position after Turbo's own scroll-to-top.
+    */
+    (function () {
+        if (window.__perfScrollBound) return;
+        window.__perfScrollBound = true;
+
+        var KEY = "cypher_perf_scroll";
+
+        function remember() {
+            try { sessionStorage.setItem(KEY, String(window.scrollY)); } catch (e) {}
+        }
+
+        document.addEventListener("click", function (event) {
+            if (event.target.closest(".period-toggle a")) remember();
+        }, true);
+
+        document.addEventListener("submit", function (event) {
+            if (event.target.closest && event.target.closest(".period-custom-pop")) remember();
+        }, true);
+
+        function restore() {
+            var y;
+            try { y = sessionStorage.getItem(KEY); } catch (e) { return; }
+            if (y === null || y === undefined) return;
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+
+            var top = parseInt(y, 10) || 0;
+            window.scrollTo(0, top);
+            // Re-apply after Turbo's post-render scroll lands this frame.
+            window.requestAnimationFrame(function () {
+                window.scrollTo(0, top);
+                window.requestAnimationFrame(function () { window.scrollTo(0, top); });
+            });
+        }
+
+        document.addEventListener("turbo:load", restore);
+        if (!window.Turbo) {
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", restore);
+            } else {
+                restore();
+            }
+        }
+    })();
+</script>

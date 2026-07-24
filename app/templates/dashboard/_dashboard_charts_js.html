@@ -9,20 +9,19 @@
     off the end of the array. Exactly the failure mode task_status.py
     was written to stop, one layer up.
 #}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <script>
-        // Wrapped in a named IIFE so its top-level declarations are
-        // function-scoped (this re-runs on each client-side dashboard
-        // visit). It also waits for Chart.js: under Turbo the CDN
-        // <script> loads asynchronously, so on the first client-rendered
-        // visit this code can run before `Chart` exists - which left the
-        // Throughput and Tasks-by-Status charts blank until a refresh.
-        (function initDashboardCharts() {
-        if (typeof Chart === "undefined") {
-            window.setTimeout(initDashboardCharts, 40);
-            return;
-        }
+        /*
+            Chart.js is loaded ONCE per tab and then reused. It used to be
+            pulled in through a static <script src> in this body partial,
+            which Turbo re-executes on every navigation - and that async
+            reload raced the drawing code below: the fresh Chart.js replaced
+            the global mid-draw and orphaned both charts, so they went blank
+            after any period change (fine on a hard refresh, blank on an
+            in-app period switch). Now the library is loaded a single time,
+            the global is kept, and every later visit draws immediately.
+        */
+        (function () {
+        function drawDashboardCharts() {
         const statusLabels = {{ status_chart["labels"]| tojson }};
         const statusValues = {{ status_chart["values"]| tojson }};
         const statusTotal = statusValues.reduce((a, b) => a + b, 0);
@@ -256,6 +255,28 @@
                 }
             });
             if (window.App) window.App.trackChart(activityChart);
+        }
+        }
+
+        // Draw now if Chart.js is already here (every visit after the
+        // first); otherwise load it a single time and draw on load. The
+        // __chartjsLoading flag makes a rapid second visit wait for the
+        // in-flight load instead of starting another.
+        if (window.Chart) {
+            drawDashboardCharts();
+        } else if (window.__chartjsLoading) {
+            var chartWait = window.setInterval(function () {
+                if (window.Chart) {
+                    window.clearInterval(chartWait);
+                    drawDashboardCharts();
+                }
+            }, 40);
+        } else {
+            window.__chartjsLoading = true;
+            var chartScript = document.createElement("script");
+            chartScript.src = "https://cdn.jsdelivr.net/npm/chart.js";
+            chartScript.onload = drawDashboardCharts;
+            document.head.appendChild(chartScript);
         }
         })();
     </script>
