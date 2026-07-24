@@ -20,11 +20,15 @@ from flask import current_app, render_template
 
 def _config():
     c = current_app.config
+    # Gmail shows App Passwords grouped as "xxxx xxxx xxxx xxxx"; people
+    # paste them with the spaces, but the real secret has none. Strip
+    # whitespace so a copy-pasted app password just works.
+    password = (c.get("MAIL_PASSWORD") or "").replace(" ", "")
     return {
         "host": c.get("MAIL_SERVER"),
         "port": int(c.get("MAIL_PORT") or 587),
         "username": c.get("MAIL_USERNAME"),
-        "password": c.get("MAIL_PASSWORD"),
+        "password": password,
         "sender": c.get("MAIL_DEFAULT_SENDER") or c.get("MAIL_USERNAME"),
         "use_tls": bool(c.get("MAIL_USE_TLS", True)),
     }
