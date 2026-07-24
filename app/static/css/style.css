@@ -11511,6 +11511,10 @@ a.queue-title:hover { color: var(--color-primary); }
     display:grid;
     grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
     gap:20px;
+    /* Matches the 20px rhythm between every other dashboard section.
+       The team panel above has no bottom margin, so without this the
+       Recent Tasks / Recent Activity row sat flush against it. */
+    margin-top:20px;
     margin-bottom:20px;
     align-items:start;
 }
