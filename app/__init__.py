@@ -44,6 +44,7 @@ def create_app():
     from app.routes.leaves import leaves_bp
     from app.routes.gallery import gallery_bp
     from app.routes.search import search_bp
+    from app.routes.profile import profile_bp
 
 
     app.register_blueprint(auth_bp)
@@ -61,6 +62,7 @@ def create_app():
     app.register_blueprint(leaves_bp)
     app.register_blueprint(gallery_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(profile_bp)
 
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
@@ -68,6 +70,7 @@ def create_app():
 
     from app.utils.permissions import has_permission
     from app.utils.greeting import greet, today_label
+    from app.utils.avatars import avatar_url
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
@@ -75,6 +78,9 @@ def create_app():
         # route, so all three headers greet the same way.
         greet=greet,
         today_label=today_label,
+        # Presigned avatar URL (or None -> initials) for any user, so the
+        # top bar, cards and profile pages render pictures the same way.
+        avatar_url=avatar_url,
     )
 
     app.jinja_env.filters["linkify"] = linkify_text

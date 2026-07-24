@@ -5,6 +5,7 @@
     sidebar and muscle memory.
 #}
 {% set display_name = current_user.name or current_user.email or "User" %}
+{% set my_avatar = avatar_url(current_user) %}
 
 <div class="account-menu" id="accountMenu">
 
@@ -13,7 +14,9 @@
             id="accountTrigger"
             aria-haspopup="true"
             aria-expanded="false">
-        <span class="account-avatar">{{ display_name[0]|upper }}</span>
+        <span class="account-avatar">
+            {% if my_avatar %}<img src="{{ my_avatar }}" alt="{{ display_name }}">{% else %}{{ current_user.initials }}{% endif %}
+        </span>
         <span class="account-meta">
             <span class="account-name">{{ display_name }}</span>
             <span class="account-role">{{ current_user.role.replace('_', ' ')|title }}</span>
@@ -24,12 +27,18 @@
     <div class="account-dropdown" id="accountDropdown" hidden>
 
         <div class="account-dropdown-head">
-            <span class="account-avatar account-avatar-lg">{{ display_name[0]|upper }}</span>
+            <span class="account-avatar account-avatar-lg">
+                {% if my_avatar %}<img src="{{ my_avatar }}" alt="{{ display_name }}">{% else %}{{ current_user.initials }}{% endif %}
+            </span>
             <div class="account-dropdown-id">
                 <span class="account-name">{{ display_name }}</span>
                 <span class="account-email">{{ current_user.email }}</span>
             </div>
         </div>
+
+        <a href="{{ url_for('profile.my_profile') }}" class="account-item">
+            <i class="fa-solid fa-user"></i> My Profile
+        </a>
 
         <a href="{{ url_for('dashboard.index') }}" class="account-item">
             <i class="fa-solid fa-house"></i> Dashboard

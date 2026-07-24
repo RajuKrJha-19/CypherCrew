@@ -76,7 +76,11 @@
                         {% for user in users %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('users.user_performance', user_id=user.id) }}" class="table-link">
+                                {% set row_avatar = avatar_url(user) %}
+                                <a href="{{ url_for('users.user_detail', user_id=user.id) }}" class="table-link user-name-cell">
+                                    <span class="user-row-avatar">
+                                        {% if row_avatar %}<img src="{{ row_avatar }}" alt="">{% else %}{{ user.initials }}{% endif %}
+                                    </span>
                                     {{ user.name }}
                                 </a>
                             </td>

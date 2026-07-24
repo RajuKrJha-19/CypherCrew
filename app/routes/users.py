@@ -86,6 +86,25 @@ def list_users():
     )
 
 
+@users_bp.route("/<int:user_id>")
+@login_required
+def user_detail(user_id):
+    """Read-only profile of any user. Your own profile is always viewable
+    (employees reach it via the account menu); viewing someone else's needs
+    user-management rights."""
+
+    if user_id != current_user.id and not can_manage_users():
+        return redirect(url_for("profile.my_profile"))
+
+    user = User.query.get_or_404(user_id)
+
+    return render_template(
+        "users/profile.html",
+        user=user,
+        is_self=(user.id == current_user.id),
+    )
+
+
 @users_bp.route("/<int:user_id>/performance")
 @login_required
 def user_performance(user_id):

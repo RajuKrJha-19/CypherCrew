@@ -1,0 +1,118 @@
+{% extends "base_app.html" %}
+
+{% block title %}Edit Profile | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% block content %}
+{% set av = avatar_url(user) %}
+
+<div class="page-header">
+    <div>
+        <h1>Edit Profile</h1>
+        <p>Update your information and profile picture</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('profile.my_profile') }}" class="btn btn-secondary">← Back to Profile</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+{# Picture is its own multipart form so it uploads independently of the
+   text fields (a large image shouldn't hold up saving a phone number). #}
+<section class="profile-card profile-avatar-card">
+    <div class="profile-avatar-xl">
+        {% if av %}
+        <img src="{{ av }}" alt="{{ user.name }}">
+        {% else %}
+        <span>{{ user.initials }}</span>
+        {% endif %}
+    </div>
+
+    <div class="profile-avatar-actions">
+        <h3>Profile Picture</h3>
+        <p class="profile-empty">PNG, JPG, GIF or WEBP · up to 5&nbsp;MB</p>
+
+        <form method="POST"
+              action="{{ url_for('profile.upload_avatar') }}"
+              enctype="multipart/form-data"
+              class="avatar-upload-form">
+            <input type="file" name="avatar" id="avatarInput" accept="image/png,image/jpeg,image/gif,image/webp" required>
+            <button type="submit" class="btn">
+                <i class="fa-solid fa-upload"></i> Upload
+            </button>
+        </form>
+
+        {% if user.avatar_key %}
+        <form method="POST"
+              action="{{ url_for('profile.remove_avatar') }}"
+              onsubmit="return confirm('Remove your profile picture?')">
+            <button type="submit" class="btn-ghost profile-remove-btn">
+                <i class="fa-solid fa-trash-can"></i> Remove picture
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</section>
+
+<section class="form-card">
+    <form method="POST" action="{{ url_for('profile.edit_profile') }}" class="profile-form">
+
+        <div class="profile-form-grid">
+            <div class="profile-field-edit">
+                <label for="pfName">Full Name <span class="req">*</span></label>
+                <input type="text" id="pfName" name="name" value="{{ user.name }}" required>
+            </div>
+
+            <div class="profile-field-edit">
+                <label for="pfPhone">Phone</label>
+                <input type="text" id="pfPhone" name="phone" value="{{ user.phone or '' }}" placeholder="e.g. +91 98765 43210">
+            </div>
+
+            <div class="profile-field-edit">
+                <label for="pfDesignation">Designation</label>
+                <input type="text" id="pfDesignation" name="designation" value="{{ user.designation or '' }}" placeholder="e.g. Video Editor">
+            </div>
+
+            <div class="profile-field-edit">
+                <label for="pfDepartment">Department</label>
+                <input type="text" id="pfDepartment" name="department" value="{{ user.department or '' }}" placeholder="e.g. Creative">
+            </div>
+
+            <div class="profile-field-edit">
+                <label for="pfLocation">Location</label>
+                <input type="text" id="pfLocation" name="location" value="{{ user.location or '' }}" placeholder="e.g. Mumbai, India">
+            </div>
+
+            <div class="profile-field-edit">
+                <label for="pfDob">Date of Birth</label>
+                <input type="date" id="pfDob" name="date_of_birth"
+                       value="{{ user.date_of_birth.strftime('%Y-%m-%d') if user.date_of_birth else '' }}">
+            </div>
+        </div>
+
+        <div class="profile-field-edit">
+            <label for="pfBio">Bio</label>
+            <textarea id="pfBio" name="bio" rows="3" maxlength="500"
+                      placeholder="A short line about you (max 500 characters)">{{ user.bio or '' }}</textarea>
+        </div>
+
+        <p class="profile-readonly-note">
+            <i class="fa-solid fa-lock"></i>
+            Your email (<strong>{{ user.email }}</strong>) and role
+            (<strong>{{ user.role.replace("_", " ")|title }}</strong>) are managed by an administrator.
+        </p>
+
+        <button type="submit" class="btn">
+            <i class="fa-solid fa-check"></i> Save Changes
+        </button>
+    </form>
+</section>
+{% endblock %}

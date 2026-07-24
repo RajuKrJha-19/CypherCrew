@@ -1,0 +1,140 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ user.name }} · Profile | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{#
+    One template serves two entries: the owner's "My Profile" (with an
+    Edit action) and a manager viewing someone else's profile (read-only,
+    plus a Manage/Performance link). is_self decides which affordances show.
+#}
+{% block content %}
+{% set av = avatar_url(user) %}
+
+<div class="page-header">
+    <div>
+        <h1>{% if is_self %}My Profile{% else %}{{ user.name }}{% endif %}</h1>
+        <p>
+            {% if is_self %}Your personal and work information{% else %}Team member profile{% endif %}
+        </p>
+    </div>
+
+    <div class="top-actions">
+        {% if is_self %}
+        <a href="{{ url_for('profile.edit_profile') }}" class="btn">
+            <i class="fa-solid fa-pen"></i> Edit Profile
+        </a>
+        {% elif has_permission(current_user, "manage_users") %}
+        <a href="{{ url_for('users.edit_user', user_id=user.id) }}" class="btn btn-secondary">
+            <i class="fa-solid fa-user-gear"></i> Manage
+        </a>
+        {% endif %}
+        <a href="{{ url_for('users.user_performance', user_id=user.id) }}" class="btn btn-secondary">
+            <i class="fa-solid fa-chart-line"></i> Performance
+        </a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<section class="profile-hero">
+    <div class="profile-avatar-xl">
+        {% if av %}
+        <img src="{{ av }}" alt="{{ user.name }}">
+        {% else %}
+        <span>{{ user.initials }}</span>
+        {% endif %}
+    </div>
+
+    <div class="profile-hero-info">
+        <h2>{{ user.name }}</h2>
+        <p class="profile-hero-sub">
+            {{ user.designation or "Team Member" }}
+            <span class="profile-role-badge role-{{ user.role }}">
+                {{ user.role.replace("_", " ")|title }}
+            </span>
+        </p>
+        <div class="profile-hero-meta">
+            {% if user.department %}
+            <span><i class="fa-solid fa-building"></i> {{ user.department }}</span>
+            {% endif %}
+            {% if user.location %}
+            <span><i class="fa-solid fa-location-dot"></i> {{ user.location }}</span>
+            {% endif %}
+            <span><i class="fa-solid fa-calendar-day"></i>
+                Joined {{ user.created_at.strftime("%b %Y") if user.created_at else "—" }}
+            </span>
+        </div>
+    </div>
+</section>
+
+<div class="profile-grid">
+
+    <div class="profile-card profile-card-wide">
+        <h3>About</h3>
+        {% if user.bio %}
+        <p class="profile-bio">{{ user.bio }}</p>
+        {% else %}
+        <p class="profile-empty">
+            {% if is_self %}Add a short bio from Edit Profile.{% else %}No bio added yet.{% endif %}
+        </p>
+        {% endif %}
+    </div>
+
+    <div class="profile-card">
+        <h3>Contact</h3>
+        <div class="profile-field">
+            <span>Email</span>
+            <strong><a href="mailto:{{ user.email }}">{{ user.email }}</a></strong>
+        </div>
+        <div class="profile-field">
+            <span>Phone</span>
+            <strong>{{ user.phone or "—" }}</strong>
+        </div>
+        <div class="profile-field">
+            <span>Location</span>
+            <strong>{{ user.location or "—" }}</strong>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <h3>Work</h3>
+        <div class="profile-field">
+            <span>Role</span>
+            <strong>{{ user.role.replace("_", " ")|title }}</strong>
+        </div>
+        <div class="profile-field">
+            <span>Designation</span>
+            <strong>{{ user.designation or "—" }}</strong>
+        </div>
+        <div class="profile-field">
+            <span>Department</span>
+            <strong>{{ user.department or "—" }}</strong>
+        </div>
+        <div class="profile-field">
+            <span>Status</span>
+            <strong><span class="badge {{ user.status }}">{{ user.status|title }}</span></strong>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <h3>Personal</h3>
+        <div class="profile-field">
+            <span>Date of Birth</span>
+            <strong>{{ user.date_of_birth.strftime("%d %b %Y") if user.date_of_birth else "—" }}</strong>
+        </div>
+        <div class="profile-field">
+            <span>Member Since</span>
+            <strong>{{ user.created_at.strftime("%d %b %Y") if user.created_at else "—" }}</strong>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
