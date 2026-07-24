@@ -2003,6 +2003,9 @@ input[type="file"]::file-selector-button:hover{
    board keeps its own fixed .filter-bar grid. */
 .filter-bar-flow{
     display:flex;
+    /* Explicit row: these bars are <form>s, and the base form{} rule
+       lays forms out as a column - without this the controls stack. */
+    flex-direction:row;
     flex-wrap:wrap;
     align-items:center;
     gap:10px;
@@ -4801,6 +4804,9 @@ grid-template-columns:repeat(2,1fr);
     right: 0;
     z-index: 30;
     display: flex;
+    /* Explicit row: it's a <form>, so the base form{} column layout
+       would otherwise stack From / To / Apply vertically. */
+    flex-direction: row;
     align-items: flex-end;
     gap: 10px;
     padding: 14px;
@@ -7312,7 +7318,10 @@ body.sidebar-collapsed .task-page-sticky-header{
     border-color:var(--color-danger);
 }
 
-.review-reject-form-new{
+/* Scoped under .review-actions-new so this beats the
+   `.review-actions-new form { display:block }` rule above - otherwise the
+   reason box shows on load instead of only after "Send back" is clicked. */
+.review-actions-new .review-reject-form-new{
     display:none;
     grid-column:1 / -1;
     margin-top:4px;
@@ -7322,7 +7331,7 @@ body.sidebar-collapsed .task-page-sticky-header{
     border-radius:var(--radius-md);
 }
 
-.review-reject-form-new.show{ display:block; }
+.review-actions-new .review-reject-form-new.show{ display:block; }
 
 .review-reject-label{
     display:block;
@@ -11257,6 +11266,9 @@ a.queue-title:hover { color: var(--color-primary); }
 /* --- Full results page --- */
 .search-page-box {
     display: flex;
+    /* Explicit row: it's a <form>, and the base form{} rule would
+       otherwise stack the icon, input and button vertically. */
+    flex-direction: row;
     align-items: center;
     gap: 10px;
     max-width: 720px;
@@ -12362,6 +12374,25 @@ body.ds-screen .mini-action:hover{
     background:var(--ds-accent-hover);
 }
 
+/* The rule above paints every ds-screen submit button indigo, which
+   caught the review Approve and "Send back to employee" confirm (both
+   type=submit). Re-assert their colours with a review-scoped selector
+   that outranks it: Approve = green, confirm = danger. */
+body.ds-screen .review-actions-new .review-approve-btn,
+body.ds-screen .review-actions-new .review-approve-btn:hover{
+    background:var(--color-success);
+    color:#fff;
+    height:38px;
+}
+body.ds-screen .review-actions-new .review-approve-btn:hover{ filter:brightness(.95); }
+
+body.ds-screen .review-actions-new .review-reject-confirm,
+body.ds-screen .review-actions-new .review-reject-confirm:hover{
+    background:var(--color-danger);
+    color:#fff;
+}
+body.ds-screen .review-actions-new .review-reject-confirm:hover{ filter:brightness(.95); }
+
 body.ds-screen .btn-secondary,
 body.ds-screen .view-switch-btn{
     background:var(--ds-surface);
@@ -12371,6 +12402,19 @@ body.ds-screen .view-switch-btn{
 
 body.ds-screen .btn-secondary:hover{
     background:var(--ds-surface-hover);
+    color:var(--ds-text);
+}
+
+/* Ghost buttons (e.g. the focus card's "Open") were falling through to
+   the solid indigo `body.ds-screen .btn`; keep them quiet so they read
+   as the secondary action next to a primary one. */
+body.ds-screen .btn-ghost{
+    background:transparent;
+    color:var(--ds-text-secondary);
+    border:1px solid transparent;
+}
+body.ds-screen .btn-ghost:hover{
+    background:var(--ds-surface-sunken);
     color:var(--ds-text);
 }
 
