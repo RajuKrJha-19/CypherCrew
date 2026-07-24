@@ -13972,6 +13972,29 @@ body.ds-screen .selected-reference-file{
 
 .user-row-avatar img{ width:100%; height:100%; object-fit:cover; }
 
+/* ---- auth helper links (forgot / reset password) ---- */
+.auth-help{
+    margin:0 0 16px;
+    color:var(--color-text-muted, #6b7280);
+    font-size:13.5px;
+    line-height:1.5;
+    text-align:center;
+}
+
+.auth-alt-link{
+    margin:16px 0 0;
+    text-align:center;
+    font-size:13.5px;
+}
+
+.auth-alt-link a{
+    color:var(--color-primary, #4f46e5);
+    text-decoration:none;
+    font-weight:600;
+}
+
+.auth-alt-link a:hover{ text-decoration:underline; }
+
 /* ---- @mentions ---- */
 .mention{
     color:var(--color-primary);

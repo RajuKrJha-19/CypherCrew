@@ -1243,6 +1243,7 @@ def add_task():
                 ),
                 actor_id=current_user.id,
                 task_id=task.id,
+                email=True,
             )
 
             for visible_user in task.visible_to:
@@ -2788,7 +2789,8 @@ def approve_task(task_id):
             message=f"{current_user.name} moved {task.title} to {task.status}",
             link=url_for("tasks.task_detail", task_id=task.id),
             actor_id=current_user.id,
-            task_id=task.id
+            task_id=task.id,
+            email=True
         )
 
     db.session.commit()
@@ -2942,7 +2944,8 @@ def reject_task(task_id):
         message=message,
         link=url_for("tasks.task_detail", task_id=task.id),
         actor_id=current_user.id,
-        task_id=task.id
+        task_id=task.id,
+        email=True
     )
 
     db.session.commit()

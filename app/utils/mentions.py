@@ -64,6 +64,7 @@ def notify_mentioned_users(task, message, actor, link, skip_user_ids=None):
             link=link,
             actor_id=actor.id,
             task_id=task.id,
+            email=True,
         )
         skip.add(user.id)
         notified.append(user)

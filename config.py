@@ -68,3 +68,13 @@ class Config:
     R2_ENDPOINT_URL = os.getenv(
         "R2_ENDPOINT_URL"
     )
+
+    # Email (SMTP) - optional. When these are unset the app still runs;
+    # password reset and email notifications simply no-op (and log) until
+    # credentials are provided. For Gmail use an App Password.
+    MAIL_SERVER = os.getenv("MAIL_SERVER")
+    MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+    MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "True").lower() == "true"
+    MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER")
