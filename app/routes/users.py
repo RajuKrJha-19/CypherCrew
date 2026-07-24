@@ -1,3 +1,4 @@
+import calendar
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
@@ -6,6 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import User, Task
+from app.utils import task_status
 
 
 users_bp = Blueprint(
@@ -101,6 +103,10 @@ def user_performance(user_id):
 
     selected_month = request.args.get("month", now.month, type=int)
     selected_year = request.args.get("year", now.year, type=int)
+    # Table-only controls: they narrow/reorder the task list below without
+    # touching the month KPIs, which stay whole-month totals.
+    selected_status = request.args.get("status", "").strip()
+    sort = request.args.get("sort", "newest").strip()
 
     base_query = Task.query.filter(
         Task.assigned_to_id == user.id,
@@ -141,15 +147,50 @@ def user_performance(user_id):
         1
     ) if total_assigned else 0
 
-    recent_tasks = base_query.order_by(
-        Task.id.desc()
-    ).limit(8).all()
+    # The task table is a drill-down into the selected month: optionally
+    # filtered by status and reordered, so a manager can jump straight to,
+    # say, this month's overdue work instead of scanning a fixed list.
+    table_query = base_query
+
+    if selected_status:
+        table_query = table_query.filter(Task.status == selected_status)
+
+    sort_options = {
+        "newest": Task.id.desc(),
+        "oldest": Task.id.asc(),
+        "deadline_asc": Task.deadline.asc(),
+        "deadline_desc": Task.deadline.desc(),
+        "priority": db.case(
+            {"High": 0, "Medium": 1, "Low": 2},
+            value=Task.priority,
+            else_=3,
+        ),
+    }
+
+    if sort not in sort_options:
+        sort = "newest"
+
+    recent_tasks = table_query.order_by(
+        sort_options[sort]
+    ).limit(50).all()
+
+    # Dropdown data for the filter bar.
+    months = [(i, calendar.month_name[i]) for i in range(1, 13)]
+    years = list(range(now.year, now.year - 5, -1))
+    if selected_year not in years:
+        years.append(selected_year)
+        years.sort(reverse=True)
 
     return render_template(
         "users/performance.html",
         user=user,
         selected_month=selected_month,
         selected_year=selected_year,
+        selected_status=selected_status,
+        sort=sort,
+        months=months,
+        years=years,
+        statuses=task_status.ALL_STATUSES,
         total_assigned=total_assigned,
         completed_tasks=completed_tasks,
         pending_tasks=pending_tasks,

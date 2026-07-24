@@ -22,14 +22,30 @@
                 </div>
             </div>
 
-            <form method="GET" class="performance-filter">
-                <input type="number" name="month" min="1" max="12" value="{{ selected_month }}">
+            {#
+                Reporting period - drives every figure on this page. Month
+                and year are pickers rather than free-typed numbers, so an
+                out-of-range month can't be entered. The table's own status
+                and sort are carried along as hidden fields, so switching
+                month keeps the drill-down the manager set up.
+            #}
+            <form method="GET" class="filter-bar filter-bar-flow perf-period-bar">
+                <input type="hidden" name="status" value="{{ selected_status }}">
+                <input type="hidden" name="sort" value="{{ sort }}">
 
-                <input type="number" name="year" value="{{ selected_year }}">
+                <select name="month" aria-label="Month" onchange="this.form.submit()">
+                    {% for num, name in months %}
+                    <option value="{{ num }}" {% if num == selected_month %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
 
-                <button type="submit">
-                    Filter
-                </button>
+                <select name="year" aria-label="Year" onchange="this.form.submit()">
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+
+                <noscript><button type="submit">Apply</button></noscript>
             </form>
 
             <div class="performance-hero">
@@ -93,13 +109,45 @@
 
                 <div class="section-heading">
                     <div>
-                        <h2>Recent Tasks</h2>
+                        <h2>Tasks</h2>
                         <p>
-                            Tasks assigned to {{ user.name }}
-                            in selected month
+                            {{ recent_tasks|length }}
+                            task{{ "" if recent_tasks|length == 1 else "s" }}
+                            assigned to {{ user.name }} this period
                         </p>
                     </div>
                 </div>
+
+                {#
+                    Table-scoped filter + sort. Month/year ride along as
+                    hidden fields so narrowing the list never loses the
+                    reporting period. These narrow the table only - the KPI
+                    tiles above stay whole-month totals.
+                #}
+                <form method="GET" class="filter-bar filter-bar-flow perf-table-bar">
+                    <input type="hidden" name="month" value="{{ selected_month }}">
+                    <input type="hidden" name="year" value="{{ selected_year }}">
+
+                    <select name="status" aria-label="Filter by status" onchange="this.form.submit()">
+                        <option value="">All Statuses</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if selected_status == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <select name="sort" aria-label="Sort tasks" onchange="this.form.submit()">
+                        <option value="newest" {% if sort == "newest" %}selected{% endif %}>Newest first</option>
+                        <option value="oldest" {% if sort == "oldest" %}selected{% endif %}>Oldest first</option>
+                        <option value="deadline_asc" {% if sort == "deadline_asc" %}selected{% endif %}>Deadline (soonest)</option>
+                        <option value="deadline_desc" {% if sort == "deadline_desc" %}selected{% endif %}>Deadline (latest)</option>
+                        <option value="priority" {% if sort == "priority" %}selected{% endif %}>Priority (High → Low)</option>
+                    </select>
+
+                    {% if selected_status or sort != "newest" %}
+                    <a href="{{ url_for('users.user_performance', user_id=user.id, month=selected_month, year=selected_year) }}"
+                       class="mini-link">Reset</a>
+                    {% endif %}
+                </form>
 
                 <table>
 
@@ -175,7 +223,11 @@
                         <tr>
 
                             <td colspan="6">
-                                No tasks found for this month.
+                                {% if selected_status %}
+                                No {{ selected_status }} tasks for this period.
+                                {% else %}
+                                No tasks found for this period.
+                                {% endif %}
                             </td>
 
                         </tr>

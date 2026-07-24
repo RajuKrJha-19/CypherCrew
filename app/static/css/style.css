@@ -12929,6 +12929,11 @@ body.ds-screen .performance-hero span{
 body.ds-screen .performance-hero strong{
     font-size:var(--ds-font-20);
     font-weight:var(--ds-weight-semibold);
+    /* The hero fill stays dark in both themes, so the figure must use
+       the light nav text (like the label and formula around it). Without
+       this it fell back to --ds-text, which is dark in light mode and
+       left the percentage invisible on the dark hero. */
+    color:var(--ds-nav-text);
 }
 
 body.ds-screen .performance-hero p{
