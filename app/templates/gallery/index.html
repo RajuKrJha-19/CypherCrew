@@ -26,6 +26,10 @@
                 sort keeps the filters you already set. The selects submit
                 on change; only the free-text box needs a button.
             #}
+            {# Marker: pre-load all video-frame thumbnails up front so the
+               gallery grid is ready as soon as it opens (see video-thumb.js). #}
+            <span data-eager-video-thumbs hidden></span>
+
             <form method="GET" class="gallery-toolbar" id="galleryToolbar">
 
                 <div class="gallery-search-wrap">

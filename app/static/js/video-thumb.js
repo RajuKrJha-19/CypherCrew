@@ -61,11 +61,18 @@
         var videos = document.querySelectorAll(".js-video-thumb[data-vsrc]:not([data-loaded])");
         if (!videos.length) return;
 
-        if (!("IntersectionObserver" in window)) {
+        // A container marked data-eager (the gallery) pre-loads every
+        // thumbnail up front so the grid is ready the moment it opens.
+        // Only metadata + one seek range per clip is fetched, and the
+        // browser caps how many run at once, so it stays cheap.
+        var eager = document.querySelector("[data-eager-video-thumbs]");
+
+        if (eager || !("IntersectionObserver" in window)) {
             videos.forEach(load);
             return;
         }
 
+        // Elsewhere (e.g. task detail) stay lazy: load as tiles approach.
         var io = new IntersectionObserver(function (entries) {
             entries.forEach(function (entry) {
                 if (entry.isIntersecting) {
@@ -73,7 +80,7 @@
                     io.unobserve(entry.target);
                 }
             });
-        }, { rootMargin: "250px" });
+        }, { rootMargin: "600px" });
 
         videos.forEach(function (v) { io.observe(v); });
     }
