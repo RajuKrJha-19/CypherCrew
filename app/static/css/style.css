@@ -12624,6 +12624,31 @@ body.ds-screen .priority-dot{
     font-weight:var(--ds-weight-semibold);
 }
 
+/* Priority colour-coding. The neutral rule above (0,2,1) outranks the
+   plain .priority-dot.high etc. (0,2,0), so on ds-screens every priority
+   was flattened to grey. These per-level variants (0,3,1) restore the
+   code and stay theme-aware: slate -> blue -> amber -> red, matching the
+   .prio-* dots used in the review queue. */
+body.ds-screen .priority-dot.low{
+    background:var(--ds-neutral-bg);
+    color:var(--ds-neutral);
+}
+
+body.ds-screen .priority-dot.medium{
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+}
+
+body.ds-screen .priority-dot.high{
+    background:var(--ds-warning-bg);
+    color:var(--ds-warning);
+}
+
+body.ds-screen .priority-dot.urgent{
+    background:var(--ds-danger-bg);
+    color:var(--ds-danger);
+}
+
 body.ds-screen .kanban-file-btn{
     border:1px solid var(--ds-border);
     border-radius:var(--ds-radius-sm);

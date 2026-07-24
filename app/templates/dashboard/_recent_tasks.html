@@ -15,7 +15,7 @@
                 <span>{{ task.client.client_name }} - {{ task.status }}</span>
             </div>
 
-            <span class="status-pill">{{ task.priority }}</span>
+            <span class="priority-dot {{ task.priority|lower }}">{{ task.priority }}</span>
         </div>
         {% else %}
         <p>No tasks yet.</p>

@@ -215,7 +215,9 @@
 
                         <div class="detail-row">
                             <span>Priority</span>
-                            <strong>{{ task.priority }}</strong>
+                            <strong>
+                                <span class="priority-dot {{ task.priority|lower }}">{{ task.priority }}</span>
+                            </strong>
                         </div>
 
                         <div class="detail-row">
