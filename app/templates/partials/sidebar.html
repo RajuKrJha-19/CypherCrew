@@ -158,40 +158,47 @@
     </a>
 
     <script>
+        const sidebar = document.getElementById("app-sidebar");
         const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
 
+        function setCollapseButtonState(collapsed) {
+            if (!sidebarCollapseBtn) return;
+            const icon = sidebarCollapseBtn.querySelector("i");
+            const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+
+            icon.classList.toggle("fa-angles-left", !collapsed);
+            icon.classList.toggle("fa-angles-right", collapsed);
+
+            sidebarCollapseBtn.setAttribute("aria-label", label);
+            sidebarCollapseBtn.setAttribute("title", label);
+        }
+
+        function toggleSidebar() {
+            document.body.classList.toggle("sidebar-collapsed");
+            const isCollapsed = document.body.classList.contains("sidebar-collapsed");
+            try { localStorage.setItem("sidebar_collapsed", isCollapsed ? "yes" : "no"); } catch (e) {}
+            setCollapseButtonState(isCollapsed);
+        }
+
         if (sidebarCollapseBtn) {
-
-            function setCollapseButtonState(collapsed) {
-
-                const icon = sidebarCollapseBtn.querySelector("i");
-                const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
-
-                icon.classList.toggle("fa-angles-left", !collapsed);
-                icon.classList.toggle("fa-angles-right", collapsed);
-
-                sidebarCollapseBtn.setAttribute("aria-label", label);
-                sidebarCollapseBtn.setAttribute("title", label);
-            }
-
-            sidebarCollapseBtn.addEventListener("click", function () {
-
-                document.body.classList.toggle("sidebar-collapsed");
-
-                const isCollapsed = document.body.classList.contains("sidebar-collapsed");
-
-                localStorage.setItem("sidebar_collapsed", isCollapsed ? "yes" : "no");
-                setCollapseButtonState(isCollapsed);
-
+            sidebarCollapseBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                toggleSidebar();
             });
+        }
 
-            if (localStorage.getItem("sidebar_collapsed") === "yes") {
+        // Clicking the sidebar's empty space also toggles it - but never
+        // when the click lands on a nav item or any other control.
+        if (sidebar) {
+            sidebar.addEventListener("click", function (e) {
+                if (e.target.closest("a, button, input, select, textarea, label")) return;
+                toggleSidebar();
+            });
+        }
 
-                document.body.classList.add("sidebar-collapsed");
-                setCollapseButtonState(true);
-
-            }
-
+        if (localStorage.getItem("sidebar_collapsed") === "yes") {
+            document.body.classList.add("sidebar-collapsed");
+            setCollapseButtonState(true);
         }
     </script>
 

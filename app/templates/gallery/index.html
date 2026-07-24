@@ -164,15 +164,17 @@
                                      loading="lazy" decoding="async">
                                 {% elif is_video %}
                                 {#
-                                    Deliberately not a <video> element. It used to load the clip
-                                    with preload="metadata" purely to borrow a poster frame, which
-                                    on a 266 MB file cost more than the rest of the page combined.
-                                    ffmpeg is not a dependency here, so there is no server-side
-                                    frame to offer either - the tile is a poster, and the file only
-                                    streams when someone actually opens it.
+                                    Real frame borrowed from the clip, but lazily (video-thumb.js
+                                    only sets src + seeks once the tile is on screen, fetching just
+                                    the metadata and the seek range - not the whole file). A poster
+                                    sits behind it as a fallback if the frame can't decode.
                                 #}
                                 <div class="gallery-video-poster">
-                                    <i class="fa-solid fa-play"></i>
+                                    <video class="js-video-thumb gallery-video-el"
+                                           data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
+                                           preload="none" muted playsinline
+                                           onerror="this.remove()"></video>
+                                    <span class="gallery-video-play"><i class="fa-solid fa-play"></i></span>
                                 </div>
                                 {% else %}
                                 <div class="gallery-icon">

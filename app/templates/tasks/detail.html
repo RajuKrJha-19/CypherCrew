@@ -391,6 +391,9 @@
                                             {# A poster, not the clip. Loading the video just to borrow a
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
+                                                <video class="js-video-thumb file-video-el"
+                                                       data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
+                                                       preload="none" muted playsinline onerror="this.remove()"></video>
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
 
@@ -627,6 +630,9 @@ Submission Files
                                             {# A poster, not the clip. Loading the video just to borrow a
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
+                                                <video class="js-video-thumb file-video-el"
+                                                       data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
+                                                       preload="none" muted playsinline onerror="this.remove()"></video>
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
                                             {% else %}

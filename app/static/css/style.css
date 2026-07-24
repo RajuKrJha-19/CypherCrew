@@ -10451,26 +10451,45 @@ body.sidebar-collapsed .sidebar-logout{
 
 .gallery-video-poster,
 .file-video-poster{
+    position:relative;
     display:flex;
     align-items:center;
     justify-content:center;
     width:100%;
     height:100%;
+    overflow:hidden;
     background:
         linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     color:rgba(255,255,255,.92);
     pointer-events:none;
 }
 
-.gallery-video-poster i,
-.file-video-poster i{
+/* The lazily-loaded real frame, layered over the fallback gradient. */
+.gallery-video-el,
+.file-video-el{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    background:transparent;
+}
+
+/* Play badge sits on top of whichever renders (frame or gradient). */
+.gallery-video-play,
+.gallery-video-poster > i,
+.file-video-poster > i{
+    position:relative;
+    z-index:1;
     display:flex;
     align-items:center;
     justify-content:center;
     width:38px;
     height:38px;
     border-radius:var(--radius-full);
-    background:rgba(255,255,255,.16);
+    background:rgba(15,23,42,.55);
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
+    color:#fff;
     font-size:13px;
     padding-left:3px;
 }
