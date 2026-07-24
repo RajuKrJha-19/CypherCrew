@@ -438,6 +438,12 @@
 
                     </div>
 
+                    <a href="{{ url_for('tasks.export_tasks_csv', **request.args) }}"
+                       class="mini-link toolbar-export-btn" data-turbo="false"
+                       title="Download the current list as CSV">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </a>
+
                     <div class="column-customizer">
 
                         <button type="button" id="columnCustomizerBtn" class="mini-link">

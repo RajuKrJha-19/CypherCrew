@@ -1,0 +1,105 @@
+{% extends "base_app.html" %}
+
+{% block title %}Timesheet | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Timesheet</h1>
+        <p>Hours worked per {{ "team member" if can_view_all else "you" }}, from the task timers</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('reports.timesheet_csv', month=selected_month, year=selected_year) }}"
+           class="btn btn-secondary" data-turbo="false">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+        </a>
+        <a href="{{ url_for('reports.list_reports') }}" class="btn btn-secondary">← Reports</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<form method="GET" class="filter-bar filter-bar-flow">
+    <select name="month" aria-label="Month" onchange="this.form.submit()">
+        {% for num, name in months %}
+        <option value="{{ num }}" {% if num == selected_month %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <select name="year" aria-label="Year" onchange="this.form.submit()">
+        {% for y in years %}
+        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<div class="stats-grid">
+    <div class="metric-card">
+        <span>Total Hours</span>
+        <strong>{{ total_hours }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>Total Tasks</span>
+        <strong>{{ total_tasks }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>People</span>
+        <strong>{{ rows|length }}</strong>
+    </div>
+</div>
+
+<div class="table-card">
+
+    <div class="section-heading">
+        <div>
+            <h2>Hours by person</h2>
+            <p>Attributed to tasks created this period</p>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Role</th>
+                <th>Tasks</th>
+                <th>Completed</th>
+                <th>Published</th>
+                <th>Worked</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>
+                    {% set av = avatar_url(r.employee) %}
+                    <a class="table-link user-name-cell" href="{{ url_for('users.user_detail', user_id=r.employee.id) }}">
+                        <span class="user-row-avatar">
+                            {% if av %}<img src="{{ av }}" alt="">{% else %}{{ r.employee.initials }}{% endif %}
+                        </span>
+                        {{ r.employee.name }}
+                    </a>
+                </td>
+                <td>{{ r.employee.role.replace("_", " ")|title }}</td>
+                <td>{{ r.tasks }}</td>
+                <td>{{ r.completed }}</td>
+                <td>{{ r.published }}</td>
+                <td><strong>{{ format_report_time(r.worked_seconds) }}</strong></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">No activity for this period.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

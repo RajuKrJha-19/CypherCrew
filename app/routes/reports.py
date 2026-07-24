@@ -1,6 +1,11 @@
+import calendar
+import csv
+import io
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash, Response,
+)
 from flask_login import login_required, current_user
 
 from app.extensions import db
@@ -84,6 +89,113 @@ def parse_filter_date(value):
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _resolve_period(args):
+    """month/year from the query string, clamped to something sane."""
+    now = datetime.utcnow()
+    try:
+        month = int(args.get("month", now.month))
+        year = int(args.get("year", now.year))
+        if not (1 <= month <= 12):
+            raise ValueError
+    except (TypeError, ValueError):
+        month, year = now.month, now.year
+    return month, year
+
+
+def _timesheet_rows(month, year, scope_user_id=None):
+    """Per-employee time summary for a month. worked_seconds is cumulative
+    per task, so it is attributed to the month the task was created in -
+    an approximation, but a consistent basis for comparing periods."""
+    employees = User.query.filter_by(status="active")
+    if scope_user_id:
+        employees = employees.filter(User.id == scope_user_id)
+    employees = employees.order_by(User.name.asc()).all()
+
+    rows = []
+    for emp in employees:
+        tasks = Task.query.filter(
+            Task.assigned_to_id == emp.id,
+            db.extract("month", Task.created_at) == month,
+            db.extract("year", Task.created_at) == year,
+        ).all()
+        worked = sum(t.worked_seconds or 0 for t in tasks)
+        rows.append({
+            "employee": emp,
+            "tasks": len(tasks),
+            "worked_seconds": worked,
+            "worked_hours": round(worked / 3600, 2),
+            "completed": sum(1 for t in tasks if t.employee_completed),
+            "published": sum(1 for t in tasks if t.status == "Published"),
+        })
+    return rows
+
+
+@reports_bp.route("/timesheet")
+@login_required
+def timesheet():
+    """Hours worked per employee for a month, from the task timers.
+    Managers who can view reports see everyone; others see only themselves."""
+    can_view_all = has_permission(current_user, "view_reports")
+    month, year = _resolve_period(request.args)
+    scope = None if can_view_all else current_user.id
+
+    rows = _timesheet_rows(month, year, scope)
+
+    months = [(i, calendar.month_name[i]) for i in range(1, 13)]
+    years = list(range(datetime.utcnow().year, datetime.utcnow().year - 5, -1))
+    if year not in years:
+        years.append(year)
+        years.sort(reverse=True)
+
+    return render_template(
+        "reports/timesheet.html",
+        rows=rows,
+        selected_month=month,
+        selected_year=year,
+        months=months,
+        years=years,
+        total_hours=round(sum(r["worked_seconds"] for r in rows) / 3600, 2),
+        total_tasks=sum(r["tasks"] for r in rows),
+        can_view_all=can_view_all,
+        format_report_time=format_report_time,
+    )
+
+
+@reports_bp.route("/timesheet.csv")
+@login_required
+def timesheet_csv():
+    can_view_all = has_permission(current_user, "view_reports")
+    month, year = _resolve_period(request.args)
+    scope = None if can_view_all else current_user.id
+    rows = _timesheet_rows(month, year, scope)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "Employee", "Role", "Tasks", "Worked Hours",
+        "Completed", "Published", "Month", "Year",
+    ])
+    for r in rows:
+        emp = r["employee"]
+        writer.writerow([
+            emp.name,
+            emp.role.replace("_", " ").title(),
+            r["tasks"],
+            r["worked_hours"],
+            r["completed"],
+            r["published"],
+            month,
+            year,
+        ])
+
+    filename = f"timesheet-{year}-{month:02d}.csv"
+    return Response(
+        buffer.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @reports_bp.route("/")
