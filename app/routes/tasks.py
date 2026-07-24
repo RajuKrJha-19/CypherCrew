@@ -1338,10 +1338,14 @@ def self_assign_task():
         deadline_value = request.form.get("deadline")
 
         if deadline_value:
-            deadline = datetime.strptime(
-                deadline_value,
-                "%Y-%m-%dT%H:%M"
-            )
+            try:
+                deadline = datetime.strptime(
+                    deadline_value,
+                    "%Y-%m-%dT%H:%M"
+                )
+            except ValueError:
+                flash("Deadline format is invalid.", "error")
+                return redirect(form_url)
 
         try:
             client_id = int(request.form.get("client_id"))
@@ -1565,10 +1569,19 @@ def edit_task(task_id):
         deadline = None
 
         if request.form.get("deadline"):
-            deadline = datetime.strptime(
-                request.form.get("deadline"),
-                "%Y-%m-%dT%H:%M"
-            )
+            try:
+                deadline = datetime.strptime(
+                    request.form.get("deadline"),
+                    "%Y-%m-%dT%H:%M"
+                )
+            except ValueError:
+                flash("Deadline format is invalid.", "error")
+                return redirect(
+                    url_for(
+                        "tasks.edit_task",
+                        task_id=task.id
+                    )
+                )
 
         try:
             client_id = int(request.form.get("client_id"))
