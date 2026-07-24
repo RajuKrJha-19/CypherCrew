@@ -5,6 +5,7 @@ venv/
 env/
 .venv/
 .env
+.env.bak
 instance/
 *.db
 *.sqlite

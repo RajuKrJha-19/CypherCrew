@@ -12169,6 +12169,35 @@ tbody tr:hover{
     box-shadow:0 10px 24px -8px rgba(79,70,229,.95);
 }
 
+/* The auth card stays light even in dark mode, so pin its contents to
+   readable light-mode colours regardless of the app theme - otherwise
+   the brand, labels, inputs and alerts inherit dark-theme tokens and
+   turn faint / unreadable on the light card. */
+.auth-card .auth-brand h1{ color:#0f172a; }
+.auth-card .auth-brand p{ color:#64748b; }
+.auth-card label{ color:#334155; }
+.auth-card .auth-help{ color:#64748b; }
+
+.auth-card input{
+    background:#ffffff;
+    color:#0f172a;
+    border:1px solid #d1d5db;
+}
+.auth-card input::placeholder{ color:#9ca3af; }
+.auth-card input:focus{
+    border-color:var(--color-primary);
+    box-shadow:0 0 0 3px rgba(79,70,229,.15);
+    outline:none;
+}
+
+/* Flash alerts: keep readable in dark mode app-wide (dark bg needs a
+   light text, not the fixed dark green/red). */
+:root[data-theme="dark"] .alert.success{ color:#86efac; }
+:root[data-theme="dark"] .alert.error{ color:#fca5a5; }
+/* On the (always-light) auth card, keep the original dark alert text. */
+.auth-card .alert.success{ color:#166534; }
+.auth-card .alert.error{ color:#991b1b; }
+
 @media(max-width:520px){
 
     .auth-card{
