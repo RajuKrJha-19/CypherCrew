@@ -391,9 +391,15 @@
                                             {# A poster, not the clip. Loading the video just to borrow a
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
+                                                {% if file.thumbnail_state == "ready" %}
+                                                <img class="file-video-el"
+                                                     src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                                     alt="{{ file.original_filename }}" loading="lazy" decoding="async">
+                                                {% else %}
                                                 <video class="js-video-thumb file-video-el"
                                                        data-vsrc="{{ file_preview_url(file) }}"
                                                        preload="none" muted playsinline></video>
+                                                {% endif %}
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
 
@@ -630,9 +636,15 @@ Submission Files
                                             {# A poster, not the clip. Loading the video just to borrow a
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
+                                                {% if file.thumbnail_state == "ready" %}
+                                                <img class="file-video-el"
+                                                     src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                                     alt="{{ file.original_filename }}" loading="lazy" decoding="async">
+                                                {% else %}
                                                 <video class="js-video-thumb file-video-el"
                                                        data-vsrc="{{ file_preview_url(file) }}"
                                                        preload="none" muted playsinline></video>
+                                                {% endif %}
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
                                             {% else %}

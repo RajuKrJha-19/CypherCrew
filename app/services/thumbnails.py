@@ -28,6 +28,10 @@ never has to fall back to the original.
 """
 
 import io
+import os
+import shutil
+import subprocess
+import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -67,18 +71,68 @@ _inflight = set()
 _inflight_lock = threading.Lock()
 
 
+#: Seconds into the clip we grab the poster frame from. A little past the
+#: start skips the black/fade-in that many clips open on.
+VIDEO_SEEK_SECONDS = 1.0
+
+#: Hard ceiling on the ffmpeg call so a pathological file can't tie up a
+#: worker thread indefinitely.
+VIDEO_FFMPEG_TIMEOUT = 60
+
+_ffmpeg_path = None
+_ffmpeg_checked = False
+
+
+def ffmpeg_path():
+    """Path to ffmpeg if it's installed, else None (cached).
+
+    Video thumbnails need a frame decode. Where ffmpeg is present (the
+    production image) we generate a real webp once, in the background, and
+    every tile then pulls that small cached image. Where it isn't (a bare
+    dev box) video simply falls back to a client-side frame - supports()
+    reports False, so the pipeline treats the clip as un-thumbnailable.
+    """
+    global _ffmpeg_path, _ffmpeg_checked
+    if not _ffmpeg_checked:
+        _ffmpeg_checked = True
+        # Prefer a system ffmpeg; otherwise use the static binary shipped
+        # by the imageio-ffmpeg wheel, so no apt/Docker step is needed for
+        # video thumbnails to work on the server.
+        path = shutil.which("ffmpeg")
+        if not path:
+            try:
+                import imageio_ffmpeg
+                path = imageio_ffmpeg.get_ffmpeg_exe()
+            except Exception:
+                path = None
+        _ffmpeg_path = path
+    return _ffmpeg_path
+
+
+def _is_image(task_file):
+    return (task_file.mime_type or "").lower().startswith("image/")
+
+
+def _is_video(task_file):
+    return (task_file.mime_type or "").lower().startswith("video/")
+
+
 def supports(task_file):
     """True when this app can actually render a thumbnail for the file.
 
-    SVG is excluded on purpose: it is markup, Pillow will not open it,
-    and it is already refused a safe content-type on upload.
+    Images via Pillow (SVG excluded - it is markup Pillow won't open, and
+    it's already refused a safe content-type on upload). Video via ffmpeg,
+    but only when ffmpeg is actually installed.
     """
     mime = (task_file.mime_type or "").lower()
 
-    if not mime.startswith("image/"):
-        return False
+    if mime.startswith("image/"):
+        return mime not in {"image/svg+xml"}
 
-    return mime not in {"image/svg+xml"}
+    if mime.startswith("video/"):
+        return ffmpeg_path() is not None
+
+    return False
 
 
 def thumbnail_key_for(task_file):
@@ -157,6 +211,74 @@ def _render(source_bytes):
         return None
 
 
+def _render_video(task_file):
+    """Extract a poster frame from a video into WEBP bytes, via ffmpeg.
+
+    ffmpeg reads the object over its presigned URL and seeks BEFORE the
+    input (-ss before -i), so it pulls only the bytes around the chosen
+    frame with HTTP range requests - it never downloads the whole clip.
+    That is what makes a server-side video thumbnail cheap enough to do.
+    Returns webp bytes, or None if ffmpeg is absent or the decode fails.
+    """
+    ff = ffmpeg_path()
+    if not ff:
+        return None
+
+    try:
+        url = StorageService().preview_url(
+            object_key=task_file.object_key,
+            expires_in=600,
+        )
+    except Exception:
+        current_app.logger.warning(
+            "No preview URL for video thumbnail of task file %s.",
+            task_file.id, exc_info=True,
+        )
+        return None
+
+    fd, tmp_path = tempfile.mkstemp(suffix=".webp")
+    os.close(fd)
+
+    cmd = [
+        ff, "-y", "-loglevel", "error",
+        "-ss", str(VIDEO_SEEK_SECONDS),   # seek before -i -> range read, not full download
+        "-i", url,
+        "-frames:v", "1",
+        "-vf", f"scale=w={MAX_EDGE}:h={MAX_EDGE}:force_original_aspect_ratio=decrease",
+        "-c:v", "libwebp", "-q:v", "80",
+        tmp_path,
+    ]
+
+    try:
+        subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=VIDEO_FFMPEG_TIMEOUT,
+            check=True,
+        )
+        with open(tmp_path, "rb") as fh:
+            data = fh.read()
+        return data or None
+
+    except Exception:
+        # Clip shorter than the seek, unseekable input, an odd codec, a
+        # timeout - any of these just means "no server-side frame", and
+        # the tile falls back to a client-side one.
+        current_app.logger.warning(
+            "ffmpeg could not render a video thumbnail for task file %s.",
+            task_file.id, exc_info=True,
+        )
+        return None
+
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
 def generate(file_id, retry=False):
     """Build and store the thumbnail for one file.
 
@@ -193,7 +315,10 @@ def generate(file_id, retry=False):
         db.session.commit()
         return STATE_SKIPPED
 
-    if (task_file.file_size or 0) > MAX_SOURCE_BYTES:
+    # The size cap only applies to images (Pillow decompresses the whole
+    # file). Video never downloads in full - ffmpeg seeks over the URL -
+    # so a large clip is fine and must not be skipped on size.
+    if _is_image(task_file) and (task_file.file_size or 0) > MAX_SOURCE_BYTES:
         task_file.thumbnail_state = STATE_SKIPPED
         db.session.commit()
         return STATE_SKIPPED
@@ -203,9 +328,11 @@ def generate(file_id, retry=False):
 
     try:
         storage = StorageService()
-        source = storage.read_bytes(task_file.object_key)
 
-        thumb = _render(source)
+        if _is_video(task_file):
+            thumb = _render_video(task_file)
+        else:
+            thumb = _render(storage.read_bytes(task_file.object_key))
 
         if thumb is None:
             return _record_state(file_id, STATE_FAILED)
