@@ -39,3 +39,40 @@ def file_preview_url(file):
         return StorageService().preview_url(object_key=key, expires_in=3600)
     except Exception:
         return None
+
+
+def file_badge(file):
+    """A small format badge for a file tile - {label, cls} - or None.
+
+    Only for formats worth flagging at a glance (design/document files);
+    plain photos and videos don't get one. Matched on extension first (the
+    reliable signal) then mime, since browsers mislabel these often.
+    """
+    if file is None:
+        return None
+
+    mime = (getattr(file, "mime_type", "") or "").lower()
+    name = (getattr(file, "original_filename", "") or "").lower()
+    ext = name.rsplit(".", 1)[-1] if "." in name else ""
+
+    def badge(label, cls):
+        return {"label": label, "cls": cls}
+
+    if ext == "psd" or "photoshop" in mime:
+        return badge("PS", "ps")
+    if ext == "ai" or "illustrator" in mime:
+        return badge("AI", "ai")
+    if ext == "pdf" or mime == "application/pdf":
+        return badge("PDF", "pdf")
+    if ext == "eps" or "postscript" in mime:
+        return badge("EPS", "eps")
+    if ext == "indd":
+        return badge("ID", "indd")
+    if ext == "xd":
+        return badge("XD", "xd")
+    if ext in ("fig", "figma"):
+        return badge("Fig", "fig")
+    if ext == "sketch":
+        return badge("Sk", "sketch")
+
+    return None

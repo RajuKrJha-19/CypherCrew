@@ -14193,3 +14193,45 @@ body.ds-screen .selected-reference-file{
 /* Cards a touch tighter, actions closer. */
 .task-detail-layout .table-card{ border-radius:14px !important; }
 .task-actions-box{ margin-top:14px !important; gap:8px !important; }
+
+/* ==========================================================
+   FILE-FORMAT BADGE  (PS / AI / PDF / ...) on media tiles
+   Sits in the corner of a thumbnail so a design/document file
+   is recognisable at a glance, over its rendered preview.
+   ========================================================== */
+.gallery-thumb-box{ position:relative; }
+
+.file-badge{
+    position:absolute;
+    right:6px;
+    bottom:6px;
+    z-index:3;
+    padding:2px 6px;
+    border-radius:5px;
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:.03em;
+    line-height:1.4;
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+    pointer-events:none;
+}
+
+/* Small variant for the compact file tiles on the task detail page. */
+.task-file-icon{ position:relative; }
+.task-file-icon .file-badge{
+    right:2px;
+    bottom:2px;
+    padding:1px 3px;
+    font-size:7px;
+    border-radius:3px;
+    box-shadow:none;
+}
+
+.file-badge-ps{ background:#001e36; color:#31a8ff; }   /* Photoshop */
+.file-badge-ai{ background:#2a1400; color:#ff9a00; }   /* Illustrator */
+.file-badge-pdf{ background:#b30b00; color:#ffffff; }  /* PDF */
+.file-badge-eps{ background:#333333; color:#ffd54a; }
+.file-badge-indd{ background:#49021f; color:#ff3f8e; } /* InDesign */
+.file-badge-xd{ background:#2e001e; color:#ff61f6; }   /* XD */
+.file-badge-fig{ background:#1e1e1e; color:#a259ff; }  /* Figma */
+.file-badge-sketch{ background:#2b1a00; color:#fdad00; }

@@ -51,6 +51,25 @@ MAX_EDGE = 512
 #: than a photo, and Pillow would happily try to decompress it.
 MAX_SOURCE_BYTES = 40 * 1024 * 1024
 
+#: Design/document files (PSD, PDF, AI) run bigger than photos and have to
+#: be pulled in full to render, so they get a higher ceiling; past it the
+#: tile falls back to a format icon rather than downloading a giant file.
+MAX_DOC_BYTES = 120 * 1024 * 1024
+
+#: PSD is opened by Pillow; PDF/AI are rendered by PyMuPDF. Both matched on
+#: mime OR extension, since browsers label these inconsistently (often
+#: application/octet-stream).
+_PSD_MIMES = {
+    "image/vnd.adobe.photoshop", "image/x-photoshop", "image/psd",
+    "application/x-photoshop", "application/photoshop", "application/psd",
+    "application/x-adobe-photoshop",
+}
+_PDF_MIMES = {"application/pdf"}
+_AI_MIMES = {
+    "application/illustrator", "application/vnd.adobe.illustrator",
+    "application/postscript",
+}
+
 #: Guards against decompression-bomb images.
 MAX_PIXELS = 50_000_000
 
@@ -109,30 +128,49 @@ def ffmpeg_path():
     return _ffmpeg_path
 
 
-def _is_image(task_file):
-    return (task_file.mime_type or "").lower().startswith("image/")
+def _ext(task_file):
+    name = (task_file.original_filename or "").lower()
+    return name.rsplit(".", 1)[-1] if "." in name else ""
 
 
 def _is_video(task_file):
     return (task_file.mime_type or "").lower().startswith("video/")
 
 
+def _is_psd(task_file):
+    return (task_file.mime_type or "").lower() in _PSD_MIMES or _ext(task_file) == "psd"
+
+
+def _is_pdf_like(task_file):
+    """PDF, or an Illustrator file (modern .ai is PDF-compatible)."""
+    mime = (task_file.mime_type or "").lower()
+    return mime in _PDF_MIMES or mime in _AI_MIMES or _ext(task_file) in {"pdf", "ai"}
+
+
+def _is_raster(task_file):
+    """Something Pillow can open directly: a normal image, or a PSD (whose
+    flattened composite Pillow reads)."""
+    mime = (task_file.mime_type or "").lower()
+    if mime.startswith("image/"):
+        return mime not in {"image/svg+xml"}
+    return _is_psd(task_file)
+
+
+def _size_cap(task_file):
+    return MAX_DOC_BYTES if (_is_pdf_like(task_file) or _is_psd(task_file)) else MAX_SOURCE_BYTES
+
+
 def supports(task_file):
     """True when this app can actually render a thumbnail for the file.
 
-    Images via Pillow (SVG excluded - it is markup Pillow won't open, and
-    it's already refused a safe content-type on upload). Video via ffmpeg,
-    but only when ffmpeg is actually installed.
+    Raster images and PSD via Pillow (SVG excluded - it is markup Pillow
+    won't open). PDF and Illustrator via PyMuPDF. Video via ffmpeg, but
+    only when ffmpeg is actually installed.
     """
-    mime = (task_file.mime_type or "").lower()
-
-    if mime.startswith("image/"):
-        return mime not in {"image/svg+xml"}
-
-    if mime.startswith("video/"):
+    if _is_video(task_file):
         return ffmpeg_path() is not None
 
-    return False
+    return _is_raster(task_file) or _is_pdf_like(task_file)
 
 
 def thumbnail_key_for(task_file):
@@ -279,6 +317,40 @@ def _render_video(task_file):
             pass
 
 
+def _render_pdf(source_bytes, task_file):
+    """First page of a PDF/AI into WEBP bytes, via PyMuPDF.
+
+    Modern Illustrator files are PDF-compatible, so they render the same
+    way. The rendered page is handed to _render() to normalise + shrink to
+    a webp, reusing the image path (and its safety limits).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except Exception:
+        current_app.logger.warning("PyMuPDF not available; cannot render PDF/AI.")
+        return None
+
+    filetype = "pdf" if _is_pdf_like(task_file) else None
+
+    try:
+        with fitz.open(stream=source_bytes, filetype=filetype) as doc:
+            if doc.page_count < 1:
+                return None
+            page = doc.load_page(0)
+            longest = max(page.rect.width, page.rect.height, 1)
+            scale = min(MAX_EDGE / longest, 3)  # cap upscaling of tiny pages
+            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            png = pix.tobytes("png")
+    except Exception:
+        current_app.logger.warning(
+            "Could not render PDF/AI thumbnail for task file %s.",
+            task_file.id, exc_info=True,
+        )
+        return None
+
+    return _render(png)
+
+
 def generate(file_id, retry=False):
     """Build and store the thumbnail for one file.
 
@@ -315,10 +387,10 @@ def generate(file_id, retry=False):
         db.session.commit()
         return STATE_SKIPPED
 
-    # The size cap only applies to images (Pillow decompresses the whole
-    # file). Video never downloads in full - ffmpeg seeks over the URL -
-    # so a large clip is fine and must not be skipped on size.
-    if _is_image(task_file) and (task_file.file_size or 0) > MAX_SOURCE_BYTES:
+    # The size cap applies to anything pulled in full to render (images,
+    # PSD, PDF/AI). Video is exempt - ffmpeg seeks over the URL and never
+    # downloads the whole clip.
+    if not _is_video(task_file) and (task_file.file_size or 0) > _size_cap(task_file):
         task_file.thumbnail_state = STATE_SKIPPED
         db.session.commit()
         return STATE_SKIPPED
@@ -331,7 +403,9 @@ def generate(file_id, retry=False):
 
         if _is_video(task_file):
             thumb = _render_video(task_file)
-        else:
+        elif _is_pdf_like(task_file):
+            thumb = _render_pdf(storage.read_bytes(task_file.object_key), task_file)
+        else:  # raster image or PSD
             thumb = _render(storage.read_bytes(task_file.object_key))
 
         if thumb is None:

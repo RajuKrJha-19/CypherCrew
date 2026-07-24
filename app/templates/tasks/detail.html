@@ -378,6 +378,7 @@
                                     <div class="task-file-main">
 
                                         <div class="task-file-icon">
+                                            {% set type_badge = file_badge(file) %}
 
                                             {% if file.mime_type and file.mime_type.startswith("image/") %}
                                             <img
@@ -403,11 +404,14 @@
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
 
+                                            {% elif file.thumbnail_state == "ready" %}
+                                            {# PSD / PDF / AI: rendered preview of the document. #}
+                                            <img class="task-file-thumb"
+                                                 src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                                 alt="{{ file.original_filename }}" loading="lazy" decoding="async">
+
                                             {% elif file.mime_type and file.mime_type.startswith("audio/") %}
                                             🎵
-
-                                            {% elif file.mime_type == "application/pdf" %}
-                                            📕
 
                                             {% elif file.mime_type and (
                                             "zip" in file.mime_type
@@ -423,6 +427,10 @@
 
                                             {% else %}
                                             📄
+                                            {% endif %}
+
+                                            {% if type_badge %}
+                                            <span class="file-badge file-badge-{{ type_badge.cls }}">{{ type_badge.label }}</span>
                                             {% endif %}
 
                                         </div>
@@ -624,6 +632,7 @@ Submission Files
                                     <div class="task-file-main">
 
                                         <div class="task-file-icon">
+                                            {% set type_badge = file_badge(file) %}
 
                                             {% if file.mime_type and file.mime_type.startswith("image/") %}
                                             <img
@@ -647,8 +656,17 @@ Submission Files
                                                 {% endif %}
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
+                                            {% elif file.thumbnail_state == "ready" %}
+                                            {# PSD / PDF / AI: rendered preview of the document. #}
+                                            <img class="task-file-thumb"
+                                                 src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                                 alt="{{ file.original_filename }}" loading="lazy" decoding="async">
                                             {% else %}
                                             📄
+                                            {% endif %}
+
+                                            {% if type_badge %}
+                                            <span class="file-badge file-badge-{{ type_badge.cls }}">{{ type_badge.label }}</span>
                                             {% endif %}
 
                                         </div>

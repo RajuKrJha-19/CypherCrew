@@ -153,6 +153,7 @@
                         >
 
                             {% set is_video = file.mime_type and file.mime_type.startswith("video/") %}
+                            {% set type_badge = file_badge(file) %}
 
                             <div class="gallery-thumb-box {% if is_video %}is-video{% endif %}">
 
@@ -186,12 +187,15 @@
                                     {% endif %}
                                     <span class="gallery-video-play"><i class="fa-solid fa-play"></i></span>
                                 </div>
+                                {% elif file.thumbnail_state == "ready" %}
+                                {# PSD / PDF / AI: a rendered preview of the document itself. #}
+                                <img class="gallery-thumb"
+                                     src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                     alt="{{ file.original_filename }}" loading="lazy" decoding="async">
                                 {% else %}
                                 <div class="gallery-icon">
                                     {% if file.mime_type and file.mime_type.startswith("audio/") %}
                                     🎵
-                                    {% elif file.mime_type == "application/pdf" %}
-                                    📕
                                     {% elif file.mime_type and ("zip" in file.mime_type or "compressed" in file.mime_type) %}
                                     🗜️
                                     {% elif file.mime_type and ("spreadsheet" in file.mime_type or "excel" in file.mime_type) %}
@@ -200,6 +204,10 @@
                                     📄
                                     {% endif %}
                                 </div>
+                                {% endif %}
+
+                                {% if type_badge %}
+                                <span class="file-badge file-badge-{{ type_badge.cls }}">{{ type_badge.label }}</span>
                                 {% endif %}
 
                             </div>
