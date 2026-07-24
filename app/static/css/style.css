@@ -7089,6 +7089,21 @@ body.sidebar-collapsed .task-page-sticky-header{
     line-height:1.35 !important;
 }
 
+/* Task id + title open the task. The title link reads as the heading
+   (inherits its colour) until hovered, so it doesn't look like a stray
+   blue link; both get a clear hover affordance. */
+.review-task-card h3 .review-task-title-link{
+    color:inherit !important;
+    text-decoration:none !important;
+    cursor:pointer;
+}
+
+.review-task-card h3 .review-task-title-link:hover,
+.review-task-top a.review-task-code:hover{
+    color:var(--color-primary) !important;
+    text-decoration:underline !important;
+}
+
 .review-task-meta{
     display:flex !important;
     justify-content:space-between !important;
