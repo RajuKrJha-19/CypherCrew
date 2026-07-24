@@ -646,8 +646,12 @@ body.sidebar-collapsed .topbar{
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:13px;
     transition:color var(--ds-transition);
+}
+
+.theme-switch-icon svg{
+    width:15px;
+    height:15px;
 }
 
 /* Light mode: thumb over the sun, sun dark, moon muted. */
