@@ -863,6 +863,23 @@ Submission Files
                             </form>
                             {% endif %}
 
+                            {#
+                                Undo. Offered only where a move back to Assigned
+                                is actually allowed (In Progress / Paused), so a
+                                status changed by mistake can be reset without
+                                having to push the task forward. The timer stops
+                                and time already worked is kept.
+                            #}
+                            {% if task_status.ASSIGNED in task_status.allowed_moves(task.status, can_manage_tasks) %}
+                            <form method="POST" action="{{ url_for('tasks.reset_to_assigned', task_id=task.id) }}">
+                                <button type="submit" class="btn-ghost"
+                                    title="Undo: move this task back to Assigned. The timer stops and any time you have worked is kept. Use this if the status was changed by mistake.">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                    Move to Assigned
+                                </button>
+                            </form>
+                            {% endif %}
+
                             {% endif %}
 
                             {% if task.assigned_to_id == current_user.id and task.status in ["Assigned", "In Progress"]

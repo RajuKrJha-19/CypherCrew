@@ -2046,6 +2046,72 @@ def pause_task(task_id):
     )
 
 
+@tasks_bp.route("/<int:task_id>/reset-to-assigned", methods=["POST"])
+@login_required
+def reset_to_assigned(task_id):
+    """Undo a start: move a task back to Assigned.
+
+    Starting (or pausing) a task should not be a one-way trip. If the
+    status was changed by mistake, this sends it back to Assigned -
+    banking any time already worked and stopping the timer so nothing
+    accrues against a task that is now "not started" again. The move is
+    gated by the same transition table as every other status change, so
+    it is only permitted where it is actually allowed (In Progress or
+    Paused for an assignee), never as a way around the workflow.
+    """
+
+    task = Task.query.get_or_404(task_id)
+    can_manage = has_permission(current_user, "manage_tasks")
+
+    if not can_manage and task.assigned_to_id != current_user.id:
+        flash(
+            "You are not allowed to update this task.",
+            "error"
+        )
+        return redirect(url_for("tasks.list_tasks"))
+
+    if not task_status.can_move(task.status, task_status.ASSIGNED, can_manage):
+        flash(
+            "This task can't be moved back to Assigned from its current status.",
+            "error"
+        )
+        return redirect(
+            request.referrer or url_for("tasks.task_detail", task_id=task.id)
+        )
+
+    # Stop the clock first (banks worked time), then record the move so
+    # the time spent In Progress is filed before the status flips.
+    pause_timer(task)
+
+    old_status = record_status_time(task, task_status.ASSIGNED)
+
+    # Back to a clean "not started" state, matching a fresh assignment.
+    task.employee_completed = False
+    task.employee_completed_at = None
+
+    add_activity(
+        task,
+        action="reset_to_assigned",
+        message=f"Moved back to Assigned by {current_user.name}",
+        old_status=old_status,
+        new_status=task_status.ASSIGNED
+    )
+
+    db.session.commit()
+
+    flash(
+        "Task moved back to Assigned.",
+        "success"
+    )
+
+    return redirect(
+        request.referrer or url_for(
+            "tasks.task_detail",
+            task_id=task.id
+        )
+    )
+
+
 @tasks_bp.route("/<int:task_id>/hold", methods=["POST"])
 @login_required
 def hold_task(task_id):
@@ -2529,11 +2595,15 @@ def kanban_update_status():
             task.timer_started_at = None
 
     elif new_status in [
+        "Assigned",
         "Core Review",
         "Client Review",
         "Published",
     ]:
 
+        # Moving back to Assigned (an undo) or forward to a review/done
+        # state stops the clock: bank whatever was worked and clear the
+        # running timer so nothing accrues while the task sits there.
         if task.timer_started_at:
 
             worked = (

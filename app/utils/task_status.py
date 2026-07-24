@@ -158,8 +158,13 @@ DURATION_FIELD = {
 #: manager decides when that block has cleared.
 EMPLOYEE_MOVES = {
     ASSIGNED: [IN_PROGRESS],
-    IN_PROGRESS: [PAUSED, CORE_REVIEW],
-    PAUSED: [IN_PROGRESS],
+    # Assigned is allowed as an "undo": if a task was started (or paused)
+    # by mistake, the assignee can reset it to Assigned rather than being
+    # stuck moving it forward. The timer is stopped on the way (see the
+    # status-change handler), so time is not counted against an unstarted
+    # task.
+    IN_PROGRESS: [ASSIGNED, PAUSED, CORE_REVIEW],
+    PAUSED: [ASSIGNED, IN_PROGRESS],
     ON_HOLD: [],
     # lets an employee pull back a submission made by mistake
     CORE_REVIEW: [ASSIGNED, IN_PROGRESS, PAUSED],
