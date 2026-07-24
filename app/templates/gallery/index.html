@@ -171,9 +171,8 @@
                                 #}
                                 <div class="gallery-video-poster">
                                     <video class="js-video-thumb gallery-video-el"
-                                           data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
-                                           preload="none" muted playsinline
-                                           onerror="this.remove()"></video>
+                                           data-vsrc="{{ file_preview_url(file) }}"
+                                           preload="none" muted playsinline></video>
                                     <span class="gallery-video-play"><i class="fa-solid fa-play"></i></span>
                                 </div>
                                 {% else %}

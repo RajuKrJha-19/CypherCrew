@@ -70,7 +70,7 @@ def create_app():
 
     from app.utils.permissions import has_permission
     from app.utils.greeting import greet, today_label
-    from app.utils.avatars import avatar_url
+    from app.utils.avatars import avatar_url, file_preview_url
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
@@ -81,6 +81,8 @@ def create_app():
         # Presigned avatar URL (or None -> initials) for any user, so the
         # top bar, cards and profile pages render pictures the same way.
         avatar_url=avatar_url,
+        # Direct presigned URL for a task file (used by video thumbnails).
+        file_preview_url=file_preview_url,
     )
 
     app.jinja_env.filters["linkify"] = linkify_text

@@ -392,8 +392,8 @@
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
                                                 <video class="js-video-thumb file-video-el"
-                                                       data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
-                                                       preload="none" muted playsinline onerror="this.remove()"></video>
+                                                       data-vsrc="{{ file_preview_url(file) }}"
+                                                       preload="none" muted playsinline></video>
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
 
@@ -631,8 +631,8 @@ Submission Files
                                                frame pulled the whole file for a 44px square. #}
                                             <div class="task-file-thumb file-video-poster">
                                                 <video class="js-video-thumb file-video-el"
-                                                       data-vsrc="{{ url_for('tasks.preview_task_file', file_id=file.id) }}#t=0.5"
-                                                       preload="none" muted playsinline onerror="this.remove()"></video>
+                                                       data-vsrc="{{ file_preview_url(file) }}"
+                                                       preload="none" muted playsinline></video>
                                                 <i class="fa-solid fa-play"></i>
                                             </div>
                                             {% else %}
