@@ -54,24 +54,44 @@ window.CypherMediaViewer = (function () {
     //: arrowing along a row of photos doesn't flash empty on each step.
     const preloaded = new Set();
 
-    function kindOf(mime, url) {
+    // Web-renderable image types only. A PSD reports image/vnd.adobe.
+    // photoshop (and .ai often reports a PDF/postscript type), yet no
+    // browser can actually paint either - so we must NOT treat those as
+    // "image" or the stage shows a broken <img>.
+    const WEB_IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif", "bmp", "ico"];
+    const VIDEO_EXT = ["mp4", "webm", "ogv", "mov", "m4v", "mkv", "avi"];
+    const AUDIO_EXT = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
 
-        mime = mime || "";
+    // Design / raster formats the browser can't paint. Forced to "other"
+    // (the rendered-preview path) even when their mime looks renderable -
+    // a .ai commonly reports application/pdf but won't open in a PDF frame.
+    const PREVIEW_ONLY_EXT = ["psd", "ai", "eps", "indd", "tiff", "tif", "xd", "sketch", "cdr"];
 
-        if (mime.startsWith("image/")) return "image";
+    function extOf(file) {
+        // Prefer the filename (it carries the real extension); the preview
+        // URL is a route like /files/12/preview with no extension at all.
+        const name = file.filename || (file.url || "").split("?")[0].split("#")[0];
+        const dot = (name || "").lastIndexOf(".");
+        return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+    }
+
+    function kindOf(file) {
+
+        const mime = file.mime || "";
+        const ext = extOf(file);
+
+        if (WEB_IMAGE_EXT.includes(ext)) return "image";
+        if (VIDEO_EXT.includes(ext)) return "video";
+        if (AUDIO_EXT.includes(ext)) return "audio";
+        if (ext === "pdf") return "pdf";
+        if (PREVIEW_ONLY_EXT.includes(ext)) return "other";
+
+        // Mime fallback - but only for genuinely web-renderable images, so
+        // PSD/AI/TIFF fall through to "other" and get the preview path.
+        if (/^image\/(jpeg|png|gif|webp|svg\+xml|avif|bmp|x-icon)$/.test(mime)) return "image";
         if (mime.startsWith("video/")) return "video";
         if (mime.startsWith("audio/")) return "audio";
         if (mime === "application/pdf") return "pdf";
-
-        // The kanban popup sends a mime for every file, but the gallery
-        // context menu can pass "-" for rows with no stored mime_type.
-        // Fall back to the extension so those still preview properly.
-        const ext = (url || "").split("?")[0].split(".").pop().toLowerCase();
-
-        if (["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"].includes(ext)) return "image";
-        if (["mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "video";
-        if (["mp3", "wav", "ogg", "m4a", "aac"].includes(ext)) return "audio";
-        if (ext === "pdf") return "pdf";
 
         return "other";
     }
@@ -344,7 +364,7 @@ window.CypherMediaViewer = (function () {
 
             // Only images: fetching the neighbouring 200 MB video ahead of
             // time would cost far more than the wait it saves.
-            if (kindOf(file.mime, file.url) !== "image") return;
+            if (kindOf(file) !== "image") return;
 
             preloaded.add(file.url);
 
@@ -523,6 +543,24 @@ window.CypherMediaViewer = (function () {
             return;
         }
 
+        // PSD / AI / TIFF and friends: the browser can't paint the source,
+        // but the worker rendered a preview (webp) we can show full-size.
+        // That is the real content, with the original a download away.
+        if (currentFile.thumbUrl) {
+
+            const img = document.createElement("img");
+            img.className = "media-viewer-image";
+            img.src = currentFile.thumbUrl;
+            img.alt = currentFile.filename || "Preview";
+            stage.appendChild(img);
+
+            const note = document.createElement("div");
+            note.className = "media-viewer-preview-note";
+            note.textContent = "Preview - download the file for full quality";
+            stage.appendChild(note);
+            return;
+        }
+
         // Archives, spreadsheets, docs - nothing the browser can render
         // inline, so offer the two things that actually work.
         const fallback = document.createElement("div");
@@ -563,7 +601,7 @@ window.CypherMediaViewer = (function () {
         index = position;
         currentFile = items[position];
 
-        const kind = kindOf(currentFile.mime, currentFile.url);
+        const kind = kindOf(currentFile);
 
         titleEl.textContent = currentFile.filename || "Preview";
         titleEl.title = currentFile.filename || "";
@@ -572,8 +610,9 @@ window.CypherMediaViewer = (function () {
         buildMenu(kind);
         setMenuOpen(false);
 
-        // Fullscreen only makes sense for something actually rendered.
-        fullscreenBtn.hidden = kind === "other";
+        // Fullscreen only makes sense for something actually rendered - a
+        // media element, or the rendered preview we show for PSD/AI/etc.
+        fullscreenBtn.hidden = kind === "other" && !currentFile.thumbUrl;
 
         // Re-trigger the fade on every step, so moving through a set reads
         // as one file replacing another rather than the panel flickering.

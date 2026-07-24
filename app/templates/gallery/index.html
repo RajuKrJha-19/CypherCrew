@@ -139,6 +139,7 @@
                             data-preview-url="{{ url_for('tasks.preview_task_file', file_id=file.id) }}"
                             data-download-url="{{ url_for('tasks.download_task_file', file_id=file.id) }}"
                             data-filename="{{ file.original_filename }}"
+                            data-thumb-url="{{ file_thumbnail_url(file) or '' }}"
                             data-uploader="{{ file.uploaded_by.name if file.uploaded_by else '-' }}"
                             data-task-title="{{ file.task.title if file.task else '-' }}"
                             data-task-code="{{ file.task.task_code if file.task else '-' }}"
@@ -313,7 +314,10 @@
                     url: item.dataset.previewUrl,
                     downloadUrl: item.dataset.downloadUrl,
                     filename: item.dataset.filename,
-                    mime: item.dataset.mime
+                    mime: item.dataset.mime,
+                    // Rendered preview (webp) for formats the browser can't
+                    // paint itself - PSD, AI, TIFF. Empty for everything else.
+                    thumbUrl: item.dataset.thumbUrl || null
                 };
             }
 

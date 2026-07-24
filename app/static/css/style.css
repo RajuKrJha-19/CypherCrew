@@ -9677,6 +9677,25 @@ body.media-viewer-open{
     object-fit:contain;
 }
 
+/* Caption under the rendered preview shown for PSD / AI / TIFF, so it's
+   clear the stage is a generated preview and the source is a download. */
+.media-viewer-stage{ position:relative; }
+.media-viewer-preview-note{
+    position:absolute;
+    left:50%;
+    bottom:14px;
+    transform:translateX(-50%);
+    padding:5px 12px;
+    border-radius:var(--radius-full);
+    background:rgba(15,23,42,.72);
+    color:rgba(255,255,255,.9);
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.02em;
+    white-space:nowrap;
+    pointer-events:none;
+}
+
 .media-viewer-audio{
     width:min(560px,100%);
 }
@@ -14203,35 +14222,46 @@ body.ds-screen .selected-reference-file{
 
 .file-badge{
     position:absolute;
-    right:6px;
-    bottom:6px;
+    right:7px;
+    bottom:7px;
     z-index:3;
-    padding:2px 6px;
-    border-radius:5px;
-    font-size:9px;
+    padding:3px 7px;
+    border-radius:6px;
+    font-size:11px;
     font-weight:800;
-    letter-spacing:.03em;
-    line-height:1.4;
-    box-shadow:0 1px 3px rgba(0,0,0,.35);
+    letter-spacing:.04em;
+    line-height:1;
+    box-shadow:0 2px 6px rgba(0,0,0,.45);
+    /* A hairline keeps the chip legible over a same-coloured thumbnail. */
+    border:1px solid rgba(255,255,255,.14);
     pointer-events:none;
 }
 
-/* Small variant for the compact file tiles on the task detail page. */
+/* Slightly smaller variant for the compact file tiles on task detail. */
 .task-file-icon{ position:relative; }
 .task-file-icon .file-badge{
-    right:2px;
-    bottom:2px;
-    padding:1px 3px;
-    font-size:7px;
-    border-radius:3px;
-    box-shadow:none;
+    right:4px;
+    bottom:4px;
+    padding:2px 5px;
+    font-size:9px;
+    border-radius:4px;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);
 }
 
-.file-badge-ps{ background:#001e36; color:#31a8ff; }   /* Photoshop */
-.file-badge-ai{ background:#2a1400; color:#ff9a00; }   /* Illustrator */
-.file-badge-pdf{ background:#b30b00; color:#ffffff; }  /* PDF */
+.file-badge-ps{ background:#001e36; color:#31a8ff; }      /* Photoshop */
+.file-badge-ai{ background:#330000; color:#ff9a00; }      /* Illustrator */
+.file-badge-pdf{ background:#b30b00; color:#ffffff; }     /* PDF */
 .file-badge-eps{ background:#333333; color:#ffd54a; }
-.file-badge-indd{ background:#49021f; color:#ff3f8e; } /* InDesign */
-.file-badge-xd{ background:#2e001e; color:#ff61f6; }   /* XD */
-.file-badge-fig{ background:#1e1e1e; color:#a259ff; }  /* Figma */
+.file-badge-indd{ background:#49021f; color:#ff3f8e; }    /* InDesign */
+.file-badge-xd{ background:#2e001e; color:#ff61f6; }      /* XD */
+.file-badge-fig{ background:#1e1e1e; color:#a259ff; }     /* Figma */
 .file-badge-sketch{ background:#2b1a00; color:#fdad00; }
+/* Category colours for everything else. */
+.file-badge-img{ background:#062e22; color:#34d399; }     /* images */
+.file-badge-video{ background:#1e1065; color:#c4b5fd; }   /* video */
+.file-badge-audio{ background:#3f0a44; color:#f0abfc; }   /* audio */
+.file-badge-doc{ background:#0b2e4a; color:#7dd3fc; }     /* word / text */
+.file-badge-sheet{ background:#04321b; color:#4ade80; }   /* spreadsheets */
+.file-badge-slide{ background:#4a1503; color:#fdba74; }   /* slides */
+.file-badge-archive{ background:#3a2c00; color:#fcd34d; } /* archives */
+.file-badge-default{ background:#1f2937; color:#e5e7eb; } /* neutral */
