@@ -3349,6 +3349,7 @@ def delete_task_file(file_id):
 
     filename = task_file.original_filename
     object_key = task_file.object_key
+    thumbnail_key = task_file.thumbnail_key
 
     try:
         db.session.delete(task_file)
@@ -3381,16 +3382,18 @@ def delete_task_file(file_id):
             )
         )
 
-    try:
-        StorageService().delete(object_key=object_key)
-
-    except Exception:
-        current_app.logger.exception(
-            "Unable to remove storage object for deleted "
-            "task file %s: %s",
-            file_id,
-            object_key,
-        )
+    # Remove the original and its derived thumbnail together, so deleting a
+    # file reclaims all of its storage and never orphans a thumbnail in R2.
+    for leftover_key, label in ((object_key, "storage object"), (thumbnail_key, "thumbnail")):
+        if not leftover_key:
+            continue
+        try:
+            StorageService().delete(object_key=leftover_key)
+        except Exception:
+            current_app.logger.exception(
+                "Unable to remove %s for deleted task file %s: %s",
+                label, file_id, leftover_key,
+            )
 
     flash(
         "File deleted.",
