@@ -95,8 +95,16 @@ def add_client():
 
     if request.method == "POST":
 
+        client_name = (request.form.get("client_name") or "").strip()
+
+        # client_name is NOT NULL; without this an empty submit reached the
+        # DB and raised an IntegrityError (500) instead of a clean message.
+        if not client_name:
+            flash("Client name is required.", "error")
+            return redirect(url_for("clients.add_client"))
+
         client = Client(
-            client_name=request.form.get("client_name"),
+            client_name=client_name,
             company_name=request.form.get("company_name"),
             phone=request.form.get("phone"),
             email=request.form.get("email"),

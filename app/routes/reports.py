@@ -200,10 +200,18 @@ def add_report():
 
     if request.method == "POST":
 
+        completed_work = (request.form.get("completed_work") or "").strip()
+
+        # completed_work is NOT NULL; an empty submit previously reached the
+        # DB and raised an IntegrityError (500) rather than a clean message.
+        if not completed_work:
+            flash("Please describe the work you completed today.", "error")
+            return redirect(url_for("reports.add_report"))
+
         report = DailyReport(
             employee_id=current_user.id,
             report_date=today,
-            completed_work=request.form.get("completed_work"),
+            completed_work=completed_work,
             in_progress_work=request.form.get("in_progress_work"),
             hours_worked=total_hours,
             issues=request.form.get("issues"),

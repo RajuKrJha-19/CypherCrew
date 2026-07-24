@@ -220,6 +220,13 @@ def add_user():
         designation = request.form.get("designation", "").strip()
         status = request.form.get("status")
 
+        # role is NOT NULL and name/email/password are required for a usable
+        # account; without this an incomplete submit hit the DB and raised an
+        # IntegrityError (500) instead of a clean validation message.
+        if not name or not email or not password or not role:
+            flash("Name, email, password and role are required.", "error")
+            return redirect(url_for("users.add_user"))
+
         if current_user.role == "admin" and role != "employee":
             flash("Admin can create only employee accounts.", "error")
             return redirect(url_for("users.add_user"))
