@@ -129,6 +129,10 @@ def client_detail(client_id):
     try:
         selected_month = int(request.args.get("month", date.today().month))
         selected_year = int(request.args.get("year", date.today().year))
+        # month_name is indexed 1..12 below; an out-of-range month parses
+        # fine as an int but would raise IndexError, so reject it here.
+        if not (1 <= selected_month <= 12):
+            raise ValueError("month out of range")
     except (TypeError, ValueError):
         flash("Invalid month or year in the URL.", "error")
         return redirect(url_for("clients.client_detail", client_id=client_id))

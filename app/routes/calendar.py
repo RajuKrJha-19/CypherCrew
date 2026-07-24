@@ -72,6 +72,13 @@ def index():
         month = 1
         year += 1
 
+    # date() only supports years 1..9999, and the calendar's 6-week grid
+    # can spill into the neighbouring year, so an out-of-range year (e.g.
+    # from a hand-edited URL) would raise ValueError below. Keep a safe
+    # margin and fall back to the current year.
+    if not (1 < year < 9999):
+        year = today.year
+
     cal = calendar.Calendar(
         firstweekday=6
     )
