@@ -150,41 +150,37 @@
 
                             {% set is_video = file.mime_type and file.mime_type.startswith("video/") %}
                             {% set type_badge = file_badge(file) %}
+                            {#
+                                Direct presigned R2 URL for the pre-generated webp (or None).
+                                Every ready tile - photo, video frame or document preview - is
+                                just a small <img> the browser pulls straight from R2 in
+                                parallel. No redirect hop through the app, nothing generated
+                                during render, and no client-side <video> decode. That is what
+                                keeps a 69-tile grid opening instantly.
+                            #}
+                            {% set thumb = file_thumbnail_url(file) %}
 
                             <div class="gallery-thumb-box {% if is_video %}is-video{% endif %}">
 
-                                {% if is_image %}
-                                {#
-                                    A generated thumbnail, not the original. Pointing tiles at the
-                                    full-size file meant a page of 21 files pulled about a gigabyte
-                                    from R2 to paint 150px squares.
-                                #}
-                                <img class="gallery-thumb"
-                                     src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
-                                     alt="{{ file.original_filename }}"
-                                     loading="lazy" decoding="async">
-                                {% elif is_video %}
-                                {#
-                                    Prefer the pre-generated webp (the background worker makes one
-                                    per clip on upload where ffmpeg is available) - a small cached
-                                    image, exactly like a photo tile. Until it's ready (or where
-                                    ffmpeg isn't installed) fall back to a real frame borrowed
-                                    client-side by video-thumb.js.
-                                #}
+                                {% if is_video %}
                                 <div class="gallery-video-poster">
-                                    {% if file.thumbnail_state == "ready" %}
-                                    <img class="gallery-video-el"
-                                         src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
+                                    {% if thumb %}
+                                    <img class="gallery-video-el" src="{{ thumb }}"
                                          alt="{{ file.original_filename }}" loading="lazy" decoding="async">
-                                    {% else %}
-                                    <video class="js-video-thumb gallery-video-el"
-                                           data-vsrc="{{ file_preview_url(file) }}"
-                                           preload="none" muted playsinline></video>
                                     {% endif %}
+                                    {# No thumbnail yet -> the poster's own dark gradient shows. #}
                                     <span class="gallery-video-play"><i class="fa-solid fa-play"></i></span>
                                 </div>
-                                {% elif file.thumbnail_state == "ready" %}
-                                {# PSD / PDF / AI: a rendered preview of the document itself. #}
+                                {% elif thumb %}
+                                {# Photo, or a rendered PSD / PDF / AI preview - same fast path. #}
+                                <img class="gallery-thumb" src="{{ thumb }}"
+                                     alt="{{ file.original_filename }}" loading="lazy" decoding="async">
+                                {% elif is_image %}
+                                {#
+                                    Image whose thumbnail isn't generated yet (rare - the worker
+                                    makes one on upload). Heal it via the route this once rather
+                                    than pulling the full-size original into a 130px tile.
+                                #}
                                 <img class="gallery-thumb"
                                      src="{{ url_for('tasks.task_file_thumbnail', file_id=file.id) }}"
                                      alt="{{ file.original_filename }}" loading="lazy" decoding="async">

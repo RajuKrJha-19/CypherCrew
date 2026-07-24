@@ -70,7 +70,12 @@ def create_app():
 
     from app.utils.permissions import has_permission
     from app.utils.greeting import greet, today_label
-    from app.utils.avatars import avatar_url, file_preview_url, file_badge
+    from app.utils.avatars import (
+        avatar_url,
+        file_preview_url,
+        file_thumbnail_url,
+        file_badge,
+    )
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
@@ -83,6 +88,9 @@ def create_app():
         avatar_url=avatar_url,
         # Direct presigned URL for a task file (used by video thumbnails).
         file_preview_url=file_preview_url,
+        # Direct presigned URL for a file's generated thumbnail (grid tiles
+        # point <img> straight at R2 - no redirect hop through the app).
+        file_thumbnail_url=file_thumbnail_url,
         # Corner format badge (PS/AI/PDF/...) for a file tile, or None.
         file_badge=file_badge,
     )

@@ -41,6 +41,37 @@ def file_preview_url(file):
         return None
 
 
+def file_thumbnail_url(file):
+    """Direct presigned URL for a file's *generated* thumbnail, or None.
+
+    The grid points <img> straight at this so the browser fetches the
+    small cached webp from R2 itself - no redirect hop through the app,
+    no per-tile Flask request, and nothing generated during render. A
+    page of 69 tiles was paying for 69 round-trips through a 302 route;
+    this collapses each to a single direct fetch the browser can run in
+    parallel.
+
+    Returns a URL only when a thumbnail actually exists (state ready +
+    key). Not-ready files return None and the template shows a light
+    placeholder instead of proxying the full-size original.
+    """
+    if file is None:
+        return None
+
+    if getattr(file, "thumbnail_state", None) != "ready":
+        return None
+
+    key = getattr(file, "thumbnail_key", None)
+
+    if not key:
+        return None
+
+    try:
+        return StorageService().preview_url(object_key=key, expires_in=3600)
+    except Exception:
+        return None
+
+
 def file_badge(file):
     """A small format badge for a file tile - {label, cls} - or None.
 
