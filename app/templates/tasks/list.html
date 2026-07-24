@@ -14,6 +14,9 @@
 {% endblock %}
 
 {% block content %}
+            {# Computed once (not per-card): gates the inline quick-edit
+               controls on the board and list to people who can manage tasks. #}
+            {% set can_manage = has_permission(current_user, "manage_tasks") %}
             <div class="page-header task-page-sticky-header">
                 <div>
                     <h1>Tasks</h1>
@@ -204,9 +207,19 @@
                                 #{{ task.task_code }}
                             </a>
 
+                            {% if can_manage %}
+                            <button type="button"
+                                class="priority-dot {{ task.priority|lower }} qe-trigger"
+                                data-qe-field="priority" data-qe-task="{{ task.id }}"
+                                data-qe-value="{{ task.priority }}"
+                                title="Click to change priority">
+                                {{ task.priority }}
+                            </button>
+                            {% else %}
                             <span class="priority-dot {{ task.priority|lower }}">
                                 {{ task.priority }}
                             </span>
+                            {% endif %}
 
                         </div>
 
@@ -267,14 +280,29 @@
 
                         <div class="task-card-meta">
                             <span>
+                                {% if can_manage %}
+                                <button type="button" class="qe-trigger qe-inline"
+                                    data-qe-field="assignee" data-qe-task="{{ task.id }}"
+                                    data-qe-value="{{ task.assigned_to_id or '' }}"
+                                    title="Click to reassign">
+                                    {{ task.assigned_to.name if task.assigned_to else "Unassigned" }}
+                                </button>
+                                {% else %}
                                 {{ task.assigned_to.name if task.assigned_to else "Unassigned" }}
+                                {% endif %}
                             </span>
 
                             <span>
-                                {% if task.deadline %}
-                                {{ task.deadline.strftime("%d %b") }}
+                                {% if can_manage %}
+                                <button type="button" class="qe-trigger qe-inline"
+                                    data-qe-field="deadline" data-qe-task="{{ task.id }}"
+                                    data-qe-fmt="short"
+                                    data-qe-value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task.deadline else '' }}"
+                                    title="Click to set deadline">
+                                    {% if task.deadline %}{{ task.deadline.strftime("%d %b") }}{% else %}No deadline{% endif %}
+                                </button>
                                 {% else %}
-                                No deadline
+                                {% if task.deadline %}{{ task.deadline.strftime("%d %b") }}{% else %}No deadline{% endif %}
                                 {% endif %}
                             </span>
                         </div>
@@ -518,7 +546,16 @@
                             <td data-column="deliverable">{{ task.deliverable.deliverable_name }}</td>
 
                             <td data-column="assigned_to">
+                                {% if can_manage %}
+                                <button type="button" class="qe-trigger qe-inline"
+                                    data-qe-field="assignee" data-qe-task="{{ task.id }}"
+                                    data-qe-value="{{ task.assigned_to_id or '' }}"
+                                    title="Click to reassign">
+                                    {{ task.assigned_to.name if task.assigned_to else "-" }}
+                                </button>
+                                {% else %}
                                 {{ task.assigned_to.name if task.assigned_to else "-" }}
+                                {% endif %}
                             </td>
 
                             <td data-column="assigned_by">
@@ -526,10 +563,16 @@
                             </td>
 
                             <td data-column="deadline">
-                                {% if task.deadline %}
-                                {{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}
+                                {% if can_manage %}
+                                <button type="button" class="qe-trigger qe-inline"
+                                    data-qe-field="deadline" data-qe-task="{{ task.id }}"
+                                    data-qe-fmt="full"
+                                    data-qe-value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task.deadline else '' }}"
+                                    title="Click to set deadline">
+                                    {% if task.deadline %}{{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}{% else %}-{% endif %}
+                                </button>
                                 {% else %}
-                                -
+                                {% if task.deadline %}{{ task.deadline.strftime("%d %b %Y, %I:%M %p") }}{% else %}-{% endif %}
                                 {% endif %}
                             </td>
 
@@ -617,6 +660,7 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/quick-edit.js') }}"></script>
 <script>
     (function () {
         const STORAGE_KEY = "cypher_task_view";

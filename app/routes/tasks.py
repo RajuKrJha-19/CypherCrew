@@ -2703,6 +2703,143 @@ def kanban_update_status():
             )
         }
     )
+@tasks_bp.route("/assignees")
+@login_required
+def assignable_users():
+    """Active users a task can be assigned to - JSON, for the inline
+    assignee picker. Managers only, since only they can reassign."""
+
+    if not has_permission(current_user, "manage_tasks"):
+        return jsonify({"users": []})
+
+    users = User.query.filter(
+        User.status == "active",
+        User.role.in_(["super_admin", "admin", "employee"]),
+    ).order_by(User.name.asc()).all()
+
+    return jsonify(
+        {"users": [{"id": u.id, "name": u.name} for u in users]}
+    )
+
+
+@tasks_bp.route("/<int:task_id>/quick-update", methods=["POST"])
+@login_required
+def quick_update_task(task_id):
+    """Inline single-field edit from the list / board / drawer.
+
+    Changes one of assignee / priority / deadline without opening the full
+    edit form. Same permission and notification rules as edit_task, but one
+    field at a time and a small JSON reply the tile patches in place.
+    """
+
+    task = Task.query.get_or_404(task_id)
+
+    is_self_assigned_owner = (
+        task.created_by_id == current_user.id
+        and task.assigned_to_id == current_user.id
+    )
+    can_manage = has_permission(current_user, "manage_tasks")
+
+    if not can_manage and not is_self_assigned_owner:
+        return jsonify({"success": False, "message": "Permission denied."}), 403
+
+    # Published / Void are terminal - no quiet edits.
+    if task.status in task_status.TERMINAL_STATUSES:
+        return jsonify({"success": False, "message": "This task is closed."}), 400
+
+    data = request.get_json(silent=True) or {}
+    field = (data.get("field") or "").strip()
+    value = data.get("value")
+
+    changes = []
+
+    if field == "priority":
+
+        if value not in ("Low", "Medium", "High", "Urgent"):
+            return jsonify({"success": False, "message": "Invalid priority."}), 400
+
+        if value != task.priority:
+            changes.append(("Priority", task.priority, value))
+            task.priority = value
+
+        display = value
+
+    elif field == "deadline":
+
+        new_deadline = None
+
+        if value:
+            try:
+                new_deadline = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+            except ValueError:
+                return jsonify({"success": False, "message": "Invalid date."}), 400
+
+        old = task.deadline.strftime("%d %b %Y %I:%M %p") if task.deadline else "-"
+        task.deadline = new_deadline
+        new = task.deadline.strftime("%d %b %Y %I:%M %p") if task.deadline else "-"
+
+        if old != new:
+            changes.append(("Deadline", old, new))
+
+        display = new
+
+    elif field == "assignee":
+
+        if not can_manage:
+            return jsonify({"success": False, "message": "Only managers can reassign."}), 403
+
+        assigned_user = User.query.filter_by(id=value, status="active").first()
+
+        if not assigned_user:
+            return jsonify({"success": False, "message": "Invalid employee."}), 400
+
+        old_assigned_to_id = task.assigned_to_id
+
+        if assigned_user.id != old_assigned_to_id:
+
+            old_name = task.assigned_to.name if task.assigned_to else "-"
+            changes.append(("Assigned To", old_name, assigned_user.name))
+
+            task.assigned_to_id = assigned_user.id
+            # A fresh assignee hasn't completed it - mirror edit_task.
+            task.employee_completed = False
+            task.employee_completed_at = None
+
+            create_notification(
+                user_id=assigned_user.id,
+                title="Task assigned to you",
+                message=f"{current_user.name} assigned you: {task.title}",
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+
+            if old_assigned_to_id and old_assigned_to_id != assigned_user.id:
+                create_notification(
+                    user_id=old_assigned_to_id,
+                    title="Task reassigned",
+                    message=f"{task.title} is no longer assigned to you.",
+                    link=url_for("tasks.task_detail", task_id=task.id),
+                    actor_id=current_user.id,
+                    task_id=task.id,
+                )
+
+        display = assigned_user.name
+
+    else:
+        return jsonify({"success": False, "message": "Unknown field."}), 400
+
+    if changes:
+        add_activity(
+            task,
+            action="updated",
+            message=build_task_update_message(changes),
+        )
+        db.session.commit()
+
+    return jsonify({"success": True, "message": "Updated.", "display": display})
+
+
 @tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
 @login_required
 def approve_task(task_id):
