@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
+from app.utils.mentions import notify_mentioned_users
 from app.utils import task_status
 
 
@@ -3039,6 +3040,13 @@ def task_detail(task_id):
         timer_status_label=timer_status_label,
         timedelta=timedelta,
         comments=comments,
+        # Names for the comment @-mention autocomplete.
+        mention_users=[
+            u.name for u in User.query
+            .filter_by(status="active")
+            .order_by(User.name.asc())
+            .all()
+        ],
         reference_files=reference_files,
         working_files=working_files,
         final_files=final_files,
@@ -3754,12 +3762,21 @@ def add_comment(task_id):
         message=f"{current_user.name} added a comment."
     )
 
-    if task.assigned_to_id != current_user.id:
+    comment_link = url_for("tasks.task_detail", task_id=task.id)
+
+    # Tagged teammates get a "mentioned you" notification first; whoever
+    # is mentioned is skipped below so they don't also get the generic one.
+    mentioned = notify_mentioned_users(
+        task, message, current_user, comment_link
+    )
+    mentioned_ids = {u.id for u in mentioned}
+
+    if task.assigned_to_id != current_user.id and task.assigned_to_id not in mentioned_ids:
         create_notification(
             user_id=task.assigned_to_id,
             title="New Comment",
             message=f"{current_user.name} commented on '{task.title}'",
-            link=url_for("tasks.task_detail", task_id=task.id),
+            link=comment_link,
             actor_id=current_user.id,
             task_id=task.id
         )
@@ -3824,12 +3841,19 @@ def reply_comment(comment_id):
         message=f"{current_user.name} replied to a comment."
     )
 
-    if comment.user_id != current_user.id:
+    reply_link = url_for("tasks.task_detail", task_id=task.id)
+
+    mentioned = notify_mentioned_users(
+        task, message, current_user, reply_link
+    )
+    mentioned_ids = {u.id for u in mentioned}
+
+    if comment.user_id != current_user.id and comment.user_id not in mentioned_ids:
         create_notification(
             user_id=comment.user_id,
             title="New Reply",
             message=f"{current_user.name} replied to your comment.",
-            link=url_for("tasks.task_detail", task_id=task.id),
+            link=reply_link,
             actor_id=current_user.id,
             task_id=task.id
         )

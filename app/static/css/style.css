@@ -13972,6 +13972,43 @@ body.ds-screen .selected-reference-file{
 
 .user-row-avatar img{ width:100%; height:100%; object-fit:cover; }
 
+/* ---- @mentions ---- */
+.mention{
+    color:var(--color-primary);
+    background:var(--color-primary-soft);
+    font-weight:600;
+    padding:0 4px;
+    border-radius:4px;
+    white-space:nowrap;
+}
+
+.mention-suggest{
+    position:absolute;
+    z-index:11000;
+    max-height:230px;
+    overflow-y:auto;
+    background:var(--ds-surface, #fff);
+    border:1px solid var(--ds-border, #e5e7f0);
+    border-radius:var(--ds-radius-md, 10px);
+    box-shadow:0 10px 30px rgba(0,0,0,.16);
+    padding:4px;
+}
+
+.mention-suggest-item{
+    padding:8px 12px;
+    border-radius:var(--ds-radius-sm, 7px);
+    font-size:13px;
+    color:var(--ds-text, #0f172a);
+    cursor:pointer;
+    white-space:nowrap;
+}
+
+.mention-suggest-item.active,
+.mention-suggest-item:hover{
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+}
+
 @media(max-width:768px){
     .profile-grid{ grid-template-columns:1fr; }
     .profile-form-grid{ grid-template-columns:1fr; }

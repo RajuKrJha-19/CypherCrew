@@ -85,6 +85,9 @@ def create_app():
 
     app.jinja_env.filters["linkify"] = linkify_text
 
+    from app.utils.mentions import highlight_mentions
+    app.jinja_env.filters["mentions"] = highlight_mentions
+
     # Cache-bust static assets: append each file's mtime as ?v= so a
     # shipped CSS/JS change is fetched fresh instead of served from a
     # stale browser cache. Without this, a fixed style.css can keep

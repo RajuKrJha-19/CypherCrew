@@ -325,6 +325,10 @@
 
                             </form>
 
+                            {# @-mention picker for the composer and reply boxes. #}
+                            <script>window.MENTION_USERS = {{ (mention_users or [])|tojson }};</script>
+                            <script src="{{ url_for('static', filename='js/mention-autocomplete.js') }}" defer></script>
+
                         </div>
 
                     </div>

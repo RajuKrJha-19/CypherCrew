@@ -52,7 +52,7 @@
                 <span>{{ (comment.created_at + timedelta(hours=5, minutes=30)).strftime("%d %b %Y • %I:%M %p") }}</span>
             </div>
 
-            <p id="comment-message-{{ comment.id }}">{{ comment.message|linkify }}</p>
+            <p id="comment-message-{{ comment.id }}">{{ comment.message|linkify|mentions }}</p>
 
             {% if comment.is_edited %}
             <small class="edited-text">Edited</small>
