@@ -12,7 +12,13 @@
 
 {% set p = period %}
 
-<section class="activity-band">
+{#
+    Anchored so a period change scrolls back to this section instead of
+    the top of the page. Turbo honours the URL fragment on the preset
+    links and the custom form's action, so the Performance band stays
+    under the cursor when the window is switched.
+#}
+<section class="activity-band" id="perf">
 
     <div class="activity-head">
         <div class="activity-head-text">
@@ -22,16 +28,16 @@
 
         <div class="period-toggle" role="group" aria-label="Select time period">
 
-            <a href="{{ url_for(request.endpoint, period='today') }}"
+            <a href="{{ url_for(request.endpoint, period='today') }}#perf"
                class="period-opt {% if p.key == 'today' %}is-active{% endif %}">Today</a>
 
-            <a href="{{ url_for(request.endpoint, period='yesterday') }}"
+            <a href="{{ url_for(request.endpoint, period='yesterday') }}#perf"
                class="period-opt {% if p.key == 'yesterday' %}is-active{% endif %}">Yesterday</a>
 
-            <a href="{{ url_for(request.endpoint, period='7d') }}"
+            <a href="{{ url_for(request.endpoint, period='7d') }}#perf"
                class="period-opt {% if p.key == '7d' %}is-active{% endif %}">7 days</a>
 
-            <a href="{{ url_for(request.endpoint, period='30d') }}"
+            <a href="{{ url_for(request.endpoint, period='30d') }}#perf"
                class="period-opt {% if p.key == '30d' %}is-active{% endif %}">30 days</a>
 
             <details class="period-custom" {% if p.key == 'custom' %}open{% endif %}>
@@ -40,7 +46,7 @@
                     {% if p.key == 'custom' %}{{ p.label }}{% else %}Custom{% endif %}
                 </summary>
 
-                <form method="get" action="{{ url_for(request.endpoint) }}" class="period-custom-pop">
+                <form method="get" action="{{ url_for(request.endpoint) }}#perf" class="period-custom-pop">
                     <input type="hidden" name="period" value="custom">
 
                     <label>

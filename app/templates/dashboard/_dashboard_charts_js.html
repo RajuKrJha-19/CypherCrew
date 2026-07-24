@@ -12,11 +12,17 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        // Wrapped in an IIFE so its top-level declarations are
-        // function-scoped: under client-side navigation this script
-        // re-runs on each dashboard visit, and global `const`s would
-        // throw "already declared" on the second run.
-        (function () {
+        // Wrapped in a named IIFE so its top-level declarations are
+        // function-scoped (this re-runs on each client-side dashboard
+        // visit). It also waits for Chart.js: under Turbo the CDN
+        // <script> loads asynchronously, so on the first client-rendered
+        // visit this code can run before `Chart` exists - which left the
+        // Throughput and Tasks-by-Status charts blank until a refresh.
+        (function initDashboardCharts() {
+        if (typeof Chart === "undefined") {
+            window.setTimeout(initDashboardCharts, 40);
+            return;
+        }
         const statusLabels = {{ status_chart["labels"]| tojson }};
         const statusValues = {{ status_chart["values"]| tojson }};
         const statusTotal = statusValues.reduce((a, b) => a + b, 0);
@@ -134,10 +140,13 @@
         /*
             Performance / Throughput chart. Driven by the date picker on
             the Performance band, so its window changes with ?period=.
-            One day per bucket: for short ranges a grouped bar reads best
-            (a single day is one clean group of three bars), and for
-            longer ranges it switches to a line so 30 days do not turn
-            into a wall of bars.
+            One day per bucket, drawn as an area line for EVERY window.
+            It used to switch to grouped bars for short ranges, but that
+            made Today/Yesterday/7-days look like a different chart from
+            30-days/custom - the same picker, two visual languages. A
+            single area line reads consistently from one day to a full
+            month (bars would be a 90-bar wall at 30 days) and is the
+            standard for throughput-over-time.
         */
         const activityCtx = document.getElementById("activityChart");
 
@@ -147,12 +156,8 @@
             const activityCompleted = {{ activity_trend.completed | tojson }};
             const activityPublished = {{ activity_trend.published | tojson }};
 
-            const asBars = activityLabels.length <= 14;
-
-            // Line mode (30 days / long custom ranges) gets the same
-            // polish as the bars: a soft vertical gradient area under each
-            // curve, built lazily from the chart area so it survives
-            // responsive resizes.
+            // A soft vertical gradient under each curve, built lazily from
+            // the chart area so it survives responsive resizes.
             function activityAreaFill(hex) {
                 return function (context) {
                     const area = context.chart.chartArea;
@@ -164,16 +169,19 @@
                 };
             }
 
+            // Short windows can't draw a meaningful line (a single day is
+            // one point), so show the markers - the numbers are still
+            // legible as dots. Long windows hide them for a clean curve.
+            const fewPoints = activityLabels.length <= 10;
+
             const activitySeries = [
                 { label: "Created", data: activityCreated, color: "#6366F1" },
                 { label: "Completed", data: activityCompleted, color: "#15A34A" },
-                // Slate in line mode reads better as a soft fill than the
-                // near-black the bars use.
-                { label: "Published", data: activityPublished, color: asBars ? "#111827" : "#64748B" }
+                { label: "Published", data: activityPublished, color: "#64748B" }
             ];
 
             const activityChart = new Chart(activityCtx, {
-                type: asBars ? "bar" : "line",
+                type: "line",
                 data: {
                     labels: activityLabels,
                     datasets: activitySeries.map(function (s) {
@@ -181,14 +189,13 @@
                             label: s.label,
                             data: s.data,
                             borderColor: s.color,
-                            backgroundColor: asBars ? s.color : activityAreaFill(s.color),
-                            borderWidth: asBars ? 0 : 2,
-                            borderRadius: asBars ? 4 : 0,
-                            maxBarThickness: 34,
+                            backgroundColor: activityAreaFill(s.color),
+                            borderWidth: 2,
                             tension: 0.4,
-                            fill: asBars ? false : true,
-                            pointRadius: 0,
-                            pointHoverRadius: asBars ? 0 : 4,
+                            fill: true,
+                            pointRadius: fewPoints ? 3 : 0,
+                            pointBackgroundColor: s.color,
+                            pointHoverRadius: 4,
                             pointHoverBackgroundColor: s.color,
                             pointHoverBorderColor: cssVar("--color-surface", "#ffffff"),
                             pointHoverBorderWidth: 2
