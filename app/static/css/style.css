@@ -6559,7 +6559,11 @@ body.sidebar-collapsed .task-page-sticky-header{
 }
 
 .main:has(.task-page-sticky-header){
-    padding-top: 120px !important;
+    /* Clears the fixed header (~89px tall) with a normal section gap.
+       main's content box starts at the 60px topbar, so 48px lands the
+       content ~20px below the header (60 + 48 = 108) instead of the
+       ~90px empty band the old 120px left. */
+    padding-top: 48px !important;
 }
 
 /* Must sit after the rules above to win: on mobile the sidebar
