@@ -4,12 +4,14 @@
     by the inline script in base.html; this just flips and persists it.
 #}
 <button type="button"
-        class="theme-toggle"
+        class="theme-switch"
         id="themeToggle"
+        role="switch"
         aria-label="Toggle dark mode"
         title="Toggle light / dark">
-    <i class="fa-solid fa-moon theme-icon-dark"></i>
-    <i class="fa-solid fa-sun theme-icon-light"></i>
+    <span class="theme-switch-thumb"></span>
+    <span class="theme-switch-icon theme-switch-sun"><i class="fa-solid fa-sun"></i></span>
+    <span class="theme-switch-icon theme-switch-moon"><i class="fa-solid fa-moon"></i></span>
 </button>
 
 <script>

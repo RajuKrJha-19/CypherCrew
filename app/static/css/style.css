@@ -609,34 +609,65 @@ body.sidebar-collapsed .topbar{
 }
 
 /* --- Theme toggle (top bar) --- */
-.theme-toggle{
+/* Sliding pill switch: sun (left) + moon (right) with a thumb that slides
+   over the active side. Light track in light mode, near-black in dark. */
+.theme-switch{
+    position:relative;
     display:inline-flex;
     align-items:center;
-    justify-content:center;
-    width:38px;
-    height:38px;
-    padding:0;
-    background:transparent;
+    width:58px;
+    height:30px;
+    padding:3px;
     border:none;
-    border-radius:var(--ds-radius-md);
-    color:var(--color-text-muted);
-    font-size:16px;
+    border-radius:999px;
+    background:#e6eaf4;
     cursor:pointer;
-    transition:background var(--ds-transition), color var(--ds-transition);
+    transition:background var(--ds-transition);
+    -webkit-tap-highlight-color:transparent;
 }
 
-.theme-toggle:hover{
-    background:var(--color-surface-muted);
-    color:var(--color-text);
+.theme-switch-thumb{
+    position:absolute;
+    top:3px;
+    left:3px;
+    width:26px;
+    height:24px;
+    border-radius:999px;
+    background:#ffffff;
+    box-shadow:0 1px 3px rgba(16,24,40,.18);
+    transition:transform .25s cubic-bezier(.4,.1,.2,1), background var(--ds-transition);
+    z-index:0;
 }
 
-/* Show the icon for the mode you'll switch TO: moon in light, sun in
-   dark. Only one is ever visible. */
-.theme-icon-light{ display:none; }
-.theme-icon-dark{ display:inline-block; }
+.theme-switch-icon{
+    position:relative;
+    z-index:1;
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    transition:color var(--ds-transition);
+}
 
-:root[data-theme="dark"] .theme-icon-dark{ display:none; }
-:root[data-theme="dark"] .theme-icon-light{ display:inline-block; }
+/* Light mode: thumb over the sun, sun dark, moon muted. */
+.theme-switch-sun{ color:#1e293b; }
+.theme-switch-moon{ color:#9aa3b7; }
+
+/* Dark mode: track dark, thumb slides right over the moon. */
+:root[data-theme="dark"] .theme-switch{ background:#0c0e18; }
+:root[data-theme="dark"] .theme-switch-thumb{
+    transform:translateX(26px);
+    background:#3b4162;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);
+}
+:root[data-theme="dark"] .theme-switch-sun{ color:#8b93a7; }
+:root[data-theme="dark"] .theme-switch-moon{ color:#ffffff; }
+
+.theme-switch:focus-visible{
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
 
 /* --- Quick Create (top bar primary action) --- */
 .quick-create{
