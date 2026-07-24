@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from config import Config
 from app.extensions import (
@@ -76,5 +78,18 @@ def create_app():
     )
 
     app.jinja_env.filters["linkify"] = linkify_text
-    
+
+    # Cache-bust static assets: append each file's mtime as ?v= so a
+    # shipped CSS/JS change is fetched fresh instead of served from a
+    # stale browser cache. Without this, a fixed style.css can keep
+    # rendering the old layout until the cache happens to expire.
+    @app.url_defaults
+    def _static_cache_bust(endpoint, values):
+        if endpoint == "static" and values.get("filename"):
+            try:
+                file_path = os.path.join(app.static_folder, values["filename"])
+                values["v"] = int(os.stat(file_path).st_mtime)
+            except OSError:
+                pass
+
     return app
