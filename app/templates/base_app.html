@@ -32,6 +32,7 @@
 #}
 <script src="{{ url_for('static', filename='js/task-panel.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/global-search.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/command-palette.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/video-thumb.js') }}" defer></script>
 
 {# Always fetch fresh; teardown still runs on before-render so no
@@ -86,4 +87,7 @@
     </main>
 
 </div>
+
+{# Command palette (Cmd/Ctrl-K) - global overlay, rendered once per shell. #}
+{% include "partials/command_palette.html" %}
 {% endblock %}
