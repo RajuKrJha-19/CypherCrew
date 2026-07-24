@@ -149,10 +149,27 @@
 
             const asBars = activityLabels.length <= 14;
 
+            // Line mode (30 days / long custom ranges) gets the same
+            // polish as the bars: a soft vertical gradient area under each
+            // curve, built lazily from the chart area so it survives
+            // responsive resizes.
+            function activityAreaFill(hex) {
+                return function (context) {
+                    const area = context.chart.chartArea;
+                    if (!area) return "transparent";
+                    const g = context.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+                    g.addColorStop(0, hex + "2E");
+                    g.addColorStop(1, hex + "00");
+                    return g;
+                };
+            }
+
             const activitySeries = [
                 { label: "Created", data: activityCreated, color: "#6366F1" },
                 { label: "Completed", data: activityCompleted, color: "#15A34A" },
-                { label: "Published", data: activityPublished, color: "#111827" }
+                // Slate in line mode reads better as a soft fill than the
+                // near-black the bars use.
+                { label: "Published", data: activityPublished, color: asBars ? "#111827" : "#64748B" }
             ];
 
             const activityChart = new Chart(activityCtx, {
@@ -164,14 +181,17 @@
                             label: s.label,
                             data: s.data,
                             borderColor: s.color,
-                            backgroundColor: asBars ? s.color : "transparent",
+                            backgroundColor: asBars ? s.color : activityAreaFill(s.color),
                             borderWidth: asBars ? 0 : 2,
                             borderRadius: asBars ? 4 : 0,
                             maxBarThickness: 34,
-                            tension: 0.35,
-                            fill: false,
-                            pointRadius: asBars ? 0 : 3,
-                            pointHoverRadius: asBars ? 0 : 5
+                            tension: 0.4,
+                            fill: asBars ? false : true,
+                            pointRadius: 0,
+                            pointHoverRadius: asBars ? 0 : 4,
+                            pointHoverBackgroundColor: s.color,
+                            pointHoverBorderColor: cssVar("--color-surface", "#ffffff"),
+                            pointHoverBorderWidth: 2
                         };
                     })
                 },
@@ -186,19 +206,44 @@
                             labels: {
                                 usePointStyle: true,
                                 boxWidth: 8,
+                                boxHeight: 8,
+                                padding: 16,
+                                color: cssVar("--color-text-muted", "#646C85"),
                                 font: { size: 12 }
                             }
+                        },
+                        tooltip: {
+                            backgroundColor: "#1c1f26",
+                            titleColor: "#ffffff",
+                            bodyColor: "#e8eaf0",
+                            padding: 10,
+                            cornerRadius: 8,
+                            usePointStyle: true,
+                            boxPadding: 4
                         }
                     },
                     scales: {
                         x: {
                             grid: { display: false },
-                            ticks: { color: "#646C85", maxTicksLimit: 10 }
+                            border: { display: false },
+                            ticks: {
+                                color: cssVar("--color-text-muted", "#8a90a0"),
+                                font: { size: 11 },
+                                maxTicksLimit: 8,
+                                maxRotation: 0,
+                                autoSkip: true
+                            }
                         },
                         y: {
                             beginAtZero: true,
-                            ticks: { precision: 0, color: "#646C85" },
-                            grid: { color: "#E5E7F0" }
+                            border: { display: false },
+                            ticks: {
+                                precision: 0,
+                                color: cssVar("--color-text-muted", "#8a90a0"),
+                                font: { size: 11 },
+                                maxTicksLimit: 5
+                            },
+                            grid: { color: cssVar("--color-border", "#E5E7F0"), drawTicks: false }
                         }
                     }
                 }

@@ -117,12 +117,16 @@ def list_reports():
     if to_date:
         query = query.filter(DailyReport.report_date <= to_date)
 
+    sort = request.args.get("sort", "newest").strip()
+    if sort == "oldest":
+        order = (DailyReport.report_date.asc(), DailyReport.created_at.asc())
+    else:
+        sort = "newest"
+        order = (DailyReport.report_date.desc(), DailyReport.created_at.desc())
+
     page = request.args.get("page", 1, type=int)
 
-    pagination = query.order_by(
-        DailyReport.report_date.desc(),
-        DailyReport.created_at.desc()
-    ).paginate(
+    pagination = query.order_by(*order).paginate(
         page=page,
         per_page=25,
         error_out=False
@@ -152,6 +156,7 @@ def list_reports():
         selected_employee=selected_employee,
         from_date=from_date_raw,
         to_date=to_date_raw,
+        sort=sort,
         is_filtered=is_filtered
     )
 

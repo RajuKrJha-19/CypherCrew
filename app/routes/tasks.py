@@ -620,6 +620,7 @@ def list_tasks():
         priorities=priorities,
         selected_status=selected_status,
         selected_priority=selected_priority,
+        selected_assigned_to=assigned_to,
         search=search,
         sort_by=sort_by,
         filter_by=filter_by,

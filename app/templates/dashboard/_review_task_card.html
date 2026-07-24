@@ -42,32 +42,43 @@
     {% endif %}
 
     {% if task.status in ["Core Review", "Client Review"] %}
+    {% set is_client = task.status == "Client Review" %}
     <div class="review-actions-new">
 
-        <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}" class="review-move-form"
-            data-task-id="{{ task.id }}" data-from-status="{{ task.status }}"
-            data-to-status="{% if task.status == 'Core Review' %}Client Review{% elif task.status == 'Client Review' %}Published{% endif %}">
-            <button type="submit" class="review-approve-btn">
-                Approve
+        <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}"
+            class="review-move-form" data-task-id="{{ task.id }}"
+            data-from-status="{{ task.status }}"
+            data-to-status="{{ 'Published' if is_client else 'Client Review' }}">
+            <button type="submit" class="review-approve-btn"
+                title="{% if is_client %}Approve and publish this task{% else %}Approve and move to Client Review{% endif %}">
+                <i class="fa-solid fa-check"></i>
+                {% if is_client %}Approve &amp; Publish{% else %}Approve{% endif %}
             </button>
         </form>
 
-        <button type="button" class="review-reject-toggle" onclick="toggleReviewRejectBox(this)">
-            Reject
+        <button type="button" class="review-reject-toggle" onclick="toggleReviewRejectBox(this)"
+            title="Send this task back to the employee for changes">
+            <i class="fa-solid fa-rotate-left"></i>
+            Send back
         </button>
 
         <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
             class="review-reject-form-new review-move-form" data-task-id="{{ task.id }}"
             data-from-status="{{ task.status }}" data-to-status="Assigned">
-            <textarea name="message" placeholder="Write rejection reason..." required minlength="10"></textarea>
+
+            <label class="review-reject-label">Reason for sending back</label>
+
+            <textarea name="message"
+                placeholder="What needs fixing? (at least 10 characters)"
+                required minlength="10"></textarea>
 
             <div class="review-reject-action-row">
-                <button type="button" class="btn-secondary" onclick="toggleReviewRejectBox(this)">
+                <button type="button" class="review-reject-cancel" onclick="toggleReviewRejectBox(this)">
                     Cancel
                 </button>
 
-                <button type="submit" class="btn-danger">
-                    Confirm Reject
+                <button type="submit" class="review-reject-confirm">
+                    <i class="fa-solid fa-paper-plane"></i> Send back to employee
                 </button>
             </div>
         </form>

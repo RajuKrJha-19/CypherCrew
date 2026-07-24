@@ -44,6 +44,31 @@
             {% endif %}
             {% endwith %}
 
+            {#
+                Scope tabs (managers only). "My Tasks" narrows the whole
+                page - board, list, stats - to work assigned to you, the
+                way Asana/Jira/Linear separate "assigned to me" from the
+                full workspace. It reuses the assigned_to filter, so there
+                is one source of truth, and preserves every other filter,
+                sort and search when you switch.
+            #}
+            {% if has_permission(current_user, "manage_tasks") %}
+            {% set scope_args = request.args.to_dict() %}
+            {% set _ = scope_args.pop('page', None) %}
+            {% set _ = scope_args.pop('assigned_to', None) %}
+            {% set mine = selected_assigned_to == current_user.id|string %}
+            <div class="task-scope-tabs" role="group" aria-label="Task scope">
+                <a href="{{ url_for('tasks.list_tasks', **scope_args) }}"
+                   class="task-scope-tab {% if not mine %}is-active{% endif %}">
+                    <i class="fa-solid fa-layer-group"></i> All Tasks
+                </a>
+                <a href="{{ url_for('tasks.list_tasks', assigned_to=current_user.id, **scope_args) }}"
+                   class="task-scope-tab {% if mine %}is-active{% endif %}">
+                    <i class="fa-solid fa-user"></i> My Tasks
+                </a>
+            </div>
+            {% endif %}
+
             <div class="stats-grid">
 
                 <a href="{{ url_for('tasks.filtered_tasks', filter_type='all') }}" class="metric-card metric-card-link">

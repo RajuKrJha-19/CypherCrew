@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import Leave, User
 from app.utils.permissions import has_permission
+from app.utils.timezone import ist_now
 
 
 leaves_bp = Blueprint(
@@ -79,14 +80,42 @@ def list_leaves():
             )
         )
 
-    leaves = Leave.query.order_by(
-        Leave.start_date.asc()
-    ).all()
+    # Filters + sort. Leaves have no approval status, so the useful
+    # cuts are "whose" and "when": a member, and where the leave sits
+    # relative to today.
+    selected_member = request.args.get("member", "").strip()
+    selected_period = request.args.get("period", "").strip()
+    sort = request.args.get("sort", "start_desc").strip()
+
+    today = ist_now().date()
+    query = Leave.query
+
+    if selected_member.isdigit():
+        query = query.filter(Leave.user_id == int(selected_member))
+
+    if selected_period == "upcoming":
+        query = query.filter(Leave.start_date > today)
+    elif selected_period == "ongoing":
+        query = query.filter(Leave.start_date <= today, Leave.end_date >= today)
+    elif selected_period == "past":
+        query = query.filter(Leave.end_date < today)
+
+    if sort == "start_asc":
+        query = query.order_by(Leave.start_date.asc())
+    else:
+        sort = "start_desc"
+        query = query.order_by(Leave.start_date.desc())
+
+    leaves = query.all()
 
     return render_template(
         "leaves/list.html",
         leaves=leaves,
-        users=users
+        users=users,
+        selected_member=selected_member,
+        selected_period=selected_period,
+        sort=sort,
+        is_filtered=bool(selected_member or selected_period),
     )
 
 

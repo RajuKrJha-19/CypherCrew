@@ -38,6 +38,11 @@
     </div>
     {% else %}
 
+    <p class="search-summary">
+        <strong>{{ counts.all }}</strong> result{{ '' if counts.all == 1 else 's' }}
+        for “<span class="search-summary-term">{{ term }}</span>”
+    </p>
+
     {# Entity tabs - narrow the result set, Asana-style. Counts come
        from the same fetch as the sections, so they never lie. #}
     <div class="search-tabs">
@@ -84,14 +89,17 @@
                 </span>
                 <span class="search-result-body">
                     <span class="search-result-title">
-                        {% if item.code %}<span class="gs-code">{{ item.code }}</span>{% endif %}
+                        {% if item.code %}<span class="gs-code">#{{ item.code }}</span>{% endif %}
                         {{ item.title }}
                     </span>
-                    <span class="search-result-sub">{{ item.subtitle }}</span>
+                    <span class="search-result-sub">
+                        {{ item.subtitle }}{% if item.type == 'task' and item.priority %} <span class="dot-sep">·</span> {{ item.priority }} priority{% endif %}
+                    </span>
                 </span>
                 {% if item.status %}
                 <span class="gs-badge gs-badge-{{ item.type }}">{{ item.status }}</span>
                 {% endif %}
+                <i class="fa-solid fa-chevron-right search-result-arrow"></i>
             </a>
             {% endfor %}
         </div>

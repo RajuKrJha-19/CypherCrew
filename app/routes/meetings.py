@@ -20,6 +20,7 @@ from app.models import (
     Notification
 )
 from app.utils.permissions import has_permission
+from app.utils.timezone import ist_now
 
 
 meetings_bp = Blueprint(
@@ -117,9 +118,34 @@ def list_meetings():
             )
         )
 
-    meetings = Meeting.query.order_by(
-        Meeting.meeting_date.asc()
-    ).all()
+    selected_period = request.args.get("period", "").strip()
+    selected_client = request.args.get("client", "").strip()
+    selected_member = request.args.get("member", "").strip()
+    sort = request.args.get("sort", "date_desc").strip()
+
+    now = ist_now()
+    query = Meeting.query
+
+    if selected_period == "upcoming":
+        query = query.filter(Meeting.meeting_date >= now)
+    elif selected_period == "past":
+        query = query.filter(Meeting.meeting_date < now)
+
+    if selected_client.isdigit():
+        query = query.filter(Meeting.client_id == int(selected_client))
+
+    if selected_member.isdigit():
+        query = query.filter(
+            Meeting.participants.any(User.id == int(selected_member))
+        )
+
+    if sort == "date_asc":
+        query = query.order_by(Meeting.meeting_date.asc())
+    else:
+        sort = "date_desc"
+        query = query.order_by(Meeting.meeting_date.desc())
+
+    meetings = query.all()
 
     clients = Client.query.filter_by(
         status="active"
@@ -138,7 +164,12 @@ def list_meetings():
         "meetings/list.html",
         meetings=meetings,
         clients=clients,
-        employees=employees
+        employees=employees,
+        selected_period=selected_period,
+        selected_client=selected_client,
+        selected_member=selected_member,
+        sort=sort,
+        is_filtered=bool(selected_period or selected_client or selected_member),
     )
 
 

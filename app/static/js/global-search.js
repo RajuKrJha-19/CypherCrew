@@ -192,6 +192,21 @@
         if (!form.contains(event.target)) close();
     });
 
+    // Selecting a result must close the panel. The top bar is a
+    // Turbo-permanent element, so without this the dropdown would stay
+    // open across navigation (and behind the task drawer, which opens
+    // without a page change). Deferred so the anchor's own navigation /
+    // drawer-open fires first.
+    dropdown.addEventListener("click", function (event) {
+        if (event.target.closest(".gs-item, .gs-all")) {
+            window.setTimeout(close, 0);
+        }
+    });
+
+    // Any client-side navigation also closes it.
+    document.addEventListener("turbo:before-visit", close);
+    document.addEventListener("turbo:load", close);
+
     // "/" focuses search from anywhere, the way most tools bind it.
     document.addEventListener("keydown", function (event) {
         if (event.key !== "/") return;

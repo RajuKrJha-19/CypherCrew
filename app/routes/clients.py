@@ -21,6 +21,8 @@ def list_clients():
 
     search = request.args.get("q", "").strip()
     selected_status = request.args.get("status", "").strip()
+    selected_manager = request.args.get("manager", "").strip()
+    sort = request.args.get("sort", "newest").strip()
 
     query = Client.query
 
@@ -39,15 +41,33 @@ def list_clients():
     if selected_status:
         query = query.filter(Client.status == selected_status)
 
+    if selected_manager.isdigit():
+        query = query.filter(Client.assigned_manager_id == int(selected_manager))
+
+    sort_options = {
+        "newest": Client.id.desc(),
+        "oldest": Client.id.asc(),
+        "name_asc": Client.client_name.asc(),
+        "name_desc": Client.client_name.desc(),
+    }
+    if sort not in sort_options:
+        sort = "newest"
+    query = query.order_by(sort_options[sort])
+
     page = request.args.get("page", 1, type=int)
 
-    pagination = query.order_by(Client.id.desc()).paginate(
+    pagination = query.paginate(
         page=page,
         per_page=25,
         error_out=False
     )
 
-    is_filtered = bool(search or selected_status)
+    managers = User.query.filter(
+        User.status == "active",
+        User.role.in_(["admin", "super_admin"])
+    ).order_by(User.name.asc()).all()
+
+    is_filtered = bool(search or selected_status or selected_manager)
 
     return render_template(
         "clients/list.html",
@@ -55,6 +75,9 @@ def list_clients():
         pagination=pagination,
         search=search,
         selected_status=selected_status,
+        selected_manager=selected_manager,
+        sort=sort,
+        managers=managers,
         is_filtered=is_filtered
     )
 

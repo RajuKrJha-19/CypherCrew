@@ -102,10 +102,41 @@
 
                 <div class="section-heading">
                     <div>
-                        <h2>Upcoming Meetings</h2>
-                        <p>All scheduled meetings</p>
+                        <h2>Meetings</h2>
+                        <p>Scheduled meetings</p>
                     </div>
                 </div>
+
+                <form method="GET" class="filter-bar filter-bar-flow">
+                    <select name="period" onchange="this.form.submit()" aria-label="Period">
+                        <option value="">All time</option>
+                        <option value="upcoming" {% if selected_period=="upcoming" %}selected{% endif %}>Upcoming</option>
+                        <option value="past" {% if selected_period=="past" %}selected{% endif %}>Past</option>
+                    </select>
+
+                    <select name="client" onchange="this.form.submit()" aria-label="Client">
+                        <option value="">All clients</option>
+                        {% for client in clients %}
+                        <option value="{{ client.id }}" {% if selected_client == client.id|string %}selected{% endif %}>{{ client.client_name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <select name="member" onchange="this.form.submit()" aria-label="Member">
+                        <option value="">All members</option>
+                        {% for user in employees %}
+                        <option value="{{ user.id }}" {% if selected_member == user.id|string %}selected{% endif %}>{{ user.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <select name="sort" onchange="this.form.submit()" aria-label="Sort">
+                        <option value="date_desc" {% if sort=="date_desc" %}selected{% endif %}>Newest first</option>
+                        <option value="date_asc" {% if sort=="date_asc" %}selected{% endif %}>Oldest first</option>
+                    </select>
+
+                    {% if is_filtered or sort != "date_desc" %}
+                    <a href="{{ url_for('meetings.list_meetings') }}" class="mini-link">Reset</a>
+                    {% endif %}
+                </form>
 
                 <table>
 
@@ -186,7 +217,12 @@
 
                         <tr>
                             <td colspan="6">
+                                {% if is_filtered %}
+                                No meetings match these filters.
+                                <a href="{{ url_for('meetings.list_meetings') }}" class="mini-link">Clear filters</a>
+                                {% else %}
                                 No meetings scheduled.
+                                {% endif %}
                             </td>
                         </tr>
 

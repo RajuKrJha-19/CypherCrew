@@ -1997,6 +1997,69 @@ input[type="file"]::file-selector-button:hover{
     height:40px;
 }
 
+/* Flexible list-page filter bars: any number of controls flow in a row
+   and wrap neatly on narrow widths. Applied to the standalone list
+   pages (clients, users, reports, leaves, meetings, notes); the tasks
+   board keeps its own fixed .filter-bar grid. */
+.filter-bar-flow{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+}
+
+.filter-bar-flow > input[type="text"],
+.filter-bar-flow > input[type="search"]{
+    flex:1 1 200px;
+    min-width:160px;
+}
+
+.filter-bar-flow > select,
+.filter-bar-flow > input[type="date"]{
+    flex:0 0 auto;
+    min-width:150px;
+    height:40px;
+}
+
+/* Push the Reset link to the far end. */
+.filter-bar-flow > .mini-link{
+    margin-left:auto;
+    white-space:nowrap;
+}
+
+/* Task scope tabs: All Tasks / My Tasks (managers). Underline tabs -
+   they read as switching what the whole page is scoped to, distinct
+   from the pill-style board/list view switcher. */
+.task-scope-tabs{
+    display:inline-flex;
+    gap:2px;
+    margin-bottom:16px;
+    border-bottom:1px solid var(--color-border);
+}
+
+.task-scope-tab{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:9px 16px;
+    margin-bottom:-1px;
+    font-size:var(--text-md);
+    font-weight:600;
+    color:var(--color-text-muted);
+    text-decoration:none;
+    border-bottom:2px solid transparent;
+    transition:color var(--ds-transition), border-color var(--ds-transition);
+}
+
+.task-scope-tab i{ font-size:12px; }
+
+.task-scope-tab:hover{ color:var(--color-text); }
+
+.task-scope-tab.is-active{
+    color:var(--color-primary);
+    border-bottom-color:var(--color-primary);
+}
+
 /* BOARD / LIST VIEW SWITCHER */
 
 .task-view-switcher{
@@ -7200,70 +7263,125 @@ body.sidebar-collapsed .task-page-sticky-header{
 }
 
 .review-actions-new{
-    margin-top:10px !important;
-    display:grid !important;
-    grid-template-columns:1fr 1fr !important;
-    gap:8px !important;
+    margin-top:12px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
 }
 
 .review-actions-new form{
-    display:block !important;
-    margin:0 !important;
+    display:block;
+    margin:0;
 }
 
+/* Approve = green (a positive action reads as success, not the brand
+   blue it used to be). Send-back = a lighter danger-outline that fills
+   in on hover, so the destructive-ish action is present but not
+   shouting on every card. */
 .review-approve-btn,
 .review-reject-toggle{
-    width:100% !important;
-    height:30px !important;
-    border-radius:10px !important;
-    font-size:11px !important;
-    font-weight:600 !important;
+    width:100%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    height:38px;
+    padding:0 10px;
+    border:1px solid transparent;
+    border-radius:var(--radius-sm);
+    font-size:var(--text-base);
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s, color .15s, border-color .15s, filter .15s;
 }
 
 .review-approve-btn{
-    background:var(--color-primary) !important;
-    color:var(--color-surface) !important;
+    background:var(--color-success);
+    color:#fff;
 }
+.review-approve-btn:hover{ filter:brightness(.95); }
 
 .review-reject-toggle{
-    background:var(--color-danger) !important;
-    color:var(--color-surface) !important;
+    background:var(--color-danger-soft);
+    color:var(--color-danger);
+    border-color:var(--color-danger-border);
+}
+.review-reject-toggle:hover{
+    background:var(--color-danger);
+    color:#fff;
+    border-color:var(--color-danger);
 }
 
 .review-reject-form-new{
-    display:none !important;
-    grid-column:1 / -1 !important;
-    margin-top:4px !important;
+    display:none;
+    grid-column:1 / -1;
+    margin-top:4px;
+    padding:12px;
+    background:var(--color-surface-muted);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md);
 }
 
-.review-reject-form-new.show{
-    display:block !important;
+.review-reject-form-new.show{ display:block; }
+
+.review-reject-label{
+    display:block;
+    margin-bottom:6px;
+    font-size:var(--text-sm);
+    font-weight:600;
+    color:var(--color-text-secondary);
 }
 
 .review-reject-form-new textarea{
-    width:100% !important;
-    height:72px !important;
-    min-height:72px !important;
-    max-height:120px !important;
-    resize:vertical !important;
-    padding:10px !important;
-    font-size:13px !important;
-    border-radius:10px !important;
+    width:100%;
+    min-height:70px;
+    max-height:150px;
+    resize:vertical;
+    padding:10px;
+    font-size:var(--text-base);
+    border:1px solid var(--color-border-strong);
+    border-radius:var(--radius-sm);
+    background:var(--color-surface);
+    color:var(--color-text);
+    outline:none;
+}
+.review-reject-form-new textarea:focus{
+    border-color:var(--color-primary);
+    box-shadow:var(--focus-ring);
 }
 
 .review-reject-action-row{
-    display:grid !important;
-    grid-template-columns:1fr 1fr !important;
-    gap:8px !important;
-    margin-top:8px !important;
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:10px;
 }
 
-.review-reject-action-row button{
-    height:30px !important;
-    border-radius:10px !important;
-    font-size:11px !important;
-    font-weight:600 !important;
+.review-reject-cancel,
+.review-reject-confirm{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    height:34px;
+    padding:0 14px;
+    border:1px solid transparent;
+    border-radius:var(--radius-sm);
+    font-size:var(--text-base);
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s, filter .15s;
 }
+.review-reject-cancel{
+    background:var(--color-surface);
+    color:var(--color-text-secondary);
+    border-color:var(--color-border-strong);
+}
+.review-reject-cancel:hover{ background:var(--color-surface-muted); }
+.review-reject-confirm{
+    background:var(--color-danger);
+    color:#fff;
+}
+.review-reject-confirm:hover{ filter:brightness(.95); }
 
 .task-current-status{
     color:black !important;
@@ -11284,6 +11402,29 @@ a.queue-title:hover { color: var(--color-primary); }
     background: var(--color-surface-muted);
 }
 
+.search-summary {
+    margin-bottom: 14px;
+    font-size: var(--text-md);
+    color: var(--color-text-muted);
+}
+.search-summary strong { color: var(--color-text); }
+.search-summary-term { color: var(--color-text); font-weight: 600; }
+
+/* A quiet chevron that appears on row hover - the standard "this row is
+   clickable" affordance. */
+.search-result-arrow {
+    color: var(--color-text-subtle);
+    font-size: 11px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--ds-transition), transform var(--ds-transition);
+}
+.search-result:hover .search-result-arrow { opacity: 1; transform: translateX(2px); }
+
+/* Dark-mode variants for the light entity-icon chips. */
+:root[data-theme="dark"] .sr-client { background: #0c2b3a; color: #38bdf8; }
+:root[data-theme="dark"] .sr-user   { background: #241a3a; color: #a78bfa; }
+
 /* ==========================================================
    RECENT ACTIVITY - DENSER
    Each entry was a bordered card with the message and the
@@ -13493,33 +13634,10 @@ body.ds-screen .review-task-meta strong{
     font-weight:var(--ds-weight-semibold) !important;
 }
 
-body.ds-screen .review-approve-btn{
-    background:var(--ds-accent) !important;
-    color:var(--ds-text-inverse) !important;
-    border-radius:var(--ds-radius) !important;
-}
-
-body.ds-screen .review-approve-btn:hover{
-    background:var(--ds-accent-hover) !important;
-}
-
-body.ds-screen .review-reject-toggle{
-    background:var(--ds-danger) !important;
-    color:var(--ds-text-inverse) !important;
-    border-radius:var(--ds-radius) !important;
-}
-
-body.ds-screen .review-reject-form-new textarea{
-    border-color:var(--ds-border-strong) !important;
-    border-radius:var(--ds-radius) !important;
-    font-size:var(--ds-font-13) !important;
-}
-
-body.ds-screen .review-reject-action-row button{
-    border-radius:var(--ds-radius) !important;
-    font-size:var(--ds-font-11) !important;
-    font-weight:var(--ds-weight-semibold) !important;
-}
+/* The review approve/reject buttons are now fully styled in the base
+   .review-* rules above (green approve, danger-outline send-back). The
+   old ds-screen overrides that forced a blue approve were removed so
+   that clean styling applies here too. */
 
 body.ds-screen .btn-danger{
     background:var(--ds-danger);

@@ -50,10 +50,20 @@ def list_users():
     if selected_status:
         query = query.filter(User.status == selected_status)
 
+    sort = request.args.get("sort", "newest").strip()
+    sort_options = {
+        "newest": User.id.desc(),
+        "oldest": User.id.asc(),
+        "name_asc": User.name.asc(),
+        "name_desc": User.name.desc(),
+    }
+    if sort not in sort_options:
+        sort = "newest"
+
     page = request.args.get("page", 1, type=int)
 
     pagination = query.order_by(
-        User.id.desc()
+        sort_options[sort]
     ).paginate(
         page=page,
         per_page=25,
@@ -69,6 +79,7 @@ def list_users():
         search=search,
         selected_role=selected_role,
         selected_status=selected_status,
+        sort=sort,
         is_filtered=is_filtered
     )
 

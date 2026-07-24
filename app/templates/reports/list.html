@@ -26,10 +26,10 @@
             {% endif %}
             {% endwith %}
 
-            <form method="GET" class="filter-bar" id="reportFilterForm">
+            <form method="GET" class="filter-bar filter-bar-flow" id="reportFilterForm">
 
                 {% if can_view_all %}
-                <select name="employee_id">
+                <select name="employee_id" onchange="this.form.submit()">
                     <option value="">All Employees</option>
 
                     {% for employee in employees %}
@@ -40,9 +40,14 @@
                 </select>
                 {% endif %}
 
-                <input type="date" name="from_date" value="{{ from_date }}" title="From date">
+                <input type="date" name="from_date" value="{{ from_date }}" title="From date" onchange="this.form.submit()">
 
-                <input type="date" name="to_date" value="{{ to_date }}" title="To date">
+                <input type="date" name="to_date" value="{{ to_date }}" title="To date" onchange="this.form.submit()">
+
+                <select name="sort" onchange="this.form.submit()">
+                    <option value="newest" {% if sort=="newest" %}selected{% endif %}>Newest first</option>
+                    <option value="oldest" {% if sort=="oldest" %}selected{% endif %}>Oldest first</option>
+                </select>
 
                 <button type="submit">
                     Filter
@@ -121,13 +126,13 @@
             <div class="list-pagination">
 
                 {% if pagination.has_prev %}
-                <a href="{{ url_for('reports.list_reports', employee_id=selected_employee, from_date=from_date, to_date=to_date, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
+                <a href="{{ url_for('reports.list_reports', employee_id=selected_employee, from_date=from_date, to_date=to_date, sort=sort, page=pagination.prev_num) }}" class="mini-link">← Prev</a>
                 {% endif %}
 
                 <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
 
                 {% if pagination.has_next %}
-                <a href="{{ url_for('reports.list_reports', employee_id=selected_employee, from_date=from_date, to_date=to_date, page=pagination.next_num) }}" class="mini-link">Next →</a>
+                <a href="{{ url_for('reports.list_reports', employee_id=selected_employee, from_date=from_date, to_date=to_date, sort=sort, page=pagination.next_num) }}" class="mini-link">Next →</a>
                 {% endif %}
 
             </div>

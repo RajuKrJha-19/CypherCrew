@@ -101,13 +101,38 @@
 
                     <div>
 
-                        <h2>Upcoming Leaves</h2>
+                        <h2>Leaves</h2>
 
-                        <p>All approved employee leaves</p>
+                        <p>Planned employee leaves</p>
 
                     </div>
 
                 </div>
+
+                <form method="GET" class="filter-bar filter-bar-flow">
+                    <select name="period" onchange="this.form.submit()" aria-label="Period">
+                        <option value="">All periods</option>
+                        <option value="upcoming" {% if selected_period=="upcoming" %}selected{% endif %}>Upcoming</option>
+                        <option value="ongoing" {% if selected_period=="ongoing" %}selected{% endif %}>Ongoing</option>
+                        <option value="past" {% if selected_period=="past" %}selected{% endif %}>Past</option>
+                    </select>
+
+                    <select name="member" onchange="this.form.submit()" aria-label="Employee">
+                        <option value="">All employees</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}" {% if selected_member == user.id|string %}selected{% endif %}>{{ user.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <select name="sort" onchange="this.form.submit()" aria-label="Sort">
+                        <option value="start_desc" {% if sort=="start_desc" %}selected{% endif %}>Newest first</option>
+                        <option value="start_asc" {% if sort=="start_asc" %}selected{% endif %}>Oldest first</option>
+                    </select>
+
+                    {% if is_filtered or sort != "start_desc" %}
+                    <a href="{{ url_for('leaves.list_leaves') }}" class="mini-link">Reset</a>
+                    {% endif %}
+                </form>
 
                 <table>
 
@@ -182,7 +207,12 @@
 
                             <td colspan="{{ 5 if can_manage else 4 }}">
 
+                                {% if is_filtered %}
+                                No leaves match these filters.
+                                <a href="{{ url_for('leaves.list_leaves') }}" class="mini-link">Clear filters</a>
+                                {% else %}
                                 No leaves added.
+                                {% endif %}
 
                             </td>
 
