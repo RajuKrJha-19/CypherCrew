@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}CypherCrew{% endblock %}</title>
 
+    {# CSRF: the token every state-changing request needs. csrf.js reads it
+       from this meta tag and attaches it to fetches (X-CSRFToken header) and
+       form posts (hidden field). Loaded here, before Turbo, so the fetch
+       wrapper is in place before Turbo captures its own fetch reference. #}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
+
     {#
         Resolve the theme before the first paint so there is no flash of
         the wrong mode. Saved preference wins; otherwise follow the OS.

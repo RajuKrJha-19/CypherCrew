@@ -1,6 +1,7 @@
 import os
 import csv
 import io
+from uuid import uuid4
 from werkzeug.utils import secure_filename
 from app.utils.timezone import ist_now
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ from flask_login import login_required, current_user
 
 from sqlalchemy import or_, cast, String
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models import (
@@ -227,10 +229,16 @@ def apply_task_search(query, search):
 
     clean_search = search.strip().replace("#", "")
 
-    return query.join(
+    # outerjoin, not join: an inner join here silently dropped any task with
+    # no client or deliverable from every search - even when its title or
+    # code matched - because the row had nothing to join to. With an outer
+    # join those columns are simply NULL (so their ilike clauses don't
+    # match), and the task still surfaces on a title/code/status hit. This
+    # matches the outer-join behaviour the global search already uses.
+    return query.outerjoin(
         Client,
         Task.client_id == Client.id
-    ).join(
+    ).outerjoin(
         ClientDeliverable,
         Task.deliverable_id == ClientDeliverable.id
     ).outerjoin(
@@ -567,6 +575,20 @@ def list_tasks():
 
         query = query.order_by(Task.id.desc())
 
+    # Eager-load the four relationships every card and row dereferences
+    # (client, deliverable, assignee, creator). Without this the board and
+    # the table each triggered ~4 extra queries per task - a page of M
+    # tasks fired 4xM SELECTs. selectinload issues one extra query per
+    # relationship instead (a handful total), and unlike joinedload it adds
+    # no JOINs, so it stays compatible with the group_by file-size sorts
+    # above and never multiplies rows.
+    query = query.options(
+        selectinload(Task.client),
+        selectinload(Task.deliverable),
+        selectinload(Task.assigned_to),
+        selectinload(Task.created_by),
+    )
+
     tasks = query.all()
 
     statuses = task_status.ALL_STATUSES
@@ -797,6 +819,53 @@ def filtered_tasks(filter_type):
             ])
         )
 
+    elif filter_type == "due_today":
+
+        page_title = "Due Today"
+        page_subtitle = "Active tasks whose deadline is today"
+
+        query = query.filter(
+            Task.deadline.isnot(None),
+            db.func.date(Task.deadline) == ist_now().date(),
+            Task.status.in_([
+                "Assigned",
+                "In Progress",
+                "Paused"
+            ])
+        )
+
+    elif filter_type == "due_week":
+
+        page_title = "Due This Week"
+        page_subtitle = "Active tasks due within the next 7 days"
+
+        now = ist_now()
+
+        query = query.filter(
+            Task.deadline.isnot(None),
+            Task.deadline >= now,
+            Task.deadline <= now + timedelta(days=7),
+            Task.status.in_([
+                "Assigned",
+                "In Progress",
+                "Paused"
+            ])
+        )
+
+    elif filter_type == "unassigned":
+
+        page_title = "Unassigned Tasks"
+        page_subtitle = "Tasks with no one assigned yet"
+
+        query = query.filter(Task.assigned_to_id.is_(None))
+
+    elif filter_type == "on_hold":
+
+        page_title = "On Hold"
+        page_subtitle = "Tasks currently blocked or parked on hold"
+
+        query = query.filter(Task.status == "On Hold")
+
     else:
 
         flash(
@@ -814,7 +883,12 @@ def filtered_tasks(filter_type):
             search
         )
 
-    tasks = query.order_by(
+    tasks = query.options(
+        selectinload(Task.client),
+        selectinload(Task.deliverable),
+        selectinload(Task.assigned_to),
+        selectinload(Task.created_by),
+    ).order_by(
         Task.deadline.asc().nullslast(),
         Task.id.desc()
     ).all()
@@ -1968,16 +2042,13 @@ def start_task(task_id):
         )
         return redirect(url_for("tasks.list_tasks"))
 
-    running_task = None
-
-    if not has_permission(current_user, "manage_tasks"):
-
-        running_task = Task.query.filter(
-            Task.assigned_to_id == task.assigned_to_id,
-            Task.id != task.id,
-            Task.timer_started_at.isnot(None),
-            Task.status == "In Progress"
-        ).first()
+    # A given assignee may only have one task running at a time - starting
+    # another pauses whichever was already going, keeping that employee's
+    # timer state consistent. This holds whoever clicks Start (the assignee
+    # or a manager acting for them). (The old non-manager-guarded copy of
+    # this query was dead code - immediately overwritten by an identical
+    # unconditional one - so runtime behaviour is unchanged; only the dead
+    # duplicate is removed.)
     running_task = Task.query.filter(
         Task.assigned_to_id == task.assigned_to_id,
         Task.id != task.id,
@@ -2840,6 +2911,132 @@ def quick_update_task(task_id):
     return jsonify({"success": True, "message": "Updated.", "display": display})
 
 
+@tasks_bp.route("/bulk-update", methods=["POST"])
+@login_required
+def bulk_update_tasks():
+    """Apply one field change to many tasks at once - the manager's
+    batch reassign / re-prioritise / re-deadline. Same per-task rules and
+    reassignment notifications as the inline quick-edit; closed (Published/
+    Void) tasks are skipped rather than failed. Bulk status changes are
+    deliberately not offered here - they carry timer and workflow side
+    effects that belong on the single-task path.
+    """
+
+    if not has_permission(current_user, "manage_tasks"):
+        return jsonify({"success": False, "message": "Permission denied."}), 403
+
+    data = request.get_json(silent=True) or {}
+    field = (data.get("field") or "").strip()
+    value = data.get("value")
+    raw_ids = data.get("task_ids") or []
+
+    if field not in ("assignee", "priority", "deadline"):
+        return jsonify({"success": False, "message": "Unsupported field."}), 400
+
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return jsonify({"success": False, "message": "No tasks selected."}), 400
+
+    # The ids arrive as strings from the checkboxes; the column is an
+    # integer, so coerce (and drop anything non-numeric) before querying.
+    try:
+        task_ids = [int(i) for i in raw_ids]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid task selection."}), 400
+
+    # Validate the new value once, up front.
+    assigned_user = None
+    new_deadline = None
+    display = value
+
+    if field == "priority":
+        if value not in ("Low", "Medium", "High", "Urgent"):
+            return jsonify({"success": False, "message": "Invalid priority."}), 400
+
+    elif field == "assignee":
+        assigned_user = User.query.filter_by(id=value, status="active").first()
+        if not assigned_user:
+            return jsonify({"success": False, "message": "Invalid employee."}), 400
+        display = assigned_user.name
+
+    elif field == "deadline":
+        if value:
+            try:
+                new_deadline = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+            except ValueError:
+                return jsonify({"success": False, "message": "Invalid date."}), 400
+        display = new_deadline.strftime("%d %b %Y %I:%M %p") if new_deadline else "cleared"
+
+    tasks = Task.query.filter(Task.id.in_(task_ids)).all()
+
+    updated = 0
+    skipped = 0
+
+    for task in tasks:
+
+        if task.status in task_status.TERMINAL_STATUSES:
+            skipped += 1
+            continue
+
+        changed = False
+
+        if field == "priority" and task.priority != value:
+            task.priority = value
+            changed = True
+
+        elif field == "deadline" and task.deadline != new_deadline:
+            task.deadline = new_deadline
+            changed = True
+
+        elif field == "assignee" and task.assigned_to_id != assigned_user.id:
+            old_id = task.assigned_to_id
+            task.assigned_to_id = assigned_user.id
+            task.employee_completed = False
+            task.employee_completed_at = None
+
+            create_notification(
+                user_id=assigned_user.id,
+                title="Task assigned to you",
+                message=f"{current_user.name} assigned you: {task.title}",
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+            if old_id and old_id != assigned_user.id:
+                create_notification(
+                    user_id=old_id,
+                    title="Task reassigned",
+                    message=f"{task.title} is no longer assigned to you.",
+                    link=url_for("tasks.task_detail", task_id=task.id),
+                    actor_id=current_user.id,
+                    task_id=task.id,
+                )
+            changed = True
+
+        if changed:
+            add_activity(
+                task,
+                action="updated",
+                message=f"{current_user.name} set {field} to {display} (bulk edit).",
+            )
+            updated += 1
+        else:
+            skipped += 1
+
+    if updated:
+        db.session.commit()
+
+    parts = [f"Updated {updated} task{'' if updated == 1 else 's'}."]
+    if skipped:
+        parts.append(f"{skipped} unchanged or skipped.")
+
+    return jsonify({
+        "success": True,
+        "updated": updated,
+        "skipped": skipped,
+        "message": " ".join(parts),
+    })
+
+
 @tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
 @login_required
 def approve_task(task_id):
@@ -2999,18 +3196,6 @@ def reject_task(task_id):
 
     if reference_file and reference_file.filename:
 
-        upload_folder = os.path.join(
-            "app",
-            "static",
-            "uploads",
-            "task_feedbacks"
-        )
-
-        os.makedirs(
-            upload_folder,
-            exist_ok=True
-        )
-
         safe_name = secure_filename(
             reference_file.filename
         )
@@ -3033,17 +3218,41 @@ def reject_task(task_id):
                 )
             )
 
-        file_name = f"task_{task.id}_{safe_name}"
-
-        save_path = os.path.join(
-            upload_folder,
-            file_name
+        # Store the attachment in R2 like every other upload - not on the
+        # app's local disk, which was served straight from /static with no
+        # auth and vanished on every restart/redeploy. file_path now holds
+        # the R2 object key (content-type is sanitised by StorageService on
+        # write); it is served only through the authenticated
+        # tasks.task_feedback_file route below.
+        object_key = (
+            f"feedback/task-{task.id}/{uuid4().hex[:12]}_{safe_name}"
         )
 
-        reference_file.save(save_path)
+        try:
+            StorageService().upload(
+                file_obj=reference_file.stream,
+                object_key=object_key,
+                content_type=reference_file.mimetype,
+            )
+        except StorageServiceError:
+            current_app.logger.exception(
+                "Failed to store rejection attachment for task %s.",
+                task.id,
+            )
+            flash(
+                "Could not upload the reference file. Please try again.",
+                "error",
+            )
+            return redirect(
+                request.referrer or url_for(
+                    "tasks.task_detail",
+                    task_id=task.id
+                )
+            )
 
-        file_path = f"uploads/task_feedbacks/{file_name}"
-        file_type = reference_file.content_type
+        file_name = reference_file.filename
+        file_path = object_key
+        file_type = reference_file.mimetype
 
     feedback = TaskFeedback(
         task_id=task.id,
@@ -3313,6 +3522,48 @@ def task_file_thumbnail(file_id):
     )
 
     return response
+
+
+@tasks_bp.route("/feedback/<int:feedback_id>/file")
+@login_required
+def task_feedback_file(feedback_id):
+    """Serve a rejection-feedback attachment, access-controlled.
+
+    New attachments live in R2 (file_path = object key) and are served as a
+    short-lived presigned redirect. Rows created before this change stored a
+    local static path (file_path starts with "uploads/"); those keep working
+    via the static handler. Either way, only the reviewer who sent it, the
+    assignee who received it, or a manager may open it - closing the old gap
+    where these files were readable by anyone who guessed the /static path.
+    """
+    feedback = TaskFeedback.query.get_or_404(feedback_id)
+
+    if not (
+        has_permission(current_user, "manage_tasks")
+        or current_user.id in (feedback.sender_id, feedback.receiver_id)
+        or (feedback.task and feedback.task.assigned_to_id == current_user.id)
+    ):
+        abort(403)
+
+    key = feedback.file_path
+
+    if not key:
+        abort(404)
+
+    # Legacy local-disk attachment - serve it the old way.
+    if key.startswith("uploads/"):
+        return redirect(url_for("static", filename=key))
+
+    try:
+        url = StorageService().preview_url(object_key=key, expires_in=600)
+    except StorageServiceError:
+        current_app.logger.exception(
+            "Unable to sign rejection attachment for feedback %s.",
+            feedback.id,
+        )
+        abort(404)
+
+    return redirect(url)
 
 
 @tasks_bp.route("/files/<int:file_id>/preview")

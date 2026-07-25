@@ -770,7 +770,7 @@ Submission Files
                                 <p>{{ feedback.message|linkify }}</p>
 
                                 {% if feedback.file_path %}
-                                <a href="{{ url_for('static', filename=feedback.file_path) }}" target="_blank"
+                                <a href="{{ url_for('tasks.task_feedback_file', feedback_id=feedback.id) }}" target="_blank"
                                     class="table-link">
                                     View Reference File
                                 </a>

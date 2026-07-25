@@ -44,12 +44,15 @@
             <i class="fa-solid fa-house"></i> Dashboard
         </a>
 
-        <a href="{{ url_for('auth.logout') }}"
-           class="account-item account-logout"
-           data-turbo="false"
-           onclick="return confirm('Log out of CypherCrew?')">
-            <i class="fa-solid fa-right-from-bracket"></i> Logout
-        </a>
+        {# Logout is a POST (CSRF-protected) so it can't be triggered by a
+           cross-site request; the csrf token is injected by csrf.js. #}
+        <form method="POST" action="{{ url_for('auth.logout') }}"
+              data-turbo="false"
+              onsubmit="return confirm('Log out of CypherCrew?')">
+            <button type="submit" class="account-item account-logout logout-as-button">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+        </form>
 
     </div>
 

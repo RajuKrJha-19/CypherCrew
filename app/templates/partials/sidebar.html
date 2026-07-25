@@ -148,14 +148,18 @@
         it here also puts the empty space at the foot of the sidebar to
         use.
     #}
-    <a href="{{ url_for('auth.logout') }}"
-       class="sidebar-logout"
-       title="Sign out of CypherCrew"
-       data-turbo="false"
-       onclick="return confirm('Log out of CypherCrew?')">
-        <i class="fa-solid fa-right-from-bracket"></i>
-        <span>Logout</span>
-    </a>
+    {# Logout is a POST (CSRF-protected) so a cross-site request can't force
+       a sign-out; the csrf token is injected by csrf.js at submit. #}
+    <form method="POST" action="{{ url_for('auth.logout') }}"
+          data-turbo="false"
+          onsubmit="return confirm('Log out of CypherCrew?')">
+        <button type="submit"
+                class="sidebar-logout logout-as-button"
+                title="Sign out of CypherCrew">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+        </button>
+    </form>
 
     <script>
         const sidebar = document.getElementById("app-sidebar");

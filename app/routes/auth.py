@@ -1,12 +1,15 @@
+import hashlib
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, current_app,
 )
+from flask_limiter.util import get_remote_address
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app.models import User
-from app.extensions import login_manager, db
+from app.extensions import login_manager, db, limiter
 from app.utils.email import send_email, email_enabled
 
 
@@ -18,6 +21,38 @@ auth_bp = Blueprint(
 
 #: Reset links expire after this many seconds.
 RESET_TOKEN_MAX_AGE = 3600
+
+#: A real password hash to compare against when the submitted email doesn't
+#: exist, so login takes the same time and returns the same message whether
+#: the account is missing or the password is simply wrong (no enumeration).
+_DUMMY_PW_HASH = generate_password_hash("cyphercrew-nonexistent-account")
+
+
+def _pw_fingerprint(user):
+    """A short, stable fingerprint of the user's current password hash.
+
+    Embedding it in the reset token makes the link single-use: the instant
+    the password changes (via this reset or any other), the hash - and so
+    this fingerprint - changes, and every previously-issued link stops
+    validating. Closes the replay window where a captured link kept working
+    for the full hour even after the user already used it.
+    """
+    return hashlib.sha256(
+        (user.password_hash or "").encode()
+    ).hexdigest()[:16]
+
+
+def _email_rate_key():
+    """Throttle by the submitted email, not the client IP.
+
+    The app sits behind a proxy (Cloudflare), so every request can share
+    one source IP - IP-keying would either lump all users together or need
+    fragile proxy config. Keying on the email throttles per-account guessing
+    (the actual brute-force surface) and can never lock everyone out at
+    once. Falls back to IP only when no email was posted.
+    """
+    email = (request.form.get("email", "") or "").strip().lower()
+    return email or get_remote_address()
 
 
 def _reset_serializer():
@@ -33,6 +68,14 @@ def load_user(user_id):
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit(
+    "10 per 5 minutes",
+    key_func=_email_rate_key,
+    methods=["POST"],
+    error_message=(
+        "Too many login attempts. Please wait a few minutes and try again."
+    ),
+)
 def login():
 
     if current_user.is_authenticated:
@@ -47,19 +90,23 @@ def login():
             email=email
         ).first()
 
-        if not user:
+        # Always run exactly one password-hash comparison - against the real
+        # user, or a dummy hash when the email is unknown - so a missing
+        # account and a wrong password take the same time and return the
+        # same message. That removes the timing / early-return signal an
+        # attacker could use to enumerate which emails are registered.
+        if user:
+            password_ok = check_password_hash(user.password_hash, password)
+        else:
+            check_password_hash(_DUMMY_PW_HASH, password)
+            password_ok = False
+
+        if not user or not password_ok:
             flash("Invalid email or password.", "error")
             return redirect(url_for("auth.login"))
 
         if user.status != "active":
             flash("Your account is inactive.", "error")
-            return redirect(url_for("auth.login"))
-
-        if not check_password_hash(
-            user.password_hash,
-            password
-        ):
-            flash("Invalid email or password.", "error")
             return redirect(url_for("auth.login"))
 
         login_user(user)
@@ -70,6 +117,14 @@ def login():
 
 
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit(
+    "5 per 15 minutes",
+    key_func=_email_rate_key,
+    methods=["POST"],
+    error_message=(
+        "Too many reset requests. Please wait a few minutes and try again."
+    ),
+)
 def forgot_password():
 
     if current_user.is_authenticated:
@@ -81,7 +136,9 @@ def forgot_password():
         user = User.query.filter_by(email=email).first()
 
         if user and user.status == "active":
-            token = _reset_serializer().dumps(str(user.id))
+            token = _reset_serializer().dumps(
+                {"uid": user.id, "fp": _pw_fingerprint(user)}
+            )
             reset_url = url_for("auth.reset_password", token=token, _external=True)
 
             send_email(
@@ -124,7 +181,7 @@ def reset_password(token):
         return redirect(url_for("dashboard.index"))
 
     try:
-        user_id = _reset_serializer().loads(token, max_age=RESET_TOKEN_MAX_AGE)
+        data = _reset_serializer().loads(token, max_age=RESET_TOKEN_MAX_AGE)
     except SignatureExpired:
         flash("This reset link has expired. Please request a new one.", "error")
         return redirect(url_for("auth.forgot_password"))
@@ -132,10 +189,30 @@ def reset_password(token):
         flash("This reset link is invalid.", "error")
         return redirect(url_for("auth.forgot_password"))
 
-    user = User.query.get(int(user_id))
+    # New tokens are {uid, fp}; tolerate the old bare-id form for any link
+    # issued just before this change (they expire within the hour anyway).
+    if isinstance(data, dict):
+        user_id = data.get("uid")
+        token_fp = data.get("fp")
+    else:
+        user_id = data
+        token_fp = None
+
+    user = User.query.get(int(user_id)) if user_id is not None else None
 
     if not user or user.status != "active":
         flash("This reset link is no longer valid.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    # Single-use: the fingerprint in the link must still match the account's
+    # current password hash. Once the password has been changed (by this
+    # link or otherwise), it won't - so a used or superseded link is dead.
+    if token_fp is not None and token_fp != _pw_fingerprint(user):
+        flash(
+            "This reset link has already been used or is no longer valid. "
+            "Please request a new one.",
+            "error",
+        )
         return redirect(url_for("auth.forgot_password"))
 
     if request.method == "POST":
@@ -160,10 +237,11 @@ def reset_password(token):
     return render_template("auth/reset_password.html", token=token, user=user)
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
-
+    # POST (not GET) so a cross-site <img src=".../logout"> can't forcibly
+    # sign a user out, and CSRF-protected like every other state change.
     logout_user()
 
     return redirect(url_for("auth.login"))

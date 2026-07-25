@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Something went wrong | CypherCrew{% endblock %}
+
+{% block body %}
+<div class="error-page">
+    <div class="error-card">
+        <div class="error-code">500</div>
+        <i class="fa-solid fa-triangle-exclamation error-icon"></i>
+        <h1>Something went wrong</h1>
+        <p>An unexpected error occurred on our side. It has been logged. Please
+           try again in a moment.</p>
+        <div class="error-actions">
+            <a href="{{ url_for('dashboard.index') }}" class="btn">Go to dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

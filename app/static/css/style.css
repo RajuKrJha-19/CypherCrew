@@ -14534,6 +14534,260 @@ body.cmdk-open{ overflow:hidden; }
 }
 .cmdk-foot-tip{ margin-left:auto; }
 
+
+/* Logout became a <button> inside a CSRF-protected POST form; strip the
+   native button chrome so it renders exactly like the link it replaced.
+   The .sidebar-logout / .account-item classes still supply all the real
+   styling (colour, padding, layout). */
+.logout-as-button{
+    width:100%;
+    border:0;
+    background:none;
+    font:inherit;
+    text-align:left;
+    cursor:pointer;
+}
+
+
+/* ==========================================================
+   TASK QUICK-VIEW CHIPS (one-click daily filters)
+   ========================================================== */
+.task-quickfilters{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    margin:0 0 12px;
+}
+.task-quickfilters-label{
+    font-size:12px;
+    font-weight:600;
+    color:var(--ds-text-muted,#8a90a0);
+    margin-right:2px;
+}
+.qf-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 11px;
+    border:1px solid var(--ds-border,#e3e5ec);
+    border-radius:var(--ds-radius-full,999px);
+    background:var(--ds-surface,#fff);
+    color:var(--ds-text-secondary,#5a6172);
+    font-size:12.5px;
+    font-weight:600;
+    text-decoration:none;
+    transition:background .12s ease, border-color .12s ease, color .12s ease;
+}
+.qf-chip i{ font-size:11px; opacity:.85; }
+.qf-chip:hover{
+    background:var(--ds-accent-soft,#eef2ff);
+    border-color:var(--ds-accent-border,#c7d2fe);
+    color:var(--ds-accent-text,#4338ca);
+}
+.qf-chip-warn{ color:#b42318; }
+.qf-chip-warn:hover{
+    background:#fef3f2;
+    border-color:#fecdca;
+    color:#b42318;
+}
+:root[data-theme="dark"] .qf-chip-warn{ color:#fca5a5; }
+:root[data-theme="dark"] .qf-chip-warn:hover{
+    background:#3a1412;
+    border-color:#5a2320;
+    color:#fca5a5;
+}
+
+
+/* ==========================================================
+   BULK EDIT (multi-select on the tasks List view)
+   ========================================================== */
+.tasks-select-col{ width:36px; text-align:center; }
+.tasks-select-col input{ cursor:pointer; }
+
+/* Snackbar-style action bar - intentionally dark in both themes, the
+   convention people know from Gmail/Drive multi-select. */
+.bulk-bar{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%);
+    z-index:4500;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:10px 12px 10px 18px;
+    background:#1c1f26;
+    color:#fff;
+    border-radius:var(--ds-radius-full,999px);
+    box-shadow:0 14px 36px rgba(15,23,42,.4);
+}
+.bulk-bar[hidden]{ display:none; }
+.bulk-bar-count{ font-size:13px; white-space:nowrap; }
+.bulk-bar-count strong{ font-weight:800; }
+.bulk-bar-actions{ display:flex; gap:8px; }
+.bulk-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 12px;
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:var(--ds-radius-full,999px);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .12s ease;
+}
+.bulk-btn i{ font-size:11px; opacity:.9; }
+.bulk-btn:hover{ background:rgba(255,255,255,.18); }
+.bulk-clear{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:26px;
+    height:26px;
+    border:0;
+    border-radius:50%;
+    background:rgba(255,255,255,.12);
+    color:#fff;
+    cursor:pointer;
+}
+.bulk-clear:hover{ background:rgba(255,255,255,.24); }
+
+
+/* ==========================================================
+   ERROR PAGES (404 / 500 / 403)
+   ========================================================== */
+.error-page{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:var(--ds-canvas,#f7f8fa);
+}
+.error-card{
+    text-align:center;
+    max-width:440px;
+    width:100%;
+    padding:40px 32px;
+    background:var(--ds-surface,#fff);
+    border:1px solid var(--ds-border,#e3e5ec);
+    border-radius:var(--ds-radius-lg,12px);
+    box-shadow:0 8px 28px rgba(15,23,42,.08);
+}
+.error-code{
+    font-size:56px;
+    font-weight:800;
+    letter-spacing:-.02em;
+    color:var(--ds-accent,#4f46e5);
+    line-height:1;
+}
+.error-icon{
+    font-size:22px;
+    color:var(--ds-text-muted,#8a90a0);
+    margin:12px 0 4px;
+}
+.error-card h1{
+    font-size:20px;
+    margin:8px 0 6px;
+    color:var(--ds-text,#1c1f26);
+}
+.error-card p{
+    color:var(--ds-text-secondary,#5a6172);
+    font-size:14px;
+    line-height:1.6;
+    margin:0 0 22px;
+}
+.error-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+
+
+/* ==========================================================
+   CALENDAR - WEEK & LIST VIEWS
+   ========================================================== */
+/* The view tabs are now links (were buttons) - match their look. */
+.calendar-view-tabs a{
+    border:none;
+    background:var(--color-surface);
+    padding:10px 16px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--color-text-muted);
+    text-decoration:none;
+    border-right:1px solid var(--color-border);
+}
+.calendar-view-tabs a:last-child{ border-right:none; }
+.calendar-view-tabs a.active{
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+}
+
+/* Week: the same 7 columns, but tall cells that list every item. */
+.calendar-week-day{ min-height:340px; }
+.calendar-week-dow{
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    color:var(--color-text-muted);
+    margin-right:4px;
+}
+.calendar-day-empty{
+    display:block;
+    padding-top:6px;
+    color:var(--color-text-muted);
+    font-size:12px;
+    opacity:.6;
+}
+
+/* List: a chronological agenda of what's coming up. */
+.calendar-list{ padding:4px 0; }
+.calendar-list-empty{
+    padding:44px 20px;
+    text-align:center;
+    color:var(--color-text-muted);
+    font-size:14px;
+}
+.calendar-list-day{
+    display:flex;
+    gap:16px;
+    padding:12px 16px;
+    border-bottom:1px solid var(--color-border);
+}
+.calendar-list-day:last-child{ border-bottom:none; }
+.calendar-list-day.is-today{ background:var(--color-primary-soft); }
+.calendar-list-date{
+    flex:0 0 52px;
+    text-align:center;
+    line-height:1.1;
+}
+.calendar-list-dow{
+    display:block;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    color:var(--color-text-muted);
+}
+.calendar-list-dnum{
+    display:block;
+    font-size:22px;
+    font-weight:800;
+    color:var(--color-text);
+}
+.calendar-list-mon{
+    display:block;
+    font-size:11px;
+    color:var(--color-text-muted);
+}
+.calendar-list-events{
+    flex:1 1 auto;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-width:0;
+}
+
 @media (max-width:600px){
     .cmdk-panel{ margin-top:8vh; max-height:80vh; }
     .cmdk-foot-tip{ display:none; }

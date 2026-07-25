@@ -18,6 +18,34 @@ class Config:
 )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Connection health. Managed Postgres closes idle connections after a
+    # few minutes; without pre-ping the next request grabs a dead socket
+    # from the pool and 500s ("server closed the connection"). pool_pre_ping
+    # validates a connection before use, pool_recycle retires it well under
+    # the provider's idle window, and a per-connection statement_timeout
+    # stops a single runaway query from pinning a worker for the full
+    # gunicorn timeout. All values are env-overridable so they can be tuned
+    # in production without a code change.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "280")),
+        "connect_args": {
+            "options": (
+                "-c statement_timeout="
+                + os.getenv("DB_STATEMENT_TIMEOUT_MS", "30000")
+            ),
+        },
+    }
+
+    # Cap the size of a single request body. Large video *submissions*
+    # bypass this entirely - they upload part-by-part straight to R2 via
+    # the presigned multipart flow and never stream through the app. This
+    # only bounds the direct-upload paths (reference files, the no-JS
+    # submission fallback, avatars), so one enormous request can't exhaust
+    # the app server's memory/disk. Deliberately generous (2 GB) so it
+    # never blocks a real reference file; raise MAX_UPLOAD_MB if needed.
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "2048")) * 1024 * 1024
+
     # Session & Cookies
 
     SESSION_COOKIE_HTTPONLY = True

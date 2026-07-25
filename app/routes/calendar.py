@@ -1,5 +1,5 @@
 import calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.utils.timezone import ist_now
 from flask import (
     Blueprint,
@@ -217,12 +217,59 @@ def index():
 
     month_name = calendar.month_name[month]
 
+    # ---------------------------------------------------------------
+    # View mode: month (default) / week / list. Week and list reuse the
+    # events already gathered above, so they add no queries - just a
+    # different slice of the same data.
+    # ---------------------------------------------------------------
+    view = request.args.get("view", "month").strip().lower()
+    if view not in ("month", "week", "list"):
+        view = "month"
 
+    # Reference date for the week view (?date=YYYY-MM-DD), default today.
+    ref_date = None
+    date_arg = request.args.get("date", "").strip()
+    if date_arg:
+        try:
+            ref_date = datetime.strptime(date_arg, "%Y-%m-%d").date()
+        except ValueError:
+            ref_date = None
+    if ref_date is None:
+        ref_date = today.date()
+
+    # The week containing ref_date, Sunday-first to match the month grid
+    # (Python weekday(): Mon=0..Sun=6, so Sunday's offset is (wd + 1) % 7).
+    week_start = ref_date - timedelta(days=(ref_date.weekday() + 1) % 7)
+    week_days = [week_start + timedelta(days=i) for i in range(7)]
+    prev_week = (week_start - timedelta(days=7)).isoformat()
+    next_week = (week_start + timedelta(days=7)).isoformat()
+    this_week = today.date().isoformat()
+    week_range_label = (
+        f"{week_days[0].strftime('%d %b')} - "
+        f"{week_days[6].strftime('%d %b %Y')}"
+    )
+
+    # List view: every day with something on it, from a week back through
+    # the next two months - "what's coming up", in order.
+    list_start = today.date() - timedelta(days=7)
+    list_end = today.date() + timedelta(days=60)
+    all_event_dates = set(events) | set(holiday_events) | set(meeting_events)
+    list_dates = sorted(
+        d for d in all_event_dates if list_start <= d <= list_end
+    )
 
     return render_template(
         "calendar/index.html",
 
         today=today.date(),
+
+        view=view,
+        week_days=week_days,
+        prev_week=prev_week,
+        next_week=next_week,
+        this_week=this_week,
+        week_range_label=week_range_label,
+        list_dates=list_dates,
 
         month=month,
         year=year,

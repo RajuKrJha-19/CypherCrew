@@ -3,10 +3,19 @@ from app.utils.timezone import ist_now, IST_OFFSET
 from flask import Blueprint, render_template, redirect, url_for, jsonify, request
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from app.utils.timezone import ist_now
 from app.utils.permissions import has_permission
 from app.utils import task_status
+from app.utils.cache import ttl_cache
 from app.extensions import db
+
+import os
+
+#: How long the heavy company-wide dashboard aggregates may be served from
+#: cache. Env-tunable; a value seconds old is fine for an overview, and the
+#: live counters (build_overview) are never cached.
+_DASHBOARD_CACHE_TTL = int(os.getenv("DASHBOARD_CACHE_TTL", "30"))
 from app.models import Task,User,Client,TaskActivity,Meeting,Holiday,Leave
 
 dashboard_bp = Blueprint(
@@ -237,21 +246,31 @@ def my_tasks():
     if current_user.role not in ["admin", "super_admin"] and not has_permission(current_user, "approve_tasks"):
         return redirect(url_for("dashboard.index"))
 
+    # Each review card reads the task's client, deliverable and assignee -
+    # eager-load them so a queue of N cards doesn't fire ~3xN extra
+    # queries. selectinload keeps it to a small constant number of SELECTs.
+    _review_eager = (
+        selectinload(Task.client),
+        selectinload(Task.deliverable),
+        selectinload(Task.assigned_to),
+        selectinload(Task.created_by),
+    )
+
     core_review_tasks = Task.query.filter(
         Task.status == "Core Review"
-    ).order_by(
+    ).options(*_review_eager).order_by(
         Task.employee_completed_at.desc()
     ).all()
 
     client_review_tasks = Task.query.filter(
         Task.status == "Client Review"
-    ).order_by(
+    ).options(*_review_eager).order_by(
         Task.id.desc()
     ).all()
 
     published_tasks = Task.query.filter(
         Task.status == "Published"
-    ).order_by(
+    ).options(*_review_eager).order_by(
         Task.completed_at.desc()
     ).limit(30).all()
 
@@ -305,6 +324,7 @@ WORKING_DAY_HOURS = 8
 WORKLOAD_FULL_HOURS = WORKING_DAY_HOURS * 5
 
 
+@ttl_cache(_DASHBOARD_CACHE_TTL)
 def build_workload():
     """Remaining work per employee, in terms they can act on.
 
@@ -414,6 +434,7 @@ def build_workload():
     )
 
     return workload
+@ttl_cache(_DASHBOARD_CACHE_TTL)
 def build_company_health():
 
     employees = User.query.filter(

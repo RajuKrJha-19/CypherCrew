@@ -107,6 +107,34 @@
 
             </div>
 
+            {# One-click "what needs attention" views - the queries people
+               re-pick every day, as chips. They open the filtered list, so
+               they compose with its search box. Fixed set on purpose (not a
+               saved-view builder): this is an ops tool, not a PM suite. #}
+            <div class="task-quickfilters">
+                <span class="task-quickfilters-label">Quick views</span>
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='overdue') }}" class="qf-chip qf-chip-warn">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Overdue
+                </a>
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='due_today') }}" class="qf-chip">
+                    <i class="fa-solid fa-calendar-day"></i> Due today
+                </a>
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='due_week') }}" class="qf-chip">
+                    <i class="fa-solid fa-calendar-week"></i> Due this week
+                </a>
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='review') }}" class="qf-chip">
+                    <i class="fa-solid fa-user-check"></i> In review
+                </a>
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='on_hold') }}" class="qf-chip">
+                    <i class="fa-solid fa-circle-pause"></i> On hold
+                </a>
+                {% if can_manage %}
+                <a href="{{ url_for('tasks.filtered_tasks', filter_type='unassigned') }}" class="qf-chip">
+                    <i class="fa-solid fa-user-slash"></i> Unassigned
+                </a>
+                {% endif %}
+            </div>
+
             {# Filters and the view switcher share one row. #}
             <div class="task-filter-row">
 
@@ -512,6 +540,11 @@
                 <table id="taskListTable">
                     <thead>
                         <tr>
+                            {% if can_manage %}
+                            <th class="tasks-select-col">
+                                <input type="checkbox" class="tasks-select-all" aria-label="Select all tasks">
+                            </th>
+                            {% endif %}
                             <th data-column="task_id">Task ID</th>
                             <th data-column="task">Task</th>
                             <th data-column="client">Client</th>
@@ -529,6 +562,13 @@
                         {% for task in tasks %}
 
                         <tr data-task-id="{{ task.id }}">
+                            {% if can_manage %}
+                            <td class="tasks-select-col">
+                                <input type="checkbox" class="tasks-row-select"
+                                       value="{{ task.id }}"
+                                       aria-label="Select task {{ task.task_code }}">
+                            </td>
+                            {% endif %}
                             <td data-column="task_id">
                                 <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="task-code-badge">
                                     #{{ task.task_code }}
@@ -654,6 +694,28 @@
             </div>
     </div>
 
+    {% if can_manage %}
+    {# Floating bulk-action bar - appears once tasks are ticked in the List
+       view. One gesture reassigns / re-prioritises / re-deadlines the whole
+       selection instead of opening each task in turn. #}
+    <div class="bulk-bar" id="bulkBar" hidden>
+        <span class="bulk-bar-count"><strong id="bulkCount">0</strong> selected</span>
+        <div class="bulk-bar-actions">
+            <button type="button" class="bulk-btn" data-bulk-field="assignee">
+                <i class="fa-solid fa-user-pen"></i> Reassign
+            </button>
+            <button type="button" class="bulk-btn" data-bulk-field="priority">
+                <i class="fa-solid fa-flag"></i> Priority
+            </button>
+            <button type="button" class="bulk-btn" data-bulk-field="deadline">
+                <i class="fa-solid fa-calendar-day"></i> Deadline
+            </button>
+        </div>
+        <button type="button" class="bulk-clear" id="bulkClear" aria-label="Clear selection">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+    {% endif %}
 
 {% endblock %}
 
@@ -661,6 +723,7 @@
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/quick-edit.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bulk-edit.js') }}"></script>
 <script>
     (function () {
         const STORAGE_KEY = "cypher_task_view";

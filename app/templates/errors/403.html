@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Access denied | CypherCrew{% endblock %}
+
+{% block body %}
+<div class="error-page">
+    <div class="error-card">
+        <div class="error-code">403</div>
+        <i class="fa-solid fa-lock error-icon"></i>
+        <h1>Access denied</h1>
+        <p>You don't have permission to view this page. If you think this is a
+           mistake, ask an admin to check your access.</p>
+        <div class="error-actions">
+            <a href="{{ url_for('dashboard.index') }}" class="btn">Go to dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

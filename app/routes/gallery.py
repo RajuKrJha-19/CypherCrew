@@ -1,11 +1,13 @@
 from datetime import timedelta
 
 from flask import Blueprint, render_template, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from sqlalchemy import or_, cast, String
 
-from app.models import TaskFile, User, Task, Client
+from app.extensions import db
+from app.models import TaskFile, User, Task, Client, task_visibility
+from app.utils.permissions import has_permission
 
 
 gallery_bp = Blueprint(
@@ -13,6 +15,37 @@ gallery_bp = Blueprint(
     __name__,
     url_prefix="/gallery"
 )
+
+
+def _scope_to_viewer(query):
+    """Restrict a Task-joined query to files the current user may actually
+    see - the exact rule the task list uses (tasks.get_task_base_query):
+    a manager sees everything; everyone else sees only files on tasks
+    assigned to them or explicitly shared with them via visible_to.
+
+    Before this, the gallery listed every file in the company and rendered
+    direct presigned R2 thumbnail URLs, which bypass the per-file view
+    check the /files/<id>/preview route enforces - so any employee could
+    browse thumbnails, filenames, task titles and client names for work
+    they had no access to. The visibility check belongs on the listing.
+
+    The membership test hits the task_visibility association table
+    directly rather than Task.visible_to.any(User...), so it never
+    collides with the uploader `User` join these queries already carry.
+    """
+    if has_permission(current_user, "manage_tasks"):
+        return query
+
+    return query.filter(
+        or_(
+            Task.assigned_to_id == current_user.id,
+            Task.id.in_(
+                db.session.query(task_visibility.c.task_id).filter(
+                    task_visibility.c.user_id == current_user.id
+                )
+            ),
+        )
+    )
 
 
 #: Sort options offered in the toolbar. Kept here rather than in the
@@ -128,6 +161,9 @@ def index():
         .filter(TaskFile.folder_type.in_(["reference", "submission"]))
     )
 
+    # Only the files this user is allowed to see (managers: all).
+    query = _scope_to_viewer(query)
+
     if search:
 
         like_pattern = f"%{search}%"
@@ -195,21 +231,27 @@ def index():
         grouped_files = [{"date_label": None, "files": files}]
 
     # Only offer people and clients that actually have files here, so a
-    # dropdown can't lead to a guaranteed empty result.
+    # dropdown can't lead to a guaranteed empty result - and, like the
+    # grid itself, only those tied to files the viewer may see.
     uploaders = (
-        User.query
-        .join(TaskFile, TaskFile.uploaded_by_id == User.id)
-        .filter(TaskFile.folder_type.in_(["reference", "submission"]))
+        _scope_to_viewer(
+            User.query
+            .join(TaskFile, TaskFile.uploaded_by_id == User.id)
+            .join(Task, Task.id == TaskFile.task_id)
+            .filter(TaskFile.folder_type.in_(["reference", "submission"]))
+        )
         .distinct()
         .order_by(User.name.asc())
         .all()
     )
 
     clients = (
-        Client.query
-        .join(Task, Task.client_id == Client.id)
-        .join(TaskFile, TaskFile.task_id == Task.id)
-        .filter(TaskFile.folder_type.in_(["reference", "submission"]))
+        _scope_to_viewer(
+            Client.query
+            .join(Task, Task.client_id == Client.id)
+            .join(TaskFile, TaskFile.task_id == Task.id)
+            .filter(TaskFile.folder_type.in_(["reference", "submission"]))
+        )
         .distinct()
         .order_by(Client.client_name.asc())
         .all()
