@@ -14,10 +14,41 @@ from app.extensions import db
 from app.social.errors import SocialError
 from app.social.oauth.manager import OAuthManager
 from app.social.services.accounts import AccountManager
+from app.social.tokens.vault import VaultDisabled, get_vault
 from app.utils.permissions import has_permission
+from app.utils.social_platforms import label as platform_label
 
 
 oauth_bp = Blueprint("oauth", __name__, url_prefix="/oauth")
+
+_VAULT_MISCONFIG = (
+    "Social publishing is not fully configured: SOCIAL_TOKEN_KEY is missing, "
+    "so account tokens cannot be encrypted. Set it in the environment and "
+    "restart, then try connecting again."
+)
+
+# Human wording for the "we connected N accounts of platform X" summary.
+_ACCOUNT_NOUNS = {
+    "facebook": ("Facebook Page", "Facebook Pages"),
+    "instagram": ("Instagram account", "Instagram accounts"),
+}
+
+# Shown when the Meta consent succeeded but no Instagram account came back -
+# almost always because no IG Business/Creator account is linked to the Page
+# (or the Instagram permission was declined). Never fail silently.
+_NO_INSTAGRAM = (
+    "No Instagram Business account is linked to your Facebook Page(s). To "
+    "publish to Instagram, link an Instagram Business or Creator account to a "
+    "Page you manage (Meta Business settings → Instagram accounts), grant the "
+    "Instagram permission, then reconnect."
+)
+
+
+def _account_phrase(platform, count):
+    singular, plural = _ACCOUNT_NOUNS.get(
+        platform, (f"{platform_label(platform)} account",
+                   f"{platform_label(platform)} accounts"))
+    return f"{count} {singular if count == 1 else plural}"
 
 
 def _connect_guard():
@@ -37,6 +68,30 @@ def _redirect_uri(platform):
 @login_required
 def connect(platform):
     _connect_guard()
+
+    # Discovered-only platforms (Instagram) have no standalone login: they
+    # are found through the Facebook consent and refreshed from connected
+    # Pages. Send the user to that action instead of an unnecessary OAuth.
+    from app.social.registry import get_provider
+    provider = get_provider(platform)
+    if provider is not None and not getattr(provider, "connectable", True):
+        flash(
+            "Instagram accounts are connected automatically with Facebook. "
+            "Use “Refresh Instagram” to pick up accounts linked to your "
+            "Pages.", "info")
+        return redirect(url_for("social.accounts"))
+
+    # Fail fast on misconfiguration: without a token vault we cannot store
+    # the credentials, so there's no point round-tripping to the provider.
+    try:
+        get_vault()
+    except VaultDisabled:
+        current_app.logger.error(
+            "[oauth:%s] connect blocked: token vault disabled "
+            "(SOCIAL_TOKEN_KEY unset)", platform)
+        flash(_VAULT_MISCONFIG, "error")
+        return redirect(url_for("social.index"))
+
     try:
         url = OAuthManager.start(
             platform, _redirect_uri(platform), current_user.id
@@ -51,8 +106,11 @@ def connect(platform):
 @login_required
 def callback(platform):
     _connect_guard()
+    log = current_app.logger
 
     if request.args.get("error"):
+        log.warning("[oauth:%s] provider returned error: %s", platform,
+                    request.args.get("error"))
         flash(
             "Authorization was cancelled or denied: "
             + request.args.get("error_description", request.args["error"]),
@@ -63,23 +121,62 @@ def callback(platform):
     code = request.args.get("code")
     state = request.args.get("state")
     if not code or not state:
+        log.warning("[oauth:%s] callback missing code/state", platform)
         flash("Missing authorization code or state.", "error")
         return redirect(url_for("social.index"))
 
+    log.info("[oauth:%s] callback received; starting token exchange + save",
+             platform)
     try:
-        bundle, accounts = OAuthManager.finish(platform, code, state)
-        for info in accounts:
+        # finish_all also discovers sibling platforms that share this consent:
+        # one Facebook login returns the Facebook Pages AND the Instagram
+        # Business accounts linked to them.
+        bundle, results, empty = OAuthManager.finish_all(platform, code, state)
+        saved = {}
+        for plat, info in results:
+            # upsert_from_oauth encrypts the (per-Page) token via the vault.
             AccountManager.upsert_from_oauth(
-                platform, info, bundle, current_user.id
+                plat, info, bundle, current_user.id
             )
+            saved[plat] = saved.get(plat, 0) + 1
         db.session.commit()
-        flash(f"Connected {len(accounts)} {platform} account(s).", "success")
-    except SocialError as exc:
+        total = sum(saved.values())
+        log.info("[oauth:%s] 4/4 encrypted + saved %d account(s) (%s); done",
+                 platform, total,
+                 ", ".join(f"{k}={v}" for k, v in saved.items()) or "none")
+
+        if total:
+            phrases = [_account_phrase(p, n) for p, n in saved.items()]
+            flash("Connected " + " and ".join(phrases) + ".", "success")
+            # Facebook connected but no linked Instagram - explain, don't hide.
+            if "instagram" in empty and "facebook" in saved:
+                flash(_NO_INSTAGRAM, "info")
+        elif "instagram" in empty and "facebook" in empty:
+            # Nothing at all came back.
+            flash(
+                "Authorization succeeded but no publishable account was found. "
+                "Ensure you manage at least one Facebook Page (with content "
+                "permissions) and, for Instagram, that a Business/Creator "
+                "account is linked to it.", "error")
+        else:
+            flash(
+                f"Connected, but no publishable {platform_label(platform)} "
+                "account was found.", "error")
+    except VaultDisabled as exc:
         db.session.rollback()
-        flash(str(exc), "error")
+        log.error("[oauth:%s] save FAILED: token vault disabled: %s",
+                  platform, exc)
+        flash(_VAULT_MISCONFIG, "error")
+    except SocialError as exc:
+        # Provider/OAuth error already classified - show its real message.
+        db.session.rollback()
+        log.warning("[oauth:%s] connect FAILED: %s", platform, exc)
+        flash(f"Could not connect: {exc}", "error")
     except Exception:  # noqa: BLE001
         db.session.rollback()
-        current_app.logger.exception("OAuth callback failed for %s", platform)
-        flash("Could not complete the connection. Please try again.", "error")
+        log.exception("[oauth:%s] connect FAILED with an unexpected error",
+                      platform)
+        flash("Could not complete the connection — check the server logs "
+              "for the exact error.", "error")
 
     return redirect(url_for("social.index"))

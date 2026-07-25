@@ -8,23 +8,24 @@ manage_social / connect_social_accounts permissions.
 from datetime import datetime, timedelta
 
 from flask import (
-    Blueprint, abort, flash, jsonify, redirect, render_template, request,
-    url_for,
+    Blueprint, abort, current_app, flash, jsonify, redirect, render_template,
+    request, url_for,
 )
 from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import (
-    Client, ClientAsset, PublishJob, SocialAccount, SocialMediaAsset,
-    SocialPost, SocialPostTarget,
+    Client, ClientAsset, PublishJob, PublishResult, SocialAccount,
+    SocialAuditLog, SocialMediaAsset, SocialPost, SocialPostTarget,
 )
+from app.social.dto import TokenBundle
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
     approval, audit, publishing, recovery, scheduling, versioning,
 )
 from app.social.services.accounts import AccountManager
-from app.utils.permissions import has_permission
+from app.utils.permissions import has_permission, can_manage_social_engine
 from app.utils.social_platforms import PLATFORMS, label as platform_label
 
 
@@ -37,10 +38,57 @@ _IST_OFFSET = timedelta(hours=5, minutes=30)
 #: Statuses whose content is still fully editable.
 _EDITABLE_STATUSES = ("draft", "pending_approval", "rejected")
 
+_NO_INSTAGRAM = (
+    "No Instagram Business account is linked to your Facebook Page(s). Link an "
+    "Instagram Business or Creator account to a Page in Meta Business settings, "
+    "then refresh again."
+)
+
 
 def _guard():
     if not has_permission(current_user, "manage_social"):
         abort(403)
+
+
+def _engine_guard():
+    """Engine ops (worker kick, retry/requeue) are owner/admin-only - normal
+    publishers must never reach the internal machinery, backend included."""
+    if not can_manage_social_engine(current_user):
+        abort(403)
+
+
+def _connectable_keys():
+    """Registered platforms that have their own connect (OAuth) entry point.
+    Instagram is excluded - it is discovered through the Facebook consent."""
+    return [k for k in registry.keys()
+            if getattr(registry.get(k), "connectable", True)]
+
+
+def _grouped_accounts(accounts):
+    """Group Instagram accounts UNDER their parent Facebook Page (matched by
+    page_id), so the UI shows the Meta Business Suite hierarchy instead of a
+    flat list. Returns [{account, children:[...]}], parents first."""
+    fb_by_page = {
+        (a.meta or {}).get("page_id") or a.external_id: a
+        for a in accounts if a.platform == "facebook"
+    }
+    children, grouped_ig = {}, set()
+    for a in accounts:
+        if a.platform == "instagram":
+            parent = fb_by_page.get((a.meta or {}).get("page_id"))
+            if parent is not None:
+                children.setdefault(parent.id, []).append(a)
+                grouped_ig.add(a.id)
+
+    groups = []
+    for a in accounts:
+        if a.platform == "facebook":
+            groups.append({"account": a, "children": children.get(a.id, [])})
+        elif a.platform == "instagram" and a.id in grouped_ig:
+            continue  # rendered nested under its Page
+        else:
+            groups.append({"account": a, "children": []})
+    return groups
 
 
 def _parse_schedule(value):
@@ -81,33 +129,182 @@ def _capabilities_map():
 def index():
     _guard()
     accounts = AccountManager.list_accounts(include_revoked=False)
+    now = datetime.utcnow()
+    start_today = datetime(now.year, now.month, now.day)
+
+    upcoming = (
+        SocialPostTarget.query
+        .filter(
+            SocialPostTarget.status.in_(["scheduled", "approved"]),
+            SocialPostTarget.scheduled_for.isnot(None),
+            SocialPostTarget.scheduled_for >= now,
+        )
+        .order_by(SocialPostTarget.scheduled_for.asc())
+        .limit(6)
+        .all()
+    )
+    recent = (
+        SocialAuditLog.query
+        .order_by(SocialAuditLog.created_at.desc())
+        .limit(7)
+        .all()
+    )
+    published_today = (
+        PublishResult.query
+        .filter(PublishResult.created_at >= start_today)
+        .count()
+    )
+    drafts_count = SocialPost.query.filter_by(status="draft").count()
+
     return render_template(
         "social/index.html",
         accounts=accounts,
+        groups=_grouped_accounts(accounts),
         platforms=PLATFORMS,
         available=registry.keys(),
+        connectable=_connectable_keys(),
+        status=engine_status.engine_status(),
+        upcoming=upcoming,
+        recent=recent,
+        published_today=published_today,
+        drafts_count=drafts_count,
+        has_facebook=any(a.platform == "facebook" for a in accounts),
+        to_ist=_to_ist_input,
+    )
+
+
+@social_bp.route("/accounts")
+@login_required
+def accounts():
+    _guard()
+    accts = AccountManager.list_accounts(include_revoked=False)
+    return render_template(
+        "social/accounts.html",
+        groups=_grouped_accounts(accts),
+        accounts=accts,
+        platforms=PLATFORMS,
+        available=registry.keys(),
+        connectable=_connectable_keys(),
+        has_facebook=any(a.platform == "facebook" for a in accts),
+        has_instagram=any(a.platform == "instagram" for a in accts),
         status=engine_status.engine_status(),
     )
+
+
+@social_bp.route("/instagram/discover", methods=["POST"])
+@login_required
+def discover_instagram():
+    """Refresh: discover IG Business accounts linked to ALREADY-connected
+    Facebook Pages, using each Page's stored token. No OAuth - this is the
+    Buffer/Meta Business Suite behaviour where Instagram rides on Facebook."""
+    if not has_permission(current_user, "connect_social_accounts"):
+        abort(403)
+    ig = registry.get("instagram")
+    fb_accounts = AccountManager.list_accounts(platform="facebook")
+
+    if ig is None or not hasattr(ig, "discover_for_page"):
+        flash("Instagram discovery isn't available in the current mode.",
+              "error")
+        return redirect(url_for("social.accounts"))
+    if not fb_accounts:
+        flash("Connect a Facebook Page first — Instagram accounts are "
+              "discovered from your Pages.", "info")
+        return redirect(url_for("social.accounts"))
+
+    found = 0
+    for fb in fb_accounts:
+        page_id = (fb.meta or {}).get("page_id") or fb.external_id
+        try:
+            token = AccountManager.access_token(fb)
+            info = ig.discover_for_page(page_id, token,
+                                        page_name=fb.display_name)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception(
+                "[ig-discover] page %s discovery failed", page_id)
+            continue
+        if info is None:
+            continue
+        bundle = TokenBundle(access_token=token, scopes=fb.scopes,
+                             token_expires_at=fb.token_expires_at)
+        AccountManager.upsert_from_oauth(
+            "instagram", info, bundle, current_user.id)
+        found += 1
+    db.session.commit()
+
+    if found:
+        flash(f"Discovered {found} Instagram account(s) linked to your "
+              "Pages.", "success")
+    else:
+        flash(_NO_INSTAGRAM, "info")
+    return redirect(url_for("social.accounts"))
+
+
+@social_bp.route("/analytics")
+@login_required
+def analytics():
+    _guard()
+    return render_template(
+        "social/analytics.html",
+        accounts=AccountManager.list_accounts(include_revoked=False),
+        status=engine_status.engine_status(),
+    )
+
+
+# Job state -> the board column it belongs to.
+_QUEUE_COLUMN = {
+    "queued": "queued",
+    "claimed": "publishing", "uploading": "publishing",
+    "awaiting_remote": "publishing", "publishing": "publishing",
+    "succeeded": "completed",
+    "failed": "failed", "dead": "failed",
+}
 
 
 @social_bp.route("/queue")
 @login_required
 def queue():
-    """Failure Recovery: the dead-letter / failed jobs an operator can
-    requeue."""
+    """The publishing queue as a live board: Queued · Publishing · Completed
+    · Failed, filterable by platform and free-text, with retry on failures."""
     _guard()
-    jobs = recovery.dead_jobs(limit=200)
+    platform_f = (request.args.get("platform") or "").strip()
+    q_search = (request.args.get("q") or "").strip()
+    needle = q_search.lower()
+
+    jobs = (
+        PublishJob.query
+        .order_by(PublishJob.updated_at.desc())
+        .limit(400)
+        .all()
+    )
+    buckets = {"queued": [], "publishing": [], "completed": [], "failed": []}
+    for job in jobs:
+        target = job.target
+        plat = target.platform if target else ""
+        if platform_f and plat != platform_f:
+            continue
+        if needle:
+            title = ((target.post.title if target and target.post else "")
+                     or "").lower()
+            if needle not in title and needle not in (plat or "").lower():
+                continue
+        column = _QUEUE_COLUMN.get(job.state)
+        if column:
+            buckets[column].append(job)
+
     return render_template(
         "social/queue.html",
-        jobs=jobs,
+        buckets=buckets,
         status=engine_status.engine_status(),
+        platforms=PLATFORMS,
+        platform_f=platform_f,
+        q_search=q_search,
     )
 
 
 @social_bp.route("/jobs/<int:job_id>/requeue", methods=["POST"])
 @login_required
 def requeue_job(job_id):
-    _guard()
+    _engine_guard()
     job = PublishJob.query.get_or_404(job_id)
     if recovery.requeue_job(job, actor_id=current_user.id, commit=True):
         flash("Job requeued.", "success")
@@ -119,7 +316,7 @@ def requeue_job(job_id):
 @social_bp.route("/jobs/requeue-all", methods=["POST"])
 @login_required
 def requeue_all():
-    _guard()
+    _engine_guard()
     count = recovery.requeue_all_dead(actor_id=current_user.id)
     flash(f"Requeued {count} job(s).", "success")
     return redirect(url_for("social.queue"))
@@ -131,7 +328,7 @@ def process_queue():
     """Kick the scheduler + worker once. In production these run on cron;
     this button drives the full loop on demand (and is how the simulation
     workflow completes locally)."""
-    _guard()
+    _engine_guard()
     from app.social.queue import worker
     enq = scheduling.enqueue_due()
 
@@ -446,24 +643,78 @@ def client_assets_api(client_id):
         .order_by(ClientAsset.category, ClientAsset.created_at.desc())
         .all()
     )
-    return jsonify(assets=[
-        {"id": a.id, "filename": a.original_filename,
-         "mime": a.mime_type or "", "category": a.category}
-        for a in assets
-    ])
+    from app.social.media import pipeline
+
+    def _preview(a):
+        # A short-lived presigned URL so the composer can show a real
+        # thumbnail + live preview. Best-effort: never break the list if a
+        # single object can't be signed.
+        is_image = (a.mime_type or "").startswith("image")
+        url = None
+        if is_image:
+            try:
+                url = pipeline.presigned_url(a.object_key)
+            except Exception:  # noqa: BLE001
+                url = None
+        return {
+            "id": a.id, "filename": a.original_filename,
+            "mime": a.mime_type or "", "category": a.category,
+            "is_image": is_image, "url": url,
+        }
+
+    return jsonify(assets=[_preview(a) for a in assets])
 
 
 @social_bp.route("/calendar")
 @login_required
 def calendar():
+    """A real month grid of scheduled/published targets, bucketed by their
+    IST day (the team's clock), colour-coded per platform."""
+    import calendar as _cal
+
     _guard()
-    posts = (
-        SocialPost.query
-        .order_by(SocialPost.created_at.desc())
-        .limit(100)
+    now_ist = datetime.utcnow() + _IST_OFFSET
+    year = request.args.get("y", type=int) or now_ist.year
+    month = request.args.get("m", type=int) or now_ist.month
+    if month < 1:
+        year, month = year - 1, 12
+    elif month > 12:
+        year, month = year + 1, 1
+
+    first_ist = datetime(year, month, 1)
+    next_ist = datetime(year + (1 if month == 12 else 0),
+                        1 if month == 12 else month + 1, 1)
+    # scheduled_for is stored UTC; shift the IST month window back to UTC.
+    start_utc, end_utc = first_ist - _IST_OFFSET, next_ist - _IST_OFFSET
+
+    targets = (
+        SocialPostTarget.query
+        .filter(
+            SocialPostTarget.scheduled_for.isnot(None),
+            SocialPostTarget.scheduled_for >= start_utc,
+            SocialPostTarget.scheduled_for < end_utc,
+        )
+        .order_by(SocialPostTarget.scheduled_for.asc())
         .all()
     )
-    return render_template("social/calendar.html", posts=posts)
+    by_day = {}
+    for t in targets:
+        by_day.setdefault((t.scheduled_for + _IST_OFFSET).day, []).append(t)
+
+    weeks = _cal.Calendar(firstweekday=6).monthdayscalendar(year, month)
+    prev_y, prev_m = (year - 1, 12) if month == 1 else (year, month - 1)
+    next_y, next_m = (year + 1, 1) if month == 12 else (year, month + 1)
+
+    return render_template(
+        "social/calendar.html",
+        year=year, month=month, month_name=_cal.month_name[month],
+        weeks=weeks, by_day=by_day,
+        today=(now_ist.day if now_ist.year == year and now_ist.month == month
+               else 0),
+        prev_y=prev_y, prev_m=prev_m, next_y=next_y, next_m=next_m,
+        to_ist=_to_ist_input,
+        status=engine_status.engine_status(),
+    )
 
 
 @social_bp.route("/history")

@@ -14,6 +14,12 @@ from app.social.providers.meta_common import MetaBaseProvider
 
 class MetaInstagramProvider(MetaBaseProvider):
     key = "instagram"
+    # Instagram is DISCOVERED through the Facebook login (the unified Meta
+    # consent), never connected on its own: an IG Business account is found
+    # via its linked Page and published with that Page's token. So there is
+    # no standalone Instagram OAuth entry point - see AccountManager /
+    # social.discover_instagram for the "refresh linked Instagram" action.
+    connectable = False
     SCOPES = [
         "instagram_basic",
         "instagram_content_publish",
@@ -36,8 +42,9 @@ class MetaInstagramProvider(MetaBaseProvider):
     # -- Discovery ---------------------------------------------------------
 
     def list_publishable_accounts(self, token):
-        """IG Business accounts linked to the user's Pages. Publishing uses
-        the linked Page's token."""
+        """IG Business accounts linked to the user's Pages, discovered in one
+        pass off the Facebook user token during the unified Meta connect.
+        Publishing uses the linked Page's token (stored per IG account)."""
         resp = self.graph().get("me/accounts", token=token, params={
             "fields": "id,name,access_token,instagram_business_account{id,username}",
             "limit": 100,
@@ -47,14 +54,35 @@ class MetaInstagramProvider(MetaBaseProvider):
             iga = page.get("instagram_business_account")
             if not iga:
                 continue
-            accounts.append(AccountInfo(
-                external_id=iga["id"],
-                display_name=iga.get("username") or page.get("name", iga["id"]),
-                account_type="ig_business",
-                access_token=page.get("access_token"),
-                meta={"page_id": page["id"], "ig_id": iga["id"]},
-            ))
+            accounts.append(self._ig_account(page["id"], iga,
+                                              page.get("access_token"),
+                                              page.get("name")))
         return accounts
+
+    def discover_for_page(self, page_id, page_token, page_name=None):
+        """Find the IG Business account linked to a SINGLE already-connected
+        Page, using that Page's stored token. This is the "refresh linked
+        Instagram" path - no OAuth, just a Graph read:
+            GET /{page-id}?fields=instagram_business_account{id,username}
+        Returns an AccountInfo or None (no IG linked)."""
+        resp = self.graph().get(page_id, token=page_token, params={
+            "fields": "instagram_business_account{id,username},name",
+        })
+        iga = resp.get("instagram_business_account")
+        if not iga:
+            return None
+        return self._ig_account(page_id, iga, page_token,
+                                resp.get("name") or page_name)
+
+    @staticmethod
+    def _ig_account(page_id, iga, page_token, page_name=None):
+        return AccountInfo(
+            external_id=iga["id"],
+            display_name=iga.get("username") or page_name or iga["id"],
+            account_type="ig_business",
+            access_token=page_token,
+            meta={"page_id": page_id, "ig_id": iga["id"]},
+        )
 
     # -- Validation --------------------------------------------------------
 

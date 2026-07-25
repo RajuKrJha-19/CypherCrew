@@ -34,6 +34,21 @@ _AUTH_CODES = {190, 102, 10, 200, 210, 803}
 _RATE_CODES = {4, 17, 32, 613, 80001, 80002, 80003, 80004, 80006, 80008}
 _RATE_SUBCODES = {2446079, 2207051}
 
+# The unified Meta connect requests the union of Facebook-Page and Instagram
+# scopes, so a SINGLE consent connects Facebook Pages AND their linked
+# Instagram Business accounts in one pass (Meta Business Suite style). The
+# Instagram scopes are not "required" for a Facebook connect (see each
+# provider's _required_scopes), so Facebook still connects even if the user
+# declines Instagram - we just can't discover Instagram until they grant it.
+META_UNIFIED_SCOPES = [
+    "pages_show_list",
+    "pages_read_engagement",
+    "pages_manage_posts",
+    "business_management",
+    "instagram_basic",
+    "instagram_content_publish",
+]
+
 
 class MetaGraphError(Exception):
     """Raised for any non-2xx / error-body Graph response. Carries the raw
@@ -210,13 +225,25 @@ class MetaBaseProvider(SocialProvider):
 
     SCOPES: list = []
 
+    #: Providers sharing one OAuth consent. A single Meta login unlocks
+    #: Facebook Pages AND their linked Instagram accounts, so the OAuth
+    #: manager requests the union of scopes and runs discovery across every
+    #: provider in the group (see OAuthManager.finish_all).
+    connect_group = "meta"
+
     def graph(self):
         return MetaGraph()
 
     # -- OAuth -------------------------------------------------------------
 
-    def build_oauth_url(self, state, redirect_uri):
-        return build_login_url(self.SCOPES, state, redirect_uri)
+    def connect_scopes(self):
+        """Scopes to request at connect time. One Meta consent grants the
+        whole family, so we request the union - connecting Facebook then
+        also connects the Instagram Business account linked to each Page."""
+        return META_UNIFIED_SCOPES
+
+    def build_oauth_url(self, state, redirect_uri, scopes=None):
+        return build_login_url(scopes or self.SCOPES, state, redirect_uri)
 
     def exchange_code(self, code, code_verifier, redirect_uri):
         token, expires_at = exchange_code_for_long_lived_token(code, redirect_uri)

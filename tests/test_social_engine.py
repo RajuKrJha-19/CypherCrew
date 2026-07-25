@@ -291,6 +291,78 @@ def test_simulation_oauth_loopback_stores_encrypted_token(session):
     assert AccountManager.access_token(acct) == bundle.access_token
 
 
+def test_shared_consent_group_discovers_siblings(session):
+    """One connect discovers every sibling platform in the same consent
+    group - the mechanism behind 'connect Facebook, get its Instagram too'.
+    Also asserts a sibling that yields nothing is reported (never silent)."""
+    import urllib.parse as up
+    from app.social.dto import AccountInfo, TokenBundle
+    from app.social.errors import PermanentError
+    from app.social.oauth.manager import OAuthManager
+    from app.social.providers.base import SocialProvider
+    from app.social.registry import registry
+
+    class _Base(SocialProvider):
+        connect_group = "grp"
+
+        def exchange_code(self, code, verifier, redirect_uri):
+            return TokenBundle(access_token="AT")
+
+        def validate(self, content):
+            return []
+
+        def start_publish(self, target, content, token):
+            raise NotImplementedError
+
+        def map_error(self, exc):
+            return PermanentError(str(exc))
+
+    class Hub(_Base):
+        key = "hub"
+
+        def connect_scopes(self):
+            return ["a", "b"]
+
+        def build_oauth_url(self, state, redirect_uri, scopes=None):
+            return f"https://hub.test/auth?state={state}&code=HUBCODE"
+
+        def list_publishable_accounts(self, token):
+            return [AccountInfo("HUB1", "Hub Page", "page")]
+
+    class Sib(_Base):
+        key = "sib"
+        yields = True
+
+        def build_oauth_url(self, state, redirect_uri):
+            return f"https://sib.test/auth?state={state}"
+
+        def list_publishable_accounts(self, token):
+            return ([AccountInfo("SIB1", "Sib Acct", "ig_business")]
+                    if Sib.yields else [])
+
+    registry.register(Hub())
+    registry.register(Sib())
+    try:
+        # Both siblings yield -> both platforms come back, nothing empty.
+        Sib.yields = True
+        url = OAuthManager.start("hub", "http://x/oauth/hub/callback", None)
+        q = dict(up.parse_qsl(up.urlparse(url).query))
+        _bundle, results, empty = OAuthManager.finish_all("hub", q["code"], q["state"])
+        assert {p for p, _ in results} == {"hub", "sib"}
+        assert empty == []
+
+        # Sibling yields nothing -> hub still connects, sib reported in `empty`.
+        Sib.yields = False
+        url = OAuthManager.start("hub", "http://x/oauth/hub/callback", None)
+        q = dict(up.parse_qsl(up.urlparse(url).query))
+        _bundle, results, empty = OAuthManager.finish_all("hub", q["code"], q["state"])
+        assert {p for p, _ in results} == {"hub"}
+        assert empty == ["sib"]
+    finally:
+        registry._providers.pop("hub", None)
+        registry._providers.pop("sib", None)
+
+
 def test_full_workflow_compose_to_published(session):
     import urllib.parse as up
     from app.models import SocialMediaAsset, SocialPost

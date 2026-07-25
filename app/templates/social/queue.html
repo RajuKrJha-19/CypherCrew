@@ -1,28 +1,60 @@
 {% extends "base_app.html" %}
+{% block title %}Queue · Social Publishing | CypherCrew{% endblock %}
 
-{% block title %}Queue & Recovery | CypherCrew{% endblock %}
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
 
-{% block content %}
-<div class="page-header">
-    <div>
-        <h1>Queue &amp; Recovery</h1>
-        <p>Failed and dead-lettered publish jobs you can retry</p>
+{% macro job_card(job, retry=False) %}
+{% set t = job.target %}
+<div class="queue-card">
+    <div class="qc-top">
+        {% if t %}<span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>{% endif %}
+        <span class="sp-pill {{ 'danger' if job.state in ['failed','dead'] else ('' if job.state in ['succeeded','queued'] else 'info') }}">{{ job.state|replace('_',' ') }}</span>
     </div>
-    <div class="top-actions">
-        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Back</a>
-        <form method="POST" action="{{ url_for('social.process_queue') }}">
-            <button type="submit" class="btn btn-secondary" title="Run the scheduler + worker once">
-                <i class="fa-solid fa-play"></i> Process queue now
-            </button>
-        </form>
-        {% if jobs %}
-        <form method="POST" action="{{ url_for('social.requeue_all') }}"
-              onsubmit="return confirm('Requeue all {{ jobs|length }} job(s)?');">
-            <button type="submit" class="btn">Requeue all</button>
+    <div class="qc-title">
+        {% if t and t.post %}<a href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}" style="color:inherit;">{{ t.post.title or 'Untitled post' }}</a>
+        {% else %}Job #{{ job.id }}{% endif %}
+    </div>
+    {% if job.last_error and job.state in ['failed','dead'] %}
+    <div class="qc-err" title="{{ job.last_error }}">{{ job.last_error }}</div>
+    {% endif %}
+    <div class="qc-foot">
+        <span class="qc-meta">
+            <i class="fa-solid fa-rotate"></i> {{ job.attempts }}/{{ job.max_attempts }}
+            · {{ job.updated_at.strftime('%d %b %H:%M') }}
+        </span>
+        {% if retry %}
+        <form method="POST" action="{{ url_for('social.requeue_job', job_id=job.id) }}" style="margin:0;">
+            <button type="submit" class="mini-link"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
         </form>
         {% endif %}
     </div>
 </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Publishing queue</h1>
+        <p>Every scheduled publish as it moves from queued to live — with one-click retry on failures</p>
+    </div>
+    {% set is_engine_admin = can_manage_social_engine(current_user) %}
+    {% if is_engine_admin %}
+    <div class="top-actions">
+        <form method="POST" action="{{ url_for('social.process_queue') }}" style="margin:0;">
+            <button type="submit" class="btn"><i class="fa-solid fa-play"></i> Process now</button>
+        </form>
+        {% if buckets.failed %}
+        <form method="POST" action="{{ url_for('social.requeue_all') }}" style="margin:0;"
+              onsubmit="return confirm('Retry all {{ buckets.failed|length }} failed job(s)?');">
+            <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Retry all failed</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -30,52 +62,45 @@
 {% endfor %}
 {% endwith %}
 
-<div class="stats-grid">
-    <div class="metric-card"><span>Queued</span><strong>{{ status.jobs.queued }}</strong></div>
-    <div class="metric-card"><span>In flight</span><strong>{{ status.jobs.in_flight }}</strong></div>
-    <div class="metric-card"><span>Succeeded</span><strong>{{ status.jobs.succeeded }}</strong></div>
-    <div class="metric-card {% if status.jobs.dead or status.jobs.failed %}warning{% endif %}">
-        <span>Dead / failed</span><strong>{{ status.jobs.dead + status.jobs.failed }}</strong>
+{# ---- Filters ---- #}
+<form method="GET" class="social-filters">
+    <div class="grow">
+        <input type="search" name="q" value="{{ q_search }}" placeholder="Search by post title or platform…">
     </div>
-</div>
-
-<div class="form-card">
-    {% if jobs %}
-    <div class="table-card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Job</th>
-                    <th>Platform</th>
-                    <th>State</th>
-                    <th>Attempts</th>
-                    <th>Last error</th>
-                    <th>Updated</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for j in jobs %}
-                <tr>
-                    <td>#{{ j.id }}</td>
-                    <td>{{ j.target.platform if j.target else '-' }}</td>
-                    <td><span class="status-pill warning">{{ j.state }}</span></td>
-                    <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
-                    <td>{{ (j.last_error or '')[:90] }}</td>
-                    <td>{{ j.updated_at.strftime('%d %b %H:%M') }}</td>
-                    <td>
-                        <form method="POST"
-                              action="{{ url_for('social.requeue_job', job_id=j.id) }}">
-                            <button type="submit" class="mini-action">Requeue</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="empty-text">Nothing to recover — no failed or dead jobs. 🎉</p>
+    <select name="platform" onchange="this.form.submit()">
+        <option value="">All platforms</option>
+        {% for key, label, icon in platforms %}
+        <option value="{{ key }}" {{ 'selected' if platform_f == key }}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-filter"></i> Filter</button>
+    {% if platform_f or q_search %}
+    <a href="{{ url_for('social.queue') }}" class="btn btn-ghost">Clear</a>
     {% endif %}
+</form>
+
+{# ---- Board ---- #}
+<div class="queue-board">
+    {% set cols = [
+        ('queued','Queued','fa-hourglass-half', false),
+        ('publishing','Publishing','fa-paper-plane', false),
+        ('completed','Completed','fa-circle-check', false),
+        ('failed','Failed','fa-triangle-exclamation', true)
+    ] %}
+    {% for key, title, icon, retry in cols %}
+    <div class="queue-col">
+        <div class="queue-col-head">
+            <span class="t"><i class="fa-solid {{ icon }}"></i> {{ title }}</span>
+            <span class="c">{{ buckets[key]|length }}</span>
+        </div>
+        <div class="queue-col-body">
+            {% for job in buckets[key] %}
+                {{ job_card(job, retry=(retry and is_engine_admin)) }}
+            {% else %}
+            <div class="queue-empty">Nothing here</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
 </div>
 {% endblock %}

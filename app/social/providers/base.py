@@ -22,6 +22,12 @@ class SocialProvider(ABC):
     key: str = ""
     #: Declared once per adapter (see dto.Capabilities).
     capabilities: Capabilities = None
+    #: Whether this platform has its OWN connect (OAuth) entry point.
+    #: False for platforms that are DISCOVERED through another's consent -
+    #: e.g. Instagram Business accounts are found via the Facebook login and
+    #: published with the linked Page token, so they are never connected on
+    #: their own (Buffer / Meta Business Suite architecture).
+    connectable: bool = True
 
     # -- OAuth -------------------------------------------------------------
 

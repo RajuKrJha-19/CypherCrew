@@ -1,53 +1,71 @@
 {% extends "base_app.html" %}
+{% block title %}Calendar · Social Publishing | CypherCrew{% endblock %}
 
-{% block title %}Content Calendar | CypherCrew{% endblock %}
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+{% set DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Content Calendar</h1>
-        <p>Scheduled and published social posts</p>
+        <h1>Content calendar</h1>
+        <p>Every scheduled post at a glance — colour-coded by platform, in IST</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Accounts</a>
+        <a href="{{ url_for('social.compose') }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
     </div>
 </div>
 
-<div class="form-card">
-    {% if posts %}
-    <div class="table-card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Post</th>
-                    <th>Client</th>
-                    <th>Targets</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in posts %}
-                <tr>
-                    <td>{{ p.title or '(untitled)' }}</td>
-                    <td>{{ p.client.client_name if p.client else '-' }}</td>
-                    <td>
-                        {% for t in p.targets %}
-                        <span class="status-pill">{{ t.platform }}</span>
-                        {% endfor %}
-                    </td>
-                    <td><span class="status-pill">{{ p.status }}</span></td>
-                    <td>{{ p.created_at.strftime('%d %b %Y') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% include 'partials/social_nav.html' %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="cal-toolbar">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <span class="cal-title">{{ month_name }} {{ year }}</span>
+        <div class="cal-nav">
+            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=prev_y, m=prev_m) }}" title="Previous month"><i class="fa-solid fa-chevron-left"></i></a>
+            <a class="btn btn-ghost" href="{{ url_for('social.calendar') }}">Today</a>
+            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=next_y, m=next_m) }}" title="Next month"><i class="fa-solid fa-chevron-right"></i></a>
+        </div>
     </div>
-    {% else %}
-    <p class="empty-text">
-        No social posts yet. The composer arrives with the first platform
-        adapter (Phase 1); posts will originate from a task deliverable.
-    </p>
-    {% endif %}
+    <div class="cal-legend">
+        <span><span class="st-dot" style="background:var(--sp-facebook)"></span> Facebook</span>
+        <span><span class="st-dot" style="background:var(--sp-instagram)"></span> Instagram</span>
+        <span><span class="st-dot" style="background:var(--sp-linkedin)"></span> LinkedIn</span>
+        <span><span class="st-dot" style="background:var(--sp-youtube)"></span> YouTube</span>
+    </div>
+</div>
+
+<div class="cal-grid">
+    {% for d in DOW %}<div class="cal-dow">{{ d }}</div>{% endfor %}
+    {% for week in weeks %}
+        {% for day in week %}
+            {% if day == 0 %}
+            <div class="cal-cell out"></div>
+            {% else %}
+            <div class="cal-cell {{ 'today' if day == today }}">
+                <span class="cal-daynum">{{ day }}</span>
+                {% set events = by_day.get(day, []) %}
+                {% for t in events[:3] %}
+                {% set tm = to_ist(t.scheduled_for)[11:16] %}
+                <a class="cal-event {{ t.platform }}"
+                   href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}"
+                   title="{{ (t.post.title if t.post else '') or t.caption or 'Post' }} · {{ t.platform }} · {{ t.status }}">
+                    <i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i>
+                    <span class="ce-time">{{ tm }}</span>
+                    {{ (t.post.title if t.post else none) or t.caption or 'Post' }}
+                </a>
+                {% endfor %}
+                {% if events|length > 3 %}
+                <span class="cal-more">+{{ events|length - 3 }} more</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
 </div>
 {% endblock %}

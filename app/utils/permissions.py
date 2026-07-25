@@ -89,3 +89,21 @@ def can_manage_clients(user):
         user.role in ("admin", "super_admin")
         or has_permission(user, "manage_clients")
     )
+
+
+def can_manage_social_engine(user):
+    """True for anyone allowed to operate the Social Publishing *engine* -
+    the internal machinery: kicking the worker/scheduler, retrying or
+    requeuing failed jobs, and other maintenance controls.
+
+    This is deliberately narrower than `manage_social` (which lets an
+    employee compose, schedule and publish for clients). Engine controls
+    are ops surface, not publishing surface: a normal employee or manager
+    must never see or reach them. Only the owner (super_admin) and admins
+    qualify - mirroring can_manage_clients' role widening, so no new DB
+    permission/migration is needed. Backend routes call this directly; the
+    same helper is a Jinja global so the UI hides what the route forbids.
+    """
+    if user is None:
+        return False
+    return getattr(user, "role", None) in ("admin", "super_admin")

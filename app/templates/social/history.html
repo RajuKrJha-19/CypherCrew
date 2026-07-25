@@ -1,52 +1,56 @@
 {% extends "base_app.html" %}
+{% block title %}Published · Social Publishing | CypherCrew{% endblock %}
 
-{% block title %}Publishing History | CypherCrew{% endblock %}
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
+{% set STATUS_TONE = {'published':'success','approved':'info','scheduled':'warning','publishing':'info','failed':'danger'} %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Publishing History</h1>
-        <p>Every publish attempt and its outcome</p>
-    </div>
-    <div class="top-actions">
-        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Accounts</a>
+        <h1>Published</h1>
+        <p>Every publish attempt and its outcome, newest first</p>
     </div>
 </div>
 
-<div class="form-card">
-    {% if targets %}
-    <div class="table-card">
+{% include 'partials/social_nav.html' %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{% if targets %}
+<div class="social-card">
+    <div class="table-card" style="border:0;box-shadow:none;">
         <table>
             <thead>
-                <tr>
-                    <th>Platform</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Permalink</th>
-                    <th>Last error</th>
-                    <th>Updated</th>
-                </tr>
+                <tr><th>Platform</th><th>Type</th><th>Status</th><th>Link</th><th>Last error</th><th>Updated</th></tr>
             </thead>
             <tbody>
                 {% for t in targets %}
                 <tr>
-                    <td>{{ t.platform }}</td>
-                    <td>{{ t.post_type }}</td>
-                    <td><span class="status-pill">{{ t.status }}</span></td>
-                    <td>
-                        {% if t.permalink %}
-                        <a href="{{ t.permalink }}" target="_blank" rel="noopener">View</a>
-                        {% else %}-{% endif %}
-                    </td>
-                    <td>{{ (t.last_error or '')[:80] }}</td>
-                    <td>{{ t.updated_at.strftime('%d %b %Y %H:%M') }}</td>
+                    <td><span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span></td>
+                    <td style="text-transform:capitalize;">{{ t.post_type }}</td>
+                    <td><span class="sp-pill {{ STATUS_TONE.get(t.status,'') }}">{{ t.status.replace('_',' ') }}</span></td>
+                    <td>{% if t.permalink %}<a href="{{ t.permalink }}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> View</a>{% else %}<span style="color:var(--color-text-subtle);">—</span>{% endif %}</td>
+                    <td style="color:var(--color-danger);font-size:12px;">{{ (t.last_error or '')[:80] }}</td>
+                    <td style="color:var(--color-text-muted);font-size:12px;">{{ t.updated_at.strftime('%d %b %Y %H:%M') }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <p class="empty-text">No publish attempts yet.</p>
-    {% endif %}
 </div>
+{% else %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <h3>Nothing published yet</h3>
+        <p>Once posts are approved and scheduled, every publish attempt and its result will appear here.</p>
+        <div class="actions"><a href="{{ url_for('social.compose') }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> Compose a post</a></div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

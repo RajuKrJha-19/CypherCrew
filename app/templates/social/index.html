@@ -1,34 +1,43 @@
 {% extends "base_app.html" %}
-
 {% block title %}Social Publishing | CypherCrew{% endblock %}
+
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
+{% set MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+{% set ACT = {
+  'post_created':('fa-plus','info','created a draft'),
+  'post_updated':('fa-pen','','edited a post'),
+  'submitted_for_approval':('fa-paper-plane','info','submitted a post for approval'),
+  'approved':('fa-check','success','approved a post'),
+  'post_approved':('fa-check','success','approved a post'),
+  'rejected':('fa-rotate-left','danger','sent a post back for changes'),
+  'scheduled':('fa-clock','info','scheduled a post'),
+  'post_scheduled':('fa-clock','info','scheduled a post'),
+  'published':('fa-check-double','success','published a post'),
+  'target_published':('fa-check-double','success','published a post'),
+  'account_connected':('fa-plug','success','connected an account'),
+  'account_disconnected':('fa-plug-circle-xmark','danger','disconnected an account'),
+  'post_deleted':('fa-trash','danger','deleted a draft'),
+  'job_requeued':('fa-arrows-rotate','info','requeued a job')
+} %}
 
 {% block content %}
 <div class="page-header">
     <div>
         <h1>Social Publishing</h1>
-        <p>Connect accounts, then schedule and publish across platforms</p>
+        <p>Plan, approve, schedule and publish across every connected channel</p>
     </div>
     <div class="top-actions">
         <a href="{{ url_for('social.compose') }}" class="btn">
             <i class="fa-solid fa-pen-to-square"></i> New post
         </a>
-        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary">
-            <i class="fa-solid fa-layer-group"></i> Posts
-        </a>
-        <a href="{{ url_for('social.calendar') }}" class="btn btn-secondary">
-            <i class="fa-solid fa-calendar-days"></i> Content Calendar
-        </a>
-        <a href="{{ url_for('social.queue') }}" class="btn btn-secondary">
-            <i class="fa-solid fa-list-check"></i> Queue &amp; Recovery
-            {% if status.jobs.dead or status.jobs.failed %}
-            <span class="status-pill warning">{{ status.jobs.dead + status.jobs.failed }}</span>
-            {% endif %}
-        </a>
-        <a href="{{ url_for('social.history') }}" class="btn btn-secondary">
-            <i class="fa-solid fa-clock-rotate-left"></i> Publishing History
+        <a href="{{ url_for('social.accounts') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-plug"></i> Manage accounts
         </a>
     </div>
 </div>
+
+{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -36,91 +45,197 @@
 {% endfor %}
 {% endwith %}
 
-<div class="stats-grid">
-    <div class="metric-card">
-        <span>Scheduled</span>
-        <strong>{{ status.targets.scheduled }}</strong>
-    </div>
-    <div class="metric-card">
-        <span>In flight</span>
-        <strong>{{ status.jobs.queued + status.jobs.in_flight }}</strong>
-    </div>
-    <div class="metric-card">
-        <span>Published</span>
-        <strong>{{ status.targets.published }}</strong>
-    </div>
-    <div class="metric-card {% if status.jobs.dead or status.jobs.failed %}warning{% endif %}">
-        <span>Needs recovery</span>
-        <strong>{{ status.jobs.dead + status.jobs.failed }}</strong>
-    </div>
-</div>
-
 {% if status.accounts.needs_reauth %}
 <div class="alert error">
+    <i class="fa-solid fa-triangle-exclamation"></i>
     {{ status.accounts.needs_reauth }} account(s) need re-authorization before
-    they can publish again.
+    they can publish again. <a href="{{ url_for('social.accounts') }}">Review accounts →</a>
 </div>
 {% endif %}
 
-<div class="form-card">
-    <h2>Connected Accounts</h2>
-    {% if accounts %}
-    <div class="table-card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Platform</th>
-                    <th>Account</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for a in accounts %}
-                <tr>
-                    <td>{{ a.platform|capitalize }}</td>
-                    <td>{{ a.display_name }}</td>
-                    <td>{{ a.account_type }}</td>
-                    <td>
-                        <span class="status-pill">{{ a.status }}</span>
-                    </td>
-                    <td>
-                        <form method="POST"
-                              action="{{ url_for('social.disconnect_account', account_id=a.id) }}"
-                              onsubmit="return confirm('Disconnect {{ a.display_name }}?');">
-                            <button type="submit" class="mini-link">Disconnect</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% if not accounts %}
+{# ---- First-run onboarding: no channels yet ---- #}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-share-nodes"></i></div>
+        <h3>Connect your first channel</h3>
+        <p>Link a Facebook Page to start publishing. Any Instagram Business
+           account linked to that Page is discovered automatically — no
+           separate Instagram login needed.</p>
+        <div class="actions">
+            <a href="{{ url_for('social.accounts') }}" class="btn">
+                <i class="fa-solid fa-plug"></i> Connect an account
+            </a>
+        </div>
     </div>
-    {% else %}
-    <p class="empty-text">No accounts connected yet. Connect one below to get started.</p>
-    {% endif %}
+</div>
+{% else %}
+
+{# ---- Stat tiles ---- #}
+<div class="social-stats">
+    <a class="stat-tile accent" href="{{ url_for('social.accounts') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-plug"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ accounts|length }}</span>
+            <span class="stat-tile-label">Connected accounts</span>
+        </div>
+    </a>
+    <a class="stat-tile warning" href="{{ url_for('social.calendar') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-clock"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ status.targets.scheduled }}</span>
+            <span class="stat-tile-label">Scheduled</span>
+        </div>
+    </a>
+    <a class="stat-tile success" href="{{ url_for('social.history') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-check-double"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ published_today }}</span>
+            <span class="stat-tile-label">Published today</span>
+        </div>
+    </a>
+    <a class="stat-tile" href="{{ url_for('social.drafts') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-layer-group"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ drafts_count }}</span>
+            <span class="stat-tile-label">Drafts</span>
+        </div>
+    </a>
+    <a class="stat-tile" href="{{ url_for('social.queue') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-list-check"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ status.jobs.queued + status.jobs.in_flight }}</span>
+            <span class="stat-tile-label">In publishing queue</span>
+        </div>
+    </a>
+    <a class="stat-tile danger {% if status.jobs.dead or status.jobs.failed %}hot{% endif %}"
+       href="{{ url_for('social.queue') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">{{ status.jobs.dead + status.jobs.failed }}</span>
+            <span class="stat-tile-label">Failed posts</span>
+        </div>
+    </a>
 </div>
 
-<div class="form-card">
-    <h2>Connect an account</h2>
-    <p>Authorize CypherCrew to publish on your behalf. You choose which
-       Pages / accounts to connect during authorization.</p>
-    <div class="top-actions" style="flex-wrap:wrap; gap:10px; margin-top:12px;">
-        {% for key, label, icon in platforms %}
-        {% if key in available %}
-        {# Full navigation (not a Turbo fetch): OAuth is a redirect chain. #}
-        <a href="{{ url_for('oauth.connect', platform=key) }}" class="btn btn-secondary"
-           data-turbo="false">
-            <i class="{{ icon }}"></i> {{ label }}
-        </a>
-        {% else %}
-        <span class="btn btn-ghost" style="opacity:.55; cursor:not-allowed;"
-              title="Coming soon">
-            <i class="{{ icon }}"></i> {{ label }} <small>(soon)</small>
-        </span>
-        {% endif %}
-        {% endfor %}
+<div class="social-dash">
+    <div class="social-dash-col">
+        {# ---- Upcoming scheduled ---- #}
+        <div class="social-card">
+            <div class="social-card-head">
+                <h2><i class="fa-solid fa-calendar-check"></i> Upcoming scheduled posts</h2>
+                <a class="social-card-link" href="{{ url_for('social.calendar') }}">
+                    Open calendar <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+            {% if upcoming %}
+            <div class="sp-list">
+                {% for t in upcoming %}
+                {% set d = to_ist(t.scheduled_for) %}
+                <a class="sp-list-item" href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}">
+                    <div class="sp-when">
+                        <span class="d">{{ d[8:10] }}</span>
+                        <span class="m">{{ MONTHS[d[5:7]|int] }}</span>
+                    </div>
+                    <div class="sp-list-body">
+                        <span class="sp-list-title">{{ (t.post.title if t.post else none) or t.caption or 'Untitled post' }}</span>
+                        <span class="sp-list-meta">
+                            <span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>
+                            <span><i class="fa-regular fa-clock"></i> {{ d[11:16] }} IST</span>
+                            <span class="sp-pill">{{ t.post_type }}</span>
+                        </span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right" style="color:var(--color-text-subtle);"></i>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="social-empty" style="padding:30px 20px;">
+                <div class="ic" style="width:48px;height:48px;font-size:19px;"><i class="fa-regular fa-calendar"></i></div>
+                <h3 style="font-size:14px;">Nothing scheduled yet</h3>
+                <p>Compose a post and pick a time — it’ll show up here and on the calendar.</p>
+                <div class="actions"><a href="{{ url_for('social.compose') }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> Create a post</a></div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ---- Recent activity ---- #}
+        <div class="social-card">
+            <div class="social-card-head">
+                <h2><i class="fa-solid fa-wave-square"></i> Recent activity</h2>
+            </div>
+            {% if recent %}
+            <div class="activity-feed">
+                {% for r in recent %}
+                {% set meta = ACT.get(r.action, ('fa-circle-dot','', r.action|replace('_',' '))) %}
+                {% set d = to_ist(r.created_at) %}
+                <div class="activity-item">
+                    <div class="activity-ic {{ meta[1] }}"><i class="fa-solid {{ meta[0] }}"></i></div>
+                    <div class="activity-body">
+                        <span class="activity-text"><b>{{ r.actor.name if r.actor else 'System' }}</b> {{ meta[2] }}</span>
+                        <span class="activity-time">{{ d[8:10] }} {{ MONTHS[d[5:7]|int] }} · {{ d[11:16] }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="social-card-body"><p class="empty-text" style="margin:0;">No activity yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="social-dash-col">
+        {# ---- Connected accounts summary ---- #}
+        <div class="social-card">
+            <div class="social-card-head">
+                <h3><i class="fa-solid fa-plug"></i> Channels</h3>
+                <a class="social-card-link" href="{{ url_for('social.accounts') }}">Manage <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+            <div class="sp-list">
+                {% for g in groups %}
+                {% set a = g.account %}
+                <div class="sp-list-item" style="cursor:default;">
+                    <div class="account-avatar pf-{{ a.platform }}" style="width:36px;height:36px;font-size:15px;border-radius:10px;">
+                        <i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i>
+                    </div>
+                    <div class="sp-list-body">
+                        <span class="sp-list-title">{{ a.display_name }}</span>
+                        <span class="sp-list-meta">
+                            <span class="st-dot {{ a.status }}"></span>
+                            <span class="st-label">{{ a.status|replace('_',' ') }}</span>
+                            {% if g.children %}<span>· <i class="fa-brands fa-instagram"></i> {{ g.children|length }} IG</span>{% endif %}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="social-card-body" style="border-top:1px solid var(--color-border);">
+                {% if has_facebook %}
+                <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false" style="margin:0;">
+                    <button type="submit" class="btn btn-secondary" style="width:100%;">
+                        <i class="fa-brands fa-instagram"></i> Refresh linked Instagram
+                    </button>
+                </form>
+                {% else %}
+                <a href="{{ url_for('social.accounts') }}" class="btn btn-secondary" style="width:100%;">
+                    <i class="fa-solid fa-plus"></i> Add a channel
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ---- Quick actions ---- #}
+        <div class="social-card">
+            <div class="social-card-head"><h3><i class="fa-solid fa-bolt"></i> Quick actions</h3></div>
+            <div class="social-card-body">
+                <div class="quick-actions">
+                    <a class="quick-action" href="{{ url_for('social.compose') }}"><i class="fa-solid fa-pen-to-square"></i> New post</a>
+                    <a class="quick-action" href="{{ url_for('social.calendar') }}"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
+                    <a class="quick-action" href="{{ url_for('social.drafts') }}"><i class="fa-solid fa-layer-group"></i> Drafts</a>
+                    <a class="quick-action" href="{{ url_for('social.queue') }}"><i class="fa-solid fa-list-check"></i> Queue</a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

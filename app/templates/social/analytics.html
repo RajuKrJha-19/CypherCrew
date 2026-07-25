@@ -1,0 +1,71 @@
+{% extends "base_app.html" %}
+{% block title %}Analytics · Social Publishing | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Analytics</h1>
+        <p>Reach, engagement and growth across every connected channel</p>
+    </div>
+</div>
+
+{% include 'partials/social_nav.html' %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="analytics-hero">
+    <div class="ic"><i class="fa-solid fa-chart-line"></i></div>
+    <div>
+        <h2>Insights are on the way</h2>
+        <p>Once posts start publishing, per-post and per-channel metrics will sync
+           here automatically from the Meta Graph API. The layout below is the shape
+           they’ll take — no numbers yet.</p>
+    </div>
+</div>
+
+{% set metrics = [
+    ('Reach','fa-signal'),
+    ('Impressions','fa-eye'),
+    ('Engagement','fa-hand-pointer'),
+    ('Comments','fa-comment'),
+    ('Likes','fa-heart'),
+    ('Shares','fa-share'),
+    ('Followers','fa-users'),
+    ('Growth','fa-arrow-trend-up')
+] %}
+<div class="analytics-grid">
+    {% for name, icon in metrics %}
+    <div class="analytic-card">
+        <span class="analytic-soon"><span class="sp-pill">Soon</span></span>
+        <div class="ac-head">
+            <div class="ac-ic"><i class="fa-solid {{ icon }}"></i></div>
+            <span class="ac-name">{{ name }}</span>
+        </div>
+        <div class="ac-value">—</div>
+        <div class="ac-spark"></div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if accounts %}
+<div class="social-card" style="margin-top:20px;">
+    <div class="social-card-head"><h2><i class="fa-solid fa-plug"></i> Channels that will report</h2></div>
+    <div class="social-card-body">
+        <div class="sp-list" style="gap:0;">
+            {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+            {% for a in accounts %}
+            <div class="sp-list-item" style="cursor:default;padding-left:0;padding-right:0;">
+                <span class="pf-chip {{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ a.platform|capitalize }}</span>
+                <div class="sp-list-body"><span class="sp-list-title">{{ a.display_name }}</span></div>
+                <span class="sp-pill">Ready</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

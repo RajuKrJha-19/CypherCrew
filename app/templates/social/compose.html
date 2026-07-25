@@ -1,17 +1,20 @@
 {% extends "base_app.html" %}
+{% block title %}{{ 'Edit post' if post else 'New post' }} · Social | CypherCrew{% endblock %}
 
-{% block title %}{{ 'Edit post' if post else 'New post' }} | CypherCrew{% endblock %}
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>{{ 'Edit post' if post else 'Compose post' }}</h1>
-        <p>Draft once, publish to every selected platform</p>
+        <h1>{{ 'Edit post' if post else 'Compose' }}</h1>
+        <p>Write once, preview per platform, and publish everywhere you’re connected</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary">Drafts</a>
+        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary"><i class="fa-solid fa-layer-group"></i> Drafts</a>
     </div>
 </div>
+
+{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -19,99 +22,139 @@
 {% endfor %}
 {% endwith %}
 
+{% if not accounts %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-plug"></i></div>
+        <h3>No channels connected</h3>
+        <p>Connect a Facebook Page (Instagram comes with it) before composing a post.</p>
+        <div class="actions"><a href="{{ url_for('social.accounts') }}" class="btn"><i class="fa-solid fa-plug"></i> Connect an account</a></div>
+    </div>
+</div>
+{% else %}
 <form method="POST"
       action="{{ url_for('social.update_post', post_id=post.id) if post else url_for('social.create_post') }}"
-      class="form-card social-composer" id="composerForm">
+      class="composer-3col" id="composerForm">
 
-    <div class="composer-grid">
-        <div class="composer-main">
-            <label class="field">
-                <span>Title <small>(internal)</small></span>
-                <input type="text" name="title" value="{{ post.title or '' }}"
-                       placeholder="e.g. July product launch">
-            </label>
+    {# ================= LEFT: editor ================= #}
+    <div class="social-card">
+        <div class="social-card-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="field">
+                    <span>Title <small>(internal)</small></span>
+                    <input type="text" name="title" value="{{ post.title or '' }}" placeholder="e.g. July launch">
+                </label>
+                <label class="field">
+                    <span>Client</span>
+                    <select name="client_id" id="clientSelect">
+                        <option value="">— No client —</option>
+                        {% for c in clients %}
+                        <option value="{{ c.id }}" {% if post and post.client_id == c.id %}selected{% endif %}>{{ c.client_name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
 
-            <label class="field">
-                <span>Client</span>
-                <select name="client_id" id="clientSelect">
-                    <option value="">— No client —</option>
-                    {% for c in clients %}
-                    <option value="{{ c.id }}"
-                        {% if post and post.client_id == c.id %}selected{% endif %}>
-                        {{ c.client_name }}
-                    </option>
+            <div class="cmp-section" style="margin-top:16px;">
+                <span class="cmp-label">Caption <span class="cmp-count" id="captionCount">0</span></span>
+                <div class="cmp-emoji-bar" id="emojiBar">
+                    {% for e in ['😀','🔥','🎉','✨','👍','❤️','📢','🚀'] %}
+                    <button type="button" data-emoji="{{ e }}">{{ e }}</button>
                     {% endfor %}
-                </select>
-            </label>
+                    <button type="button" class="cmp-tool" data-insert="#"><i class="fa-solid fa-hashtag"></i> Hashtag</button>
+                    <button type="button" class="cmp-tool" data-insert="@"><i class="fa-solid fa-at"></i> Mention</button>
+                </div>
+                <textarea name="caption" id="captionInput" rows="7"
+                          placeholder="Write your caption…">{{ post.base_caption or '' }}</textarea>
+            </div>
 
-            <label class="field">
-                <span>Caption</span>
-                <textarea name="caption" id="captionInput" rows="6"
-                          placeholder="Write your caption… (add #simfail / #simretry / #simslow to test outcomes)">{{ post.base_caption or '' }}</textarea>
-                <small class="field-hint"><span id="captionCount">0</span> characters</small>
-            </label>
+            <div class="cmp-section" style="margin-top:16px;">
+                <span class="cmp-label">Media <small id="mediaHint">Select a client to load its brand assets</small></span>
+                <div class="cmp-media-grid" id="mediaGrid"></div>
+            </div>
+        </div>
+    </div>
 
-            <div class="field">
-                <span>Media</span>
-                <p class="field-hint" id="mediaHint">Select a client to load its brand assets.</p>
-                <div class="composer-media-grid" id="mediaGrid"></div>
+    {# ================= RIGHT: preview + options ================= #}
+    <div class="composer-side-rail">
+        {# --- Live preview --- #}
+        <div class="social-card">
+            <div class="social-card-head">
+                <h3><i class="fa-solid fa-eye"></i> Live preview</h3>
+                <div class="preview-switch" id="previewSwitch">
+                    <button type="button" data-pf="facebook" class="active">Facebook</button>
+                    <button type="button" data-pf="instagram">Instagram</button>
+                </div>
+            </div>
+            <div class="social-card-body">
+                <div class="phone-preview">
+                    <div class="pp-head">
+                        <div class="pp-ava facebook" id="ppAva"><i class="fa-brands fa-facebook"></i></div>
+                        <div>
+                            <div class="pp-name" id="ppName">Your Page</div>
+                            <div class="pp-sub" id="ppSub">Just now · 🌐</div>
+                        </div>
+                    </div>
+                    <div class="pp-caption" id="ppCaptionTop" style="display:none;"></div>
+                    <div class="pp-media" id="ppMedia"><i class="fa-regular fa-image"></i></div>
+                    <div class="pp-actions" id="ppActions">
+                        <i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>
+                    </div>
+                    <div class="pp-caption" id="ppCaption"><span class="ph">Your caption preview…</span></div>
+                </div>
             </div>
         </div>
 
-        <aside class="composer-side">
-            <div class="field">
-                <span>Post type</span>
-                <select name="post_type" id="postTypeSelect">
-                    {% for pt in ['image','carousel','reel','story','video','text','document'] %}
-                    <option value="{{ pt }}" {% if post_type == pt %}selected{% endif %}>
-                        {{ pt|capitalize }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <small class="field-hint" id="postTypeHint"></small>
-            </div>
-
-            <div class="field">
-                <span>Platforms</span>
-                {% if accounts %}
-                <div class="composer-accounts">
-                    {% for a in accounts %}
-                    <label class="composer-account">
-                        <input type="checkbox" name="account_ids" value="{{ a.id }}"
-                               data-platform="{{ a.platform }}"
-                               {% if a.id in selected_account_ids %}checked{% endif %}>
-                        <span class="platform-tag">{{ a.platform|capitalize }}</span>
-                        {{ a.display_name }}
-                    </label>
-                    {% endfor %}
+        {# --- Publishing options --- #}
+        <div class="social-card">
+            <div class="social-card-head"><h3><i class="fa-solid fa-sliders"></i> Publishing</h3></div>
+            <div class="social-card-body">
+                <div class="cmp-section">
+                    <span class="cmp-label">Post type</span>
+                    <select name="post_type" id="postTypeSelect">
+                        {% for pt in ['image','carousel','reel','story','video','text','document'] %}
+                        <option value="{{ pt }}" {% if post_type == pt %}selected{% endif %}>{{ pt|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="cmp-warn" id="postTypeWarn"></div>
                 </div>
-                {% else %}
-                <p class="field-hint">
-                    No accounts connected.
-                    <a href="{{ url_for('social.index') }}">Connect one first.</a>
+
+                <div class="cmp-section" style="margin-top:16px;">
+                    <span class="cmp-label">Publish to <small id="accountCount"></small></span>
+                    <div class="cmp-accounts">
+                        {% for a in accounts %}
+                        <label class="cmp-account {% if a.id in selected_account_ids %}on{% endif %}">
+                            <input type="checkbox" name="account_ids" value="{{ a.id }}"
+                                   data-platform="{{ a.platform }}" data-name="{{ a.display_name }}"
+                                   {% if a.id in selected_account_ids %}checked{% endif %}>
+                            <span class="ava pf-{{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i></span>
+                            <span class="nm">{{ a.display_name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="cmp-section" style="margin-top:16px;">
+                    <span class="cmp-label">Schedule <small>Times are IST</small></span>
+                    <label class="cmp-radio">
+                        <input type="radio" name="publish_mode" value="schedule" id="modeSchedule" checked>
+                        Schedule for later
+                    </label>
+                    <input type="datetime-local" name="schedule" id="scheduleInput" value="{{ schedule_value }}">
+                    <label class="cmp-radio">
+                        <input type="radio" name="publish_mode" value="now" id="modeNow">
+                        Publish as soon as approved
+                    </label>
+                </div>
+
+                <button type="submit" class="btn" style="width:100%; margin-top:18px;">
+                    <i class="fa-solid fa-floppy-disk"></i> {{ 'Save changes' if post else 'Save draft' }}
+                </button>
+                <p class="connect-note" style="text-align:center; margin-top:10px;">
+                    Saved as a draft — it publishes only after approval &amp; scheduling.
                 </p>
-                {% endif %}
             </div>
-
-            <div class="field">
-                <span>When</span>
-                <label class="radio-line">
-                    <input type="radio" name="publish_mode" value="schedule" checked>
-                    Schedule
-                </label>
-                <input type="datetime-local" name="schedule" id="scheduleInput"
-                       value="{{ schedule_value }}">
-                <label class="radio-line">
-                    <input type="radio" name="publish_mode" value="now">
-                    Publish as soon as approved
-                </label>
-                <small class="field-hint">Times are IST.</small>
-            </div>
-
-            <button type="submit" class="btn" style="width:100%">
-                {{ 'Save changes' if post else 'Save draft' }}
-            </button>
-        </aside>
+        </div>
     </div>
 </form>
 
@@ -119,62 +162,150 @@
 (function () {
     const caps = {{ capabilities|tojson }};
     const preselectedAssets = {{ selected_asset_ids|tojson }};
+    const PF_LABEL = {facebook:"Facebook", instagram:"Instagram", youtube:"YouTube", x:"X", linkedin:"LinkedIn"};
 
-    const clientSelect = document.getElementById("clientSelect");
-    const mediaGrid = document.getElementById("mediaGrid");
-    const mediaHint = document.getElementById("mediaHint");
-    const caption = document.getElementById("captionInput");
-    const captionCount = document.getElementById("captionCount");
-    const postType = document.getElementById("postTypeSelect");
-    const postTypeHint = document.getElementById("postTypeHint");
+    const $ = id => document.getElementById(id);
+    const clientSelect = $("clientSelect"), mediaGrid = $("mediaGrid"), mediaHint = $("mediaHint");
+    const caption = $("captionInput"), captionCount = $("captionCount");
+    const postType = $("postTypeSelect"), postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount");
+    let previewPlatform = "facebook";
+    let selectedMediaUrl = null;
 
-    function updateCount() { captionCount.textContent = caption.value.length; }
-    caption.addEventListener("input", updateCount); updateCount();
-
-    // Show which selected platforms accept the chosen post type.
-    function refreshPostTypeHint() {
-        const pt = postType.value;
-        const checked = [...document.querySelectorAll('input[name="account_ids"]:checked')];
-        if (!checked.length) { postTypeHint.textContent = ""; return; }
-        const unsupported = checked
-            .map(c => c.dataset.platform)
-            .filter(p => caps[p] && !caps[p].post_types.includes(pt));
-        postTypeHint.textContent = unsupported.length
-            ? "⚠ Not supported on: " + [...new Set(unsupported)].join(", ")
-            : "✓ Supported on all selected platforms";
-        postTypeHint.className = "field-hint " + (unsupported.length ? "warn" : "ok");
+    // ---- caption count + preview ----
+    function maxChars() {
+        const checked = accountsChecked();
+        let m = Infinity;
+        checked.forEach(c => { const cap = caps[c.dataset.platform];
+            if (cap && cap.max_caption_chars) m = Math.min(m, cap.max_caption_chars); });
+        return m === Infinity ? null : m;
     }
-    postType.addEventListener("change", refreshPostTypeHint);
-    document.querySelectorAll('input[name="account_ids"]').forEach(
-        c => c.addEventListener("change", refreshPostTypeHint));
+    function updateCaption() {
+        const len = caption.value.length, m = maxChars();
+        captionCount.textContent = m ? `${len} / ${m}` : `${len}`;
+        captionCount.classList.toggle("over", m && len > m);
+        renderPreview();
+    }
+    caption.addEventListener("input", updateCaption);
 
-    function renderAssets(assets) {
-        if (!assets.length) {
-            mediaGrid.innerHTML = "";
-            mediaHint.textContent = "This client has no brand assets yet.";
-            return;
+    // ---- accounts ----
+    function accountsChecked(){ return [...document.querySelectorAll('input[name="account_ids"]:checked')]; }
+    function refreshAccounts() {
+        document.querySelectorAll('.cmp-account').forEach(l => {
+            l.classList.toggle("on", l.querySelector("input").checked);
+        });
+        const n = accountsChecked().length;
+        accountCount.textContent = n ? `${n} selected` : "none selected";
+        refreshTypeWarn();
+        updateCaption();
+    }
+    document.querySelectorAll('input[name="account_ids"]').forEach(c => c.addEventListener("change", refreshAccounts));
+
+    // ---- post type support warning ----
+    function refreshTypeWarn() {
+        const pt = postType.value, checked = accountsChecked();
+        if (!checked.length) { postTypeWarn.className = "cmp-warn"; return; }
+        const bad = [...new Set(checked.map(c => c.dataset.platform)
+            .filter(p => caps[p] && !caps[p].post_types.includes(pt)))];
+        if (bad.length) {
+            postTypeWarn.className = "cmp-warn warn show";
+            postTypeWarn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+                pt + ' isn’t supported on: ' + bad.map(p => PF_LABEL[p]||p).join(", ");
+        } else {
+            postTypeWarn.className = "cmp-warn ok show";
+            postTypeWarn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Supported on all selected platforms';
         }
-        mediaHint.textContent = "Tick the media to attach.";
+    }
+    postType.addEventListener("change", () => { refreshTypeWarn(); renderPreview(); });
+
+    // ---- emoji / insert helpers ----
+    function insertAtCursor(text) {
+        const s = caption.selectionStart, e = caption.selectionEnd;
+        caption.value = caption.value.slice(0, s) + text + caption.value.slice(e);
+        caption.focus(); caption.selectionStart = caption.selectionEnd = s + text.length;
+        updateCaption();
+    }
+    $("emojiBar").addEventListener("click", ev => {
+        const b = ev.target.closest("button"); if (!b) return;
+        insertAtCursor(b.dataset.emoji || b.dataset.insert || "");
+    });
+
+    // ---- preview switch ----
+    $("previewSwitch").addEventListener("click", ev => {
+        const b = ev.target.closest("button"); if (!b) return;
+        previewPlatform = b.dataset.pf;
+        [...ev.currentTarget.children].forEach(c => c.classList.toggle("active", c === b));
+        renderPreview();
+    });
+
+    function renderPreview() {
+        const isIG = previewPlatform === "instagram";
+        const acct = accountsChecked().find(c => c.dataset.platform === previewPlatform);
+        const ava = $("ppAva");
+        ava.className = "pp-ava " + previewPlatform;
+        ava.innerHTML = '<i class="fa-brands fa-' + (isIG ? "instagram" : "facebook") + '"></i>';
+        $("ppName").textContent = acct ? acct.dataset.name : (isIG ? "your_handle" : "Your Page");
+        $("ppSub").textContent = isIG ? "Original audio" : "Just now · 🌐";
+
+        // caption placement: IG shows caption under media; FB shows it on top too
+        const text = caption.value.trim();
+        const cap = $("ppCaption");
+        if (text) { cap.textContent = text; } else { cap.innerHTML = '<span class="ph">Your caption preview…</span>'; }
+
+        // media
+        const media = $("ppMedia");
+        if (selectedMediaUrl) media.innerHTML = '<img src="' + selectedMediaUrl + '" alt="">';
+        else media.innerHTML = '<i class="fa-regular fa-image"></i>';
+
+        // actions row per platform
+        $("ppActions").innerHTML = isIG
+            ? '<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span style="margin-left:auto"><i class="fa-regular fa-bookmark"></i></span>'
+            : '<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>';
+    }
+
+    // ---- media assets ----
+    function selectedAssetInputs(){ return [...document.querySelectorAll('input[name="asset_ids"]:checked')]; }
+    function refreshMediaSelection() {
+        document.querySelectorAll('.cmp-asset').forEach(l => l.classList.toggle("selected", l.querySelector("input").checked));
+        const first = selectedAssetInputs()[0];
+        selectedMediaUrl = first ? (first.dataset.url || null) : null;
+        renderPreview();
+    }
+    function renderAssets(assets) {
+        if (!assets.length) { mediaGrid.innerHTML = ""; mediaHint.textContent = "This client has no brand assets yet"; return; }
+        mediaHint.textContent = "Click to attach";
         mediaGrid.innerHTML = assets.map(a => `
-            <label class="composer-media-item">
-                <input type="checkbox" name="asset_ids" value="${a.id}"
+            <label class="cmp-asset" title="${a.filename}">
+                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url || ''}"
                        ${preselectedAssets.includes(a.id) ? "checked" : ""}>
-                <span class="media-cat">${a.category}</span>
-                <span class="media-name">${a.filename}</span>
+                <span class="cmp-asset-thumb">${a.is_image && a.url
+                    ? `<img src="${a.url}" loading="lazy" alt="">`
+                    : '<i class="fa-regular fa-file"></i>'}</span>
+                <span class="cmp-asset-name">${a.filename}</span>
+                <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
             </label>`).join("");
+        mediaGrid.querySelectorAll('input[name="asset_ids"]').forEach(c => c.addEventListener("change", refreshMediaSelection));
+        refreshMediaSelection();
     }
-
     function loadAssets(clientId) {
-        if (!clientId) { mediaGrid.innerHTML = ""; mediaHint.textContent = "Select a client to load its brand assets."; return; }
-        fetch(`/social/api/clients/${clientId}/assets`)
-            .then(r => r.json())
+        if (!clientId) { mediaGrid.innerHTML = ""; mediaHint.textContent = "Select a client to load its brand assets"; selectedMediaUrl = null; renderPreview(); return; }
+        mediaHint.textContent = "Loading…";
+        fetch(`/social/api/clients/${clientId}/assets`).then(r => r.json())
             .then(d => renderAssets(d.assets || []))
-            .catch(() => { mediaHint.textContent = "Could not load assets."; });
+            .catch(() => { mediaHint.textContent = "Could not load assets"; });
     }
-
     clientSelect.addEventListener("change", () => loadAssets(clientSelect.value));
+
+    // ---- init ----
+    // default preview platform to the first selected account's platform if it's FB/IG
+    const firstSel = accountsChecked()[0];
+    if (firstSel && ["facebook","instagram"].includes(firstSel.dataset.platform)) {
+        previewPlatform = firstSel.dataset.platform;
+        document.querySelectorAll('#previewSwitch button').forEach(b => b.classList.toggle("active", b.dataset.pf === previewPlatform));
+    }
+    refreshAccounts();
     if (clientSelect.value) loadAssets(clientSelect.value);
-    refreshPostTypeHint();
+    renderPreview();
 })();
 </script>
+{% endif %}
 {% endblock %}

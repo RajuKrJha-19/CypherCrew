@@ -101,7 +101,11 @@ def rupload(video_id):
 
 @meta_emulator_bp.route("/<ver>/<node>", methods=["GET"])
 def node(ver, node):
-    fields = set((request.args.get("fields", "") or "").split(","))
+    raw_fields = request.args.get("fields", "") or ""
+    fields = set(raw_fields.split(","))
+    if "instagram_business_account" in raw_fields:  # Page -> linked IG (refresh)
+        return jsonify(id=node, name=_PAGE["name"],
+                       instagram_business_account=_PAGE["instagram_business_account"])
     if "status_code" in fields:                    # IG container
         return jsonify(id=node, status_code="FINISHED")
     if "status" in fields:                         # FB video/reel processing

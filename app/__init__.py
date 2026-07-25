@@ -211,7 +211,9 @@ def create_app():
         if app.config.get("AUTO_SEED", True):
             seed_database()
 
-    from app.utils.permissions import has_permission, can_manage_clients
+    from app.utils.permissions import (
+        has_permission, can_manage_clients, can_manage_social_engine,
+    )
     from app.utils import task_status as task_status_module
     from app.utils.greeting import greet, today_label
     from app.utils.avatars import (
@@ -223,6 +225,10 @@ def create_app():
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
+        # "May operate the Social Publishing engine" (owner/admin only) -
+        # gates the internal ops controls (worker kick, retry/requeue) so
+        # employees and managers never see engine machinery.
+        can_manage_social_engine=can_manage_social_engine,
         # "May curate this client" (admin/super_admin, or the explicit
         # manage_clients permission) - distinct from "may read it",
         # which is now every signed-in user. See the helper's docstring.
