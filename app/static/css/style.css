@@ -1110,53 +1110,156 @@ body.sidebar-collapsed .sidebar a{
     color:var(--color-surface);
 }
 
+/* ---------------------------------------------------------------
+   Mobile navigation chrome: hamburger trigger, drawer close (X),
+   and the backdrop. All three are inert on desktop - the buttons
+   are display:none until the mobile breakpoint and the backdrop
+   only paints while the drawer is open - so the desktop shell is
+   completely untouched.
+   --------------------------------------------------------------- */
+.mobile-nav-toggle,
+.sidebar-close-btn{
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    border:none;
+    background:transparent;
+    cursor:pointer;
+    border-radius:var(--radius-sm);
+}
+
+.mobile-nav-toggle{
+    width:40px;
+    height:40px;
+    margin-right:2px;
+    color:var(--color-text);
+    font-size:19px;
+}
+
+.mobile-nav-toggle:hover{
+    background:var(--color-surface-muted);
+}
+
+.sidebar-close-btn{
+    width:32px;
+    height:32px;
+    color:var(--color-text-muted);
+    font-size:17px;
+}
+
+.sidebar-close-btn:hover{
+    background:var(--color-surface-muted);
+    color:var(--color-text);
+}
+
+.mobile-nav-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(15,18,25,.5);
+    /* Above every in-page layer (sticky headers reach z-index:9999, various
+       dropdowns 5000-11000) so the drawer visually detaches from the page,
+       but below the true overlay layer (modals / command palette / task
+       drawer at 99998+), which must never be trapped under it. */
+    z-index:60000;
+    animation:mobileNavFade .2s ease;
+}
+
+@keyframes mobileNavFade{ from{opacity:0} to{opacity:1} }
+
 @media(max-width:768px){
 
-    /* .layout must stop being a row, or a width:100% sidebar
-       simply sits beside .main and crushes it. */
+    /* The sidebar leaves the flow and becomes an off-canvas drawer, so the
+       content column is full width and the top bar sits at the very top. */
     .layout{
         flex-direction:column;
     }
 
+    /* ---- Off-canvas navigation drawer ----
+       Slides in from the left over the content. It keeps the FULL vertical
+       nav - brand, section labels, every item, logout - because it is the
+       real menu now, not a cramped horizontal strip. */
     .sidebar{
-        position:relative;
-        width:100%;
-        height:auto;
-        padding:12px;
+        position:fixed;
+        top:0;
+        left:0;
+        width:min(84vw,300px);
+        height:100vh;
+        height:100dvh;
+        padding:16px 12px;
+        transform:translateX(-100%);
+        transition:transform .28s ease, box-shadow .28s ease;
+        /* One above the backdrop so the panel sits over the dimmed page. */
+        z-index:60001;
+        overflow-y:auto;
+        overflow-x:hidden;
+    }
+
+    body.mobile-nav-open .sidebar{
+        transform:translateX(0);
+        box-shadow:0 24px 70px rgba(0,0,0,.45);
+    }
+
+    .sidebar-nav{
+        display:block;
+        overflow-x:hidden;
     }
 
     .sidebar h2{
         font-size:var(--text-lg);
-        margin-bottom:10px;
-        padding:0 4px;
     }
 
-    /* nav becomes a compact horizontal strip instead of a
-       12-item vertical list eating the whole screen */
-    .sidebar-nav{
-        display:flex;
-        flex-direction:row;
-        gap:6px;
-        overflow-x:auto;
-    }
-
-    /* group labels only make sense in a vertical list */
     .sidebar-nav-label{
-        display:none;
+        display:block;
     }
 
     .sidebar a{
-        flex-direction:column;
-        gap:4px;
-        margin-bottom:0;
-        padding:8px 10px;
-        font-size:var(--text-xs);
+        flex-direction:row;
+        gap:14px;
+        margin-bottom:2px;
+        padding:12px 14px;
+        font-size:var(--text-md);
     }
 
     .sidebar a i{
-        font-size:16px;
+        font-size:18px;
     }
 
+    /* Collapse is a desktop-only affordance; inside the drawer it must
+       never centre icons or hide labels, even if the desktop preference
+       (localStorage) was set before the viewport shrank. */
+    body.sidebar-collapsed .sidebar{
+        width:min(84vw,300px);
+    }
+    body.sidebar-collapsed .sidebar a{
+        justify-content:flex-start;
+        padding:12px 14px;
+    }
+    body.sidebar-collapsed .sidebar a span,
+    body.sidebar-collapsed .sidebar h2,
+    body.sidebar-collapsed .sidebar-nav-label{
+        display:block;
+    }
+
+    /* Desktop collapse toggle is meaningless in a drawer; the close (X)
+       button takes its place. */
+    .sidebar-collapse-btn{
+        display:none;
+    }
+    .sidebar-close-btn{
+        display:inline-flex;
+    }
+
+    /* Backdrop + body scroll-lock while the drawer is open. */
+    body.mobile-nav-open{
+        overflow:hidden;
+    }
+    body.mobile-nav-open .mobile-nav-backdrop{
+        display:block;
+    }
+
+    /* Content column and top bar are full width; the hamburger appears. */
     .main{
         margin-left:0;
         padding:16px;
@@ -1164,29 +1267,17 @@ body.sidebar-collapsed .sidebar a{
 
     .topbar{
         margin-left:0;
-        padding:0 16px;
-        gap:10px;
+        padding:0 12px;
+        gap:8px;
     }
 
-    body.sidebar-collapsed .sidebar,
+    .mobile-nav-toggle{
+        display:inline-flex;
+    }
+
     body.sidebar-collapsed .main,
     body.sidebar-collapsed .topbar{
-        width:100%;
         margin-left:0;
-    }
-
-    body.sidebar-collapsed .sidebar a{
-        justify-content:center;
-        padding:8px 10px;
-    }
-
-    /* labels stay visible on mobile - the rail is horizontal here */
-    body.sidebar-collapsed .sidebar a span{
-        display:block;
-    }
-
-    .sidebar-collapse-btn{
-        display:none;
     }
 
     /* page headers stack instead of squeezing the title */
@@ -14548,6 +14639,68 @@ body.cmdk-open{ overflow:hidden; }
     cursor:pointer;
 }
 
+/* Logout is now a <button> inside a <form> (POST logout), so the collapsed-
+   rail rules that target `.sidebar a` never reached it - its label spilled
+   out of the narrow rail. Mirror the nav-item collapse behaviour: centre
+   the icon and turn the label into a hover tooltip. Collapsed-only, so the
+   expanded sidebar is untouched. */
+@media(min-width:769px){
+    body.sidebar-collapsed .sidebar-logout{
+        position:relative;
+        text-align:center;
+        padding-left:0;
+        padding-right:0;
+    }
+    body.sidebar-collapsed .sidebar-logout > span{
+        position:absolute;
+        left:calc(100% + 10px);
+        top:50%;
+        transform:translateY(-50%) translateX(-4px);
+        padding:6px 10px;
+        background:#20222c;
+        border:1px solid rgba(255,255,255,.12);
+        border-radius:var(--ds-radius);
+        color:#e8eaf0;
+        font-size:var(--ds-font-12);
+        font-weight:var(--ds-weight-medium);
+        line-height:1;
+        white-space:nowrap;
+        box-shadow:0 8px 22px rgba(0,0,0,.32);
+        opacity:0;
+        pointer-events:none;
+        transition:opacity .12s ease, transform .12s ease;
+        z-index:1500;
+    }
+    body.sidebar-collapsed .sidebar-logout:hover > span{
+        opacity:1;
+        transform:translateY(-50%) translateX(0);
+    }
+}
+
+/* Dark-mode notifications: the item hover / unread / border used hardcoded
+   light hex values that stayed light in dark mode, so unread notifications
+   rendered as bright blocks with pale, hard-to-read text. Give them proper
+   dark surfaces and legible text. */
+:root[data-theme="dark"] .notification-item{
+    border-bottom-color:rgba(255,255,255,.07);
+}
+:root[data-theme="dark"] .notification-item:hover{
+    background:rgba(255,255,255,.05) !important;
+}
+:root[data-theme="dark"] .notification-item.unread{
+    background:rgba(99,102,241,.13) !important;
+}
+:root[data-theme="dark"] .notification-item.unread:hover{
+    background:rgba(99,102,241,.20) !important;
+}
+:root[data-theme="dark"] .notification-item strong{
+    color:#e6e8ee !important;
+}
+:root[data-theme="dark"] .notification-item span,
+:root[data-theme="dark"] .notification-item small{
+    color:#aeb4c2 !important;
+}
+
 
 /* ==========================================================
    TASK QUICK-VIEW CHIPS (one-click daily filters)
@@ -14791,4 +14944,86 @@ body.cmdk-open{ overflow:hidden; }
 @media (max-width:600px){
     .cmdk-panel{ margin-top:8vh; max-height:80vh; }
     .cmdk-foot-tip{ display:none; }
+}
+
+/* ===================================================================
+   MOBILE CALENDAR (phones, <=600px)
+   The month/week grids otherwise force a 620-760px min-width and scroll
+   horizontally, so only ~4 of 7 days are visible. On a phone this reads
+   as broken. Instead:
+     - Month: fit all 7 columns compactly and reduce each event to its
+       colour dot - the standard mobile month-calendar pattern. Tapping a
+       day still opens the "Selected day" detail card below the grid.
+     - Week: stack the seven days as full-width rows, each listing its
+       items in full - far more usable than seven skinny columns.
+   Placed last so it wins over the earlier min-width rules. Desktop and
+   tablet (>600px) are completely untouched.
+   =================================================================== */
+@media (max-width:600px){
+
+    /* Let both grids fill the card instead of overflowing it. */
+    .calendar-weekdays,
+    .calendar-grid{
+        min-width:0;
+    }
+
+    /* ---- Month: compact 7-column grid ---- */
+    .calendar-weekdays span{
+        padding:8px 2px;
+        font-size:11px;
+    }
+
+    .calendar-grid:not(.calendar-week-grid) .calendar-day{
+        min-height:58px;
+        padding:5px 3px;
+    }
+
+    .calendar-grid:not(.calendar-week-grid) .calendar-day-number{
+        text-align:center;
+        margin-bottom:4px;
+    }
+
+    /* Events collapse to a centred row of colour dots. */
+    .calendar-grid:not(.calendar-week-grid) .calendar-events{
+        flex-direction:row;
+        flex-wrap:wrap;
+        justify-content:center;
+        gap:3px;
+    }
+
+    .calendar-grid:not(.calendar-week-grid) .calendar-event{
+        width:7px;
+        height:7px;
+        padding:0;
+        gap:0;
+        font-size:0;               /* hide the label, keep the dot */
+        background:transparent;
+        border-radius:50%;
+    }
+
+    .calendar-grid:not(.calendar-week-grid) .calendar-event span{
+        width:7px;
+        height:7px;
+    }
+
+    /* "No items" is noise in a tiny month cell. */
+    .calendar-grid:not(.calendar-week-grid) .calendar-day-empty{
+        display:none;
+    }
+
+    /* ---- Week: stack the days as full-width rows ---- */
+    .calendar-week-grid{
+        grid-template-columns:1fr;
+    }
+
+    .calendar-week-day{
+        min-height:0;
+        border-right:none;
+    }
+
+    /* The shared weekday header (Sun..Sat) is redundant once the week's
+       days stack and each carries its own "SUN 19" label. */
+    .calendar-main-card:has(.calendar-week-grid) .calendar-weekdays{
+        display:none;
+    }
 }

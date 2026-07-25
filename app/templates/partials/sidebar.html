@@ -36,6 +36,15 @@
             title="Collapse sidebar">
             <i class="fa-solid fa-angles-left"></i>
         </button>
+        {# Mobile-only: closes the off-canvas drawer. Hidden on desktop. #}
+        <button
+            type="button"
+            class="sidebar-close-btn"
+            id="sidebarCloseBtn"
+            aria-label="Close navigation menu"
+            title="Close menu">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
 
     <nav class="sidebar-nav">
@@ -192,9 +201,12 @@
         }
 
         // Clicking the sidebar's empty space also toggles it - but never
-        // when the click lands on a nav item or any other control.
+        // when the click lands on a nav item or any other control, and
+        // never on mobile (where the sidebar is an off-canvas drawer, not
+        // a collapsible rail).
         if (sidebar) {
             sidebar.addEventListener("click", function (e) {
+                if (window.innerWidth < 769) return;
                 if (e.target.closest("a, button, input, select, textarea, label")) return;
                 toggleSidebar();
             });
@@ -204,6 +216,60 @@
             document.body.classList.add("sidebar-collapsed");
             setCollapseButtonState(true);
         }
+
+        // -----------------------------------------------------------------
+        // Mobile off-canvas drawer
+        // On phones/tablets the sidebar slides in over the content instead
+        // of docking. The hamburger (in the top bar) opens it; the backdrop,
+        // the close button, choosing a destination, Escape, or growing back
+        // to desktop width all close it. The sidebar is data-turbo-permanent,
+        // so we also close on turbo:before-render so it never persists open
+        // across a client-side navigation.
+        // -----------------------------------------------------------------
+        function setMobileNavExpanded(open) {
+            const toggle = document.getElementById("mobileNavToggle");
+            if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        }
+
+        function openMobileNav() {
+            document.body.classList.add("mobile-nav-open");
+            setMobileNavExpanded(true);
+        }
+
+        function closeMobileNav() {
+            document.body.classList.remove("mobile-nav-open");
+            setMobileNavExpanded(false);
+        }
+
+        // Delegated on document so it works regardless of DOM order (the
+        // hamburger and backdrop are parsed AFTER this script) and survives
+        // Turbo navigations without re-binding.
+        document.addEventListener("click", function (e) {
+            if (e.target.closest("#mobileNavToggle")) {
+                if (document.body.classList.contains("mobile-nav-open")) closeMobileNav();
+                else openMobileNav();
+                return;
+            }
+            if (e.target.closest("#mobileNavBackdrop") ||
+                e.target.closest("#sidebarCloseBtn")) {
+                closeMobileNav();
+                return;
+            }
+            // Choosing a nav destination inside the drawer dismisses it.
+            if (e.target.closest("#app-sidebar a")) {
+                closeMobileNav();
+            }
+        });
+
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape") closeMobileNav();
+        });
+
+        document.addEventListener("turbo:before-render", closeMobileNav);
+
+        window.addEventListener("resize", function () {
+            if (window.innerWidth >= 769) closeMobileNav();
+        });
     </script>
 
 </aside>
