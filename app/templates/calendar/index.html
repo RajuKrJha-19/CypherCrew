@@ -396,44 +396,29 @@
 
                         <div class="calendar-summary-grid">
 
+                            {# All four figures are computed in the route
+                               (calendar_summary): a stable snapshot that
+                               respects the client/employee scope but not the
+                               status filter, so filtering the grid no longer
+                               collapses them. #}
                             <div>
                                 <span>Total</span>
-                                <strong>
-                                    {% set total = namespace(value=0) %}
-                                    {% for event_date, tasks in events.items() %}
-                                    {% set total.value = total.value + tasks|length %}
-                                    {% endfor %}
-                                    {{ total.value }}
-                                </strong>
+                                <strong>{{ calendar_summary.total }}</strong>
                             </div>
 
                             <div>
                                 <span>Today</span>
-                                <strong>
-                                    {{ events.get(today, [])|length }}
-                                </strong>
+                                <strong>{{ calendar_summary.today }}</strong>
                             </div>
 
                             <div>
                                 <span>Overdue</span>
-                                <strong class="danger-text">
-                                    {% set overdue = namespace(value=0) %}
-                                    {% for event_date, tasks in events.items() %}
-                                    {% if event_date < today %} {% set overdue.value=overdue.value + tasks|length %} {%
-                                        endif %} {% endfor %} {{ overdue.value }} </strong>
+                                <strong class="danger-text">{{ calendar_summary.overdue }}</strong>
                             </div>
 
                             <div>
                                 <span>This Month</span>
-                                <strong>
-                                    {% set month_total = namespace(value=0) %}
-                                    {% for event_date, tasks in events.items() %}
-                                    {% if event_date.month == month %}
-                                    {% set month_total.value = month_total.value + tasks|length %}
-                                    {% endif %}
-                                    {% endfor %}
-                                    {{ month_total.value }}
-                                </strong>
+                                <strong>{{ calendar_summary.this_month }}</strong>
                             </div>
 
                         </div>

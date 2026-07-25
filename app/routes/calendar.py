@@ -258,8 +258,78 @@ def index():
         d for d in all_event_dates if list_start <= d <= list_end
     )
 
+    # ---------------------------------------------------------------
+    # Calendar Summary (right-hand card): a stable at-a-glance snapshot.
+    # It respects the structural scope (client / employee) but NOT the
+    # status filter - filtering the grid to one status must not collapse
+    # the summary (e.g. Overdue -> 0), the same rule the Tasks KPI cards
+    # follow. It is computed here rather than summed from the filtered
+    # `events` dict the grid is drawn from, which is what made the numbers
+    # drift the moment a filter was applied.
+    summary_query = Task.query.filter(Task.deadline.isnot(None))
+
+    if selected_client:
+        summary_query = summary_query.filter(
+            Task.client_id == selected_client
+        )
+
+    if selected_employee:
+        summary_query = summary_query.filter(
+            Task.assigned_to_id == selected_employee
+        )
+
+    summary_rows = summary_query.with_entities(
+        Task.status,
+        Task.deadline
+    ).all()
+
+    now = ist_now()
+    today_date = now.date()
+
+    calendar_summary = {
+        "total": 0,
+        "today": 0,
+        "overdue": 0,
+        "this_month": 0,
+    }
+
+    for row_status, row_deadline in summary_rows:
+
+        # Void/cancelled work is neither delivered nor outstanding - leave
+        # it out of every figure, matching the Tasks KPI cards.
+        if row_status in task_status.EXCLUDED_FROM_METRICS:
+            continue
+
+        deadline_date = row_deadline.date()
+
+        calendar_summary["total"] += 1
+
+        if deadline_date == today_date:
+            calendar_summary["today"] += 1
+
+        # Match year AND month, so e.g. Aug 2025 never counts toward the
+        # Aug 2026 the user is viewing.
+        if deadline_date.month == month and deadline_date.year == year:
+            calendar_summary["this_month"] += 1
+
+        # Overdue is status-aware, matching the board: a completed or
+        # published task with a past deadline is not overdue, and an
+        # on-hold one is blocked by someone outside the team. Only open,
+        # actively-owed work counts.
+        if (
+            row_deadline < now
+            and row_status in (
+                task_status.ASSIGNED,
+                task_status.IN_PROGRESS,
+                task_status.PAUSED,
+            )
+        ):
+            calendar_summary["overdue"] += 1
+
     return render_template(
         "calendar/index.html",
+
+        calendar_summary=calendar_summary,
 
         today=today.date(),
 

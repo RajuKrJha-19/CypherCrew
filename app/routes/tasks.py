@@ -446,6 +446,85 @@ def apply_task_filters(query, args):
     return query
 
 
+def apply_task_scope(query, args):
+    """Structural scope ONLY - which people's / which client's tasks are in
+    view (My Tasks, a client, an assigner). Deliberately excludes the
+    transient list-slice filters (status / priority / search / date range),
+    unlike apply_task_filters().
+
+    The headline KPI cards use this so they stay a stable overview of the
+    scope: filtering the board to "In Progress" should not zero out the
+    "In Review", "Completed" and "Overdue" cards and make them contradict
+    their own labels. The board/list below still uses apply_task_filters()."""
+
+    assigned_to = args.get("assigned_to", "").strip()
+    assigned_by = args.get("assigned_by", "").strip()
+    client_id = args.get("client", "").strip()
+
+    if assigned_to and assigned_to.isdigit():
+        query = query.filter(Task.assigned_to_id == int(assigned_to))
+
+    if assigned_by and assigned_by.isdigit():
+        query = query.filter(Task.created_by_id == int(assigned_by))
+
+    if client_id and client_id.isdigit():
+        query = query.filter(Task.client_id == int(client_id))
+
+    return query
+
+
+def compute_task_kpis(scope_query):
+    """Headline KPI counts (total / completed / review / overdue) for a
+    scope query. Columns-only aggregate - no ORM hydration, no joins - so
+    it stays cheap enough to run on every list render and every live poll.
+
+    Void tasks are excluded from every figure (cancelled work is neither
+    delivered nor outstanding), and on-hold tasks never count as overdue
+    (they are blocked by someone outside the team) - matching the board and
+    the previous inline logic exactly."""
+
+    now = ist_now()
+
+    rows = scope_query.with_entities(
+        Task.status,
+        Task.employee_completed,
+        Task.deadline,
+    ).all()
+
+    total = completed = review = overdue = 0
+
+    for status, employee_completed, deadline in rows:
+
+        if status in task_status.EXCLUDED_FROM_METRICS:
+            continue
+
+        total += 1
+
+        if employee_completed:
+            completed += 1
+
+        if status in (task_status.CORE_REVIEW, task_status.CLIENT_REVIEW):
+            review += 1
+
+        if (
+            deadline
+            and deadline < now
+            and status in (
+                task_status.ASSIGNED,
+                task_status.IN_PROGRESS,
+                task_status.PAUSED,
+            )
+        ):
+            overdue += 1
+
+    return {
+        "total": total,
+        "completed": completed,
+        "review": review,
+        "overdue": overdue,
+    }
+
+
 @tasks_bp.route("/export.csv")
 @login_required
 def export_tasks_csv():
@@ -504,60 +583,35 @@ def live_state():
     Scoped by the same filters and the same permission base query as the
     list, so the poll returns exactly the set the page is showing."""
 
+    # The board / list reconciliation needs exactly the visible (filtered)
+    # set, so `tasks` comes from the fully-filtered query.
     query = apply_task_filters(get_task_base_query(), request.args)
 
     rows = query.with_entities(
         Task.id,
         Task.status,
         Task.priority,
-        Task.employee_completed,
-        Task.deadline,
     ).all()
 
-    now = ist_now()
-
     tasks = {}
-    completed = review = overdue = 0
 
-    for task_id, status, priority, employee_completed, deadline in rows:
+    for task_id, status, priority in rows:
+        tasks[str(task_id)] = {
+            "status": status,
+            "priority": priority,
+            # Void tasks aren't shown on the board - matching list_tasks().
+            "void": status in task_status.EXCLUDED_FROM_METRICS,
+        }
 
-        # Void tasks aren't shown on the board and are excluded from the
-        # headline figures - matching list_tasks().
-        is_void = status in task_status.EXCLUDED_FROM_METRICS
-
-        tasks[str(task_id)] = {"status": status, "priority": priority, "void": is_void}
-
-        if is_void:
-            continue
-
-        if employee_completed:
-            completed += 1
-
-        if status in (task_status.CORE_REVIEW, task_status.CLIENT_REVIEW):
-            review += 1
-
-        if (
-            deadline
-            and deadline < now
-            and status in (
-                task_status.ASSIGNED,
-                task_status.IN_PROGRESS,
-                task_status.PAUSED,
-            )
-        ):
-            overdue += 1
-
-    non_void = sum(1 for t in tasks.values() if not t["void"])
-
-    return jsonify(
-        tasks=tasks,
-        counts={
-            "total": non_void,
-            "completed": completed,
-            "review": review,
-            "overdue": overdue,
-        },
+    # The KPI cards are a stable scope overview (see compute_task_kpis /
+    # list_tasks), so the poll must NOT recompute them from the filtered
+    # slice - otherwise a refresh would collapse them all over again. They
+    # come from the same scope query the initial render uses.
+    counts = compute_task_kpis(
+        apply_task_scope(get_task_base_query(), request.args)
     )
+
+    return jsonify(tasks=tasks, counts=counts)
 
 
 @tasks_bp.route("/")
@@ -722,42 +776,21 @@ def list_tasks():
         else:
             board_columns.setdefault(task.status, []).append(task)
 
-    # A voided task was cancelled by the client, so counting it either
-    # way would misrepresent the team: it is neither delivered work nor
-    # outstanding work. It is left out of every figure below.
-    counted_tasks = [
-        task for task in tasks
-        if task.status not in task_status.EXCLUDED_FROM_METRICS
-    ]
+    # Headline KPI cards are a stable overview of the current SCOPE (My
+    # Tasks / a client), NOT of the status/priority/search slice the board
+    # below is showing. Computing them from the filtered `tasks` made every
+    # card collapse the moment a filter was applied - e.g. filtering to
+    # "In Progress" zeroed the In Review / Completed / Overdue cards so they
+    # contradicted their own labels. They now come from a separate, cheap
+    # scope query (the same one the live poll uses).
+    kpis = compute_task_kpis(
+        apply_task_scope(get_task_base_query(), request.args)
+    )
 
-    total_tasks = len(counted_tasks)
-
-    completed_tasks = len([
-        task for task in counted_tasks
-        if task.employee_completed
-    ])
-
-    review_tasks = len([
-        task for task in counted_tasks
-        if task.status in [
-            task_status.CORE_REVIEW,
-            task_status.CLIENT_REVIEW
-        ]
-    ])
-
-    # An on-hold task is blocked by someone outside the team, so it is
-    # not the assignee's fault that the deadline is passing - it does
-    # not count as overdue while it is parked.
-    overdue_tasks = len([
-        task for task in counted_tasks
-        if task.deadline
-        and task.deadline < ist_now()
-        and task.status in [
-            task_status.ASSIGNED,
-            task_status.IN_PROGRESS,
-            task_status.PAUSED
-        ]
-    ])
+    total_tasks = kpis["total"]
+    completed_tasks = kpis["completed"]
+    review_tasks = kpis["review"]
+    overdue_tasks = kpis["overdue"]
 
     void_tasks = len(voided_tasks)
 
