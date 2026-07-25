@@ -42,3 +42,16 @@ from app.models.note import (
 )
 from app.models.task_file import TaskFile
 from app.models.client_asset import ClientAsset
+
+# --- Social Publishing Engine ---
+from app.models.social_account import SocialAccount
+from app.models.social_oauth import SocialOAuthState
+from app.models.social_post import (
+    SocialPost,
+    SocialPostTarget,
+    SocialMediaAsset,
+)
+from app.models.publish_job import PublishJob, PublishResult
+from app.models.social_analytics import SocialAnalyticsSnapshot
+from app.models.social_audit import SocialAuditLog, ContentVersion
+from app.models.platform_rate_budget import PlatformRateBudget

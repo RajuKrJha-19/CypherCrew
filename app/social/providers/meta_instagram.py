@@ -1,0 +1,168 @@
+"""Instagram Business publisher (Graph API v25, Content Publishing API).
+
+Instagram publishing is asynchronous: create a media container, poll its
+status until FINISHED, then publish it. That maps cleanly onto the engine's
+job state machine - start_publish returns PENDING with the container id in
+provider_state, and poll_publish advances it (the worker re-drives poll on
+each cycle). Supports image, carousel (2-10), reel and story.
+"""
+
+from app.social.dto import AccountInfo, Capabilities, PublishStep, StepStatus
+from app.social.errors import PermanentError, TransientError
+from app.social.providers.meta_common import MetaBaseProvider
+
+
+class MetaInstagramProvider(MetaBaseProvider):
+    key = "instagram"
+    SCOPES = [
+        "instagram_basic",
+        "instagram_content_publish",
+        "pages_show_list",
+        "pages_read_engagement",
+        "business_management",
+    ]
+    capabilities = Capabilities(
+        post_types={"image", "carousel", "reel", "story"},
+        requires_container_poll=True,
+        max_carousel=10,
+        publish_rate=(100, "24h"),
+        story_support=True,
+        max_caption_chars=2200,
+    )
+
+    def _required_scopes(self):
+        return ["instagram_content_publish", "instagram_basic"]
+
+    # -- Discovery ---------------------------------------------------------
+
+    def list_publishable_accounts(self, token):
+        """IG Business accounts linked to the user's Pages. Publishing uses
+        the linked Page's token."""
+        resp = self.graph().get("me/accounts", token=token, params={
+            "fields": "id,name,access_token,instagram_business_account{id,username}",
+            "limit": 100,
+        })
+        accounts = []
+        for page in resp.get("data", []):
+            iga = page.get("instagram_business_account")
+            if not iga:
+                continue
+            accounts.append(AccountInfo(
+                external_id=iga["id"],
+                display_name=iga.get("username") or page.get("name", iga["id"]),
+                account_type="ig_business",
+                access_token=page.get("access_token"),
+                meta={"page_id": page["id"], "ig_id": iga["id"]},
+            ))
+        return accounts
+
+    # -- Validation --------------------------------------------------------
+
+    def validate(self, content):
+        from app.social.media import pipeline
+        problems = pipeline.validate_against(self.capabilities, content)
+        if not content.media:
+            problems.append(f"An Instagram {content.post_type} needs media.")
+        if content.post_type == "carousel" and len(content.media) < 2:
+            problems.append("An Instagram carousel needs at least 2 items.")
+        return problems
+
+    # -- Publishing (async: create container -> poll -> publish) ----------
+
+    def start_publish(self, target, content, token):
+        graph = self.graph()
+        ig_id = target.account.external_id
+        caption = self._full_caption(content)
+
+        if content.post_type == "carousel":
+            container_id = self._create_carousel(graph, ig_id, token, content, caption)
+        elif content.post_type == "reel":
+            container_id = graph.post(f"{ig_id}/media", token=token, data={
+                "media_type": "REELS",
+                "video_url": self._media_url(content.media[0]),
+                "caption": caption,
+            })["id"]
+        elif content.post_type == "story":
+            media = content.media[0]
+            key = "video_url" if (media.mime_type or "").startswith("video") else "image_url"
+            container_id = graph.post(f"{ig_id}/media", token=token, data={
+                "media_type": "STORIES",
+                key: self._media_url(media),
+            })["id"]
+        else:  # image
+            container_id = graph.post(f"{ig_id}/media", token=token, data={
+                "image_url": self._media_url(content.media[0]),
+                "caption": caption,
+            })["id"]
+
+        return PublishStep(
+            status=StepStatus.PENDING.value,
+            provider_state={"container_id": container_id, "ig_id": ig_id},
+        )
+
+    def _create_carousel(self, graph, ig_id, token, content, caption):
+        children = []
+        for media in content.media:
+            is_video = (media.mime_type or "").startswith("video")
+            data = {"is_carousel_item": "true"}
+            data["video_url" if is_video else "image_url"] = self._media_url(media)
+            children.append(graph.post(f"{ig_id}/media", token=token, data=data)["id"])
+        return graph.post(f"{ig_id}/media", token=token, data={
+            "media_type": "CAROUSEL",
+            "children": ",".join(children),
+            "caption": caption,
+        })["id"]
+
+    def poll_publish(self, target, provider_state, token):
+        graph = self.graph()
+        container_id = provider_state["container_id"]
+        ig_id = provider_state["ig_id"]
+
+        status = graph.get(container_id, token=token,
+                           params={"fields": "status_code"}).get("status_code")
+
+        if status == "FINISHED":
+            published = graph.post(f"{ig_id}/media_publish", token=token,
+                                  data={"creation_id": container_id})
+            media_id = published["id"]
+            return PublishStep(
+                status=StepStatus.DONE.value,
+                external_post_id=media_id,
+                permalink=self._permalink(graph, media_id, token),
+            )
+
+        if status in ("IN_PROGRESS", None, "PUBLISHED"):
+            # Still processing - stay PENDING so the worker polls again.
+            return PublishStep(status=StepStatus.PENDING.value,
+                              provider_state=provider_state)
+
+        # ERROR or EXPIRED - a transient container error is worth one retry;
+        # EXPIRED (24h) is permanent.
+        if status == "ERROR":
+            raise TransientError(f"Instagram container status: {status}")
+        raise PermanentError(f"Instagram container status: {status}")
+
+    def _permalink(self, graph, media_id, token):
+        try:
+            resp = graph.get(media_id, token=token, params={"fields": "permalink"})
+            return resp.get("permalink")
+        except Exception:
+            return None
+
+    # -- Analytics ---------------------------------------------------------
+
+    def fetch_analytics(self, target, token):
+        if not target.external_post_id:
+            return {}
+        page_token = self._page_token(target)
+        try:
+            resp = self.graph().get(
+                f"{target.external_post_id}/insights", token=page_token,
+                params={"metric": "impressions,reach,likes,comments,saved"})
+        except Exception:
+            return {}
+        metrics = {}
+        for row in resp.get("data", []):
+            values = row.get("values") or [{}]
+            metrics[row.get("name")] = values[0].get("value")
+        return metrics

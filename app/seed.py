@@ -19,6 +19,9 @@ def seed_database():
         ("publish_tasks", "Publish Tasks"),
         ("view_reports", "View Reports"),
         ("manage_reports", "Manage Reports"),
+        # Social Publishing Engine.
+        ("connect_social_accounts", "Connect Social Accounts"),
+        ("manage_social", "Manage Social Publishing"),
     ]
 
     for code, name in permissions:

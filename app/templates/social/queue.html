@@ -1,0 +1,81 @@
+{% extends "base_app.html" %}
+
+{% block title %}Queue & Recovery | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Queue &amp; Recovery</h1>
+        <p>Failed and dead-lettered publish jobs you can retry</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Back</a>
+        <form method="POST" action="{{ url_for('social.process_queue') }}">
+            <button type="submit" class="btn btn-secondary" title="Run the scheduler + worker once">
+                <i class="fa-solid fa-play"></i> Process queue now
+            </button>
+        </form>
+        {% if jobs %}
+        <form method="POST" action="{{ url_for('social.requeue_all') }}"
+              onsubmit="return confirm('Requeue all {{ jobs|length }} job(s)?');">
+            <button type="submit" class="btn">Requeue all</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="stats-grid">
+    <div class="metric-card"><span>Queued</span><strong>{{ status.jobs.queued }}</strong></div>
+    <div class="metric-card"><span>In flight</span><strong>{{ status.jobs.in_flight }}</strong></div>
+    <div class="metric-card"><span>Succeeded</span><strong>{{ status.jobs.succeeded }}</strong></div>
+    <div class="metric-card {% if status.jobs.dead or status.jobs.failed %}warning{% endif %}">
+        <span>Dead / failed</span><strong>{{ status.jobs.dead + status.jobs.failed }}</strong>
+    </div>
+</div>
+
+<div class="form-card">
+    {% if jobs %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Platform</th>
+                    <th>State</th>
+                    <th>Attempts</th>
+                    <th>Last error</th>
+                    <th>Updated</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in jobs %}
+                <tr>
+                    <td>#{{ j.id }}</td>
+                    <td>{{ j.target.platform if j.target else '-' }}</td>
+                    <td><span class="status-pill warning">{{ j.state }}</span></td>
+                    <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
+                    <td>{{ (j.last_error or '')[:90] }}</td>
+                    <td>{{ j.updated_at.strftime('%d %b %H:%M') }}</td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('social.requeue_job', job_id=j.id) }}">
+                            <button type="submit" class="mini-action">Requeue</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">Nothing to recover — no failed or dead jobs. 🎉</p>
+    {% endif %}
+</div>
+{% endblock %}

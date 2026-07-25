@@ -167,6 +167,46 @@ def create_app():
     app.register_blueprint(profile_bp)
     app.register_blueprint(internal_bp)
 
+    # Social Publishing Engine. Registered ONLY when the feature flag is on,
+    # so with it off the engine's routes/providers are entirely absent and
+    # the app behaves exactly as before. (The /internal/social/* cron
+    # endpoints live on internal_bp above and self-gate on the flag too.)
+    if app.config.get("SOCIAL_ENGINE_ENABLED"):
+        from app.social.registry import load_providers
+        load_providers(app)
+
+        from app.routes.social import social_bp
+        from app.routes.oauth import oauth_bp
+        app.register_blueprint(social_bp)
+        app.register_blueprint(oauth_bp)
+
+        # Local Graph API emulator - lets the real Meta provider be exercised
+        # end-to-end without a real Meta app. Dev/test only.
+        if app.config.get("META_EMULATOR"):
+            from app.social.providers.meta_emulator import meta_emulator_bp
+            app.register_blueprint(meta_emulator_bp)
+            # The emulator stands in for graph.facebook.com, which is not
+            # behind our CSRF; the provider's server-side POSTs carry no
+            # CSRF token, so exempt it (dev-only blueprint).
+            csrf.exempt(meta_emulator_bp)
+            app.logger.warning(
+                "META_EMULATOR is on - Meta provider is talking to the local "
+                "Graph emulator, not graph.facebook.com."
+            )
+
+        # Fail LOUD (but not fatal) on misconfiguration, so a half-configured
+        # engine is obvious in the logs rather than silently broken.
+        if not app.config.get("SOCIAL_TOKEN_KEY"):
+            app.logger.warning(
+                "SOCIAL_ENGINE_ENABLED is on but SOCIAL_TOKEN_KEY is unset - "
+                "accounts cannot be connected (token vault disabled)."
+            )
+        if not app.config.get("SOCIAL_WORKER_TOKEN"):
+            app.logger.warning(
+                "SOCIAL_ENGINE_ENABLED is on but SOCIAL_WORKER_TOKEN is unset - "
+                "the /internal/social/* cron endpoints stay closed (403)."
+            )
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()

@@ -156,6 +156,16 @@
         <span>Gallery</span>
     </a>
 
+    {# Social Publishing Engine - only visible when the feature flag is on
+       and the viewer can manage social. #}
+    {% if config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+    <a href="{{ url_for('social.index') }}"
+       class="{% if endpoint.startswith('social.') or endpoint.startswith('oauth.') %}active{% endif %}">
+        <i class="fa-solid fa-share-nodes"></i>
+        <span>Social</span>
+    </a>
+    {% endif %}
+
     </nav>
 
     {#

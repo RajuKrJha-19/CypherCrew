@@ -15339,3 +15339,90 @@ body.cmdk-open{ overflow:hidden; }
         display:none;
     }
 }
+
+/* ===================================================================
+   SOCIAL PUBLISHING ENGINE - composer + workflow UI
+   Scoped under social-* classes; only rendered on /social pages.
+   =================================================================== */
+.social-composer{ max-width:960px; width:100%; }
+.social-composer .composer-grid{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    gap:24px;
+}
+.composer-main, .composer-side{ min-width:0; display:flex; flex-direction:column; gap:16px; }
+
+.field{ display:flex; flex-direction:column; gap:6px; }
+.field > span{ font-weight:600; font-size:var(--text-sm,13px); color:var(--color-text); }
+.field > span small{ color:var(--color-text-muted); font-weight:400; }
+.field input[type="text"],
+.field input[type="datetime-local"],
+.field select,
+.field textarea,
+.reject-form input,
+.schedule-form input{
+    width:100%;
+    padding:9px 11px;
+    border:1px solid var(--color-border-strong);
+    border-radius:var(--radius-sm);
+    background:var(--color-surface);
+    color:var(--color-text);
+    font-size:var(--text-base,14px);
+    font-family:inherit;
+}
+.field textarea{ resize:vertical; min-height:120px; }
+.field input:focus, .field select:focus, .field textarea:focus{
+    outline:none; border-color:var(--color-primary);
+    box-shadow:0 0 0 3px var(--color-primary-soft);
+}
+.field-hint{ font-size:12px; color:var(--color-text-muted); }
+.field-hint.warn{ color:var(--color-danger); }
+.field-hint.ok{ color:var(--color-success); }
+
+.radio-line{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-text); }
+.radio-line input{ width:auto; }
+
+/* Platform account chips */
+.composer-accounts{ display:flex; flex-direction:column; gap:6px; }
+.composer-account{
+    display:flex; align-items:center; gap:8px;
+    padding:8px 10px; border:1px solid var(--color-border);
+    border-radius:var(--radius-sm); font-size:13px; cursor:pointer;
+    background:var(--color-surface);
+}
+.composer-account:hover{ background:var(--color-surface-muted); }
+.composer-account input{ width:auto; }
+.platform-tag{
+    display:inline-block; padding:2px 8px; border-radius:999px;
+    background:var(--color-primary-soft); color:var(--color-primary);
+    font-size:11px; font-weight:600;
+}
+
+/* Media picker grid */
+.composer-media-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+.composer-media-item{
+    display:flex; align-items:center; gap:8px; min-width:0;
+    padding:8px 10px; border:1px solid var(--color-border);
+    border-radius:var(--radius-sm); font-size:12px; cursor:pointer;
+    background:var(--color-surface);
+}
+.composer-media-item:hover{ background:var(--color-surface-muted); }
+.composer-media-item input{ width:auto; flex-shrink:0; }
+.media-cat{ font-size:10px; text-transform:uppercase; color:var(--color-text-muted); flex-shrink:0; }
+.media-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Workflow action bar */
+.social-actionbar{ display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.social-actionbar form{ display:flex; align-items:center; gap:8px; margin:0; }
+.social-actionbar .reject-form input,
+.social-actionbar .schedule-form input{ width:auto; max-width:220px; }
+.btn-danger-text{ color:var(--color-danger) !important; }
+
+@media(max-width:900px){
+    .social-composer .composer-grid{ grid-template-columns:1fr; }
+    .composer-side{ order:-1; }
+}
+@media(max-width:600px){
+    .social-actionbar{ flex-direction:column; align-items:stretch; }
+    .social-actionbar form{ flex-wrap:wrap; }
+}

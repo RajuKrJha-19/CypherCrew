@@ -1,0 +1,126 @@
+{% extends "base_app.html" %}
+
+{% block title %}Social Publishing | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Social Publishing</h1>
+        <p>Connect accounts, then schedule and publish across platforms</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.compose') }}" class="btn">
+            <i class="fa-solid fa-pen-to-square"></i> New post
+        </a>
+        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-layer-group"></i> Posts
+        </a>
+        <a href="{{ url_for('social.calendar') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-calendar-days"></i> Content Calendar
+        </a>
+        <a href="{{ url_for('social.queue') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-list-check"></i> Queue &amp; Recovery
+            {% if status.jobs.dead or status.jobs.failed %}
+            <span class="status-pill warning">{{ status.jobs.dead + status.jobs.failed }}</span>
+            {% endif %}
+        </a>
+        <a href="{{ url_for('social.history') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-clock-rotate-left"></i> Publishing History
+        </a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="stats-grid">
+    <div class="metric-card">
+        <span>Scheduled</span>
+        <strong>{{ status.targets.scheduled }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>In flight</span>
+        <strong>{{ status.jobs.queued + status.jobs.in_flight }}</strong>
+    </div>
+    <div class="metric-card">
+        <span>Published</span>
+        <strong>{{ status.targets.published }}</strong>
+    </div>
+    <div class="metric-card {% if status.jobs.dead or status.jobs.failed %}warning{% endif %}">
+        <span>Needs recovery</span>
+        <strong>{{ status.jobs.dead + status.jobs.failed }}</strong>
+    </div>
+</div>
+
+{% if status.accounts.needs_reauth %}
+<div class="alert error">
+    {{ status.accounts.needs_reauth }} account(s) need re-authorization before
+    they can publish again.
+</div>
+{% endif %}
+
+<div class="form-card">
+    <h2>Connected Accounts</h2>
+    {% if accounts %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in accounts %}
+                <tr>
+                    <td>{{ a.platform|capitalize }}</td>
+                    <td>{{ a.display_name }}</td>
+                    <td>{{ a.account_type }}</td>
+                    <td>
+                        <span class="status-pill">{{ a.status }}</span>
+                    </td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('social.disconnect_account', account_id=a.id) }}"
+                              onsubmit="return confirm('Disconnect {{ a.display_name }}?');">
+                            <button type="submit" class="mini-link">Disconnect</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">No accounts connected yet. Connect one below to get started.</p>
+    {% endif %}
+</div>
+
+<div class="form-card">
+    <h2>Connect an account</h2>
+    <p>Authorize CypherCrew to publish on your behalf. You choose which
+       Pages / accounts to connect during authorization.</p>
+    <div class="top-actions" style="flex-wrap:wrap; gap:10px; margin-top:12px;">
+        {% for key, label, icon in platforms %}
+        {% if key in available %}
+        {# Full navigation (not a Turbo fetch): OAuth is a redirect chain. #}
+        <a href="{{ url_for('oauth.connect', platform=key) }}" class="btn btn-secondary"
+           data-turbo="false">
+            <i class="{{ icon }}"></i> {{ label }}
+        </a>
+        {% else %}
+        <span class="btn btn-ghost" style="opacity:.55; cursor:not-allowed;"
+              title="Coming soon">
+            <i class="{{ icon }}"></i> {{ label }} <small>(soon)</small>
+        </span>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

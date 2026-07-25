@@ -1,0 +1,52 @@
+{% extends "base_app.html" %}
+
+{% block title %}Publishing History | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Publishing History</h1>
+        <p>Every publish attempt and its outcome</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Accounts</a>
+    </div>
+</div>
+
+<div class="form-card">
+    {% if targets %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Permalink</th>
+                    <th>Last error</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in targets %}
+                <tr>
+                    <td>{{ t.platform }}</td>
+                    <td>{{ t.post_type }}</td>
+                    <td><span class="status-pill">{{ t.status }}</span></td>
+                    <td>
+                        {% if t.permalink %}
+                        <a href="{{ t.permalink }}" target="_blank" rel="noopener">View</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{{ (t.last_error or '')[:80] }}</td>
+                    <td>{{ t.updated_at.strftime('%d %b %Y %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">No publish attempts yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

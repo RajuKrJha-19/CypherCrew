@@ -1,0 +1,126 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ post.title or 'Post' }} | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ post.title or 'Untitled post' }}</h1>
+        <p>
+            <span class="status-pill">{{ post.status.replace('_',' ') }}</span>
+            {% if post.client %} · {{ post.client.client_name }}{% endif %}
+        </p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary">All drafts</a>
+        {% if post.status in ['draft','pending_approval','rejected'] %}
+        <a href="{{ url_for('social.edit_post', post_id=post.id) }}" class="btn btn-secondary">Edit</a>
+        {% endif %}
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{# ---- Workflow action bar (status-driven) ---- #}
+<div class="form-card social-actionbar">
+    {% if post.status == 'draft' %}
+    <form method="POST" action="{{ url_for('social.submit_post', post_id=post.id) }}">
+        <button class="btn">Submit for approval</button>
+    </form>
+    {% elif post.status == 'pending_approval' %}
+        {% if can_approve %}
+        <form method="POST" action="{{ url_for('social.approve_post', post_id=post.id) }}">
+            <button class="btn">Approve</button>
+        </form>
+        <form method="POST" action="{{ url_for('social.reject_post', post_id=post.id) }}" class="reject-form">
+            <input type="text" name="reason" placeholder="Reason (optional)">
+            <button class="btn btn-secondary">Send back</button>
+        </form>
+        {% else %}
+        <span class="field-hint">Awaiting approval from a reviewer.</span>
+        {% endif %}
+    {% elif post.status == 'rejected' %}
+        <span class="field-hint">Sent back for changes — edit and resubmit.</span>
+    {% elif post.status == 'approved' %}
+        <form method="POST" action="{{ url_for('social.schedule_post', post_id=post.id) }}" class="schedule-form">
+            <input type="datetime-local" name="schedule">
+            <button class="btn" name="publish_mode" value="schedule">Schedule</button>
+            <button class="btn btn-secondary" name="publish_mode" value="now">Publish now</button>
+        </form>
+    {% elif post.status in ['scheduled','publishing'] %}
+        <span class="field-hint">Queued for publishing.</span>
+        <form method="POST" action="{{ url_for('social.process_queue') }}">
+            <button class="btn btn-secondary">Process queue now</button>
+        </form>
+    {% elif post.status in ['published','partially_published'] %}
+        <span class="field-hint">✓ Published.</span>
+    {% endif %}
+
+    {% if post.status not in ['publishing','published','partially_published'] %}
+    <form method="POST" action="{{ url_for('social.delete_post', post_id=post.id) }}"
+          onsubmit="return confirm('Delete this draft?');" class="delete-form">
+        <button class="btn btn-ghost btn-danger-text">Delete</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if post.base_caption %}
+<div class="form-card">
+    <h2>Caption</h2>
+    <p style="white-space:pre-wrap">{{ post.base_caption }}</p>
+</div>
+{% endif %}
+
+<div class="form-card">
+    <h2>Platforms ({{ post.targets|length }})</h2>
+    {% if post.targets %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Media</th>
+                    <th>When (IST)</th>
+                    <th>Status</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in post.targets %}
+                <tr>
+                    <td><span class="platform-tag">{{ t.platform|capitalize }}</span></td>
+                    <td>{{ t.account.display_name if t.account else '-' }}</td>
+                    <td>{{ t.post_type }}</td>
+                    <td>{{ t.media|length }}</td>
+                    <td>{{ to_ist(t.scheduled_for) or '—' }}</td>
+                    <td>
+                        <span class="status-pill">{{ t.status }}</span>
+                        {% if problems[t.id] %}
+                        <div class="field-hint warn">
+                            {% for p in problems[t.id] %}⚠ {{ p }}<br>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.permalink %}
+                        <a href="{{ t.permalink }}" target="_blank" rel="noopener">View</a>
+                        {% elif t.last_error %}
+                        <span class="field-hint warn">{{ t.last_error[:60] }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">No platforms yet. <a href="{{ url_for('social.edit_post', post_id=post.id) }}">Add some.</a></p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base_app.html" %}
+
+{% block title %}Drafts | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Posts</h1>
+        <p>Drafts, pending approval, approved and scheduled</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.compose') }}" class="btn">+ New post</a>
+        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Accounts</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="form-card">
+    {% if posts %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Client</th>
+                    <th>Platforms</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in posts %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('social.post_detail', post_id=p.id) }}">
+                            {{ p.title or '(untitled)' }}
+                        </a>
+                    </td>
+                    <td>{{ p.client.client_name if p.client else '—' }}</td>
+                    <td>
+                        {% for t in p.targets %}
+                        <span class="platform-tag">{{ t.platform[:2]|capitalize }}</span>
+                        {% endfor %}
+                    </td>
+                    <td><span class="status-pill">{{ p.status.replace('_',' ') }}</span></td>
+                    <td>{{ p.updated_at.strftime('%d %b %H:%M') }}</td>
+                    <td>
+                        <a href="{{ url_for('social.post_detail', post_id=p.id) }}" class="mini-link">Open</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">
+        No posts yet. <a href="{{ url_for('social.compose') }}">Compose your first post.</a>
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

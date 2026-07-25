@@ -106,3 +106,73 @@ class Config:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "True").lower() == "true"
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER")
+
+    # ------------------------------------------------------------------
+    # Social Publishing Engine
+    # ------------------------------------------------------------------
+    # Master feature flag. OFF by default: with it off nothing about the
+    # engine is wired into request handling, so the app behaves exactly as
+    # before. Turn on per-environment once credentials + the worker cron
+    # are in place.
+    SOCIAL_ENGINE_ENABLED = (
+        os.getenv("SOCIAL_ENGINE_ENABLED", "False").lower() == "true"
+    )
+
+    # Token vault key(s) for Fernet encryption of platform access/refresh
+    # tokens at rest. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Comma-separate multiple keys to rotate (first = primary/encrypt, the
+    # rest still decrypt). MUST live outside the database. If unset, the
+    # vault is disabled and no tokens can be stored (connect flow refuses).
+    SOCIAL_TOKEN_KEY = os.getenv("SOCIAL_TOKEN_KEY")
+    SOCIAL_TOKEN_KEY_VERSION = int(os.getenv("SOCIAL_TOKEN_KEY_VERSION", "1"))
+
+    # Simulation mode: register the SimulationProvider for every platform
+    # that does NOT have a real adapter configured. The full compose ->
+    # approve -> schedule -> publish -> analytics loop works locally with no
+    # external credentials. Real adapters (below) take over their platforms.
+    SOCIAL_SIMULATION_MODE = (
+        os.getenv("SOCIAL_SIMULATION_MODE", "True").lower() == "true"
+    )
+
+    # ---- Meta (Facebook Pages + Instagram) provider ----
+    # Real integration goes live once these are set (App Review + Business
+    # Verification are prerequisites on Meta's side). The provider code is
+    # identical whether it talks to graph.facebook.com or the local Graph
+    # emulator - only the base URLs differ.
+    META_APP_ID = os.getenv("META_APP_ID")
+    META_APP_SECRET = os.getenv("META_APP_SECRET")
+    META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v25.0")
+    META_GRAPH_BASE_URL = os.getenv(
+        "META_GRAPH_BASE_URL", "https://graph.facebook.com")
+    META_OAUTH_BASE_URL = os.getenv(
+        "META_OAUTH_BASE_URL", "https://www.facebook.com")
+
+    # Mounts a local Graph API emulator at /mock/graph and points the Meta
+    # provider at it, so the entire real code path (OAuth, discovery,
+    # container flow, publishing, insights) is browser-testable with no real
+    # Meta app.
+    #
+    # Hard safety rule: the emulator is FORCE-DISABLED whenever real Meta
+    # credentials (META_APP_ID) are present. So even if META_EMULATOR=true is
+    # left set by accident in production, the mock Graph API can never mount
+    # or intercept traffic once you configure a real app.
+    META_EMULATOR = (
+        os.getenv("META_EMULATOR", "False").lower() == "true"
+        and not os.getenv("META_APP_ID")
+    )
+
+    # Shared secrets for the cron-triggered internal endpoints that drain
+    # the publish queue / run the scheduler / sync analytics / refresh
+    # tokens. Same pattern as REMINDER_TOKEN: fail closed when unset.
+    SOCIAL_WORKER_TOKEN = os.getenv("SOCIAL_WORKER_TOKEN")
+
+    # Number of jobs a single worker drain claims per run, and the size of
+    # the in-process thread pool that runs them (kept small - it runs inside
+    # a gunicorn worker, mirroring the thumbnail pool).
+    SOCIAL_WORKER_BATCH = int(os.getenv("SOCIAL_WORKER_BATCH", "10"))
+    SOCIAL_WORKER_THREADS = int(os.getenv("SOCIAL_WORKER_THREADS", "3"))
+
+    # Public base URL used to build OAuth redirect URIs (e.g.
+    # https://crew.cypherms.com). Falls back to the request host when unset.
+    SOCIAL_PUBLIC_BASE_URL = os.getenv("SOCIAL_PUBLIC_BASE_URL")

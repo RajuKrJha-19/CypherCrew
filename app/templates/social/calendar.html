@@ -1,0 +1,53 @@
+{% extends "base_app.html" %}
+
+{% block title %}Content Calendar | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Content Calendar</h1>
+        <p>Scheduled and published social posts</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.index') }}" class="btn btn-secondary">Accounts</a>
+    </div>
+</div>
+
+<div class="form-card">
+    {% if posts %}
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Client</th>
+                    <th>Targets</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in posts %}
+                <tr>
+                    <td>{{ p.title or '(untitled)' }}</td>
+                    <td>{{ p.client.client_name if p.client else '-' }}</td>
+                    <td>
+                        {% for t in p.targets %}
+                        <span class="status-pill">{{ t.platform }}</span>
+                        {% endfor %}
+                    </td>
+                    <td><span class="status-pill">{{ p.status }}</span></td>
+                    <td>{{ p.created_at.strftime('%d %b %Y') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-text">
+        No social posts yet. The composer arrives with the first platform
+        adapter (Phase 1); posts will originate from a task deliverable.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

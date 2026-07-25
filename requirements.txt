@@ -22,3 +22,9 @@ botocore==1.43.46
 Pillow==11.3.0
 imageio-ffmpeg==0.6.0
 PyMuPDF==1.28.0
+# Social Publishing Engine.
+# Fernet-encrypts platform access/refresh tokens at rest (token vault).
+cryptography==44.0.0
+# HTTP client for the social provider adapters (Graph / REST calls). The
+# app had no HTTP client before; provider calls are server-side and sync.
+requests==2.32.3

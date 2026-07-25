@@ -6,7 +6,7 @@ cron can call them. Not @login_required; the token is the auth.
 
 import os
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, request
 
 from app.extensions import csrf
 from app.services.reminders import send_deadline_reminders
@@ -26,6 +26,25 @@ def _authorised():
         or request.args.get("token")
     )
     return bool(expected) and provided == expected
+
+
+def _social_authorised():
+    """Same fail-closed pattern for the Social Publishing Engine cron
+    endpoints, gated by its own SOCIAL_WORKER_TOKEN."""
+    expected = current_app.config.get("SOCIAL_WORKER_TOKEN")
+    provided = (
+        request.headers.get("X-Social-Token")
+        or request.args.get("token")
+    )
+    return bool(expected) and provided == expected
+
+
+def _social_guard():
+    """Abort unless the engine is enabled AND the caller is authorised."""
+    if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        abort(503)
+    if not _social_authorised():
+        abort(403)
 
 
 @internal_bp.route("/reminders/run", methods=["POST"])
@@ -61,3 +80,56 @@ def run_task_fallback():
 
     result = run_task_fallback_reassignment()
     return jsonify(success=True, **result)
+
+
+# ----------------------------------------------------------------------
+# Social Publishing Engine cron endpoints
+# Gated by SOCIAL_ENGINE_ENABLED + SOCIAL_WORKER_TOKEN. Services are
+# imported lazily so the engine stays fully dormant when the flag is off.
+#
+# Cron examples:
+#   * * * * *      worker/run      (drain the publish queue)
+#   * * * * *      scheduler/run   (enqueue due scheduled posts)
+#   */30 * * * *   analytics/run   (refresh insights)
+#   0 */6 * * *    tokens/refresh  (refresh expiring platform tokens)
+# ----------------------------------------------------------------------
+
+@internal_bp.route("/social/worker/run", methods=["POST"])
+@csrf.exempt
+def run_social_worker():
+    _social_guard()
+    from app.social.queue import worker
+    return jsonify(success=True, **worker.drain())
+
+
+@internal_bp.route("/social/scheduler/run", methods=["POST"])
+@csrf.exempt
+def run_social_scheduler():
+    _social_guard()
+    from app.social.services import scheduling
+    return jsonify(success=True, **scheduling.enqueue_due())
+
+
+@internal_bp.route("/social/analytics/run", methods=["POST"])
+@csrf.exempt
+def run_social_analytics():
+    _social_guard()
+    from app.social.services import analytics
+    return jsonify(success=True, **analytics.sync_recent())
+
+
+@internal_bp.route("/social/tokens/refresh", methods=["POST"])
+@csrf.exempt
+def run_social_token_refresh():
+    _social_guard()
+    from app.social.tokens import refresh
+    return jsonify(success=True, **refresh.refresh_expiring())
+
+
+@internal_bp.route("/social/status", methods=["GET"])
+@csrf.exempt
+def social_status():
+    """Queue depth / dead-letter / account-health snapshot for monitoring."""
+    _social_guard()
+    from app.social.status import engine_status
+    return jsonify(success=True, **engine_status())

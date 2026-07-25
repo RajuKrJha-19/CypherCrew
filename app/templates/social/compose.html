@@ -1,0 +1,180 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ 'Edit post' if post else 'New post' }} | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ 'Edit post' if post else 'Compose post' }}</h1>
+        <p>Draft once, publish to every selected platform</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary">Drafts</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<form method="POST"
+      action="{{ url_for('social.update_post', post_id=post.id) if post else url_for('social.create_post') }}"
+      class="form-card social-composer" id="composerForm">
+
+    <div class="composer-grid">
+        <div class="composer-main">
+            <label class="field">
+                <span>Title <small>(internal)</small></span>
+                <input type="text" name="title" value="{{ post.title or '' }}"
+                       placeholder="e.g. July product launch">
+            </label>
+
+            <label class="field">
+                <span>Client</span>
+                <select name="client_id" id="clientSelect">
+                    <option value="">— No client —</option>
+                    {% for c in clients %}
+                    <option value="{{ c.id }}"
+                        {% if post and post.client_id == c.id %}selected{% endif %}>
+                        {{ c.client_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Caption</span>
+                <textarea name="caption" id="captionInput" rows="6"
+                          placeholder="Write your caption… (add #simfail / #simretry / #simslow to test outcomes)">{{ post.base_caption or '' }}</textarea>
+                <small class="field-hint"><span id="captionCount">0</span> characters</small>
+            </label>
+
+            <div class="field">
+                <span>Media</span>
+                <p class="field-hint" id="mediaHint">Select a client to load its brand assets.</p>
+                <div class="composer-media-grid" id="mediaGrid"></div>
+            </div>
+        </div>
+
+        <aside class="composer-side">
+            <div class="field">
+                <span>Post type</span>
+                <select name="post_type" id="postTypeSelect">
+                    {% for pt in ['image','carousel','reel','story','video','text','document'] %}
+                    <option value="{{ pt }}" {% if post_type == pt %}selected{% endif %}>
+                        {{ pt|capitalize }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="field-hint" id="postTypeHint"></small>
+            </div>
+
+            <div class="field">
+                <span>Platforms</span>
+                {% if accounts %}
+                <div class="composer-accounts">
+                    {% for a in accounts %}
+                    <label class="composer-account">
+                        <input type="checkbox" name="account_ids" value="{{ a.id }}"
+                               data-platform="{{ a.platform }}"
+                               {% if a.id in selected_account_ids %}checked{% endif %}>
+                        <span class="platform-tag">{{ a.platform|capitalize }}</span>
+                        {{ a.display_name }}
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="field-hint">
+                    No accounts connected.
+                    <a href="{{ url_for('social.index') }}">Connect one first.</a>
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <span>When</span>
+                <label class="radio-line">
+                    <input type="radio" name="publish_mode" value="schedule" checked>
+                    Schedule
+                </label>
+                <input type="datetime-local" name="schedule" id="scheduleInput"
+                       value="{{ schedule_value }}">
+                <label class="radio-line">
+                    <input type="radio" name="publish_mode" value="now">
+                    Publish as soon as approved
+                </label>
+                <small class="field-hint">Times are IST.</small>
+            </div>
+
+            <button type="submit" class="btn" style="width:100%">
+                {{ 'Save changes' if post else 'Save draft' }}
+            </button>
+        </aside>
+    </div>
+</form>
+
+<script>
+(function () {
+    const caps = {{ capabilities|tojson }};
+    const preselectedAssets = {{ selected_asset_ids|tojson }};
+
+    const clientSelect = document.getElementById("clientSelect");
+    const mediaGrid = document.getElementById("mediaGrid");
+    const mediaHint = document.getElementById("mediaHint");
+    const caption = document.getElementById("captionInput");
+    const captionCount = document.getElementById("captionCount");
+    const postType = document.getElementById("postTypeSelect");
+    const postTypeHint = document.getElementById("postTypeHint");
+
+    function updateCount() { captionCount.textContent = caption.value.length; }
+    caption.addEventListener("input", updateCount); updateCount();
+
+    // Show which selected platforms accept the chosen post type.
+    function refreshPostTypeHint() {
+        const pt = postType.value;
+        const checked = [...document.querySelectorAll('input[name="account_ids"]:checked')];
+        if (!checked.length) { postTypeHint.textContent = ""; return; }
+        const unsupported = checked
+            .map(c => c.dataset.platform)
+            .filter(p => caps[p] && !caps[p].post_types.includes(pt));
+        postTypeHint.textContent = unsupported.length
+            ? "⚠ Not supported on: " + [...new Set(unsupported)].join(", ")
+            : "✓ Supported on all selected platforms";
+        postTypeHint.className = "field-hint " + (unsupported.length ? "warn" : "ok");
+    }
+    postType.addEventListener("change", refreshPostTypeHint);
+    document.querySelectorAll('input[name="account_ids"]').forEach(
+        c => c.addEventListener("change", refreshPostTypeHint));
+
+    function renderAssets(assets) {
+        if (!assets.length) {
+            mediaGrid.innerHTML = "";
+            mediaHint.textContent = "This client has no brand assets yet.";
+            return;
+        }
+        mediaHint.textContent = "Tick the media to attach.";
+        mediaGrid.innerHTML = assets.map(a => `
+            <label class="composer-media-item">
+                <input type="checkbox" name="asset_ids" value="${a.id}"
+                       ${preselectedAssets.includes(a.id) ? "checked" : ""}>
+                <span class="media-cat">${a.category}</span>
+                <span class="media-name">${a.filename}</span>
+            </label>`).join("");
+    }
+
+    function loadAssets(clientId) {
+        if (!clientId) { mediaGrid.innerHTML = ""; mediaHint.textContent = "Select a client to load its brand assets."; return; }
+        fetch(`/social/api/clients/${clientId}/assets`)
+            .then(r => r.json())
+            .then(d => renderAssets(d.assets || []))
+            .catch(() => { mediaHint.textContent = "Could not load assets."; });
+    }
+
+    clientSelect.addEventListener("change", () => loadAssets(clientSelect.value));
+    if (clientSelect.value) loadAssets(clientSelect.value);
+    refreshPostTypeHint();
+})();
+</script>
+{% endblock %}
