@@ -1,33 +1,49 @@
 <div class="notification-widget">
 
     <button
+        id="mentionsBtn"
+        class="notification-btn top-notification-btn"
+        type="button"
+        aria-label="Mentions"
+        aria-haspopup="true"
+        aria-expanded="false"
+    >
+        <i class="fa-solid fa-at"></i>
+        <span id="mentionsBadge" class="notification-dot" hidden></span>
+    </button>
+
+    <button
         id="notificationBtn"
         class="notification-btn top-notification-btn"
         type="button"
         aria-label="Notifications"
+        aria-haspopup="true"
+        aria-expanded="false"
     >
         <i class="fa-solid fa-bell"></i>
-        <span
-            id="notificationBadge"
-            class="notification-badge"
-            style="display:none;"
-        >
-            0
-        </span>
+        <span id="notificationBadge" class="notification-dot" hidden></span>
     </button>
+
+</div>
+
+<div id="mentionsPanel" class="notification-panel">
+
+    <div class="notification-panel-head notification-header">
+        <strong>Mentions</strong>
+    </div>
+
+    <div id="mentionsList" class="notification-list">
+        <p class="notification-empty">
+            No mentions yet
+        </p>
+    </div>
 
 </div>
 
 <div id="notificationPanel" class="notification-panel">
 
     <div class="notification-panel-head notification-header">
-
         <strong>Notifications</strong>
-
-        <button id="markNotificationsRead" type="button">
-            Mark all read
-        </button>
-
     </div>
 
     <div id="notificationList" class="notification-list">

@@ -5,15 +5,40 @@
 {% block body_class %}ds-screen{% endblock %}
 
 {% block content %}
-        <div class="page-header">
-            <div>
-                <h1>{{ client.client_name }}</h1>
-                <p>
-                    Assigned Manager:
-                    {{ client.assigned_manager.name if client.assigned_manager else "-" }}
-                </p>
+        <div class="page-header client-header">
+            <div class="client-header-identity">
+
+                <div class="client-logo-box">
+                    {% if client_logo_url %}
+                    <img src="{{ client_logo_url }}" alt="{{ client.client_name }} logo">
+                    {% else %}
+                    <i class="fa-solid fa-building"></i>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <h1>
+                        {{ client.client_name }}
+                        <span class="badge {{ client.status }}">{{ client.status|title }}</span>
+                        {% if client.parent %}
+                        <span class="sub-client-tag">sub-client of {{ client.parent.client_name }}</span>
+                        {% endif %}
+                    </h1>
+                    <p>
+                        {{ client.company_name or client.client_name }}
+                        &middot;
+                        Managed by {{ client.assigned_manager.name if client.assigned_manager else "Unassigned" }}
+                    </p>
+                </div>
+
             </div>
+
             <div class="top-actions">
+                {% if can_manage and not client.parent %}
+                <a href="{{ url_for('clients.add_client', parent_id=client.id) }}" class="btn">
+                    <i class="fa-solid fa-plus"></i> Add Sub-client
+                </a>
+                {% endif %}
             </div>
         </div>
 
@@ -27,140 +52,396 @@
             {% endif %}
         {% endwith %}
 
-        <div class="table-card client-stats-card">
+        <div class="client-detail-grid{% if not can_manage %} is-single-column{% endif %}">
 
-            <div class="month-header">
-                <h2>
-                     {{ month_name }} {{ selected_year }}  
-                </h2>
+            <div class="client-detail-main">
 
-                <form method="GET" class="month-form">
-                    <input
-                        type="number"
-                        name="month"
-                        min="1"
-                        max="12"
-                        value="{{ selected_month }}"
-                    >
+                {#
+                    Permanent, client-level reference material - logo,
+                    brand imagery, video, fonts, brand guideline docs -
+                    as opposed to the per-task reference/submission files
+                    that live under each task. Shown up top: this is
+                    what the whole team reaches for before starting
+                    creative work on the client, not something to dig
+                    for under the month-by-month delivery stats below.
+                #}
+                <div class="table-card brand-assets-card">
 
-                    <input
-                        type="number"
-                        name="year"
-                        value="{{ selected_year }}"
-                    >
+                    <div class="brand-assets-head">
+                        <h2 class="card-title">Brand Assets</h2>
 
-                    <button type="submit">
-                        View
-                    </button>
-                </form>
-            </div>
-
-            {% if grouped_stats %}
-
-                <div class="client-stats-table">
-
-                    <div class="client-stats-head">
-                        <div>Service</div>
-                        <div>Deliverable</div>
-                        <div>Target</div>
-                        <div>Action</div>
+                        {% if can_manage %}
+                        <button type="button" class="btn-secondary" id="toggleAssetUpload" aria-expanded="false" aria-controls="assetUploadForm">
+                            <i class="fa-solid fa-plus"></i> Add Asset
+                        </button>
+                        {% endif %}
                     </div>
 
-                    {% for service, items in grouped_stats.items() %}
-                        {% for item in items %}
+                    {% if can_manage %}
+                    <form
+                        method="POST"
+                        action="{{ url_for('clients.add_client_asset', client_id=client.id) }}"
+                        enctype="multipart/form-data"
+                        class="inline-upload-form"
+                        id="assetUploadForm"
+                    >
+                        <div class="inline-upload-row">
+                            <select name="category" required aria-label="Asset type">
+                                {% for key, label, icon in asset_categories %}
+                                <option value="{{ key }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
 
-                            <div class="client-stats-row">
+                            <input type="file" name="asset_files" multiple required aria-label="File(s)">
 
-                                <div class="service-name">
-                                    {{ service }}
-                                </div>
+                            <button type="submit">Upload</button>
+                        </div>
 
-                                <div class="deliverable-name">
-                                    {{ item.deliverable_name }}
-                                </div>
+                        <p class="form-hint">
+                            One asset type per upload - pick the type, then
+                            choose as many files of that type as you like.
+                        </p>
+                    </form>
+                    {% endif %}
 
-                                <div class="target-count">
-                                    <span>
-                                        {{ item.completed_count }}/{{ item.target_count }}
-                                    </span>
-                                </div>
+                    {% if assets_by_category %}
+                    <div class="asset-category-groups">
+                        {% for key, cat_label, cat_icon in asset_categories %}
+                        {% set items = assets_by_category.get(key) %}
+                        {% if items %}
+                        <div class="asset-category-group">
 
-                                <div class="action-cell">
-                                    {% if has_permission(current_user, "edit_monthly_targets") %}
-                                        <a
-                                            href="{{ url_for('clients.edit_deliverable', deliverable_id=item.id) }}"
-                                            class="edit-pill"
+                            <h3 class="asset-category-title">
+                                <i class="{{ cat_icon }}"></i>
+                                {{ cat_label }}
+                                <span class="asset-category-count">{{ items|length }}</span>
+                            </h3>
+
+                            <div class="asset-grid">
+                                {% for asset in items %}
+                                {% set is_image = asset.mime_type and asset.mime_type.startswith("image/") %}
+                                {% set is_video = asset.mime_type and asset.mime_type.startswith("video/") %}
+
+                                <div
+                                    class="asset-card"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Preview {{ asset.original_filename }}"
+                                    data-preview-url="{{ url_for('clients.preview_client_asset', asset_id=asset.id) }}"
+                                    data-download-url="{{ url_for('clients.download_client_asset', asset_id=asset.id) }}"
+                                    data-filename="{{ asset.original_filename }}"
+                                    data-mime="{{ asset.mime_type or '' }}"
+                                >
+                                    <div class="asset-thumb{% if is_video %} is-video{% endif %}">
+                                        {% if is_image %}
+                                        <img
+                                            src="{{ url_for('clients.preview_client_asset', asset_id=asset.id) }}"
+                                            alt="{{ asset.original_filename }}"
+                                            loading="lazy"
+                                            decoding="async"
                                         >
-                                            Edit
-                                        </a>
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </div>
+                                        {% elif is_video %}
+                                        <span class="asset-icon"><i class="fa-solid fa-video"></i></span>
+                                        <span class="asset-play-badge"><i class="fa-solid fa-play"></i></span>
+                                        {% else %}
+                                        <span class="asset-icon"><i class="{{ cat_icon }}"></i></span>
+                                        {% endif %}
+                                    </div>
 
+                                    <div class="asset-name" title="{{ asset.original_filename }}">
+                                        {{ asset.original_filename }}
+                                    </div>
+
+                                    <div class="asset-meta">
+                                        {% if asset.file_size %}
+                                        {% if asset.file_size < 1024 %}{{ asset.file_size }} B
+                                        {% elif asset.file_size < 1048576 %}{{ (asset.file_size / 1024)|round(1) }} KB
+                                        {% else %}{{ (asset.file_size / 1048576)|round(2) }} MB{% endif %}
+                                        {% else %}-{% endif %}
+                                    </div>
+
+                                    <div class="asset-actions">
+                                        <a
+                                            href="{{ url_for('clients.download_client_asset', asset_id=asset.id) }}"
+                                            class="asset-action-btn"
+                                            title="Download"
+                                            onclick="event.stopPropagation()"
+                                        >
+                                            <i class="fa-solid fa-download"></i>
+                                        </a>
+
+                                        {% if can_manage %}
+                                        <form
+                                            method="POST"
+                                            action="{{ url_for('clients.delete_client_asset', asset_id=asset.id) }}"
+                                            class="asset-delete-form"
+                                            onsubmit="return confirm('Delete this asset? This cannot be undone.')"
+                                            onclick="event.stopPropagation()"
+                                        >
+                                            <button type="submit" class="asset-action-btn" title="Delete">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+
+                                </div>
+                                {% endfor %}
                             </div>
 
+                        </div>
+                        {% endif %}
                         {% endfor %}
-                    {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-text">
+                        No brand assets uploaded yet.
+                        {% if can_manage %}
+                        Add the client's logo, images, videos or fonts above
+                        so the whole team can find them in one place.
+                        {% endif %}
+                    </p>
+                    {% endif %}
 
                 </div>
 
-            {% else %}
-                <p>No stats added for this month.</p>
+                {#
+                    Deliverables are curation surface - monthly targets
+                    and delivery counts - so the whole card is
+                    manager-only. The route skips the query entirely
+                    for everyone else, so grouped_stats is empty here
+                    by construction rather than merely unrendered.
+                #}
+                {% if can_edit_deliverables %}
+                <div class="table-card client-deliverables-card">
+
+                    <div class="deliverables-head">
+                        <h2 class="card-title">Deliverables</h2>
+
+                        <div class="deliverables-head-actions">
+                            <form method="GET" class="month-form">
+                                <select name="month">
+                                    {% for m in range(1, 13) %}
+                                    <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>
+                                        {{ ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m - 1] }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+
+                                <input type="number" name="year" value="{{ selected_year }}" min="2000" max="2100">
+
+                                <button type="submit">View</button>
+                            </form>
+
+                            {% if can_edit_deliverables %}
+                            <button type="button" class="btn-secondary" id="toggleDeliverableForm" aria-expanded="false" aria-controls="addDeliverableForm">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if can_edit_deliverables %}
+                    <form
+                        method="POST"
+                        action="{{ url_for('clients.add_deliverable', client_id=client.id) }}"
+                        class="inline-upload-form"
+                        id="addDeliverableForm"
+                    >
+                        <input type="hidden" name="month" value="{{ selected_month }}">
+                        <input type="hidden" name="year" value="{{ selected_year }}">
+
+                        <div class="inline-upload-row">
+                            <input type="text" name="service_name" placeholder="Service (Social Media)" aria-label="Service" required>
+                            <input type="text" name="deliverable_name" placeholder="Deliverable (Meta Reel)" aria-label="Deliverable" required>
+                            <input type="number" name="completed_count" placeholder="Done" aria-label="Completed count" value="0" class="inline-upload-narrow">
+                            <input type="number" name="target_count" placeholder="Target" aria-label="Target count" required class="inline-upload-narrow">
+                            <button type="submit">Add</button>
+                        </div>
+
+                        <p class="form-hint">
+                            Added under {{ month_name }} {{ selected_year }} - switch the month above first if you meant a different one.
+                        </p>
+                    </form>
+                    {% endif %}
+
+                    <p class="deliverables-period">{{ month_name }} {{ selected_year }}</p>
+
+                    {% if grouped_stats %}
+                    {# No inner permission checks: the whole card is
+                       already gated on can_edit_deliverables above, so
+                       anyone reading this table may also edit it. #}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Deliverable</th>
+                                <th>Progress</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for service, items in grouped_stats.items() %}
+                            {% for item in items %}
+                            <tr>
+                                <td class="deliverable-service-cell">{{ service }}</td>
+                                <td>{{ item.deliverable_name }}</td>
+                                <td>
+                                    <span class="target-pill">{{ item.completed_count }}/{{ item.target_count }}</span>
+                                </td>
+                                <td class="deliverable-action-cell">
+                                    <a href="{{ url_for('clients.edit_deliverable', deliverable_id=item.id) }}" class="table-link">
+                                        Edit
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="empty-text">
+                        No deliverables added for {{ month_name }} {{ selected_year }} yet.
+                    </p>
+                    {% endif %}
+
+                </div>
+                {% endif %}
+
+            </div>
+
+            {#
+                The whole right-hand column - the client's own contact
+                details and its sub-clients - is curation surface.
+                Employees get the brand-asset column alone, which is
+                why .client-detail-grid drops to a single column for
+                them rather than leaving a 320px gap.
+            #}
+            {% if can_manage %}
+            <div class="client-detail-side">
+
+                <div class="table-card">
+                    <h2 class="card-title">Client Info</h2>
+
+                    <div class="detail-row">
+                        <span>Company</span>
+                        <strong>{{ client.company_name or "-" }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Industry</span>
+                        <strong>{{ client.industry or "-" }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Phone</span>
+                        <strong>{{ client.phone or "-" }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Email</span>
+                        <strong>{{ client.email or "-" }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Assigned Manager</span>
+                        <strong>{{ client.assigned_manager.name if client.assigned_manager else "-" }}</strong>
+                    </div>
+
+                    <div class="detail-row">
+                        <span>Client Since</span>
+                        <strong>{{ client.created_at.strftime("%d %b %Y") if client.created_at else "-" }}</strong>
+                    </div>
+                </div>
+
+                {% if client.sub_clients %}
+                <div class="table-card sub-clients-card">
+                    <h2 class="card-title">Sub-clients</h2>
+
+                    <div class="sub-clients-list">
+                        {% for sub in client.sub_clients|sort(attribute="client_name") %}
+                        <a href="{{ url_for('clients.client_detail', client_id=sub.id) }}" class="sub-client-item">
+                            <span>{{ sub.client_name }}</span>
+                            <span class="badge {{ sub.status }}">{{ sub.status|title }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
             {% endif %}
 
         </div>
 
-        {% if has_permission(current_user, "edit_monthly_targets") %}
-            <div class="form-card add-deliverable-card">
-                <h1>Add Deliverable</h1>
-                <p>Add monthly target for {{ month_name }} {{ selected_year }}</p>
+{% endblock %}
 
-                <form
-                    method="POST"
-                    action="{{ url_for('clients.add_deliverable', client_id=client.id) }}"
-                >
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+<script>
+    (function () {
 
-                    <input type="hidden" name="month" value="{{ selected_month }}">
-                    <input type="hidden" name="year" value="{{ selected_year }}">
+        function wireToggle(buttonId, formId) {
+            const toggleBtn = document.getElementById(buttonId);
+            const form = document.getElementById(formId);
 
-                    <label>Service</label>
-                    <input
-                        type="text"
-                        name="service_name"
-                        placeholder="Social Media"
-                        required
-                    >
+            if (!toggleBtn || !form) return;
 
-                    <label>Deliverable</label>
-                    <input
-                        type="text"
-                        name="deliverable_name"
-                        placeholder="Meta Reel"
-                        required
-                    >
+            toggleBtn.addEventListener("click", function () {
+                const opening = form.classList.toggle("show");
+                toggleBtn.setAttribute("aria-expanded", opening ? "true" : "false");
 
-                    <label>Completed Count</label>
-                    <input
-                        type="number"
-                        name="completed_count"
-                        value="0"
-                    >
+                if (opening) {
+                    const firstField = form.querySelector("input, select");
+                    if (firstField) firstField.focus();
+                }
+            });
+        }
 
-                    <label>Target Count</label>
-                    <input
-                        type="number"
-                        name="target_count"
-                        required
-                    >
+        wireToggle("toggleAssetUpload", "assetUploadForm");
+        wireToggle("toggleDeliverableForm", "addDeliverableForm");
 
-                    <button type="submit">
-                        Add Deliverable
-                    </button>
+        function fileFrom(card) {
+            return {
+                url: card.dataset.previewUrl,
+                downloadUrl: card.dataset.downloadUrl,
+                filename: card.dataset.filename,
+                mime: card.dataset.mime,
+            };
+        }
 
-                </form>
-            </div>
-        {% endif %}
+        function viewAsset(card) {
+            const cards = Array.from(document.querySelectorAll(".asset-card"));
 
-    
+            CypherMediaViewer.open({
+                items: cards.map(fileFrom),
+                index: Math.max(0, cards.indexOf(card)),
+            });
+        }
+
+        document.addEventListener("click", function (event) {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+            const card = event.target.closest(".asset-card");
+            if (!card) return;
+
+            // The download/delete controls in the card's corner handle
+            // their own clicks (stopPropagation inline) - reaching here
+            // means the click was on the card itself.
+            viewAsset(card);
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter" && event.key !== " ") return;
+
+            const card = event.target.closest ? event.target.closest(".asset-card") : null;
+            if (!card) return;
+
+            event.preventDefault();
+            viewAsset(card);
+        });
+
+    })();
+</script>
 {% endblock %}

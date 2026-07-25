@@ -49,6 +49,29 @@
                         {% endfor %}
                     </select>
 
+                    <div class="form-group">
+                        <label>Parent Client (optional)</label>
+
+                        <p class="form-hint">
+                            Leave blank for an ordinary top-level client.
+                            Set this to create a sub-client - a full client
+                            of its own, with its own deliverables and
+                            targets, just grouped under a parent.
+                        </p>
+
+                        <select name="parent_client_id">
+                            <option value="">No parent (top-level client)</option>
+                            {% for parent in parent_options %}
+                            <option
+                                value="{{ parent.id }}"
+                                {% if preselected_parent_id == parent.id %}selected{% endif %}
+                            >
+                                {{ parent.client_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <label>Status</label>
                     <select name="status">
                         <option value="active">Active</option>

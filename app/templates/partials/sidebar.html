@@ -70,9 +70,10 @@
         <span>Dashboard</span>
     </a>
 
-    {% if has_permission(current_user,"manage_users") or has_permission(current_user,"manage_permissions") or has_permission(current_user,"manage_clients") %}
+    {# Unconditional: Clients below is now visible to everyone, so this
+       section always has at least one item under it. Gating the label
+       would leave that link floating without a heading. #}
     <span class="sidebar-nav-label">Company</span>
-    {% endif %}
 
     {% if has_permission(current_user,"manage_users") %}
     <a href="{{ url_for('users.list_users') }}"
@@ -90,13 +91,20 @@
     </a>
     {% endif %}
 
-    {% if has_permission(current_user,"manage_clients") %}
+    {#
+        Open to everyone, deliberately. The client pages carry the
+        brand assets (logo, fonts, guidelines) the whole team needs to
+        do creative work, so the tab is not manager-only. What differs
+        by role is how much of each page renders: an employee sees the
+        client's name, its manager and the brand assets; the client's
+        own details, deliverables and sub-clients stay with the people
+        who curate them. See can_manage_clients().
+    #}
     <a href="{{ url_for('clients.list_clients') }}"
        class="{% if endpoint.startswith('clients.') %}active{% endif %}">
         <i class="fa-solid fa-building"></i>
         <span>Clients</span>
     </a>
-    {% endif %}
 
     <span class="sidebar-nav-label">Work</span>
 

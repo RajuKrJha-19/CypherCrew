@@ -10,6 +10,7 @@ from flask import Blueprint, abort, jsonify, request
 
 from app.extensions import csrf
 from app.services.reminders import send_deadline_reminders
+from app.services.task_fallback import run_task_fallback_reassignment
 
 
 internal_bp = Blueprint("internal", __name__, url_prefix="/internal")
@@ -40,4 +41,23 @@ def run_reminders():
         abort(403)
 
     result = send_deadline_reminders()
+    return jsonify(success=True, **result)
+
+
+@internal_bp.route("/task-fallback/run", methods=["POST"])
+@csrf.exempt
+def run_task_fallback():
+    """Shift stalled tasks to their backup assignee. Protected by
+    REMINDER_TOKEN. Run this far more often than the daily reminder -
+    fallback windows are counted in hours, so an hourly cron entry (or
+    every 15-30 min) is what actually makes the feature work on time.
+
+    Cron example (every 15 minutes):
+        curl -fsS -X POST -H "X-Reminder-Token: $REMINDER_TOKEN" \\
+             https://crew.cypherms.com/internal/task-fallback/run
+    """
+    if not _authorised():
+        abort(403)
+
+    result = run_task_fallback_reassignment()
     return jsonify(success=True, **result)

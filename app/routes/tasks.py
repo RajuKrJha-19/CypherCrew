@@ -39,8 +39,9 @@ from app.models import (
 )
 from app.utils.permissions import has_permission
 from app.utils.notifications import create_notification
-from app.utils.mentions import notify_mentioned_users
+from app.utils.mentions import notify_mentioned_users, find_mentioned_users
 from app.utils import task_status
+from app.utils import social_platforms as social
 
 
 tasks_bp = Blueprint("tasks", __name__, url_prefix="/tasks")
@@ -222,6 +223,97 @@ def add_activity(
     db.session.add(activity)
 
 
+def parse_fallback_fields(assigned_to_id):
+    """Read backup_assignee_id / fallback_hours from the task form.
+
+    Both are optional, but half-set (one without the other) is
+    rejected rather than silently ignored - a manager who fills in
+    just the hours would otherwise get no fallback at all with no
+    indication why.
+
+    Returns (backup_assignee_id, fallback_hours, error_message).
+    On success error_message is None. On failure both values are
+    None and error_message explains what to fix.
+    """
+
+    backup_raw = (request.form.get("backup_assignee_id") or "").strip()
+    hours_raw = (request.form.get("fallback_hours") or "").strip()
+
+    if not backup_raw and not hours_raw:
+        return None, None, None
+
+    if backup_raw and not hours_raw:
+        return None, None, (
+            "Set a fallback window (hours) to use a backup assignee."
+        )
+
+    if hours_raw and not backup_raw:
+        return None, None, (
+            "Select a backup assignee to use a fallback window."
+        )
+
+    try:
+        backup_assignee_id = int(backup_raw)
+        fallback_hours = int(hours_raw)
+    except (TypeError, ValueError):
+        return None, None, "Fallback window must be a whole number of hours."
+
+    if fallback_hours <= 0:
+        return None, None, "Fallback window must be greater than zero."
+
+    if backup_assignee_id == assigned_to_id:
+        return None, None, (
+            "Backup assignee must be different from the assignee."
+        )
+
+    backup_user = User.query.filter_by(
+        id=backup_assignee_id, status="active"
+    ).first()
+
+    if not backup_user:
+        return None, None, "Selected backup assignee is invalid."
+
+    return backup_assignee_id, fallback_hours, None
+
+
+def active_user_names():
+    """Names offered to the @-mention picker (window.MENTION_USERS) -
+    every active user regardless of role, matching who find_mentioned_users
+    actually matches against."""
+    return [
+        u.name for u in User.query
+        .filter_by(status="active")
+        .order_by(User.name.asc())
+        .all()
+    ]
+
+
+def parse_social_media_fields():
+    """Read is_social_media / social_platforms from the task form.
+
+    Returns (is_social_media, platforms_csv, error_message). platforms_csv
+    is the comma-joined, catalog-ordered string to store on the task -
+    empty when the task isn't social media. On failure error_message
+    explains what to fix and the other two values are None.
+    """
+
+    is_social_media = bool(request.form.get("is_social_media"))
+
+    if not is_social_media:
+        return False, "", None
+
+    selected = request.form.getlist("social_platforms")
+    platforms = social.parse_platforms(",".join(selected))
+
+    if not platforms:
+        return None, None, (
+            "Select at least one platform, or uncheck "
+            '"This task is for social media."'
+        )
+
+    return True, social.format_platforms(platforms), None
+
+
 def apply_task_search(query, search):
 
     if not search:
@@ -294,7 +386,16 @@ def apply_task_filters(query, args):
     client_id = args.get("client", "").strip()
 
     if selected_status:
-        query = query.filter(Task.status == selected_status)
+        # ?status= accepts either one exact status or the name of a
+        # group (see task_status.STATUS_GROUPS), so a dashboard card
+        # that counts several statuses can link to a filter covering
+        # all of them instead of just the first.
+        group = task_status.group_members(selected_status)
+
+        if group:
+            query = query.filter(Task.status.in_(group))
+        else:
+            query = query.filter(Task.status == selected_status)
 
     if selected_priority:
         query = query.filter(Task.priority == selected_priority)
@@ -593,6 +694,11 @@ def list_tasks():
 
     statuses = task_status.ALL_STATUSES
 
+    # Offered above the individual statuses so arriving from a
+    # dashboard card that counts a group ("Needs Review") lands on a
+    # filter the dropdown can actually show as selected - and clear.
+    status_groups = list(task_status.STATUS_GROUPS.keys())
+
     priorities = [
         "Low",
         "Medium",
@@ -689,6 +795,7 @@ def list_tasks():
         # Board columns explain themselves via task_status.description().
         task_status=task_status,
         statuses=statuses,
+        status_groups=status_groups,
         priorities=priorities,
         selected_status=selected_status,
         selected_priority=selected_priority,
@@ -993,12 +1100,7 @@ def add_task():
             url_for("tasks.self_assign_task", **panel_args())
         )
 
-    clients = (
-        Client.query
-        .filter_by(status="active")
-        .order_by(Client.client_name.asc())
-        .all()
-    )
+    clients = Client.ordered_with_sub_clients()
 
     deliverables = (
         ClientDeliverable.query
@@ -1188,6 +1290,28 @@ def add_task():
                 form_url
             )
 
+        backup_assignee_id, fallback_hours, fallback_error = (
+            parse_fallback_fields(assigned_to_id)
+        )
+
+        if fallback_error:
+            flash(fallback_error, "error")
+
+            return redirect(
+                form_url
+            )
+
+        is_social_media, social_platforms_csv, social_error = (
+            parse_social_media_fields()
+        )
+
+        if social_error:
+            flash(social_error, "error")
+
+            return redirect(
+                form_url
+            )
+
         reference_files = [
             uploaded_file
             for uploaded_file
@@ -1223,6 +1347,10 @@ def add_task():
             status_started_at=datetime.utcnow(),
             created_by_id=current_user.id,
             task_code=generate_task_code(),
+            backup_assignee_id=backup_assignee_id,
+            fallback_hours=fallback_hours,
+            is_social_media=is_social_media,
+            social_platforms=social_platforms_csv,
         )
 
         visibility_ids = request.form.getlist(
@@ -1294,14 +1422,36 @@ def add_task():
                         object_key
                     )
 
+            created_message = f"Created by {current_user.name}"
+
+            if task.backup_assignee_id and task.fallback_hours:
+                backup_name = User.query.get(task.backup_assignee_id).name
+                created_message += (
+                    f"\nBackup assignee: {backup_name} "
+                    f"(shifts after {task.fallback_hours}h if not started)"
+                )
+
+            if task.is_social_media and task.social_platforms:
+                platform_labels = ", ".join(
+                    social.label(key)
+                    for key in social.parse_platforms(task.social_platforms)
+                )
+                created_message += f"\nSocial media: {platform_labels}"
+
             add_activity(
                 task,
                 action="created",
-                message=(
-                    f"Created by {current_user.name}"
-                ),
+                message=created_message,
                 old_status=None,
                 new_status="Assigned",
+            )
+
+            notify_mentioned_users(
+                task,
+                task.description,
+                actor=current_user,
+                link=url_for("tasks.task_detail", task_id=task.id),
+                source="description",
             )
 
             create_notification(
@@ -1436,6 +1586,8 @@ def add_task():
         deliverables=deliverables,
         employees=employees,
         deadline_default=deadline_default,
+        social_platform_options=social.PLATFORMS,
+        mention_users=active_user_names(),
     )
 
 @tasks_bp.route("/self-assign", methods=["GET", "POST"])
@@ -1445,11 +1597,7 @@ def self_assign_task():
     # See add_task: keeps the drawer flag across validation redirects.
     form_url = url_for("tasks.self_assign_task", **panel_args())
 
-    clients = Client.query.filter_by(
-        status="active"
-    ).order_by(
-        Client.client_name.asc()
-    ).all()
+    clients = Client.ordered_with_sub_clients()
 
     deliverables = ClientDeliverable.query.order_by(
         ClientDeliverable.id.desc()
@@ -1651,11 +1799,7 @@ def edit_task(task_id):
     if not has_permission(current_user, "manage_tasks") and not is_self_assigned_owner:
         return redirect(url_for("dashboard.index"))
 
-    clients = Client.query.filter_by(
-        status="active"
-    ).order_by(
-        Client.client_name.asc()
-    ).all()
+    clients = Client.ordered_with_sub_clients()
 
     deliverables = ClientDeliverable.query.order_by(
         ClientDeliverable.id.desc()
@@ -1672,6 +1816,10 @@ def edit_task(task_id):
 
         old_status = task.status
         old_assigned_to_id = task.assigned_to_id
+        old_backup_assignee_id = task.backup_assignee_id
+        old_fallback_hours = task.fallback_hours
+        old_is_social_media = task.is_social_media
+        old_social_platforms = task.social_platforms or ""
 
         old_title = task.title
         old_description = task.description or ""
@@ -1794,6 +1942,32 @@ def edit_task(task_id):
                 )
             )
 
+        backup_assignee_id, fallback_hours, fallback_error = (
+            parse_fallback_fields(assigned_to_id)
+        )
+
+        if fallback_error:
+            flash(fallback_error, "error")
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
+        is_social_media, social_platforms_csv, social_error = (
+            parse_social_media_fields()
+        )
+
+        if social_error:
+            flash(social_error, "error")
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
         new_title = request.form.get("title", "").strip()
         new_description = request.form.get("description", "").strip()
         new_priority = request.form.get("priority")
@@ -1837,6 +2011,41 @@ def edit_task(task_id):
         task.quantity = quantity
         task.estimated_time = estimated_time
 
+        fallback_config_changed = (
+            old_backup_assignee_id != backup_assignee_id
+            or old_fallback_hours != fallback_hours
+        )
+
+        task.backup_assignee_id = backup_assignee_id
+        task.fallback_hours = fallback_hours
+
+        if fallback_config_changed:
+
+            # A changed (or newly added / removed) backup config is a
+            # fresh decision - re-arm it so a config edited after a
+            # previous auto-shift can fire again, and restart the
+            # clock so it counts from this edit rather than from
+            # whenever the task was originally assigned.
+            task.fallback_triggered_at = None
+
+            if task.status == task_status.ASSIGNED:
+                task.status_started_at = datetime.utcnow()
+
+        social_config_changed = (
+            old_is_social_media != is_social_media
+            or old_social_platforms != social_platforms_csv
+        )
+
+        task.is_social_media = is_social_media
+        task.social_platforms = social_platforms_csv or None
+
+        if social_config_changed:
+            # The publish confirmation checklist is keyed off the
+            # current platform list - a stale confirmation from before
+            # this edit would otherwise let a changed platform slip
+            # through unconfirmed the next time this task is published.
+            task.social_platforms_published = None
+
         new_client = Client.query.get(client_id)
         new_client_name = new_client.client_name if new_client else "-"
 
@@ -1858,6 +2067,23 @@ def edit_task(task_id):
                 ("Description", "Updated", "Updated")
             )
 
+            # Only newly-added @mentions get notified - someone already
+            # tagged before this edit (e.g. a typo fix elsewhere in the
+            # text) shouldn't be re-notified for a mention they already
+            # have.
+            already_mentioned_ids = {
+                u.id for u in find_mentioned_users(old_description)
+            }
+
+            notify_mentioned_users(
+                task,
+                task.description,
+                actor=current_user,
+                link=url_for("tasks.task_detail", task_id=task.id),
+                skip_user_ids=already_mentioned_ids,
+                source="description",
+            )
+
         if old_client != new_client_name:
             changes.append(
                 ("Client", old_client, new_client_name)
@@ -1871,6 +2097,54 @@ def edit_task(task_id):
         if old_assigned_to != new_assigned_to:
             changes.append(
                 ("Assigned To", old_assigned_to, new_assigned_to)
+            )
+
+        if fallback_config_changed:
+
+            old_backup_name = (
+                User.query.get(old_backup_assignee_id).name
+                if old_backup_assignee_id else "-"
+            )
+
+            new_backup_name = (
+                User.query.get(backup_assignee_id).name
+                if backup_assignee_id else "-"
+            )
+
+            changes.append(
+                (
+                    "Backup Assignee",
+                    (
+                        f"{old_backup_name} "
+                        f"({old_fallback_hours}h)"
+                        if old_backup_assignee_id else "-"
+                    ),
+                    (
+                        f"{new_backup_name} "
+                        f"({fallback_hours}h)"
+                        if backup_assignee_id else "-"
+                    ),
+                )
+            )
+
+        if social_config_changed:
+
+            old_platform_names = ", ".join(
+                social.label(key)
+                for key in social.parse_platforms(old_social_platforms)
+            ) or "-"
+
+            new_platform_names = ", ".join(
+                social.label(key)
+                for key in social.parse_platforms(social_platforms_csv)
+            ) or "-"
+
+            changes.append(
+                (
+                    "Social Media",
+                    old_platform_names if old_is_social_media else "-",
+                    new_platform_names if is_social_media else "-",
+                )
             )
 
         if old_priority != task.priority:
@@ -2025,7 +2299,10 @@ def edit_task(task_id):
         clients=clients,
         deliverables=deliverables,
         employees=employees,
-        task_status=task_status
+        task_status=task_status,
+        social_platform_options=social.PLATFORMS,
+        task_social_platforms=social.parse_platforms(task.social_platforms),
+        mention_users=active_user_names(),
     )
 
 @tasks_bp.route("/<int:task_id>/start", methods=["POST"])
@@ -3086,15 +3363,56 @@ def approve_task(task_id):
                 request.referrer or url_for("tasks.list_tasks")
             )
 
+        required_platforms = (
+            social.parse_platforms(task.social_platforms)
+            if task.is_social_media else []
+        )
+
+        if required_platforms:
+
+            confirmed_platforms = social.parse_platforms(
+                ",".join(request.form.getlist("confirmed_platforms"))
+            )
+
+            missing = [
+                key for key in required_platforms
+                if key not in confirmed_platforms
+            ]
+
+            if missing:
+                flash(
+                    "Confirm this was published on every listed "
+                    "platform before publishing: "
+                    + ", ".join(social.label(key) for key in missing)
+                    + ".",
+                    "error"
+                )
+                return redirect(
+                    request.referrer or url_for("tasks.list_tasks")
+                )
+
+            task.social_platforms_published = social.format_platforms(
+                required_platforms
+            )
+
         old_status = record_status_time(
             task,
             "Published"
         )
 
+        publish_message = f"Published by {current_user.name}"
+
+        if required_platforms:
+            publish_message += (
+                ". Confirmed live on: "
+                + ", ".join(social.label(key) for key in required_platforms)
+                + "."
+            )
+
         add_activity(
             task,
             action="published",
-            message=f"Published by {current_user.name}",
+            message=publish_message,
             old_status=old_status,
             new_status="Published"
         )
@@ -3432,6 +3750,8 @@ def task_detail(task_id):
         core_review_time=format_seconds(task.core_review_seconds),
         client_review_time=format_seconds(task.client_review_seconds),
         task_status=task_status,
+        social=social,
+        task_social_platform_keys=social.parse_platforms(task.social_platforms),
         can_manage_tasks=has_permission(current_user, "manage_tasks"),
         current_status_seconds=current_status_seconds,
         current_status=task.status,
@@ -3455,6 +3775,9 @@ def _can_view_task_file(task_file):
     """Same rule the preview and download routes apply."""
 
     if has_permission(current_user, "manage_tasks"):
+        return True
+
+    if task_file.folder_type == "submission":
         return True
 
     task = task_file.task
@@ -3576,7 +3899,8 @@ def preview_task_file(file_id):
     if not has_permission(current_user, "manage_tasks"):
 
         can_view = (
-            task.assigned_to_id == current_user.id
+            task_file.folder_type == "submission"
+            or task.assigned_to_id == current_user.id
             or current_user in task.visible_to
         )
 
@@ -3647,7 +3971,8 @@ def download_task_file(file_id):
     if not has_permission(current_user, "manage_tasks"):
 
         can_view = (
-            task.assigned_to_id == current_user.id
+            task_file.folder_type == "submission"
+            or task.assigned_to_id == current_user.id
             or current_user in task.visible_to
         )
 

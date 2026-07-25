@@ -15,9 +15,13 @@
     non-zero.
 #}
 
+{# Summed from the same list the "Needs Review" filter group expands
+   to, so the number on the card and the rows behind the link are
+   always the same set - they were hard-coded separately before, which
+   is exactly how they drifted. #}
 {% set needs_review =
-    stats.status_counts.get("Core Review", 0)
-    + stats.status_counts.get("Client Review", 0)
+    stats.status_counts.get(task_status.CORE_REVIEW, 0)
+    + stats.status_counts.get(task_status.CLIENT_REVIEW, 0)
 %}
 
 <div class="dashboard-kpi-grid">
@@ -46,7 +50,11 @@
         </div>
     </a>
 
-    <a href="{{ url_for('tasks.list_tasks', status='Core Review') }}"
+    {# Links to the "Needs Review" status *group*, not one status: this
+       card counts Core + Client Review together, and linking to Core
+       Review alone silently dropped every Client Review task it had
+       just counted - so the count and the page it opened disagreed. #}
+    <a href="{{ url_for('tasks.list_tasks', status=task_status.NEEDS_REVIEW) }}"
        class="kpi-card dashboard-card-link"
        title="Finished but not signed off - internal and client review combined">
         <div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div>

@@ -98,20 +98,33 @@ def search_tasks(term, limit):
 
 
 def search_clients(term, limit):
-    if not _can("manage_clients"):
-        return []
+    """Clients are findable by everyone - the client page is how the
+    team reaches a client's brand assets - but the fields a non-manager
+    can match on and read back are limited to the name, mirroring the
+    reduced client page they would land on. Searching company / email /
+    industry would otherwise let an employee probe account details the
+    page itself withholds.
+    """
+    can_manage = _can("manage_clients")
 
     like = f"%{term}%"
 
-    rows = (
-        Client.query.filter(
-            or_(
-                Client.client_name.ilike(like),
-                Client.company_name.ilike(like),
-                Client.email.ilike(like),
-                Client.industry.ilike(like),
-            )
+    if can_manage:
+        match = or_(
+            Client.client_name.ilike(like),
+            Client.company_name.ilike(like),
+            Client.email.ilike(like),
+            Client.industry.ilike(like),
         )
+        query = Client.query.filter(match)
+    else:
+        query = Client.query.filter(
+            Client.client_name.ilike(like),
+            Client.status == "active",
+        )
+
+    rows = (
+        query
         .order_by(Client.client_name.asc())
         .limit(limit)
         .all()
@@ -122,8 +135,11 @@ def search_clients(term, limit):
             "type": "client",
             "url": url_for("clients.client_detail", client_id=client.id),
             "title": client.client_name,
-            "subtitle": client.company_name or client.industry or "Client",
-            "status": client.status,
+            "subtitle": (
+                (client.company_name or client.industry or "Client")
+                if can_manage else "Client"
+            ),
+            "status": client.status if can_manage else None,
         }
         for client in rows
     ]

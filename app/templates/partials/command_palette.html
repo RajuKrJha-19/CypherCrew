@@ -11,7 +11,11 @@
 {% set cp_manage_tasks = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
 {% set cp_review = current_user.role in ["admin", "super_admin"] or has_permission(current_user, "approve_tasks") %}
 {% set cp_reports = has_permission(current_user, "view_reports") or current_user.role in ["admin", "super_admin"] %}
-{% set cp_clients = has_permission(current_user, "manage_clients") %}
+{# Creating a client is curation (manager-only); *reaching* the client
+   list is not - everyone needs it for brand assets. Two flags, because
+   one would either hide the section from the team or hand out the
+   create action. #}
+{% set cp_manage_clients = can_manage_clients(current_user) %}
 {% set cp_users = has_permission(current_user, "manage_users") %}
 {% set cp_perms = has_permission(current_user, "manage_permissions") %}
 
@@ -19,7 +23,7 @@
 
 {% set _ = commands.append({"group": "Create", "icon": "fa-plus", "label": "New Task", "url": (url_for('tasks.add_task') if cp_manage_tasks else url_for('tasks.self_assign_task')), "keywords": "add create new task"}) %}
 {% set _ = commands.append({"group": "Create", "icon": "fa-chart-column", "label": "New Report", "url": url_for('reports.add_report'), "keywords": "add daily report"}) %}
-{% if cp_clients %}{% set _ = commands.append({"group": "Create", "icon": "fa-building", "label": "New Client", "url": url_for('clients.add_client'), "keywords": "add client"}) %}{% endif %}
+{% if cp_manage_clients %}{% set _ = commands.append({"group": "Create", "icon": "fa-building", "label": "New Client", "url": url_for('clients.add_client'), "keywords": "add client"}) %}{% endif %}
 {% if cp_users %}{% set _ = commands.append({"group": "Create", "icon": "fa-user-plus", "label": "New User", "url": url_for('users.add_user'), "keywords": "add user member team"}) %}{% endif %}
 
 {% set _ = commands.append({"group": "Go to", "icon": "fa-house", "label": "Dashboard", "url": url_for('dashboard.index'), "keywords": "home overview"}) %}
@@ -30,7 +34,7 @@
 {% set _ = commands.append({"group": "Go to", "icon": "fa-note-sticky", "label": "Notes", "url": url_for('notes.list_notes'), "keywords": "notes memo"}) %}
 {% set _ = commands.append({"group": "Go to", "icon": "fa-images", "label": "Gallery", "url": url_for('gallery.index'), "keywords": "files media images videos"}) %}
 {% if cp_manage_tasks %}{% set _ = commands.append({"group": "Go to", "icon": "fa-umbrella-beach", "label": "Holidays", "url": url_for('holidays.list_holidays'), "keywords": "leave holiday"}) %}{% endif %}
-{% if cp_clients %}{% set _ = commands.append({"group": "Go to", "icon": "fa-building", "label": "Clients", "url": url_for('clients.list_clients'), "keywords": "customers accounts"}) %}{% endif %}
+{% set _ = commands.append({"group": "Go to", "icon": "fa-building", "label": "Clients", "url": url_for('clients.list_clients'), "keywords": "customers accounts brand assets logo fonts"}) %}
 {% if cp_users %}{% set _ = commands.append({"group": "Go to", "icon": "fa-users", "label": "Users", "url": url_for('users.list_users'), "keywords": "people team members staff"}) %}{% endif %}
 {% if cp_perms %}{% set _ = commands.append({"group": "Go to", "icon": "fa-key", "label": "Permissions", "url": url_for('permissions.list_permissions'), "keywords": "roles access rights"}) %}{% endif %}
 {% set _ = commands.append({"group": "Go to", "icon": "fa-user", "label": "My Profile", "url": url_for('profile.my_profile'), "keywords": "account settings me"}) %}

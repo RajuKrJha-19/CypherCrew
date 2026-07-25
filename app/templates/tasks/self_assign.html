@@ -46,7 +46,7 @@
 
                     {% for client in clients %}
                     <option value="{{ client.id }}">
-                        {{ client.client_name }}
+                        {% if client.parent_client_id %}&nbsp;&nbsp;&nbsp;&nbsp;&#8627; {{ client.parent.client_name }} / {{ client.client_name }}{% else %}{{ client.client_name }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>

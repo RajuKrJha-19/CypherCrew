@@ -1,5 +1,6 @@
 /*
-    @-mention autocomplete for comment / reply boxes.
+    @-mention autocomplete for comment/reply boxes and the task
+    description field.
 
     Typing "@" (at the start or after a space) opens a picker of active
     teammates (window.MENTION_USERS, set per page). Choosing one inserts
@@ -105,9 +106,16 @@
         hide();
     }
 
+    // "message" covers comments/replies; "description" covers the task
+    // description on the add/edit forms - both are plain textareas, so
+    // the same picker and highlighting work for either untouched.
     document.addEventListener("input", function (e) {
         var t = e.target;
-        if (t && t.tagName === "TEXTAREA" && t.name === "message") render(t);
+        if (
+            t &&
+            t.tagName === "TEXTAREA" &&
+            (t.name === "message" || t.name === "description")
+        ) render(t);
     });
 
     document.addEventListener("keydown", function (e) {
@@ -140,4 +148,31 @@
     });
 
     document.addEventListener("scroll", function () { if (box && !box.hidden) hide(); }, true);
+
+    /*
+        The bound-once guard above stops the delegated listeners from
+        stacking up on every task page visit - correct, since delegation
+        itself needs no re-binding. But `box` is a plain <div> this
+        script appends to document.body on first use, and a real Turbo
+        navigation replaces <body> outright, taking that div with it.
+        The guard means this script never runs again to notice, so
+        `box` keeps pointing at the now-detached node forever after:
+        ensureBox() sees it's still truthy, skips rebuilding, and every
+        later "@" render writes into a div nothing can see - the picker
+        silently stops appearing on every task after the first one you
+        opened, until a hard refresh clears this script's state
+        entirely. Dropping the cached references on navigation forces
+        the next render() to rebuild into the (live) body Turbo just
+        installed - the same fix task-panel.js needed for its drawer.
+    */
+    function resetForNavigation() {
+        box = null;
+        activeField = null;
+        matches = [];
+        activeIndex = 0;
+        queryStart = -1;
+    }
+
+    document.addEventListener("turbo:before-render", resetForNavigation);
+    document.addEventListener("turbo:before-cache", resetForNavigation);
 })();

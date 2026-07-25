@@ -9,11 +9,19 @@
     <div class="page-header">
         <div>
             <h1>Clients</h1>
-            <p>View and manage company clients</p>
+            <p>
+                {% if can_manage %}
+                View and manage company clients
+                {% else %}
+                Open a client to find its logo, fonts and brand assets
+                {% endif %}
+            </p>
         </div>
 
         <div class="top-actions">
+            {% if can_manage %}
             <a href="{{ url_for('clients.add_client') }}" class="btn">+ Add Client</a>
+            {% endif %}
         </div>
     </div>
 
@@ -29,11 +37,13 @@
 
         <input type="text" name="q" value="{{ search }}" placeholder="Search by name, company or industry">
 
+        {% if can_manage %}
         <select name="status" onchange="this.form.submit()">
             <option value="">All Statuses</option>
             <option value="active" {% if selected_status=="active" %}selected{% endif %}>Active</option>
             <option value="inactive" {% if selected_status=="inactive" %}selected{% endif %}>Inactive</option>
         </select>
+        {% endif %}
 
         <select name="manager" onchange="this.form.submit()">
             <option value="">All Managers</option>
@@ -61,13 +71,21 @@
 
     <div class="table-card">
         <table>
+            {#
+                Employees get the two columns they can act on - who the
+                client is, and who to ask about it. Company, industry
+                and status are account-management detail and stay with
+                the people who curate the record.
+            #}
             <thead>
                 <tr>
                     <th>Client</th>
-                    <th>Company</th>
+                    {% if can_manage %}<th>Company</th>{% endif %}
                     <th>Manager</th>
+                    {% if can_manage %}
                     <th>Industry</th>
                     <th>Status</th>
+                    {% endif %}
                 </tr>
             </thead>
 
@@ -78,15 +96,20 @@
                         <a class="table-link" href="{{ url_for('clients.client_detail', client_id=client.id) }}">
                             {{ client.client_name }}
                         </a>
+                        {% if client.parent %}
+                        <br><small class="sub-client-hint">sub-client of {{ client.parent.client_name }}</small>
+                        {% endif %}
                     </td>
-                    <td>{{ client.company_name or "-" }}</td>
+                    {% if can_manage %}<td>{{ client.company_name or "-" }}</td>{% endif %}
                     <td>{{ client.assigned_manager.name if client.assigned_manager else "-" }}</td>
+                    {% if can_manage %}
                     <td>{{ client.industry or "-" }}</td>
                     <td><span class="badge {{ client.status }}">{{ client.status|title }}</span></td>
+                    {% endif %}
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5">
+                    <td colspan="{{ 5 if can_manage else 2 }}">
                         {% if is_filtered %}
                         No clients match these filters.
                         <a href="{{ url_for('clients.list_clients') }}" class="mini-link">Clear filters</a>

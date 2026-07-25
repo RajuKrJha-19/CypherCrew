@@ -171,7 +171,8 @@ def create_app():
         if app.config.get("AUTO_SEED", True):
             seed_database()
 
-    from app.utils.permissions import has_permission
+    from app.utils.permissions import has_permission, can_manage_clients
+    from app.utils import task_status as task_status_module
     from app.utils.greeting import greet, today_label
     from app.utils.avatars import (
         avatar_url,
@@ -182,6 +183,17 @@ def create_app():
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
+        # "May curate this client" (admin/super_admin, or the explicit
+        # manage_clients permission) - distinct from "may read it",
+        # which is now every signed-in user. See the helper's docstring.
+        can_manage_clients=can_manage_clients,
+        # Status names, groups and descriptions. A global because it is
+        # pure constants shared by the dashboards, the task list and the
+        # KPI cards - passing it per route meant a partial that used it
+        # rendered blank on any dashboard whose route had forgotten to.
+        # Routes that pass task_status= explicitly simply shadow this
+        # with the identical module.
+        task_status=task_status_module,
         # Registered globally rather than passed from each dashboard
         # route, so all three headers greet the same way.
         greet=greet,

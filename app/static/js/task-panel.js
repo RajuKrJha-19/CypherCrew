@@ -578,4 +578,45 @@
         }
     });
 
+    /*
+        A full Turbo navigation replaces <body> outright (this shell is
+        not data-turbo-permanent), taking the drawer's DOM with it - but
+        this whole script only runs once (see __cypherTaskPanelBooted
+        above), so `root` and friends keep pointing at that now-detached
+        node forever after. The next click on a task link then sees
+        `root` is still truthy, skips build(), and drives a drawer that
+        is no longer attached to the page: nothing visibly happens.
+        Every task link stays "broken" this way until a hard refresh
+        resets the script's state from scratch - exactly the "works
+        after I refresh" symptom.
+
+        Dropping the cached references here forces the next open() to
+        rebuild fresh into the (live) body Turbo just installed. Both
+        events fire before Turbo leaves a page, covering the swap
+        whether or not this page is cached; a plain persistent listener
+        (rather than App.onCleanup, whose queue runs and empties once)
+        is what keeps this active for every navigation, not just the
+        first.
+    */
+    function resetForNavigation() {
+        root = null;
+        drawerBody = null;
+        frame = null;
+        loader = null;
+        openFullLink = null;
+        positionLabel = null;
+        prevBtn = null;
+        nextBtn = null;
+        currentId = null;
+        siblings = [];
+        dirty = false;
+        ignoreNextLoad = false;
+        pushedHistory = false;
+        originUrl = null;
+        lastFocused = null;
+    }
+
+    document.addEventListener("turbo:before-render", resetForNavigation);
+    document.addEventListener("turbo:before-cache", resetForNavigation);
+
 })();

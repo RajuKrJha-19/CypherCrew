@@ -28,7 +28,19 @@
                     </div>
 
                     <p>
-                        {{ task.client.client_name }}
+                        {#
+                            target="_top": this page also renders inside
+                            the task drawer's iframe (base_panel.html).
+                            Without it, the click navigates the iframe
+                            alone to a page the drawer doesn't recognise
+                            as the same task, which makes the drawer
+                            detect "left the task" and auto-close itself
+                            instead of ever showing the client page. A
+                            no-op outside the iframe.
+                        #}
+                        <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link" target="_top">
+                            {{ task.client.client_name }}
+                        </a>
                         -
                         {{ task.deliverable.service_name }}
                         -
@@ -195,7 +207,11 @@
 
                         <div class="detail-row">
                             <span>Client</span>
-                            <strong>{{ task.client.client_name }}</strong>
+                            <strong>
+                                <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link" target="_top">
+                                    {{ task.client.client_name }}
+                                </a>
+                            </strong>
                         </div>
 
                         <div class="detail-row">
@@ -212,6 +228,31 @@
                             <span>Assigned To</span>
                             <strong>{{ task.assigned_to.name if task.assigned_to else "-" }}</strong>
                         </div>
+
+                        {% if task.backup_assignee_id and task.fallback_hours %}
+                        <div class="detail-row"
+                            title="Auto-shifts to the backup if this task is still Assigned {{ task.fallback_hours }}h after it was last assigned.">
+                            <span>Backup Assignee</span>
+                            <strong>
+                                {{ task.backup_assignee.name if task.backup_assignee else "-" }}
+                                <small>({{ task.fallback_hours }}h fallback{% if task.fallback_triggered_at %}, already shifted once{% endif %})</small>
+                            </strong>
+                        </div>
+                        {% endif %}
+
+                        {% if task.is_social_media and task_social_platform_keys %}
+                        <div class="detail-row">
+                            <span>Social Media</span>
+                            <strong class="social-platform-badges">
+                                {% for key in task_social_platform_keys %}
+                                <span class="social-platform-badge" title="{{ social.label(key) }}">
+                                    <i class="{{ social.icon(key) }}"></i>
+                                    {{ social.label(key) }}
+                                </span>
+                                {% endfor %}
+                            </strong>
+                        </div>
+                        {% endif %}
 
                         <div class="detail-row">
                             <span>Priority</span>
@@ -266,7 +307,7 @@
 
                         <div class="task-description-wrap" id="taskDescriptionWrap">
                             <pre class="task-description"
-                                id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify }}</pre>
+                                id="taskDescriptionText">{{ (task.description or "No description provided.")|linkify|mentions }}</pre>
                         </div>
 
                         {# Only revealed by JS when the brief actually
@@ -785,12 +826,14 @@ Submission Files
                         </div>
                         {% endif %}
 
-                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client
-                        Review"] %}
+                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
                         <div class="task-actions-box">
                             <div class="review-actions">
 
-                                <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}">
+                                <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}"
+                                    {% if task.status == 'Client Review' and task.is_social_media and task_social_platform_keys %}
+                                    data-social-platforms='{{ social.confirm_payload(task.social_platforms)|tojson }}'
+                                    {% endif %}>
                                     <button type="submit" class="review-btn approve-btn"
                                         title="{% if task.status == 'Core Review' %}Passes internal review and sends this task on to Client Review.{% else %}Marks this task Published - approved, delivered and complete.{% endif %}">
                                         Approve
@@ -1081,6 +1124,8 @@ Submission Files
                                     ⏸
                                     {% elif activity.action == "auto_paused" %}
                                     🟡
+                                    {% elif activity.action == "auto_reassigned" %}
+                                    🔄
                                     {% elif activity.action == "submitted_review" %}
                                     📤
                                     {% elif activity.action == "approved_core_review" %}
@@ -1108,6 +1153,8 @@ Submission Files
                                         Task Paused
                                         {% elif activity.action == "auto_paused" %}
                                         Auto Paused
+                                        {% elif activity.action == "auto_reassigned" %}
+                                        Auto-Reassigned to Backup
                                         {% elif activity.action == "submitted_review" %}
                                         Submitted for Core Review
                                         {% elif activity.action == "approved_core_review" %}
@@ -1162,6 +1209,11 @@ Submission Files
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+{# Body script (not the base_app head): this page also renders inside
+   the task drawer's iframe (base_panel.html), which never loads
+   base_app's head scripts, so the Approve & Publish confirm checklist
+   has to be wired up here to work in both places. #}
+<script src="{{ url_for('static', filename='js/social-publish-confirm.js') }}"></script>
 <script>
     // Preview opens in the in-page viewer instead of a new tab. The anchor
     // keeps its href and target so middle-click / "open in new tab" still

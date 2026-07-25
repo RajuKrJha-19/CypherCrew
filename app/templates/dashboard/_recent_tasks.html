@@ -12,7 +12,10 @@
                 <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
                     {{ task.title }}
                 </a>
-                <span>{{ task.client.client_name }} - {{ task.status }}</span>
+                <span>
+                    <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link">{{ task.client.client_name }}</a>
+                    - {{ task.status }}
+                </span>
             </div>
 
             <span class="priority-dot {{ task.priority|lower }}">{{ task.priority }}</span>

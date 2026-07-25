@@ -18,16 +18,13 @@ gallery_bp = Blueprint(
 
 
 def _scope_to_viewer(query):
-    """Restrict a Task-joined query to files the current user may actually
-    see - the exact rule the task list uses (tasks.get_task_base_query):
-    a manager sees everything; everyone else sees only files on tasks
-    assigned to them or explicitly shared with them via visible_to.
-
-    Before this, the gallery listed every file in the company and rendered
-    direct presigned R2 thumbnail URLs, which bypass the per-file view
-    check the /files/<id>/preview route enforces - so any employee could
-    browse thumbnails, filenames, task titles and client names for work
-    they had no access to. The visibility check belongs on the listing.
+    """Restrict a TaskFile+Task-joined query to files the current user may
+    actually see. Submissions are the finished, shareable work - every
+    logged-in user sees every submission, company-wide, gallery-style.
+    Reference files can carry unshared client material, so those still
+    follow the task list's own rule (tasks.get_task_base_query): a
+    manager sees everything; everyone else only sees reference files on
+    tasks assigned to them or explicitly shared with them via visible_to.
 
     The membership test hits the task_visibility association table
     directly rather than Task.visible_to.any(User...), so it never
@@ -38,6 +35,7 @@ def _scope_to_viewer(query):
 
     return query.filter(
         or_(
+            TaskFile.folder_type == "submission",
             Task.assigned_to_id == current_user.id,
             Task.id.in_(
                 db.session.query(task_visibility.c.task_id).filter(

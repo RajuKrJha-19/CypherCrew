@@ -41,3 +41,4 @@ from app.models.note import (
     NoteAttachment
 )
 from app.models.task_file import TaskFile
+from app.models.client_asset import ClientAsset

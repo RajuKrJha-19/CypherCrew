@@ -63,6 +63,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/social-publish-confirm.js') }}"></script>
 <script>
         function toggleReviewRejectBox(button) {
             const card = button.closest(".review-task-card");

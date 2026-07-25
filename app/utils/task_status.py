@@ -132,6 +132,43 @@ SELECTABLE_STATUSES = [
 
 
 # ---------------------------------------------------------------
+# Filter groups
+# ---------------------------------------------------------------
+
+#: Awaiting a sign-off decision from someone other than the assignee.
+#: Two distinct statuses, one thing to a manager: "finished, not yet
+#: approved".
+REVIEW_STATUSES = [CORE_REVIEW, CLIENT_REVIEW]
+
+NEEDS_REVIEW = "Needs Review"
+
+#: Named sets the task-list status filter accepts in place of a single
+#: status. They exist because the dashboard counts tasks by *group*
+#: ("Needs Review" = Core + Client Review) while the filter only ever
+#: matched one exact status - so that KPI card linked to Core Review
+#: alone and silently dropped every Client Review task it had just
+#: counted. A group is a first-class filter value rather than a
+#: hard-coded pair in the query, so the count, the link and the
+#: dropdown option all read from this one definition.
+#:
+#: Keys must not collide with a real status name - they share the
+#: ?status= parameter, and a real status always wins the lookup.
+STATUS_GROUPS = {
+    NEEDS_REVIEW: REVIEW_STATUSES,
+}
+
+
+def group_members(value):
+    """The statuses a filter group expands to, or None when `value` is
+    not a group (a real status, or empty)."""
+
+    if value in ALL_STATUSES:
+        return None
+
+    return STATUS_GROUPS.get(value)
+
+
+# ---------------------------------------------------------------
 # Time tracking
 # ---------------------------------------------------------------
 
@@ -173,19 +210,17 @@ EMPLOYEE_MOVES = {
     VOID: [],
 }
 
-#: What a user with manage_tasks may do.
+#: What a user with manage_tasks may do: move a task from any status
+#: to any other, in either direction - including undoing a Published
+#: task or pulling one back out of Void. Nothing is terminal for a
+#: manager. On Hold and Void still require a written reason (enforced
+#: in the status-change route, and kept out of the clickable stepper
+#: bubbles) so they never happen as a bare click even though they are
+#: listed as destinations here - a manager can move a task *out* of
+#: either into anything else on the board the same way.
 MANAGER_MOVES = {
-    ASSIGNED: [IN_PROGRESS, ON_HOLD, VOID],
-    IN_PROGRESS: [ASSIGNED, PAUSED, ON_HOLD, CORE_REVIEW, VOID],
-    PAUSED: [ASSIGNED, IN_PROGRESS, ON_HOLD, VOID],
-    ON_HOLD: [ASSIGNED, IN_PROGRESS, VOID],
-    CORE_REVIEW: [ASSIGNED, IN_PROGRESS, PAUSED, ON_HOLD, CLIENT_REVIEW, VOID],
-    CLIENT_REVIEW: [CORE_REVIEW, ON_HOLD, PUBLISHED, VOID],
-    PUBLISHED: [],
-    # Terminal, but a manager can undo a mistaken void. It goes back
-    # to Assigned rather than resuming mid-flight, because the work
-    # has to be re-planned before anyone picks it up again.
-    VOID: [ASSIGNED],
+    status: [s for s in ALL_STATUSES if s != status]
+    for status in ALL_STATUSES
 }
 
 

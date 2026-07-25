@@ -17,7 +17,13 @@
     </h3>
 
     <p>
-        {{ task.client.client_name if task.client else "-" }}
+        {% if task.client %}
+        <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link">
+            {{ task.client.client_name }}
+        </a>
+        {% else %}
+        -
+        {% endif %}
         •
         {{ task.deliverable.deliverable_name if task.deliverable else "-" }}
     </p>
@@ -52,7 +58,10 @@
         <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}"
             class="review-move-form" data-task-id="{{ task.id }}"
             data-from-status="{{ task.status }}"
-            data-to-status="{{ 'Published' if is_client else 'Client Review' }}">
+            data-to-status="{{ 'Published' if is_client else 'Client Review' }}"
+            {% if is_client and task.is_social_media and task.social_platforms %}
+            data-social-platforms='{{ social.confirm_payload(task.social_platforms)|tojson }}'
+            {% endif %}>
             <button type="submit" class="review-approve-btn"
                 title="{% if is_client %}Approve and publish this task{% else %}Approve and move to Client Review{% endif %}">
                 <i class="fa-solid fa-check"></i>

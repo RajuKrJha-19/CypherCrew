@@ -16,6 +16,17 @@ class Notification(db.Model):
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+    # "activity" (default - status changes, assignments, etc.) or
+    # "mention" (@tagged in a comment or task description). Split out
+    # as its own bell/panel in the topbar rather than mixed into the
+    # activity feed, since a mention is something addressed
+    # specifically to you and easy to lose in general noise.
+    category = db.Column(
+        db.String(20),
+        default="activity",
+        nullable=False
+    )
+
     user = db.relationship("User", foreign_keys=[user_id], backref="notifications")
     actor = db.relationship("User", foreign_keys=[actor_id])
     task = db.relationship("Task")

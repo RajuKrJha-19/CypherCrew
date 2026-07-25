@@ -152,6 +152,15 @@
                 <select name="status" id="taskStatusFilter" data-auto-submit>
                     <option value="">All Statuses</option>
 
+                    {# Groups first: they span several statuses at once
+                       (see task_status.STATUS_GROUPS) and are what the
+                       dashboard KPI cards link to. #}
+                    {% for group in status_groups %}
+                    <option value="{{ group }}" {% if selected_status==group %}selected{% endif %}>
+                        {{ group }}
+                    </option>
+                    {% endfor %}
+
                     {% for status in statuses %}
                     <option value="{{ status }}" {% if selected_status==status %}selected{% endif %}>
                         {{ status }}
@@ -301,7 +310,9 @@
                         {% endif %}
 
                         <p class="kanban-client">
-                            {{ task.client.client_name }}
+                            <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link">
+                                {{ task.client.client_name }}
+                            </a>
                             •
                             {{ task.deliverable.deliverable_name }}
                         </p>
@@ -581,7 +592,11 @@
                                 </a>
                             </td>
 
-                            <td data-column="client">{{ task.client.client_name }}</td>
+                            <td data-column="client">
+                                <a href="{{ url_for('clients.client_detail', client_id=task.client_id) }}" class="client-name-link">
+                                    {{ task.client.client_name }}
+                                </a>
+                            </td>
                             <td data-column="service">{{ task.deliverable.service_name }}</td>
                             <td data-column="deliverable">{{ task.deliverable.deliverable_name }}</td>
 

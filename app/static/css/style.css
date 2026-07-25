@@ -526,11 +526,30 @@ button:disabled{
 }
 
 /* Sticky global top bar. Sits to the right of the fixed sidebar and
-   holds the omni-search. */
+   holds the omni-search.
+
+   z-index:2000 is deliberate, not decorative: position:sticky (like
+   position:fixed) still stacks WITHIN whichever ancestor establishes
+   the containing stacking context - a fixed-position child (the
+   notification panel, at z-index:99999) is only compared against
+   this bar's siblings once it has already lost to anything outside
+   .topbar with a higher z-index than .topbar itself. That used to be
+   900, which several ordinary in-page elements (a sticky task-page
+   header, a comment's dropdown menu, the gallery's right-click menu)
+   cleared without even trying, since each had picked its own
+   "surely high enough" number independently - hence the panel (and
+   the account/quick-create/search dropdowns, trapped the same way)
+   intermittently rendering behind page content. Those in-page
+   z-indexes are reined in to a shared ~500 "local popover" tier
+   below; 2000 clears all of them with room to spare while staying
+   under the true app-wide modal tier (command palette / publish
+   confirm at 5000, the task drawer and media viewer at 99998+),
+   which must still cover the topbar when open.
+*/
 .topbar{
     position:sticky;
     top:0;
-    z-index:900;
+    z-index:2000;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -1606,69 +1625,19 @@ select:focus{
     margin:2px;
 }
 
-.stat-line div{
-    display:flex;
-    flex-direction:column;
-    gap:3px;
-}
-
-.month-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    margin-bottom:18px;
-}
-
-.month-header h2{
-    font-size:18px;
-    font-weight:700;
-}
-
 .month-form{
     display:flex;
     flex-direction:row;
     gap:8px;
 }
 
-.month-form input{
+.month-form input,
+.month-form select{
     width:85px;
 }
 
 .month-form button{
     width:70px;
-}
-
-.service-block{
-    margin-top:18px;
-    border-top:1px solid var(--color-border);
-    padding-top:14px;
-}
-
-.service-block h3{
-    font-size:14px;
-    text-transform:uppercase;
-    letter-spacing:.04em;
-    color:var(--color-neutral);
-    margin-bottom:8px;
-}
-
-.stat-line{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:8px 0;
-    border-bottom:1px solid var(--color-surface-sunken);
-}
-
-.stat-line span{
-    font-size:13px;
-    color:var(--color-text-muted);
-}
-
-.stat-line strong{
-    font-size:13px;
-    color:var(--color-neutral);
 }
 
 textarea{
@@ -1741,12 +1710,6 @@ input[type="file"]::file-selector-button:hover{
     background:var(--color-primary-hover);
 }
 
-.stat-actions{
-    display:flex;
-    align-items:center;
-    gap:10px;
-}
-
 .mini-link{
     display:inline-block;
     text-decoration:none;
@@ -1770,195 +1733,6 @@ input[type="file"]::file-selector-button:hover{
 
 .mini-link.danger:hover{
     background:#fecaca;
-}
-
-.deliverable-header{
-    display:grid;
-    grid-template-columns:1.3fr 1.6fr 1fr 1fr;
-    gap:14px;
-    align-items:center;
-    background:var(--color-surface-muted);
-    border-bottom:1px solid var(--color-border);
-    padding:14px 16px;
-    margin-top:16px;
-    font-size:13px;
-    font-weight:700;
-    color:var(--color-neutral);
-}
-
-.deliverable-row{
-    display:grid;
-    grid-template-columns:1.3fr 1.6fr 1fr 1fr;
-    gap:14px;
-    align-items:center;
-    padding:14px 16px;
-    border-bottom:1px solid var(--color-surface-sunken);
-}
-
-.deliverable-service{
-    font-size:13px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:.04em;
-    color:var(--color-neutral);
-}
-
-.deliverable-name{
-    font-size:13px;
-    color:var(--color-neutral-hover);
-}
-
-.deliverable-target{
-    display:flex;
-    justify-content:center;
-}
-
-.deliverable-target span{
-    min-width:74px;
-    text-align:center;
-    display:inline-block;
-    background:var(--color-primary-soft);
-    color:var(--color-primary-hover);
-    padding:6px 14px;
-    border-radius:999px;
-    font-size:13px;
-    font-weight:700;
-}
-
-.deliverable-actions{
-    display:flex;
-    justify-content:flex-end;
-    align-items:center;
-    gap:10px;
-}
-
-.action-btn{
-    text-decoration:none;
-    border-radius:8px;
-    padding:7px 12px;
-    font-size:12px;
-    font-weight:700;
-    display:inline-block;
-}
-
-.edit-btn{
-    background:var(--color-primary-soft);
-    color:var(--color-primary-hover);
-}
-
-.edit-btn:hover{
-    background:var(--color-primary-soft-hover);
-}
-
-.stats-table-row{
-    display:grid;
-    grid-template-columns: 1.2fr 1.5fr 0.8fr 0.6fr;
-    align-items:center;
-    padding:18px 24px;
-    border-bottom:1px solid var(--color-border);
-}
-
-.stats-target{
-    text-align:center;
-}
-
-.stats-action{
-    text-align:right;
-}
-
-.client-stats-card{
-    margin-bottom:18px;
-}
-
-.client-stats-table{
-    width:100%;
-    margin-top:18px;
-    border:1px solid var(--color-surface-sunken);
-    border-radius:12px;
-    overflow:hidden;
-}
-
-.client-stats-head,
-.client-stats-row{
-    display:grid;
-    grid-template-columns:1.2fr 1.4fr .8fr .7fr;
-    align-items:center;
-}
-
-.client-stats-head{
-    background:var(--color-surface-muted);
-    border-bottom:1px solid var(--color-border);
-}
-
-.client-stats-head div{
-    padding:14px 16px;
-    font-size:13px;
-    font-weight:700;
-    color:var(--color-neutral);
-}
-
-.client-stats-row{
-    background:var(--color-surface);
-    border-bottom:1px solid var(--color-surface-sunken);
-}
-
-.client-stats-row:last-child{
-    border-bottom:none;
-}
-
-.client-stats-row > div{
-    padding:14px 16px;
-    font-size:13px;
-    color:var(--color-neutral-hover);
-}
-
-.service-name{
-    font-weight:700;
-}
-
-.deliverable-name{
-    font-weight:500;
-    margin-left: 8px;
-}
-
-.target-count{
-    text-align:center;
-    margin-right: 80px;
-}
-
-.target-count span{
-    display:inline-block;
-    min-width:72px;
-    padding:6px 14px;
-    border-radius:999px;
-    background:var(--color-primary-soft);
-    color:var(--color-primary-hover);
-    font-size:13px;
-    font-weight:700;
-}
-
-.action-cell{
-    text-align:right;
-    margin-right: 80px;
-}
-
-.edit-pill{
-    display:inline-block;
-    padding:6px 14px;
-    border-radius:8px;
-    background:var(--color-primary-soft);
-    color:var(--color-primary-hover);
-    font-size:12px;
-    font-weight:700;
-    text-decoration:none;
-}
-
-.edit-pill:hover{
-    background:var(--color-primary-soft-hover);
-}
-
-.add-deliverable-card{
-    max-width:620px;
 }
 
 .add-task-card{
@@ -2879,6 +2653,7 @@ body{
     margin:0;
     display:inline-flex;
     align-items:center;
+    gap:2px;
 }
 
 .notification-btn,
@@ -2903,21 +2678,18 @@ body{
     background:var(--color-surface-muted);
 }
 
+/* Unread indicator on the bell / mentions icon: presence, not a
+   count - [hidden] on the element (not display:none) is what the
+   widget toggles. */
 .notification-badge{
     position:absolute;
-    top:-7px;
-    right:-7px;
-    min-width:22px;
-    height:22px;
-    padding:0 6px;
-    border-radius:50px;
+    top:4px;
+    right:4px;
+    width:9px;
+    height:9px;
+    border-radius:50%;
     background:#ef4444;
-    color:var(--color-surface);
-    font-size:12px;
-    align-items:center;
-    justify-content:center;
-    font-weight:600;
-    line-height:1;
+    border:2px solid var(--color-surface);
 }
 
 .notification-panel{
@@ -2962,32 +2734,6 @@ body{
     margin:0;
 }
 
-.notification-panel-head button,
-#markNotificationsRead{
-    border:0 !important;
-    background:transparent !important;
-    color:var(--color-primary) !important;
-    padding:6px 10px !important;
-    border-radius:8px !important;
-    cursor:pointer;
-    font-size:13px;
-    font-weight:600;
-    opacity:1 !important;
-    height:auto;
-}
-
-.notification-panel-head button:hover,
-#markNotificationsRead:hover{
-    background:var(--color-primary-soft) !important;
-}
-
-.notification-panel-head button:disabled,
-#markNotificationsRead:disabled{
-    color:var(--color-text-subtle) !important;
-    cursor:default;
-    pointer-events:none;
-}
-
 .notification-list,
 #notificationList{
     flex:1;
@@ -3009,7 +2755,7 @@ body{
     transition:background .2s ease;
 }
 
-.notification-dot{
+.notification-dot-marker{
     position:absolute;
     top:18px;
     right:16px;
@@ -6517,7 +6263,10 @@ SKETCH STYLE DISCUSSION UI
     border:1px solid var(--color-border);
     border-radius:10px;
     box-shadow:0 14px 32px rgba(15,23,42,.16);
-    z-index:9999;
+    /* Only needs to clear its own comment bubble, not the entire app -
+       see the .topbar comment for why an inflated value here used to
+       let this render above the global topbar and its dropdowns. */
+    z-index:500;
 }
 
 .comment-menu-dropdown.show{
@@ -6670,10 +6419,17 @@ CALENDAR UI EVENT FIX
 
 .task-page-sticky-header{
     position: fixed !important;
-    top: 0 !important;
+    /* Below the topbar (60px tall), not at the viewport's actual top -
+       it used to sit at top:0 with a z-index (9999) that beat the
+       topbar's old 900, so scrolling this page hid the entire global
+       topbar (search, notifications, account menu, all of it) behind
+       this header's opaque background. z-index is now a plain
+       in-page value; the topbar's own elevated tier (2000) is what
+       keeps it on top everywhere, not a second arms race here. */
+    top: 60px !important;
     left: var(--sidebar-width) !important;
     right: 0 !important;
-    z-index: 9999 !important;
+    z-index: 500 !important;
 
     background: var(--color-bg) !important;
     padding: 26px 26px 16px !important;
@@ -6685,11 +6441,13 @@ body.sidebar-collapsed .task-page-sticky-header{
 }
 
 .main:has(.task-page-sticky-header){
-    /* Clears the fixed header (~89px tall) with a normal section gap.
-       main's content box starts at the 60px topbar, so 48px lands the
-       content ~20px below the header (60 + 48 = 108) instead of the
-       ~90px empty band the old 120px left. */
-    padding-top: 48px !important;
+    /* Clears the fixed header (~89px tall, now starting at the 60px
+       topbar instead of the viewport top) with a normal section gap.
+       main's content box already starts at the 60px topbar in normal
+       flow, so 108px (60 header offset + 48 original gap) lands the
+       content ~20px below the header's new bottom edge - the same
+       visual gap as before the header moved down. */
+    padding-top: 108px !important;
 }
 
 /* Must sit after the rules above to win: on mobile the sidebar
@@ -7401,7 +7159,9 @@ body.sidebar-collapsed .task-page-sticky-header{
 .review-column-head{
     position:sticky !important;
     top:0 !important;
-    z-index:999 !important;
+    /* Only needs to clear its own column's cards, not the entire app -
+       see the .topbar comment. */
+    z-index:500 !important;
     background:var(--color-surface) !important;
     padding:14px 0 12px !important;
     margin:0 0 12px !important;
@@ -9384,7 +9144,10 @@ TASK LIST TOOLBAR
 .gallery-context-menu{
     display:none;
     position:absolute;
-    z-index:99999;
+    /* Only needs to clear the gallery grid, not the entire app - see
+       the .topbar comment for why an inflated value here used to let
+       this render above the global topbar and its dropdowns. */
+    z-index:500;
     background:var(--color-surface);
     border:1px solid var(--color-border);
     border-radius:10px;
@@ -10368,6 +10131,552 @@ body.panel-mode .main-panel{
     margin-top:2px;
     color:var(--color-primary);
     font-size:13px;
+}
+
+/* "This task is for social media" toggle + its target-platform
+   checklist (task add/edit forms) and the publish-confirmation
+   checklist (approve & publish). */
+.social-media-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-weight:500;
+    margin-bottom:10px;
+    cursor:pointer;
+}
+
+.social-media-toggle input{
+    width:16px;
+    height:16px;
+}
+
+.social-platform-list{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:12px 14px;
+    margin-bottom:16px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md);
+    background:var(--color-surface-muted);
+}
+
+.social-platform-option{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:6px 0;
+    font-size:13.5px;
+    cursor:pointer;
+}
+
+.social-platform-option input{
+    width:16px;
+    height:16px;
+}
+
+.social-platform-option i{
+    width:16px;
+    text-align:center;
+    color:var(--color-text-muted);
+}
+
+/* "Did you publish on X?" checklist shown by social-publish-confirm.js
+   before Approve & Publish goes through on a social-media task. */
+.social-confirm-overlay{
+    position:fixed;
+    inset:0;
+    z-index:5000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    background:rgba(15,23,42,.45);
+    backdrop-filter:blur(2px);
+}
+
+.social-confirm-box{
+    width:min(420px, 100%);
+    max-height:80vh;
+    overflow-y:auto;
+    padding:20px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-lg);
+    box-shadow:0 24px 64px rgba(15,23,42,.32);
+}
+
+.social-confirm-box h3{
+    margin:0 0 6px;
+    font-size:16px;
+}
+
+.social-confirm-box p{
+    margin:0 0 14px;
+    color:var(--color-text-muted);
+    font-size:13px;
+    line-height:1.5;
+}
+
+.social-confirm-list{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    margin-bottom:16px;
+}
+
+.social-confirm-item{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:9px 10px;
+    border-radius:var(--radius-md);
+    font-size:13.5px;
+    cursor:pointer;
+}
+
+.social-confirm-item:hover{
+    background:var(--color-surface-muted);
+}
+
+.social-confirm-item input{
+    width:16px;
+    height:16px;
+    flex-shrink:0;
+}
+
+.social-confirm-item i{
+    width:16px;
+    text-align:center;
+    color:var(--color-text-muted);
+}
+
+.social-confirm-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+}
+
+.social-confirm-btn{
+    padding:8px 16px;
+    border:none;
+    border-radius:var(--radius-md);
+    background:var(--color-primary);
+    color:#fff;
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+}
+
+.social-confirm-btn:hover:not(:disabled){
+    filter:brightness(1.08);
+}
+
+.social-confirm-btn:disabled{
+    opacity:.5;
+    cursor:not-allowed;
+}
+
+/* Client name shown inline on task cards/rows/detail pages, linking to
+   that client's page (brand assets, deliverables, sub-clients).
+   Inherits size/weight from whatever context it's in - a task card's
+   client line, a table cell, a dense dashboard row - rather than
+   forcing its own, so it reads as the same text with a link behaviour
+   added, not a visually different element. */
+.client-name-link{
+    color:inherit;
+    font:inherit;
+    text-decoration:none;
+}
+
+.client-name-link:hover{
+    color:var(--color-primary);
+    text-decoration:underline;
+}
+
+/* Client detail page: identity header (logo + name + status), the
+   main/sidebar content grid, and the Deliverables card. Brand Assets
+   styling follows below - all three share this page. */
+.client-header-identity{
+    display:flex;
+    align-items:center;
+    gap:16px;
+}
+
+.client-header h1{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.client-logo-box{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:56px;
+    height:56px;
+    flex-shrink:0;
+    border-radius:14px;
+    background:var(--color-surface-muted);
+    border:1px solid var(--color-border);
+    overflow:hidden;
+    font-size:22px;
+    color:var(--color-text-muted);
+}
+
+.client-logo-box img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+}
+
+.client-detail-grid{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 320px;
+    gap:20px;
+    align-items:start;
+}
+
+/* Viewers without curation rights get no right-hand column at all
+   (no Client Info, no sub-clients), so the brand-asset column takes
+   the full width instead of leaving a 320px hole beside it. */
+.client-detail-grid.is-single-column{
+    grid-template-columns:minmax(0, 1fr);
+}
+
+.client-detail-main,
+.client-detail-side{
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    min-width:0;
+}
+
+.client-detail-main > .table-card,
+.client-detail-side > .table-card{
+    margin:0;
+}
+
+@media (max-width:1000px){
+    .client-detail-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+.deliverables-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-bottom:6px;
+}
+
+.deliverables-head-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.deliverables-period{
+    margin:0 0 14px;
+    color:var(--color-text-muted);
+    font-size:12.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.target-pill{
+    display:inline-block;
+    min-width:60px;
+    text-align:center;
+    padding:4px 12px;
+    border-radius:999px;
+    background:var(--color-primary-soft);
+    color:var(--color-primary-hover);
+    font-size:12.5px;
+    font-weight:700;
+}
+
+.deliverable-service-cell{
+    font-weight:600;
+    color:var(--color-neutral);
+}
+
+.deliverable-action-cell{
+    text-align:right;
+}
+
+/* Client detail: Brand Assets library - permanent logo/image/video/
+   font/document uploads, grouped by category. Cards mirror the
+   gallery grid's shape (130px tiles, hover lift, click-to-preview via
+   the shared CypherMediaViewer) so the interaction feels identical
+   everywhere files are browsed in the app. */
+.brand-assets-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+}
+
+/* Compact "quick add" row - asset upload and add-deliverable both use
+   it. Hidden by default and toggled open by a button (+ Add Asset /
+   + Add); a plain [hidden] attribute doesn't work here because
+   .show below needs display:flex, and an attribute selector and a
+   class selector are equal specificity, so whichever is LOWER in the
+   cascade wins outright rather than blending - [hidden] silently lost
+   to display:flex every time, which is why this used to render as a
+   permanently-open, oddly-stretched box regardless of the toggle
+   button. A dedicated .show class sidesteps the conflict entirely
+   (same pattern already used by the notification/account/gallery
+   dropdowns elsewhere in this file) and keeps the row itself small
+   and inline instead of a tall stacked form. */
+.inline-upload-form{
+    display:none;
+    margin-bottom:16px;
+}
+
+.inline-upload-form.show{
+    display:block;
+}
+
+.inline-upload-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:10px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md);
+    background:var(--color-surface-muted);
+}
+
+.inline-upload-row select,
+.inline-upload-row input{
+    flex:1 1 160px;
+    min-width:0;
+}
+
+.inline-upload-row input[type="file"]{
+    flex:2 1 200px;
+}
+
+.inline-upload-row button{
+    flex:0 0 auto;
+}
+
+.inline-upload-narrow{
+    flex:0 1 90px !important;
+}
+
+.inline-upload-form .form-hint{
+    margin:6px 2px 0;
+}
+
+.asset-category-group + .asset-category-group{
+    margin-top:22px;
+}
+
+.asset-category-title{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 12px;
+    font-size:13.5px;
+    font-weight:700;
+    color:var(--color-neutral);
+}
+
+.asset-category-title i{
+    color:var(--color-text-muted);
+}
+
+.asset-category-count{
+    padding:1px 8px;
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    font-size:11.5px;
+    font-weight:600;
+}
+
+.asset-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, 140px);
+    gap:14px;
+}
+
+.asset-card{
+    position:relative;
+    width:140px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:12px;
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease;
+}
+
+.asset-card:hover,
+.asset-card:focus-visible{
+    transform:translateY(-2px);
+    box-shadow:0 10px 24px rgba(15,23,42,.14);
+    outline:none;
+}
+
+.asset-thumb{
+    position:relative;
+    width:140px;
+    height:110px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--color-surface-sunken);
+    overflow:hidden;
+}
+
+.asset-thumb img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    background:var(--color-surface);
+}
+
+.asset-icon{
+    font-size:32px;
+    color:var(--color-text-muted);
+}
+
+.asset-play-badge{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:14px;
+    color:#fff;
+    background:rgba(15,23,42,.25);
+}
+
+.asset-name{
+    padding:8px 10px 2px;
+    font-size:12px;
+    font-weight:700;
+    color:var(--color-neutral);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.asset-meta{
+    padding:0 10px 8px;
+    font-size:11px;
+    color:var(--color-text-muted);
+}
+
+.asset-actions{
+    position:absolute;
+    top:6px;
+    right:6px;
+    display:flex;
+    gap:4px;
+    opacity:0;
+    transition:opacity .15s ease;
+}
+
+.asset-card:hover .asset-actions,
+.asset-card:focus-within .asset-actions{
+    opacity:1;
+}
+
+.asset-delete-form{
+    display:contents;
+}
+
+.asset-action-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:26px;
+    height:26px;
+    border:none;
+    border-radius:7px;
+    background:rgba(15,23,42,.65);
+    color:#fff;
+    font-size:11.5px;
+    cursor:pointer;
+    text-decoration:none;
+}
+
+.asset-action-btn:hover{
+    background:rgba(15,23,42,.85);
+}
+
+/* Client detail: "sub-client of X" next to the name, and the
+   sub-clients list card. */
+.sub-client-tag{
+    display:inline-block;
+    margin-left:8px;
+    padding:3px 10px;
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    border:1px solid var(--color-border);
+    color:var(--color-text-muted);
+    font-size:12px;
+    font-weight:500;
+    vertical-align:middle;
+}
+
+.sub-clients-list{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.sub-client-item{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 4px;
+    border-bottom:1px solid var(--color-border);
+    color:var(--color-text);
+    text-decoration:none;
+    font-size:13.5px;
+    font-weight:500;
+}
+
+.sub-client-item:last-child{
+    border-bottom:none;
+}
+
+.sub-client-item:hover{
+    color:var(--color-primary);
+}
+
+.sub-client-hint{
+    color:var(--color-text-muted);
+    font-size:12px;
+}
+
+/* Read-only badges on the task detail page. */
+.social-platform-badges{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    justify-content:flex-end;
+}
+
+.social-platform-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    padding:3px 9px;
+    border:1px solid var(--color-border);
+    border-radius:999px;
+    background:var(--color-surface-muted);
+    font-size:12px;
+    font-weight:500;
 }
 
 /* Permission checkboxes: name plus what it actually unlocks. */
@@ -14215,7 +14524,10 @@ body.ds-screen .selected-reference-file{
 
 .mention-suggest{
     position:absolute;
-    z-index:11000;
+    /* Body-portalled (mention-autocomplete.js), so this only needs to
+       clear the topbar tier (2000), not guess at an arbitrarily high
+       number - see the .topbar comment. */
+    z-index:3000;
     max-height:230px;
     overflow-y:auto;
     background:var(--ds-surface, #fff);

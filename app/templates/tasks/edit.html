@@ -46,7 +46,7 @@
                 <option value="">Select Client</option>
                 {% for client in clients %}
                     <option value="{{ client.id }}" {% if task.client_id == client.id %}selected{% endif %}>
-                        {{ client.client_name }}
+                        {% if client.parent_client_id %}&nbsp;&nbsp;&nbsp;&nbsp;&#8627; {{ client.parent.client_name }} / {{ client.client_name }}{% else %}{{ client.client_name }}{% endif %}
                     </option>
                 {% endfor %}
             </select>
@@ -78,6 +78,79 @@
                     </option>
                 {% endfor %}
             </select>
+
+            <div class="form-group">
+                <label>Backup Assignee (optional)</label>
+
+                <p class="form-hint">
+                    If the assignee doesn't move this task to In Progress
+                    within the fallback window below, it auto-shifts to
+                    this person. Changing either field restarts the
+                    fallback clock.
+                </p>
+
+                <select name="backup_assignee_id">
+                    <option value="">No backup</option>
+
+                    {% for employee in employees %}
+                    <option
+                        value="{{ employee.id }}"
+                        {% if task.backup_assignee_id == employee.id %}selected{% endif %}
+                    >
+                        {{ employee.name }}
+                        -
+                        {{ employee.role|replace("_", " ")|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label>Fallback window (hours)</label>
+                <input
+                    type="number"
+                    name="fallback_hours"
+                    min="1"
+                    step="1"
+                    placeholder="e.g. 24"
+                    value="{{ task.fallback_hours or '' }}"
+                    title="Hours after assignment before this shifts to the backup, if still not started."
+                >
+            </div>
+
+            <div class="form-group">
+                <label class="social-media-toggle">
+                    <input
+                        type="checkbox"
+                        name="is_social_media"
+                        value="1"
+                        id="isSocialMedia"
+                        {% if task.is_social_media %}checked{% endif %}
+                    >
+                    This task is for social media
+                </label>
+
+                <div class="social-platform-list" id="socialPlatformList" {% if not task.is_social_media %}hidden{% endif %}>
+
+                    <p class="form-hint">
+                        Target platform(s). Before publishing, whoever
+                        approves this task will be asked to confirm it
+                        actually went out on each one.
+                    </p>
+
+                    {% for key, plabel, picon in social_platform_options %}
+                    <label class="social-platform-option">
+                        <input
+                            type="checkbox"
+                            name="social_platforms"
+                            value="{{ key }}"
+                            {% if key in task_social_platforms %}checked{% endif %}
+                        >
+                        <i class="{{ picon }}"></i>
+                        {{ plabel }}
+                    </label>
+                    {% endfor %}
+
+                </div>
+            </div>
 
             <div class="form-group">
                 <label>Visibility</label>
@@ -197,7 +270,20 @@
 {% endblock %}
 
 {% block scripts %}
+{# @-mention autocomplete for the description field - same picker and
+   highlighting as task comments. #}
+<script>window.MENTION_USERS = {{ (mention_users or [])|tojson }};</script>
+<script src="{{ url_for('static', filename='js/mention-autocomplete.js') }}" defer></script>
 <script>
+const isSocialMedia = document.getElementById("isSocialMedia");
+const socialPlatformList = document.getElementById("socialPlatformList");
+
+if (isSocialMedia && socialPlatformList) {
+    isSocialMedia.addEventListener("change", function () {
+        socialPlatformList.hidden = !isSocialMedia.checked;
+    });
+}
+
 const clientSelect = document.getElementById("clientSelect");
 const deliverableSelect = document.getElementById("deliverableSelect");
 

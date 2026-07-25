@@ -47,11 +47,19 @@ def find_mentioned_users(message, users=None):
     return [u for u in users if u.name in hit]
 
 
-def notify_mentioned_users(task, message, actor, link, skip_user_ids=None):
+def notify_mentioned_users(task, message, actor, link, skip_user_ids=None, source="comment"):
     """Notify each tagged user (except the author and anyone already
-    notified for this comment). Returns the users notified."""
+    notified for this mention). Returns the users notified.
+
+    `source` is just the wording of the notification ("comment" /
+    "description") - the same tagging rule and category apply either
+    way, and both land in the mentions panel, not the general
+    activity feed.
+    """
     skip = set(skip_user_ids or ())
     skip.add(actor.id)
+
+    verb = "the description of" if source == "description" else "a comment on"
 
     notified = []
     for user in find_mentioned_users(message):
@@ -60,11 +68,12 @@ def notify_mentioned_users(task, message, actor, link, skip_user_ids=None):
         create_notification(
             user_id=user.id,
             title="You were mentioned",
-            message=f"{actor.name} mentioned you in a comment on '{task.title}'",
+            message=f"{actor.name} mentioned you in {verb} '{task.title}'",
             link=link,
             actor_id=actor.id,
             task_id=task.id,
             email=True,
+            category="mention",
         )
         skip.add(user.id)
         notified.append(user)

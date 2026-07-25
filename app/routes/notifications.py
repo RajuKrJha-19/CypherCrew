@@ -13,6 +13,18 @@ notifications_bp = Blueprint(
     url_prefix="/notifications"
 )
 
+#: The only two categories a Notification row can carry - see
+#: app.models.notification.Notification.category.
+VALID_CATEGORIES = {"activity", "mention"}
+
+
+def _category_filter():
+    """?category=mention / ?category=activity, or no filter at all for
+    anything else (including omitted) - an unrecognised value must
+    never silently turn into "show nothing"."""
+    category = request.args.get("category", "").strip()
+    return category if category in VALID_CATEGORIES else None
+
 
 @notifications_bp.route("/api")
 @login_required
@@ -27,18 +39,28 @@ def api_notifications():
     if limit > 30:
         limit = 30
 
-    notifications = Notification.query.filter_by(
-        user_id=current_user.id
-    ).order_by(
+    category = _category_filter()
+
+    query = Notification.query.filter_by(user_id=current_user.id)
+
+    if category:
+        query = query.filter_by(category=category)
+
+    notifications = query.order_by(
         Notification.id.desc()
     ).limit(
         limit
     ).all()
 
-    unread_count = Notification.query.filter_by(
+    unread_query = Notification.query.filter_by(
         user_id=current_user.id,
         is_read=False
-    ).count()
+    )
+
+    if category:
+        unread_query = unread_query.filter_by(category=category)
+
+    unread_count = unread_query.count()
 
     return jsonify({
         "unread_count": unread_count,
@@ -49,6 +71,7 @@ def api_notifications():
                 "message": item.message,
                 "link": item.link or "#",
                 "is_read": item.is_read,
+                "category": item.category,
                 # Kept for anything relying on the old absolute string;
                 # the widget itself now renders a relative time client-
                 # side from created_at_iso so "2h ago" stays accurate
@@ -67,10 +90,17 @@ def api_notifications():
 @login_required
 def mark_read():
 
-    Notification.query.filter_by(
+    category = _category_filter()
+
+    query = Notification.query.filter_by(
         user_id=current_user.id,
         is_read=False
-    ).update(
+    )
+
+    if category:
+        query = query.filter_by(category=category)
+
+    query.update(
         {"is_read": True}
     )
 

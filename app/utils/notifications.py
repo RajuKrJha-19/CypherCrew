@@ -2,7 +2,7 @@ from app.extensions import db
 from app.models import Notification
 
 
-def create_notification(user_id, title, message=None, link=None, actor_id=None, task_id=None, commit=False, email=False):
+def create_notification(user_id, title, message=None, link=None, actor_id=None, task_id=None, commit=False, email=False, category="activity"):
     if not user_id:
         return None
 
@@ -12,7 +12,8 @@ def create_notification(user_id, title, message=None, link=None, actor_id=None, 
         message=message,
         link=link,
         actor_id=actor_id,
-        task_id=task_id
+        task_id=task_id,
+        category=category,
     )
     db.session.add(notification)
 

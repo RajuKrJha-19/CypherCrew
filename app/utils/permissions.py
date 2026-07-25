@@ -63,3 +63,29 @@ def has_permission(user, permission_code):
             return True
 
     return False
+
+
+def can_manage_clients(user):
+    """True for anyone allowed to *curate* a client record - editing the
+    client's own details, its deliverables/targets, its sub-clients, and
+    adding or deleting brand assets.
+
+    Both admin roles qualify outright, on top of the explicit
+    manage_clients permission. That widening is the point: the client
+    page is readable by the whole team (everyone needs the logo, fonts
+    and brand guidelines to do creative work), so "who may look" and
+    "who may change things" are now genuinely different questions and
+    the second one needs a name of its own rather than a
+    has_permission() call repeated at a dozen call sites.
+
+    Read access is deliberately NOT expressed here - it is simply
+    @login_required. See clients.client_detail.
+    """
+
+    if user is None:
+        return False
+
+    return (
+        user.role in ("admin", "super_admin")
+        or has_permission(user, "manage_clients")
+    )

@@ -86,6 +86,31 @@ class Task(db.Model):
         default=datetime.utcnow
     )
 
+    # ===========================
+    # Social media
+    #
+    # Set at assignment time. If a task targets social platforms,
+    # publishing it (Client Review -> Published) is gated on
+    # confirming each one was actually posted - see
+    # app.utils.social_platforms and tasks.approve_task.
+    # ===========================
+
+    is_social_media = db.Column(
+        db.Boolean,
+        default=False,
+        nullable=False
+    )
+
+    social_platforms = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
+    social_platforms_published = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
     client = db.relationship("Client")
 
     deliverable = db.relationship("ClientDeliverable")
@@ -93,6 +118,39 @@ class Task(db.Model):
     assigned_to = db.relationship(
         "User",
         foreign_keys=[assigned_to_id]
+    )
+
+    # ===========================
+    # Backup assignee / fallback
+    #
+    # Chosen at assignment time. If the task is still sitting in
+    # Assigned (never moved to In Progress) past fallback_hours after
+    # that, app.services.task_fallback shifts it to the backup.
+    # fallback_triggered_at makes that a one-time move: once set, the
+    # task is never picked up again even if it later returns to
+    # Assigned, so it can't bounce back and forth between the two
+    # people.
+    # ===========================
+
+    backup_assignee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=True
+    )
+
+    fallback_hours = db.Column(
+        db.Integer,
+        nullable=True
+    )
+
+    fallback_triggered_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    backup_assignee = db.relationship(
+        "User",
+        foreign_keys=[backup_assignee_id]
     )
 
     created_by = db.relationship(

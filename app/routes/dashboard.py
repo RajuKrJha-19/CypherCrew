@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.utils.timezone import ist_now
 from app.utils.permissions import has_permission
 from app.utils import task_status
+from app.utils import social_platforms as social
 from app.utils.cache import ttl_cache
 from app.extensions import db
 
@@ -278,7 +279,8 @@ def my_tasks():
         "dashboard/my_tasks.html",
         core_review_tasks=core_review_tasks,
         client_review_tasks=client_review_tasks,
-        published_tasks=published_tasks
+        published_tasks=published_tasks,
+        social=social,
     )
 
 @dashboard_bp.route("/employee")
