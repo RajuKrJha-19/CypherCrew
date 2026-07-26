@@ -21,6 +21,22 @@
 */
 (function () {
 
+    // This script lives inside the topbar, which is data-turbo-permanent
+    // WITHIN a shell but not across the ERP<->Studio boundary. Crossing shells
+    // re-injects and re-runs this script, so tear down the previous instance's
+    // pollers and document listeners first - otherwise they stack on every
+    // crossing (doubled 5s polling, duplicated sound/mark-read).
+    if (window.__cypherNotify) {
+        window.__cypherNotify.intervals.forEach(clearInterval);
+        window.__cypherNotify.teardown();
+    }
+    const _intervals = [];
+    const _docListeners = [];
+    function onDoc(type, fn) {
+        document.addEventListener(type, fn);
+        _docListeners.push([type, fn]);
+    }
+
     const widgets = [];
 
     function createWidget(config) {
@@ -249,8 +265,8 @@
         document.removeEventListener("keydown", unlockSound);
     }
 
-    document.addEventListener("click", unlockSound);
-    document.addEventListener("keydown", unlockSound);
+    onDoc("click", unlockSound);
+    onDoc("keydown", unlockSound);
 
     function playNotificationSound() {
         if (!soundAllowed || !sound) return;
@@ -292,11 +308,11 @@
 
     if (!widgets.length) return;
 
-    document.addEventListener("click", function () {
+    onDoc("click", function () {
         widgets.forEach(function (w) { w.close(); });
     });
 
-    document.addEventListener("keydown", function (event) {
+    onDoc("keydown", function (event) {
         if (event.key === "Escape") {
             widgets.forEach(function (w) { w.close(); });
         }
@@ -311,7 +327,18 @@
     };
 
     widgets.forEach(function (w) {
-        setInterval(function () { w.fetchItems(true); }, 5000);
+        _intervals.push(setInterval(function () { w.fetchItems(true); }, 5000));
     });
+
+    // Expose this instance's timers/listeners so the next run (after a
+    // shell crossing) can tear them down before wiring up its own.
+    window.__cypherNotify = {
+        intervals: _intervals,
+        teardown: function () {
+            _docListeners.forEach(function (p) {
+                document.removeEventListener(p[0], p[1]);
+            });
+        },
+    };
 
 })();

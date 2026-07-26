@@ -207,6 +207,12 @@ def create_app():
                 "the /internal/social/* cron endpoints stay closed (403)."
             )
 
+        # Auto-publishing: a background thread enqueues + drains the queue so
+        # scheduled posts go out on time with no external cron. Off in tests.
+        if app.config.get("SOCIAL_INPROCESS_WORKER", True):
+            from app.social.queue.autoworker import start_background_worker
+            start_background_worker(app)
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()
@@ -222,6 +228,18 @@ def create_app():
         file_thumbnail_url,
         file_badge,
     )
+
+    import os as _os
+    from flask import url_for as _url_for
+
+    def _asset_url(filename):
+        """static URL + ?v=<file mtime> so a changed asset always cache-busts."""
+        try:
+            version = int(_os.path.getmtime(
+                _os.path.join(app.static_folder, filename)))
+        except OSError:
+            version = 0
+        return _url_for("static", filename=filename, v=version)
 
     app.jinja_env.globals.update(
         has_permission=has_permission,
@@ -254,6 +272,10 @@ def create_app():
         file_thumbnail_url=file_thumbnail_url,
         # Corner format badge (PS/AI/PDF/...) for a file tile, or None.
         file_badge=file_badge,
+        # Cache-busted static URL: appends ?v=<file mtime> so browsers fetch
+        # a fresh copy the instant an asset (e.g. style.css) changes, instead
+        # of serving a stale cached one. Use for CSS/JS in the shell.
+        asset_url=_asset_url,
     )
 
     app.jinja_env.filters["linkify"] = linkify_text

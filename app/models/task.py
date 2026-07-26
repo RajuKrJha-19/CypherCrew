@@ -239,6 +239,14 @@ class Task(db.Model):
         default=0
     )
 
+    # Time a task sat in "Scheduled" (approved post waiting for its
+    # auto-publish slot). Kept as its own bucket so scheduling lead time
+    # is not silently dropped the way an unmapped status would be.
+    scheduled_seconds = db.Column(
+        db.Integer,
+        default=0
+    )
+
     # ===========================
     # On Hold / Void context
     #

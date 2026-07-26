@@ -252,6 +252,29 @@
                                 {% endfor %}
                             </strong>
                         </div>
+                        {% if config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+                        <div class="detail-row">
+                            <span></span>
+                            <strong>
+                                <a href="{{ url_for('social.compose', task=task.id) }}" data-turbo="false"
+                                   class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:8px;">
+                                    <i class="fa-solid fa-share-nodes"></i> Publish via Social Studio
+                                </a>
+                            </strong>
+                        </div>
+                        {% if social_posts %}
+                        <div class="detail-row">
+                            <span>Studio posts</span>
+                            <strong style="display:flex; flex-direction:column; gap:6px; align-items:flex-start; font-weight:500;">
+                                {% for sp in social_posts %}
+                                <a href="{{ url_for('social.post_detail', post_id=sp.id) }}" data-turbo="false" style="font-size:13px;">
+                                    {{ sp.title or 'Untitled post' }} — <em style="color:var(--color-text-muted);">{{ sp.status.replace('_',' ') }}</em>
+                                </a>
+                                {% endfor %}
+                            </strong>
+                        </div>
+                        {% endif %}
+                        {% endif %}
                         {% endif %}
 
                         <div class="detail-row">
@@ -1369,7 +1392,8 @@ Submission Files
         let statusMap = {
             "Assigned": "pendingDuration",
             "In Progress": "inProgressDuration",
-            "Paused": "holdDuration",
+            "Paused": "pausedDuration",
+            "On Hold": "onHoldDuration",
             "Core Review": "coreReviewDuration",
             "Client Review": "clientReviewDuration"
         };
@@ -1854,6 +1878,11 @@ Submission Files
     `;
         }
 
+        // Delegated on document, so it needs binding only once per tab. On the
+        // full-page task view (a Turbo navigation) this script re-runs, so a
+        // guard stops a second listener from stacking and double-posting.
+        if (!window.__replySubmitBound) {
+        window.__replySubmitBound = true;
         document.addEventListener("submit", async function (event) {
             const form = event.target;
 
@@ -1932,6 +1961,7 @@ Submission Files
                 submitBtn.disabled = false;
             }
         });
+        }
     </script>
     <script>
 

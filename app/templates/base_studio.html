@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{#
+    Social Studio shell — a DEDICATED workspace with its own sidebar + top
+    bar, so the module stands on its own like a product (Buffer/Hootsuite
+    style) rather than living inside the ERP chrome. "Back to CypherCrew" in
+    the sidebar returns to the ERP. Every Studio page extends this instead of
+    base_app.html.
+#}
+
+{% block body_class %}studio-shell{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% if config.get('TURBO_ENABLED', True) %}
+<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.13/dist/turbo.es2017-umd.min.js"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/turbo-app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/command-palette.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/video-thumb.js') }}" defer></script>
+<meta name="turbo-cache-control" content="no-cache">
+{% endblock %}
+
+{% block body %}
+<div class="studio-layout">
+
+    {% include "partials/studio_sidebar.html" %}
+    <div class="studio-backdrop" id="studioBackdrop" aria-hidden="true"></div>
+
+    <div class="studio-content">
+        <header class="studio-topbar">
+            <button type="button" class="studio-nav-toggle" id="studioNavToggle"
+                    aria-label="Open Studio navigation"><i class="fa-solid fa-bars"></i></button>
+
+            <div class="studio-top-left">
+                {% include "partials/studio_client_switcher.html" %}
+            </div>
+
+            {# Identical on every page -> keep it permanent so its scripts
+               (theme, notifications, account menu) bind once and don't stack
+               across Turbo visits. The client switcher above intentionally
+               re-renders so it reflects the active client. #}
+            <div class="studio-top-right" data-turbo-permanent id="studio-topbar-right">
+                {% include "partials/theme_toggle.html" %}
+                {% include "partials/notification_widget.html" %}
+                {% include "partials/account_menu.html" %}
+            </div>
+        </header>
+
+        <main class="studio-main">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{% include "partials/command_palette.html" %}
+
+<script>
+(function () {
+    var toggle = document.getElementById("studioNavToggle");
+    var backdrop = document.getElementById("studioBackdrop");
+    function close() { document.body.classList.remove("studio-nav-open"); }
+    if (toggle) toggle.addEventListener("click", function () {
+        document.body.classList.toggle("studio-nav-open");
+    });
+    if (backdrop) backdrop.addEventListener("click", close);
+    // Bind the Turbo close-on-navigate ONCE so it doesn't stack per visit.
+    if (!window.__studioNavBound) {
+        window.__studioNavBound = true;
+        document.addEventListener("turbo:before-render", function () {
+            document.body.classList.remove("studio-nav-open");
+        });
+    }
+})();
+</script>
+{% endblock %}

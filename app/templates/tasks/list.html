@@ -666,7 +666,7 @@
                         {% else %}
 
                         <tr>
-                            <td colspan="10">
+                            <td colspan="{{ 11 if can_manage else 10 }}">
                                 No tasks found.
                             </td>
                         </tr>

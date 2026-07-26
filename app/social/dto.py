@@ -43,6 +43,9 @@ class Capabilities:
     publish_rate: tuple | None = None      # (count, window) e.g. (100, "24h")
     story_support: bool = False
     max_caption_chars: int | None = None
+    supports_first_comment: bool = False   # auto-post a first comment
+    supports_delete: bool = False          # delete a published post via API
+    supports_comments: bool = False        # read + reply to comments (Engage)
 
     def supports(self, post_type: str) -> bool:
         return post_type in self.post_types

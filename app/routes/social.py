@@ -15,18 +15,23 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import (
-    Client, ClientAsset, PublishJob, PublishResult, SocialAccount,
-    SocialAuditLog, SocialMediaAsset, SocialPost, SocialPostTarget,
+    Client, ClientAsset, ContentVersion, PublishJob, PublishResult,
+    SocialAccount, SocialAuditLog, SocialComment, SocialMediaAsset, SocialPost,
+    SocialPostTarget, Task, TaskFile,
 )
 from app.social.dto import TokenBundle
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
-    approval, audit, publishing, recovery, scheduling, versioning,
+    approval, audit, lifecycle, publishing, recovery, scheduling,
+    versioning,
 )
+from app.social.services import engage as engage_svc
 from app.social.services.accounts import AccountManager
 from app.utils.permissions import has_permission, can_manage_social_engine
-from app.utils.social_platforms import PLATFORMS, label as platform_label
+from app.utils.social_platforms import (
+    PLATFORMS, label as platform_label, parse_platforms,
+)
 
 
 social_bp = Blueprint("social", __name__, url_prefix="/social")
@@ -91,6 +96,93 @@ def _grouped_accounts(accounts):
     return groups
 
 
+# ======================================================================
+# Social Studio: client-first context
+# ======================================================================
+# The Studio is organised around the CLIENT: a persistent switcher scopes
+# every view (dashboard, calendar, queue, drafts, published, analytics) to
+# one client, matching how the agency actually works ("I'm doing X's socials
+# today"). The active client rides in the query string (?client=<id>) so it
+# is shareable, Turbo-friendly, and needs no server-side session state.
+
+def _studio_clients():
+    """Active clients for the switcher - parents before their sub-clients."""
+    return Client.ordered_with_sub_clients(status="active")
+
+
+def _client_arg():
+    """Validated ACTIVE-client id from ?client=, or None ("All clients").
+    Active-only so routes and the context bar agree on what's selected."""
+    sel_id = request.args.get("client", type=int)
+    if sel_id is None:
+        return None
+    exists = Client.query.filter_by(id=sel_id, status="active").first()
+    return sel_id if exists else None
+
+
+def _scope_posts(query, client_id):
+    """Filter a SocialPost query to one client (no-op when None)."""
+    return query.filter(SocialPost.client_id == client_id) if client_id else query
+
+
+def _scope_targets(query, client_id):
+    """Filter a SocialPostTarget query to one client, via its post."""
+    if not client_id:
+        return query
+    return (query.join(SocialPost, SocialPostTarget.social_post_id == SocialPost.id)
+            .filter(SocialPost.client_id == client_id))
+
+
+def _channel_client_ok(account_client_id, post_client_id):
+    """Client-safety rule: a channel bound to a client may only be used for
+    THAT client's posts. Agency-wide channels (no binding) and posts with no
+    client are always allowed. This is the single source of truth used by
+    both the server guard and (mirrored) the composer's channel filter."""
+    return not (account_client_id and post_client_id
+                and account_client_id != post_client_id)
+
+
+@social_bp.context_processor
+def _inject_studio_context():
+    """Give every Studio template the switcher list + the active client, so
+    the context bar and sidebar work without per-route wiring. Blueprint-
+    scoped and cheap; degrades to SAFE DEFAULTS (never {}), so a failure here
+    can never leave `studio_clients` undefined and crash the switcher."""
+    empty = {"studio_clients": [], "selected_client": None,
+             "selected_client_id": None, "pending_approval_total": 0,
+             "engage_open_total": 0}
+    if not current_user.is_authenticated:
+        return empty
+    try:
+        clients = _studio_clients()
+        sel_id = request.args.get("client", type=int)
+        selected = next((c for c in clients if c.id == sel_id), None)
+        # On a single-post page (no ?client), fall back to that post's client
+        # so the switcher + sidebar keep the client context after create/save.
+        if selected is None and request.view_args \
+                and request.view_args.get("post_id"):
+            post = db.session.get(SocialPost, request.view_args["post_id"])
+            if post and post.client_id:
+                selected = next(
+                    (c for c in clients if c.id == post.client_id), None)
+        pending_total = _scope_posts(
+            SocialPost.query.filter_by(status="pending_approval"),
+            selected.id if selected else None).count()
+        engage_open = _scope_comments(
+            SocialComment.query.filter(SocialComment.is_ours.is_(False),
+                                       SocialComment.status == "open"),
+            selected.id if selected else None).count()
+        return {
+            "studio_clients": clients,
+            "selected_client": selected,
+            "selected_client_id": selected.id if selected else None,
+            "pending_approval_total": pending_total,
+            "engage_open_total": engage_open,
+        }
+    except Exception:  # noqa: BLE001
+        return empty
+
+
 def _parse_schedule(value):
     """datetime-local (IST) -> naive UTC datetime, or None."""
     if not value:
@@ -109,6 +201,84 @@ def _to_ist_input(dt):
     return (dt + _IST_OFFSET).strftime("%Y-%m-%dT%H:%M")
 
 
+def _to_ist_display(dt):
+    """Naive UTC datetime -> human IST string, e.g. '24 Jul 2026, 14:30'."""
+    if not dt:
+        return "—"
+    return (dt + _IST_OFFSET).strftime("%d %b %Y, %H:%M")
+
+
+def _asset_preview(a):
+    """A ClientAsset -> the dict the composer/library render: filename,
+    category, and a short-lived presigned thumbnail URL for images. Best-
+    effort: a single unsignable object never breaks the list."""
+    from app.social.media import pipeline
+    is_image = (a.mime_type or "").startswith("image")
+    url = None
+    if is_image:
+        try:
+            url = pipeline.presigned_url(a.object_key)
+        except Exception:  # noqa: BLE001
+            url = None
+    return {
+        "id": a.id, "filename": a.original_filename,
+        "mime": a.mime_type or "", "category": a.category,
+        "is_image": is_image, "url": url,
+    }
+
+
+def _post_thumbnail(post):
+    """The first image thumbnail across a post's targets, so reviewers see the
+    creative on the approval card without opening the post."""
+    from app.social.media import pipeline
+    for t in post.targets:
+        for m in t.media:
+            if (m.mime_type or "").startswith("image") and m.object_key:
+                try:
+                    return pipeline.presigned_url(m.object_key)
+                except Exception:  # noqa: BLE001
+                    return None
+    return None
+
+
+def _task_file_preview(tf):
+    """A TaskFile (a deliverable the assignee produced) -> the composer's
+    media dict, with a presigned thumbnail for images."""
+    from app.social.media import pipeline
+    is_image = (tf.mime_type or "").startswith("image")
+    url = None
+    if is_image and tf.object_key:
+        try:
+            url = pipeline.presigned_url(tf.object_key)
+        except Exception:  # noqa: BLE001
+            url = None
+    return {"id": tf.id, "filename": tf.original_filename,
+            "mime": tf.mime_type or "", "is_image": is_image, "url": url}
+
+
+def _task_deliverable_files(task):
+    """The creative for a task: its final/submission files (not references)."""
+    return (
+        TaskFile.query
+        .filter(TaskFile.task_id == task.id,
+                TaskFile.folder_type.in_(["final", "submission"]))
+        .order_by(TaskFile.folder_type.desc(), TaskFile.id.asc())
+        .all()
+    )
+
+
+def _suggested_accounts_for_task(task):
+    """Pre-select the client's channels that match the task's platforms (and
+    are client-safe), so composing from a task is one click."""
+    plats = set(parse_platforms(task.social_platforms))
+    if not plats:
+        return []
+    return [
+        a.id for a in AccountManager.list_accounts()
+        if a.platform in plats and _channel_client_ok(a.client_id, task.client_id)
+    ]
+
+
 def _capabilities_map():
     """{platform_key: capabilities} for whatever providers are registered,
     so the composer can drive per-platform post-type options client-side."""
@@ -119,21 +289,36 @@ def _capabilities_map():
             "post_types": sorted(caps.post_types) if caps else [],
             "max_carousel": caps.max_carousel if caps else None,
             "max_caption_chars": caps.max_caption_chars if caps else None,
+            "supports_first_comment": bool(caps and caps.supports_first_comment),
             "simulation": getattr(provider, "is_simulation", False),
         }
     return out
+
+
+def _hashtag_sets(client_id=None):
+    """Saved hashtag sets available in the composer: this client's sets plus
+    the agency-wide (client-less) ones."""
+    from app.models import SocialHashtagSet
+    q = SocialHashtagSet.query
+    if client_id:
+        q = q.filter(db.or_(SocialHashtagSet.client_id == client_id,
+                            SocialHashtagSet.client_id.is_(None)))
+    else:
+        q = q.filter(SocialHashtagSet.client_id.is_(None))
+    return q.order_by(SocialHashtagSet.name).all()
 
 
 @social_bp.route("/")
 @login_required
 def index():
     _guard()
+    cid = _client_arg()
     accounts = AccountManager.list_accounts(include_revoked=False)
     now = datetime.utcnow()
     start_today = datetime(now.year, now.month, now.day)
 
     upcoming = (
-        SocialPostTarget.query
+        _scope_targets(SocialPostTarget.query, cid)
         .filter(
             SocialPostTarget.status.in_(["scheduled", "approved"]),
             SocialPostTarget.scheduled_for.isnot(None),
@@ -143,18 +328,27 @@ def index():
         .limit(6)
         .all()
     )
-    recent = (
-        SocialAuditLog.query
-        .order_by(SocialAuditLog.created_at.desc())
-        .limit(7)
-        .all()
-    )
-    published_today = (
-        PublishResult.query
-        .filter(PublishResult.created_at >= start_today)
-        .count()
-    )
-    drafts_count = SocialPost.query.filter_by(status="draft").count()
+    recent_q = SocialAuditLog.query
+    if cid:
+        client_post_ids = [
+            p.id for p in SocialPost.query
+            .with_entities(SocialPost.id).filter_by(client_id=cid).all()
+        ]
+        recent_q = recent_q.filter(SocialAuditLog.post_id.in_(client_post_ids or [-1]))
+    recent = recent_q.order_by(SocialAuditLog.created_at.desc()).limit(7).all()
+
+    pub_q = PublishResult.query.filter(PublishResult.created_at >= start_today)
+    if cid:
+        pub_q = (pub_q.join(
+            SocialPostTarget, PublishResult.target_id == SocialPostTarget.id)
+            .join(SocialPost, SocialPostTarget.social_post_id == SocialPost.id)
+            .filter(SocialPost.client_id == cid))
+    published_today = pub_q.count()
+
+    drafts_count = _scope_posts(
+        SocialPost.query.filter_by(status="draft"), cid).count()
+    pending_approval = _scope_posts(
+        SocialPost.query.filter_by(status="pending_approval"), cid).count()
 
     return render_template(
         "social/index.html",
@@ -168,6 +362,9 @@ def index():
         recent=recent,
         published_today=published_today,
         drafts_count=drafts_count,
+        pending_approval=pending_approval,
+        can_approve=(has_permission(current_user, "approve_tasks")
+                     or has_permission(current_user, "publish_tasks")),
         has_facebook=any(a.platform == "facebook" for a in accounts),
         to_ist=_to_ist_input,
     )
@@ -185,10 +382,40 @@ def accounts():
         platforms=PLATFORMS,
         available=registry.keys(),
         connectable=_connectable_keys(),
+        clients=_studio_clients(),
         has_facebook=any(a.platform == "facebook" for a in accts),
         has_instagram=any(a.platform == "instagram" for a in accts),
         status=engine_status.engine_status(),
     )
+
+
+@social_bp.route("/accounts/<int:account_id>/client", methods=["POST"])
+@login_required
+def set_account_client(account_id):
+    """Bind a channel to a client (or 'Agency-wide' = no client). This is
+    what makes publishing client-safe: the composer only offers a client's
+    own channels, and the server refuses a cross-client target."""
+    if not has_permission(current_user, "connect_social_accounts"):
+        abort(403)
+    account = SocialAccount.query.get_or_404(account_id)
+    client_id = request.form.get("client_id", type=int)
+    if client_id and not Client.query.filter_by(
+            id=client_id, status="active").first():
+        client_id = None
+    account.client_id = client_id or None
+    # An Instagram account belongs to the same brand as its parent Page -
+    # keep any linked IG accounts in sync so they can't drift to another client.
+    if account.platform == "facebook":
+        page_id = (account.meta or {}).get("page_id") or account.external_id
+        for ig in SocialAccount.query.filter_by(platform="instagram").all():
+            if (ig.meta or {}).get("page_id") == page_id:
+                ig.client_id = account.client_id
+    audit.record("account_client_set", account_id=account.id,
+                 actor_id=current_user.id,
+                 detail={"client_id": account.client_id})
+    db.session.commit()
+    flash("Channel assignment updated.", "success")
+    return redirect(url_for("social.accounts"))
 
 
 @social_bp.route("/instagram/discover", methods=["POST"])
@@ -250,6 +477,125 @@ def analytics():
     )
 
 
+# ----------------------------------------------------------------------
+# Approvals inbox: a single queue of posts awaiting sign-off, so managers
+# don't have to open each post to act. Approve / send-back, single or bulk.
+# ----------------------------------------------------------------------
+
+def _can_approve():
+    return (has_permission(current_user, "approve_tasks")
+            or has_permission(current_user, "publish_tasks"))
+
+
+def _notify_submit(post):
+    """On submit-for-approval, ping the client's manager (the natural
+    reviewer) so a pending post isn't only visible as a sidebar badge."""
+    mgr_id = post.client.assigned_manager_id if post.client else None
+    if mgr_id and mgr_id != current_user.id:
+        audit.notify(
+            mgr_id, "Social post needs approval",
+            f"“{post.title or 'A post'}” is awaiting your approval.",
+            link=url_for("social.post_detail", post_id=post.id),
+            actor_id=current_user.id)
+
+
+@social_bp.route("/approvals")
+@login_required
+def approvals():
+    _guard()
+    cid = _client_arg()
+    posts = (
+        _scope_posts(
+            SocialPost.query.filter_by(status="pending_approval"), cid)
+        .order_by(SocialPost.updated_at.asc())
+        .limit(100)
+        .all()
+    )
+    recently = (
+        _scope_posts(
+            SocialPost.query.filter(SocialPost.status.in_(
+                ["approved", "scheduled"])), cid)
+        .order_by(SocialPost.approved_at.desc().nullslast())
+        .limit(8)
+        .all()
+    )
+    return render_template(
+        "social/approvals.html",
+        posts=posts, recently=recently,
+        thumbs={p.id: _post_thumbnail(p) for p in posts},
+        can_approve=_can_approve(),
+        to_ist=_to_ist_input,
+    )
+
+
+@social_bp.route("/approvals/bulk", methods=["POST"])
+@login_required
+def approvals_bulk():
+    if not _can_approve():
+        abort(403)
+    ids = request.form.getlist("post_ids", type=int)
+    action = request.form.get("action")
+    if action not in ("approve", "reject") or not ids:
+        flash("Select at least one post and an action.", "error")
+        return redirect(url_for("social.approvals"))
+    posts = SocialPost.query.filter(
+        SocialPost.id.in_(ids),
+        SocialPost.status == "pending_approval",
+    ).all()
+    reason = (request.form.get("reason") or "").strip()
+    n = 0
+    for post in posts:
+        if action == "approve":
+            approval.approve_post(post, current_user.id)
+        else:
+            post.status = "rejected"
+            audit.record("rejected", post_id=post.id, actor_id=current_user.id,
+                         task_id=post.task_id, detail={"reason": reason},
+                         message=reason or None)
+            if post.created_by_id and post.created_by_id != current_user.id:
+                audit.notify(
+                    post.created_by_id, "Social post needs changes",
+                    reason or "Your post was sent back for changes.",
+                    link=url_for("social.post_detail", post_id=post.id),
+                    actor_id=current_user.id)
+        n += 1
+    db.session.commit()
+    verb = "Approved" if action == "approve" else "Sent back"
+    flash(f"{verb} {n} post(s).", "success")
+    return redirect(url_for(
+        "social.approvals",
+        client=request.form.get("client", type=int) or None))
+
+
+# ----------------------------------------------------------------------
+# Media Library: a client's brand assets in one browsable place, reusable
+# from the composer. Per-client (assets belong to a client).
+# ----------------------------------------------------------------------
+
+@social_bp.route("/library")
+@login_required
+def library():
+    _guard()
+    cid = _client_arg()
+    assets = []
+    if cid:
+        rows = (
+            ClientAsset.query.filter_by(client_id=cid)
+            .order_by(ClientAsset.category, ClientAsset.created_at.desc())
+            .all()
+        )
+        assets = [_asset_preview(a) for a in rows]
+    # group by category for a tidy library
+    by_category = {}
+    for a in assets:
+        by_category.setdefault(a["category"] or "Uncategorised", []).append(a)
+    return render_template(
+        "social/library.html",
+        by_category=by_category,
+        asset_count=len(assets),
+    )
+
+
 # Job state -> the board column it belongs to.
 _QUEUE_COLUMN = {
     "queued": "queued",
@@ -270,12 +616,22 @@ def queue():
     q_search = (request.args.get("q") or "").strip()
     needle = q_search.lower()
 
-    jobs = (
-        PublishJob.query
-        .order_by(PublishJob.updated_at.desc())
-        .limit(400)
-        .all()
-    )
+    from sqlalchemy.orm import joinedload
+    cid = _client_arg()
+    # Eager-load target + post (avoids an N+1 across up to 400 jobs) and push
+    # the client filter into the query so LIMIT applies to the client's jobs,
+    # not the global 400 newest.
+    query = PublishJob.query.options(
+        joinedload(PublishJob.target).joinedload(SocialPostTarget.post))
+    if cid:
+        query = (
+            query.join(SocialPostTarget,
+                       PublishJob.target_id == SocialPostTarget.id)
+            .join(SocialPost,
+                  SocialPostTarget.social_post_id == SocialPost.id)
+            .filter(SocialPost.client_id == cid))
+    jobs = query.order_by(PublishJob.updated_at.desc()).limit(400).all()
+
     buckets = {"queued": [], "publishing": [], "completed": [], "failed": []}
     for job in jobs:
         target = job.target
@@ -322,6 +678,246 @@ def requeue_all():
     return redirect(url_for("social.queue"))
 
 
+@social_bp.route("/targets/<int:target_id>/retry", methods=["POST"])
+@login_required
+def retry_target(target_id):
+    """Re-run a single FAILED platform for a post. Available to publishers
+    (not just engine admins) so a one-platform failure on a multi-platform
+    post can be fixed without touching the whole Queue."""
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+    if target.status != "failed":
+        flash("Only a failed platform can be retried.", "error")
+        return redirect(url_for("social.post_detail",
+                                post_id=target.social_post_id))
+    job = target.job
+    if job is not None and recovery.requeue_job(
+            job, actor_id=current_user.id, commit=True):
+        flash(f"Retrying {target.platform} — it will publish on the next "
+              "worker run.", "success")
+    else:
+        publishing.publish_target_now(target, actor_id=current_user.id)
+        flash(f"Re-queued {target.platform} for publishing.", "success")
+    # Roll the parent back from failed so the UI reflects the in-flight retry.
+    post = target.post
+    if post and post.status == "failed":
+        post.status = "publishing"
+        db.session.commit()
+    return redirect(url_for("social.post_detail",
+                            post_id=target.social_post_id))
+
+
+@social_bp.route("/posts/<int:post_id>/duplicate", methods=["POST"])
+@login_required
+def duplicate_post(post_id):
+    """Deep-copy a post (targets + media) into a fresh draft. Agencies reuse
+    creative across cadences/clients; this saves rebuilding in the composer."""
+    _guard()
+    src = SocialPost.query.get_or_404(post_id)
+    dup = SocialPost(
+        status="draft", created_by_id=current_user.id, client_id=src.client_id,
+        title=((src.title or "Untitled") + " (copy)"),
+        base_caption=src.base_caption)
+    db.session.add(dup)
+    db.session.flush()
+    for t in src.targets:
+        nt = SocialPostTarget(
+            social_post_id=dup.id, social_account_id=t.social_account_id,
+            platform=t.platform, post_type=t.post_type, caption=t.caption,
+            hashtags=t.hashtags, first_comment=t.first_comment,
+            status="draft", scheduled_for=None)
+        db.session.add(nt)
+        db.session.flush()
+        for m in t.media:
+            db.session.add(SocialMediaAsset(
+                target_id=nt.id, source=m.source, task_file_id=m.task_file_id,
+                client_asset_id=m.client_asset_id, object_key=m.object_key,
+                role=m.role, sort_order=m.sort_order, alt_text=m.alt_text,
+                mime_type=m.mime_type))
+    versioning.snapshot_post(dup, edited_by_id=current_user.id)
+    audit.record("post_duplicated", post_id=dup.id, actor_id=current_user.id,
+                 detail={"from_post": src.id})
+    db.session.commit()
+    flash("Duplicated as a new draft — edit and go.", "success")
+    return redirect(url_for("social.edit_post", post_id=dup.id))
+
+
+def _detach_post_history(post):
+    """Detach audit + version rows before a post is deleted, so their FKs
+    don't block the delete. Audit rows are PRESERVED (post_id/target_id
+    nulled) so the trail survives; content versions are snapshots of this
+    exact post, so they're removed with it. Without this, deleting any post
+    that has history (every post has a 'post_created' log) would 500."""
+    tids = [t.id for t in post.targets] or [-1]
+    SocialAuditLog.query.filter(
+        db.or_(SocialAuditLog.post_id == post.id,
+               SocialAuditLog.target_id.in_(tids))
+    ).update({"post_id": None, "target_id": None}, synchronize_session=False)
+    ContentVersion.query.filter(
+        db.or_(ContentVersion.social_post_id == post.id,
+               ContentVersion.target_id.in_(tids))
+    ).delete(synchronize_session=False)
+    # PublishResult has no cascade; clear it too so the helper is complete
+    # (the delete routes block published posts, but this keeps it robust).
+    PublishResult.query.filter(
+        PublishResult.target_id.in_(tids)).delete(synchronize_session=False)
+    # Analytics snapshots and Engage comments also FK to the targets with no
+    # cascade. A 'removed' post is deletable and its targets were live, so both
+    # may exist - without clearing them the delete 500s on an FK violation.
+    from app.models import SocialAnalyticsSnapshot, SocialComment
+    SocialAnalyticsSnapshot.query.filter(
+        SocialAnalyticsSnapshot.target_id.in_(tids)
+    ).delete(synchronize_session=False)
+    SocialComment.query.filter(
+        SocialComment.target_id.in_(tids)
+    ).delete(synchronize_session=False)
+
+
+def _cancel_pending_jobs(post):
+    """Delete any not-yet-run jobs for a post's targets (safe: only 'queued',
+    never a job already claimed/publishing/succeeded)."""
+    for t in post.targets:
+        job = t.job
+        if job is not None and job.state == "queued":
+            db.session.delete(job)
+
+
+@social_bp.route("/posts/<int:post_id>/reopen", methods=["POST"])
+@login_required
+def reopen_post(post_id):
+    """Send an approved/scheduled post back to draft to fix it. Cancels any
+    pending (not-yet-run) jobs so nothing publishes while it's being edited."""
+    _guard()
+    post = SocialPost.query.get_or_404(post_id)
+    if post.status not in ("approved", "scheduled"):
+        flash("Only an approved or scheduled post can be reopened.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
+    was_scheduled = post.status == "scheduled"
+    _cancel_pending_jobs(post)
+    for t in post.targets:
+        if t.status in ("approved", "scheduled"):
+            t.status = "draft"
+            t.scheduled_for = None
+    post.status = "draft"
+    post.approved_by_id = None
+    post.approved_at = None
+    audit.record("post_reopened", post_id=post.id, actor_id=current_user.id,
+                 task_id=post.task_id)
+    # If this was a scheduled, task-linked post, walk the task back too.
+    if was_scheduled and post.task_id:
+        from app.social.services import task_link
+        task_link.mark_task_unscheduled(post, actor_id=current_user.id)
+    db.session.commit()
+    flash("Reopened as a draft. Re-submit it for approval when ready.",
+          "success")
+    return redirect(url_for("social.post_detail", post_id=post.id))
+
+
+@social_bp.route("/posts/<int:post_id>/reschedule", methods=["POST"])
+@login_required
+def reschedule_post(post_id):
+    """Move a scheduled post to a new time without reopening it."""
+    _guard()
+    post = SocialPost.query.get_or_404(post_id)
+    if post.status != "scheduled":
+        flash("Only a scheduled post can be rescheduled.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
+    when = _parse_schedule(request.form.get("schedule"))
+    if not when:
+        flash("Pick a valid date and time.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
+    for t in post.targets:
+        t.scheduled_for = when
+        if t.job is not None and t.job.state == "queued":
+            t.job.next_run_at = when
+    audit.record("post_rescheduled", post_id=post.id, actor_id=current_user.id,
+                 task_id=post.task_id, detail={"when": when.isoformat()})
+    db.session.commit()
+    flash(f"Rescheduled to {_to_ist_display(when)} IST.", "success")
+    return redirect(url_for("social.post_detail", post_id=post.id))
+
+
+@social_bp.route("/targets/<int:target_id>/move", methods=["POST"])
+@login_required
+def move_target(target_id):
+    """Drag-to-reschedule from the calendar: move one platform's post to a new
+    day, keeping its time. Only for scheduled/approved (not yet published)."""
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+    if target.status not in ("scheduled", "approved"):
+        return jsonify(error="Only a scheduled post can be moved."), 400
+    try:
+        new_day = datetime.strptime(request.form.get("date", ""), "%Y-%m-%d")
+    except ValueError:
+        return jsonify(error="Bad date."), 400
+    # keep the existing IST time-of-day, just change the date
+    old_ist = (target.scheduled_for + _IST_OFFSET) if target.scheduled_for \
+        else new_day.replace(hour=10)
+    new_ist = new_day.replace(hour=old_ist.hour, minute=old_ist.minute)
+    target.scheduled_for = new_ist - _IST_OFFSET
+    if target.job is not None and target.job.state == "queued":
+        target.job.next_run_at = target.scheduled_for
+    audit.record("target_moved", target_id=target.id,
+                 post_id=target.social_post_id, actor_id=current_user.id,
+                 detail={"date": request.form.get("date")})
+    db.session.commit()
+    return jsonify(ok=True, when=_to_ist_display(target.scheduled_for))
+
+
+@social_bp.route("/targets/<int:target_id>/remove", methods=["POST"])
+@login_required
+def remove_target(target_id):
+    """Delete a published post/story from the platform (Facebook via API;
+    Instagram must be removed manually) and mark it removed in the Studio,
+    keeping the record for history."""
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+    if target.status != "published":
+        flash("Only a published post can be removed.", "error")
+        return redirect(url_for("social.post_detail",
+                                post_id=target.social_post_id))
+    note = lifecycle.remove_target(target, actor_id=current_user.id)
+    lifecycle._rollup_removed(target.post)
+    db.session.commit()
+    flash(note or f"Removed the {target.platform} post.",
+          "info" if note else "success")
+    return redirect(url_for("social.post_detail",
+                            post_id=target.social_post_id))
+
+
+@social_bp.route("/posts/<int:post_id>/remove", methods=["POST"])
+@login_required
+def remove_post(post_id):
+    """Remove every published platform of a post at once."""
+    _guard()
+    post = SocialPost.query.get_or_404(post_id)
+    notes = []
+    for target in post.targets:
+        if target.status == "published":
+            n = lifecycle.remove_target(target, actor_id=current_user.id)
+            if n:
+                notes.append(n)
+    lifecycle._rollup_removed(post)
+    db.session.commit()
+    flash(" ".join(notes) or "Removed from all platforms.",
+          "info" if notes else "success")
+    return redirect(url_for("social.post_detail", post_id=post.id))
+
+
+@social_bp.route("/history/sync", methods=["POST"])
+@login_required
+def sync_history():
+    """Detect posts deleted directly on the platform and flag them removed."""
+    _guard()
+    cid = _client_arg()
+    n = lifecycle.sync_published(cid)
+    flash(
+        f"Checked with the platforms — {n} post(s) had been removed there."
+        if n else "All published posts are still live on their platforms.",
+        "info")
+    return redirect(url_for("social.history", client=cid))
+
+
 @social_bp.route("/queue/process", methods=["POST"])
 @login_required
 def process_queue():
@@ -332,15 +928,20 @@ def process_queue():
     from app.social.queue import worker
     enq = scheduling.enqueue_due()
 
-    # A manual kick advances everything now - including async jobs (e.g. an
-    # Instagram container) that would otherwise wait for their next poll
-    # window. We force every queued job due and drain a few times so a
-    # start->poll->publish chain completes in one click. In production the
-    # cron worker does this naturally across its runs.
+    # A manual kick advances jobs that are due now or waiting on a short async
+    # poll (e.g. an Instagram container, next_run_at ~30s out) so a
+    # start->poll->publish chain completes in one click. It deliberately does
+    # NOT pull forward jobs a limiter/backoff pushed minutes out - forcing a
+    # rate-limited or failing job to re-hit the platform immediately is exactly
+    # what the deferral exists to prevent. In production the cron worker
+    # advances everything naturally across its runs.
     processed = 0
     for _ in range(5):
-        PublishJob.query.filter(PublishJob.state == "queued").update(
-            {PublishJob.next_run_at: datetime.utcnow()})
+        horizon = datetime.utcnow() + timedelta(seconds=60)
+        PublishJob.query.filter(
+            PublishJob.state == "queued",
+            PublishJob.next_run_at <= horizon,
+        ).update({PublishJob.next_run_at: datetime.utcnow()})
         db.session.commit()
         drained = worker.drain()
         processed += drained["processed"]
@@ -360,32 +961,65 @@ def process_queue():
 @login_required
 def drafts():
     _guard()
-    posts = (
-        SocialPost.query
-        .filter(SocialPost.status.in_(
-            ["draft", "pending_approval", "rejected", "approved", "scheduled"]))
-        .order_by(SocialPost.updated_at.desc())
-        .limit(200)
-        .all()
-    )
-    return render_template("social/drafts.html", posts=posts)
+    allowed = ["draft", "pending_approval", "approved", "scheduled",
+               "rejected"]
+    status_f = request.args.get("status")
+    status_f = status_f if status_f in allowed else ""
+    q = _scope_posts(SocialPost.query, _client_arg())
+    q = q.filter(SocialPost.status == status_f) if status_f \
+        else q.filter(SocialPost.status.in_(allowed))
+    posts = q.order_by(SocialPost.updated_at.desc()).limit(200).all()
+    return render_template("social/drafts.html", posts=posts,
+                           status_f=status_f, statuses=allowed)
 
 
 @social_bp.route("/compose")
 @login_required
 def compose():
     _guard()
+    # A date from the calendar ("compose on this day") pre-fills the schedule.
+    schedule_value = ""
+    date_arg = request.args.get("date")
+    if date_arg:
+        try:
+            datetime.strptime(date_arg, "%Y-%m-%d")
+            schedule_value = f"{date_arg}T10:00"
+        except ValueError:
+            pass
+
+    # Compose FROM a task: link the post, pre-fill the client + matching
+    # channels, and load the task's deliverable files as the media.
+    task = None
+    task_assets = []
+    selected_account_ids = []
+    default_client_id = _client_arg()
+    task_id_arg = request.args.get("task", type=int)
+    if task_id_arg:
+        task = Task.query.get_or_404(task_id_arg)
+        task_assets = [_task_file_preview(f)
+                       for f in _task_deliverable_files(task)]
+        selected_account_ids = _suggested_accounts_for_task(task)
+        default_client_id = task.client_id or default_client_id
+
     return render_template(
         "social/compose.html",
         post=None,
+        task=task,
+        task_assets=task_assets,
+        uploaded_media=[],
+        selected_task_file_ids=[a["id"] for a in task_assets],
         accounts=AccountManager.list_accounts(),
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
         capabilities=_capabilities_map(),
-        selected_account_ids=[],
+        selected_account_ids=selected_account_ids,
         selected_asset_ids=[],
         post_type="image",
-        schedule_value="",
+        schedule_value=schedule_value,
+        default_client_id=default_client_id,
+        first_comment="",
+        platform_captions={},
+        hashtag_sets=_hashtag_sets(default_client_id),
     )
 
 
@@ -400,12 +1034,48 @@ def edit_post(post_id):
     # Reconstruct the shared form state from the post's targets.
     account_ids = [t.social_account_id for t in post.targets if t.social_account_id]
     first = post.targets[0] if post.targets else None
-    asset_ids = []
+    asset_ids, task_file_ids = [], []
     if first:
         asset_ids = [m.client_asset_id for m in first.media if m.client_asset_id]
+        task_file_ids = [m.task_file_id for m in first.media if m.task_file_id]
+    # Per-platform caption overrides (any target whose caption differs from the
+    # shared base) + the first comment (shared across targets).
+    platform_captions = {
+        t.platform: t.caption for t in post.targets
+        if t.caption and t.caption != post.base_caption
+    }
+    first_comment = next(
+        (t.first_comment for t in post.targets if t.first_comment), "")
+    # If this post came from a task, keep its deliverable files available.
+    task, task_assets = None, []
+    if post.task_id:
+        task = db.session.get(Task, post.task_id)
+        if task is not None:
+            task_assets = [_task_file_preview(f)
+                           for f in _task_deliverable_files(task)]
+    # Reconstruct directly-uploaded media so an edit keeps it.
+    uploaded_media = []
+    if first:
+        from app.social.media import pipeline
+        for m in first.media:
+            if m.source == "upload" and m.object_key:
+                is_img = (m.mime_type or "").startswith("image")
+                u = None
+                if is_img:
+                    try:
+                        u = pipeline.presigned_url(m.object_key)
+                    except Exception:  # noqa: BLE001
+                        u = None
+                uploaded_media.append({
+                    "object_key": m.object_key, "mime": m.mime_type or "",
+                    "is_image": is_img, "url": u})
     return render_template(
         "social/compose.html",
         post=post,
+        task=task,
+        task_assets=task_assets,
+        uploaded_media=uploaded_media,
+        selected_task_file_ids=task_file_ids,
         accounts=AccountManager.list_accounts(),
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
@@ -414,6 +1084,9 @@ def edit_post(post_id):
         selected_asset_ids=asset_ids,
         post_type=(first.post_type if first else "image"),
         schedule_value=_to_ist_input(first.scheduled_for if first else None),
+        first_comment=first_comment or "",
+        platform_captions=platform_captions,
+        hashtag_sets=_hashtag_sets(post.client_id),
     )
 
 
@@ -423,11 +1096,18 @@ def _apply_composer_form(post):
     post.title = (request.form.get("title") or "").strip() or None
     client_id = request.form.get("client_id", type=int)
     post.client_id = client_id
-    post.base_caption = (request.form.get("caption") or "").strip() or None
+    # Link the post back to the originating task (compose-from-task), so a
+    # real publish can move that task to Published.
+    post.task_id = request.form.get("task_id", type=int) or None
+    base_caption = (request.form.get("caption") or "").strip() or None
+    post.base_caption = base_caption
+    first_comment = (request.form.get("first_comment") or "").strip() or None
 
     post_type = (request.form.get("post_type") or "image").strip()
     account_ids = request.form.getlist("account_ids", type=int)
+    # ids arrive in the chosen order (carousel ordering) - preserved below.
     asset_ids = request.form.getlist("asset_ids", type=int)
+    task_file_ids = request.form.getlist("task_file_ids", type=int)
     publish_now = request.form.get("publish_mode") == "now"
     scheduled_for = (
         datetime.utcnow() if publish_now
@@ -439,36 +1119,79 @@ def _apply_composer_form(post):
         db.session.delete(t)
     db.session.flush()
 
-    assets = (
-        ClientAsset.query.filter(ClientAsset.id.in_(asset_ids)).all()
-        if asset_ids else []
-    )
+    # Resolve media from BOTH sources - the task's deliverable files first
+    # (they are the creative), then any client brand assets - preserving order.
+    asset_by_id = {
+        a.id: a for a in ClientAsset.query.filter(
+            ClientAsset.id.in_(asset_ids)).all()
+    } if asset_ids else {}
+    tf_by_id = {
+        f.id: f for f in TaskFile.query.filter(
+            TaskFile.id.in_(task_file_ids)).all()
+    } if task_file_ids else {}
+    media_items = [("task_file", tf_by_id[i]) for i in task_file_ids if i in tf_by_id]
+    media_items += [("client_asset", asset_by_id[i]) for i in asset_ids if i in asset_by_id]
+    # Directly-uploaded media (not from a task/brand asset): "object_key::mime".
+    from types import SimpleNamespace
+    for raw in request.form.getlist("upload_media"):
+        key, _, mime = raw.partition("::")
+        if key.startswith("social_uploads/"):
+            media_items.append(("upload", SimpleNamespace(
+                object_key=key, mime_type=(mime or None), id=None)))
+
+    def _add_media(target_id):
+        for i, (source, obj) in enumerate(media_items):
+            kw = dict(target_id=target_id, source=source,
+                      object_key=obj.object_key, mime_type=obj.mime_type,
+                      role="main", sort_order=i)
+            if source == "task_file":
+                kw["task_file_id"] = obj.id
+            elif source == "client_asset":
+                kw["client_asset_id"] = obj.id
+            db.session.add(SocialMediaAsset(**kw))
+
+    def _new_target(account, ptype, caption):
+        t = SocialPostTarget(
+            social_post_id=post.id, social_account_id=account.id,
+            platform=account.platform, post_type=ptype, caption=caption,
+            first_comment=first_comment, status="draft",
+            scheduled_for=scheduled_for)
+        db.session.add(t)
+        db.session.flush()
+        _add_media(t.id)
+        return t
+
+    # "Also share to Story": in addition to the feed post, publish the same
+    # media as a Story on platforms that support it (Instagram). Only when the
+    # main post isn't already a story and there's media to show.
+    also_story = bool(request.form.get("also_story")) \
+        and post_type not in ("story", "text") and media_items
+
+    skipped = []
+    n_created = 0
     for account_id in account_ids:
         account = db.session.get(SocialAccount, account_id)
         if account is None:
             continue
-        target = SocialPostTarget(
-            social_post_id=post.id,
-            social_account_id=account.id,
-            platform=account.platform,
-            post_type=post_type,
-            caption=post.base_caption,
-            status="draft",
-            scheduled_for=scheduled_for,
-        )
-        db.session.add(target)
-        db.session.flush()
-        for i, asset in enumerate(assets):
-            db.session.add(SocialMediaAsset(
-                target_id=target.id,
-                source="client_asset",
-                client_asset_id=asset.id,
-                object_key=asset.object_key,
-                mime_type=asset.mime_type,
-                role="main",
-                sort_order=i,
-            ))
-    return len(account_ids)
+        # Client safety: stop publishing Client A's post to Client B's Page,
+        # even if the form is tampered with.
+        if not _channel_client_ok(account.client_id, post.client_id):
+            skipped.append(account.display_name)
+            continue
+        override = (request.form.get(f"caption_{account.platform}") or "").strip()
+        _new_target(account, post_type, override or base_caption)
+        n_created += 1
+        # Optional companion Story (no caption - stories don't use one).
+        if also_story:
+            prov = registry.get(account.platform)
+            caps = prov.capabilities if prov else None
+            if caps and caps.story_support and "story" in (caps.post_types or set()):
+                _new_target(account, "story", None)
+
+    if skipped:
+        flash("Skipped channel(s) that belong to a different client: "
+              + ", ".join(skipped) + ".", "info")
+    return n_created
 
 
 @social_bp.route("/posts", methods=["POST"])
@@ -482,6 +1205,14 @@ def create_post():
     versioning.snapshot_post(post, edited_by_id=current_user.id)
     audit.record("post_created", post_id=post.id, actor_id=current_user.id,
                  task_id=post.task_id, detail={"targets": n})
+    if request.form.get("action") == "submit" and post.targets:
+        post.status = "pending_approval"
+        audit.record("submitted_for_approval", post_id=post.id,
+                     actor_id=current_user.id, task_id=post.task_id)
+        _notify_submit(post)
+        db.session.commit()
+        flash("Submitted for approval.", "success")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     db.session.commit()
     flash("Draft created.", "success")
     return redirect(url_for("social.post_detail", post_id=post.id))
@@ -501,6 +1232,15 @@ def update_post(post_id):
     versioning.snapshot_post(post, edited_by_id=current_user.id)
     audit.record("post_updated", post_id=post.id, actor_id=current_user.id,
                  task_id=post.task_id)
+    if request.form.get("action") == "submit" and post.targets \
+            and post.status in ("draft",):
+        post.status = "pending_approval"
+        audit.record("submitted_for_approval", post_id=post.id,
+                     actor_id=current_user.id, task_id=post.task_id)
+        _notify_submit(post)
+        db.session.commit()
+        flash("Saved & submitted for approval.", "success")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     db.session.commit()
     flash("Draft updated.", "success")
     return redirect(url_for("social.post_detail", post_id=post.id))
@@ -513,13 +1253,29 @@ def post_detail(post_id):
     post = SocialPost.query.get_or_404(post_id)
     # Per-target pre-flight problems (provider-validated), for the UI.
     problems = {t.id: publishing.validate_target(t) for t in post.targets}
+    # Media thumbnails so a reviewer signs off on the actual creative, not a
+    # bare count. Media is the same across a post's targets - use the first.
+    media_previews = []
+    if post.targets and post.targets[0].media:
+        from app.social.media import pipeline
+        for m in post.targets[0].media:
+            is_image = (m.mime_type or "").startswith("image")
+            url = None
+            if is_image and m.object_key:
+                try:
+                    url = pipeline.presigned_url(m.object_key)
+                except Exception:  # noqa: BLE001
+                    url = None
+            media_previews.append({"url": url, "is_image": is_image})
     return render_template(
         "social/post_detail.html",
         post=post,
         problems=problems,
+        media_previews=media_previews,
         can_approve=has_permission(current_user, "approve_tasks")
         or has_permission(current_user, "publish_tasks"),
         to_ist=_to_ist_input,
+        to_ist_display=_to_ist_display,
     )
 
 
@@ -533,10 +1289,46 @@ def delete_post(post_id):
         return redirect(url_for("social.post_detail", post_id=post.id))
     audit.record("post_deleted", post_id=None, actor_id=current_user.id,
                  detail={"post_id": post.id, "title": post.title})
+    _detach_post_history(post)
     db.session.delete(post)
     db.session.commit()
     flash("Draft deleted.", "success")
     return redirect(url_for("social.drafts"))
+
+
+@social_bp.route("/posts/bulk", methods=["POST"])
+@login_required
+def posts_bulk():
+    """Bulk submit-for-approval or delete across a client's draft backlog."""
+    _guard()
+    ids = request.form.getlist("post_ids", type=int)
+    action = request.form.get("action")
+    client = request.form.get("client", type=int) or None
+    if action not in ("submit", "delete") or not ids:
+        flash("Select at least one post and an action.", "error")
+        return redirect(url_for("social.drafts", client=client))
+    posts = SocialPost.query.filter(SocialPost.id.in_(ids)).all()
+    n = 0
+    for post in posts:
+        if action == "submit":
+            if post.status == "draft" and post.targets:
+                post.status = "pending_approval"
+                audit.record("submitted_for_approval", post_id=post.id,
+                             actor_id=current_user.id, task_id=post.task_id)
+                _notify_submit(post)
+                n += 1
+        elif post.status not in ("publishing", "published",
+                                 "partially_published"):
+            audit.record("post_deleted", post_id=None,
+                         actor_id=current_user.id,
+                         detail={"post_id": post.id, "title": post.title})
+            _detach_post_history(post)
+            db.session.delete(post)
+            n += 1
+    db.session.commit()
+    flash(f"{'Submitted' if action == 'submit' else 'Deleted'} {n} post(s).",
+          "success")
+    return redirect(url_for("social.drafts", client=client))
 
 
 @social_bp.route("/posts/<int:post_id>/submit", methods=["POST"])
@@ -550,6 +1342,7 @@ def submit_post(post_id):
     post.status = "pending_approval"
     audit.record("submitted_for_approval", post_id=post.id,
                  actor_id=current_user.id, task_id=post.task_id)
+    _notify_submit(post)
     db.session.commit()
     flash("Submitted for approval.", "success")
     return redirect(url_for("social.post_detail", post_id=post.id))
@@ -619,6 +1412,10 @@ def schedule_post(post_id):
             target.scheduled_for = datetime.utcnow()
 
     result = publishing.schedule_post(post, actor_id=current_user.id)
+    if post.task_id and not publish_now:
+        from app.social.services import task_link
+        task_link.mark_task_scheduled(post, actor_id=current_user.id)
+        db.session.commit()
     if result["problems"]:
         flash(
             "Some targets could not be scheduled - check the validation "
@@ -643,26 +1440,95 @@ def client_assets_api(client_id):
         .order_by(ClientAsset.category, ClientAsset.created_at.desc())
         .all()
     )
-    from app.social.media import pipeline
+    return jsonify(assets=[_asset_preview(a) for a in assets])
 
-    def _preview(a):
-        # A short-lived presigned URL so the composer can show a real
-        # thumbnail + live preview. Best-effort: never break the list if a
-        # single object can't be signed.
-        is_image = (a.mime_type or "").startswith("image")
-        url = None
-        if is_image:
-            try:
-                url = pipeline.presigned_url(a.object_key)
-            except Exception:  # noqa: BLE001
-                url = None
-        return {
-            "id": a.id, "filename": a.original_filename,
-            "mime": a.mime_type or "", "category": a.category,
-            "is_image": is_image, "url": url,
-        }
 
-    return jsonify(assets=[_preview(a) for a in assets])
+@social_bp.route("/api/upload", methods=["POST"])
+@login_required
+def upload_media():
+    """Direct media upload for posts/stories that DIDN'T come from a task -
+    e.g. a photo/video a client sent us to publish. Stored in R2 under a
+    dedicated prefix (never mixed with task files or brand assets) and
+    attached to the post as source='upload'."""
+    _guard()
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify(error="No file provided."), 400
+    mime = (f.mimetype or "").lower()
+    if not (mime.startswith("image") or mime.startswith("video")):
+        return jsonify(error="Only images and videos can be uploaded."), 400
+    import os
+    import re as _re
+    from uuid import uuid4
+    from app.storage.storage_service import StorageService, StorageServiceError
+    safe = _re.sub(r"[^A-Za-z0-9._-]", "_",
+                   os.path.basename(f.filename))[:80] or "upload"
+    object_key = f"social_uploads/{uuid4().hex}_{safe}"
+    try:
+        StorageService().put_bytes(
+            data=f.read(), object_key=object_key, content_type=mime)
+    except (StorageServiceError, Exception):  # noqa: BLE001
+        current_app.logger.exception("[social-upload] store failed")
+        return jsonify(error="Upload failed — please try again."), 500
+    url = None
+    if mime.startswith("image"):
+        try:
+            from app.social.media import pipeline
+            url = pipeline.presigned_url(object_key)
+        except Exception:  # noqa: BLE001
+            url = None
+    return jsonify(object_key=object_key, mime=mime, filename=safe,
+                   is_image=mime.startswith("image"), url=url)
+
+
+@social_bp.route("/api/mentions")
+@login_required
+def mentions_api():
+    """Mentionable handles for the composer's @-autocomplete: the brands/
+    channels the agency manages (connected accounts). Useful for tagging a
+    sister brand or cross-promo. Optional ?q= filter, ?platform= to prefer a
+    platform's handles first."""
+    _guard()
+    q = (request.args.get("q") or "").strip().lower()
+    prefer = (request.args.get("platform") or "").strip()
+    out = []
+    for a in AccountManager.list_accounts(include_revoked=False):
+        handle = (a.display_name or "").lstrip("@")
+        if not handle or (q and q not in handle.lower()):
+            continue
+        out.append({
+            "handle": handle,
+            "label": a.display_name,
+            "platform": a.platform,
+            "type": a.account_type,
+        })
+    # Preferred-platform handles first, then alphabetical.
+    out.sort(key=lambda m: (m["platform"] != prefer, m["label"].lower()))
+    return jsonify(suggestions=out[:8])
+
+
+@social_bp.route("/api/hashtag-sets", methods=["POST"])
+@login_required
+def create_hashtag_set():
+    """Save the current hashtags as a reusable, named set (AJAX from the
+    composer; CSRF is attached automatically by csrf.js)."""
+    _guard()
+    from app.models import SocialHashtagSet
+    name = (request.form.get("name") or "").strip()[:120]
+    hashtags = (request.form.get("hashtags") or "").strip()
+    client_id = request.form.get("client_id", type=int)
+    if not name or not hashtags:
+        return jsonify(error="A name and at least one hashtag are required."), 400
+    # Never orphan a set to a bogus/inactive client id.
+    if client_id and not Client.query.filter_by(
+            id=client_id, status="active").first():
+        client_id = None
+    row = SocialHashtagSet(
+        name=name, hashtags=hashtags, client_id=client_id or None,
+        created_by_id=current_user.id)
+    db.session.add(row)
+    db.session.commit()
+    return jsonify(id=row.id, name=row.name, hashtags=row.hashtags)
 
 
 @social_bp.route("/calendar")
@@ -688,7 +1554,7 @@ def calendar():
     start_utc, end_utc = first_ist - _IST_OFFSET, next_ist - _IST_OFFSET
 
     targets = (
-        SocialPostTarget.query
+        _scope_targets(SocialPostTarget.query, _client_arg())
         .filter(
             SocialPostTarget.scheduled_for.isnot(None),
             SocialPostTarget.scheduled_for >= start_utc,
@@ -722,12 +1588,135 @@ def calendar():
 def history():
     _guard()
     targets = (
-        SocialPostTarget.query
+        _scope_targets(SocialPostTarget.query, _client_arg())
         .order_by(SocialPostTarget.updated_at.desc())
         .limit(100)
         .all()
     )
     return render_template("social/history.html", targets=targets)
+
+
+# ======================================================================
+# Engage - comments inbox
+# ======================================================================
+
+def _scope_comments(query, client_id):
+    """Filter a SocialComment query to one client, via target -> post."""
+    query = query.join(
+        SocialPostTarget,
+        SocialComment.target_id == SocialPostTarget.id)
+    if client_id:
+        query = (query.join(
+            SocialPost, SocialPostTarget.social_post_id == SocialPost.id)
+            .filter(SocialPost.client_id == client_id))
+    return query
+
+
+@social_bp.route("/engage")
+@login_required
+def engage():
+    _guard()
+    from app.models import SocialComment
+    cid = _client_arg()
+    status_f = request.args.get("status")
+    status_f = status_f if status_f in ("open", "done") else "open"
+    q = _scope_comments(
+        SocialComment.query.filter(SocialComment.is_ours.is_(False)), cid)
+    q = q.filter(SocialComment.status == status_f)
+    comments = q.order_by(SocialComment.created_at.desc()).limit(200).all()
+    # Our replies, grouped by the parent comment they answered, so a card can
+    # show the thread inline.
+    ext_ids = [c.external_id for c in comments]
+    replies = {}
+    if ext_ids:
+        for r in (SocialComment.query
+                  .filter(SocialComment.is_ours.is_(True),
+                          SocialComment.parent_external_id.in_(ext_ids))
+                  .order_by(SocialComment.created_at.asc()).all()):
+            replies.setdefault(r.parent_external_id, []).append(r)
+    open_total = _scope_comments(
+        SocialComment.query.filter(SocialComment.is_ours.is_(False),
+                                   SocialComment.status == "open"), cid).count()
+    return render_template("social/engage.html", comments=comments,
+                           replies=replies, status_f=status_f,
+                           open_total=open_total)
+
+
+@social_bp.route("/engage/sync", methods=["POST"])
+@login_required
+def engage_sync():
+    _guard()
+    n = engage_svc.sync_comments(_client_arg())
+    flash(f"Fetched {n} new comment(s) from the platforms." if n
+          else "No new comments — you're all caught up.", "info")
+    return redirect(url_for("social.engage", client=_client_arg()))
+
+
+@social_bp.route("/engage/<int:comment_id>/reply", methods=["POST"])
+@login_required
+def engage_reply(comment_id):
+    _guard()
+    from app.models import SocialComment
+    comment = SocialComment.query.get_or_404(comment_id)
+    text = (request.form.get("message") or "").strip()
+    if not text:
+        flash("Write a reply first.", "error")
+    else:
+        ext = engage_svc.reply(comment, text, actor_id=current_user.id)
+        flash("Reply posted." if ext else
+              "Couldn't post the reply — check the channel connection.",
+              "success" if ext else "error")
+    return redirect(url_for("social.engage", client=_client_arg()))
+
+
+@social_bp.route("/engage/<int:comment_id>/done", methods=["POST"])
+@login_required
+def engage_done(comment_id):
+    _guard()
+    from app.models import SocialComment
+    comment = SocialComment.query.get_or_404(comment_id)
+    engage_svc.mark_done(comment, done=(comment.status != "done"))
+    return redirect(url_for("social.engage", client=_client_arg()))
+
+
+# ======================================================================
+# Studio settings
+# ======================================================================
+
+@social_bp.route("/settings")
+@login_required
+def settings():
+    _guard()
+    from app.models import SocialHashtagSet
+    cid = _client_arg()
+    # All sets visible for the active scope (this client's + agency-wide).
+    hashtag_sets = (_hashtag_sets(cid) if cid
+                    else SocialHashtagSet.query.order_by(
+                        SocialHashtagSet.name).all())
+    accounts = AccountManager.list_accounts()
+    engine_info = {
+        "enabled": current_app.config.get("SOCIAL_ENGINE_ENABLED", False),
+        "auto_worker": current_app.config.get("SOCIAL_INPROCESS_WORKER", True),
+        "worker_interval": current_app.config.get("SOCIAL_WORKER_INTERVAL", 20),
+        "simulation": bool(current_app.config.get("META_EMULATOR")),
+        "cron_ready": bool(current_app.config.get("SOCIAL_WORKER_TOKEN")),
+        "token_vault": bool(current_app.config.get("SOCIAL_TOKEN_KEY")),
+    }
+    return render_template(
+        "social/settings.html", hashtag_sets=hashtag_sets, accounts=accounts,
+        engine=engine_info, is_engine_admin=can_manage_social_engine(current_user))
+
+
+@social_bp.route("/settings/hashtag-sets/<int:set_id>/delete", methods=["POST"])
+@login_required
+def delete_hashtag_set(set_id):
+    _guard()
+    from app.models import SocialHashtagSet
+    hs = SocialHashtagSet.query.get_or_404(set_id)
+    db.session.delete(hs)
+    db.session.commit()
+    flash("Hashtag set deleted.", "success")
+    return redirect(url_for("social.settings", client=_client_arg()))
 
 
 @social_bp.route("/accounts/<int:account_id>/disconnect", methods=["POST"])

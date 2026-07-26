@@ -117,6 +117,13 @@ class MetaGraph:
             self._url(path), data=d, params=params, headers=headers,
             timeout=timeout or _UPLOAD_TIMEOUT, allow_redirects=False))
 
+    def delete(self, path, token=None):
+        headers, proof = self._auth(token)
+        params = {"appsecret_proof": proof} if proof else None
+        return self._handle(requests.delete(
+            self._url(path), params=params, headers=headers,
+            timeout=_TIMEOUT, allow_redirects=False))
+
 
 def appsecret_proof(token):
     """HMAC-SHA256 of the access token keyed by the app secret - Meta's
@@ -231,6 +238,10 @@ class MetaBaseProvider(SocialProvider):
     #: provider in the group (see OAuthManager.finish_all).
     connect_group = "meta"
 
+    #: Edge used to reply to a comment. Facebook replies via
+    #: /{comment_id}/comments; Instagram uses /{comment_id}/replies.
+    comment_reply_edge = "comments"
+
     def graph(self):
         return MetaGraph()
 
@@ -298,3 +309,92 @@ class MetaBaseProvider(SocialProvider):
         """Decrypt the stored per-Page token for this target's account."""
         from app.social.services.accounts import AccountManager
         return AccountManager.access_token(target.account)
+
+    # -- First comment -----------------------------------------------------
+
+    def post_first_comment(self, external_post_id, text, token):
+        """Post `text` as a comment on the just-published post/media - the
+        'hashtags / link in the first comment' pattern. Works for both a
+        Facebook Page post and an Instagram media id via /{id}/comments.
+
+        Note: on real Meta this needs the comment-management permission
+        (pages_manage_engagement for Pages, instagram_manage_comments for
+        IG). It is best-effort - the worker never fails a publish because a
+        first comment couldn't be posted."""
+        text = (text or "").strip()
+        if not (external_post_id and text):
+            return None
+        resp = self.graph().post(f"{external_post_id}/comments", token=token,
+                                 data={"message": text})
+        return resp.get("id")
+
+    # -- Engage: read + reply to comments ---------------------------------
+
+    def list_comments(self, external_post_id, token, limit=50):
+        """Recent comments on a published post/media, newest first, as
+        normalized dicts: external_id, message, author_name, author_id,
+        parent_external_id, created_time. Best-effort - returns [] on any
+        Graph error so one unreachable post never aborts a whole sync."""
+        if not external_post_id:
+            return []
+        try:
+            resp = self.graph().get(
+                f"{external_post_id}/comments", token=token,
+                params={
+                    "fields": "id,message,from,username,created_time,parent",
+                    "limit": limit,
+                })
+        except MetaGraphError:
+            return []
+        out = []
+        for c in (resp.get("data") or []):
+            frm = c.get("from") or {}
+            out.append({
+                "external_id": c.get("id"),
+                "message": c.get("message"),
+                "author_name": frm.get("name") or c.get("username"),
+                "author_id": frm.get("id"),
+                "parent_external_id": (c.get("parent") or {}).get("id"),
+                "created_time": c.get("created_time"),
+            })
+        return out
+
+    def reply_to_comment(self, comment_external_id, text, token):
+        """Publish a reply to a comment. Returns the new comment id, or None.
+        Needs the comment-management permission on real Meta
+        (pages_manage_engagement / instagram_manage_comments)."""
+        text = (text or "").strip()
+        if not (comment_external_id and text):
+            return None
+        resp = self.graph().post(
+            f"{comment_external_id}/{self.comment_reply_edge}", token=token,
+            data={"message": text})
+        return resp.get("id")
+
+    # -- Delete / existence -----------------------------------------------
+
+    def delete_post(self, external_post_id, token):
+        """Delete a published post on the platform. Default: not supported
+        (Instagram media cannot be deleted via the Graph API)."""
+        raise PermanentError(
+            "Deleting a published post isn't supported for this platform via "
+            "the API - remove it directly on the platform.")
+
+    def post_exists(self, external_post_id, token):
+        """True if the post still exists on the platform. A clear not-found
+        (Meta code 100/803) means it was deleted there; any other error is
+        treated as 'still exists' so a transient glitch never wrongly marks a
+        live post as removed."""
+        if not external_post_id:
+            return True
+        try:
+            self.graph().get(external_post_id, token=token,
+                             params={"fields": "id"})
+            return True
+        except MetaGraphError as exc:
+            code = exc.error.get("code")
+            if code in (100, 803) or exc.status_code == 404:
+                return False
+            return True
+        except requests.exceptions.RequestException:
+            return True

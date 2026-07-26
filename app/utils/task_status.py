@@ -18,6 +18,7 @@ PAUSED = "Paused"
 ON_HOLD = "On Hold"
 CORE_REVIEW = "Core Review"
 CLIENT_REVIEW = "Client Review"
+SCHEDULED = "Scheduled"
 PUBLISHED = "Published"
 VOID = "Void"
 
@@ -59,6 +60,10 @@ DESCRIPTIONS = {
     CLIENT_REVIEW:
         "With the client for approval.",
 
+    SCHEDULED:
+        "Approved and scheduled in Social Studio. It publishes "
+        "automatically at the set time, then moves to Published.",
+
     PUBLISHED:
         "Approved and delivered. The task is complete.",
 
@@ -86,6 +91,7 @@ BOARD_STATUSES = [
     ON_HOLD,
     CORE_REVIEW,
     CLIENT_REVIEW,
+    SCHEDULED,
     PUBLISHED,
 ]
 
@@ -180,6 +186,7 @@ DURATION_FIELD = {
     ON_HOLD: "on_hold_seconds",
     CORE_REVIEW: "core_review_seconds",
     CLIENT_REVIEW: "client_review_seconds",
+    SCHEDULED: "scheduled_seconds",
     PUBLISHED: "published_seconds",
     VOID: "void_seconds",
 }
@@ -206,6 +213,9 @@ EMPLOYEE_MOVES = {
     # lets an employee pull back a submission made by mistake
     CORE_REVIEW: [ASSIGNED, IN_PROGRESS, PAUSED],
     CLIENT_REVIEW: [],
+    # Scheduled is driven by Social Studio (approved post scheduled to auto-
+    # publish); an employee can't move it by hand.
+    SCHEDULED: [],
     PUBLISHED: [],
     VOID: [],
 }

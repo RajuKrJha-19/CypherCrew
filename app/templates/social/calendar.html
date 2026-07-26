@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Calendar · Social Publishing | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
@@ -11,11 +11,10 @@
         <p>Every scheduled post at a glance — colour-coded by platform, in IST</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.compose') }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
     </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -27,9 +26,9 @@
     <div style="display:flex; align-items:center; gap:12px;">
         <span class="cal-title">{{ month_name }} {{ year }}</span>
         <div class="cal-nav">
-            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=prev_y, m=prev_m) }}" title="Previous month"><i class="fa-solid fa-chevron-left"></i></a>
-            <a class="btn btn-ghost" href="{{ url_for('social.calendar') }}">Today</a>
-            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=next_y, m=next_m) }}" title="Next month"><i class="fa-solid fa-chevron-right"></i></a>
+            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=prev_y, m=prev_m, client=selected_client_id) }}" title="Previous month" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></a>
+            <a class="btn btn-ghost" href="{{ url_for('social.calendar', client=selected_client_id) }}">Today</a>
+            <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=next_y, m=next_m, client=selected_client_id) }}" title="Next month" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></a>
         </div>
     </div>
     <div class="cal-legend">
@@ -47,14 +46,22 @@
             {% if day == 0 %}
             <div class="cal-cell out"></div>
             {% else %}
-            <div class="cal-cell {{ 'today' if day == today }}">
-                <span class="cal-daynum">{{ day }}</span>
+            {% set daystr = '%04d-%02d-%02d'|format(year, month, day) %}
+            <div class="cal-cell {{ 'today' if day == today }}" data-date="{{ daystr }}">
+                <div class="cal-cell-head">
+                    <span class="cal-daynum">{{ day }}</span>
+                    <a class="cal-add" href="{{ url_for('social.compose', client=selected_client_id, date=daystr) }}"
+                       title="New post on {{ day }} {{ month_name }}" aria-label="New post on {{ day }} {{ month_name }}"><i class="fa-solid fa-plus"></i></a>
+                </div>
                 {% set events = by_day.get(day, []) %}
                 {% for t in events[:3] %}
                 {% set tm = to_ist(t.scheduled_for)[11:16] %}
-                <a class="cal-event {{ t.platform }}"
+                {% set movable = t.status in ['scheduled','approved'] %}
+                <a class="cal-event {{ t.platform }}{{ ' movable' if movable }}"
                    href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}"
-                   title="{{ (t.post.title if t.post else '') or t.caption or 'Post' }} · {{ t.platform }} · {{ t.status }}">
+                   {% if movable %}draggable="true" data-target-id="{{ t.id }}"{% endif %}
+                   title="{{ (t.post.title if t.post else '') or t.caption or 'Post' }} · {{ t.platform }} · {{ t.status }}{{ ' · drag to reschedule' if movable }}">
+                    <span class="st-dot {{ t.status }}" style="width:6px;height:6px;"></span>
                     <i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i>
                     <span class="ce-time">{{ tm }}</span>
                     {{ (t.post.title if t.post else none) or t.caption or 'Post' }}
@@ -68,4 +75,28 @@
         {% endfor %}
     {% endfor %}
 </div>
+
+<script>
+(function(){
+    var moving = null;
+    document.querySelectorAll('.cal-event.movable').forEach(function(ev){
+        ev.addEventListener('dragstart', function(e){ moving = ev.dataset.targetId; e.dataTransfer.effectAllowed='move'; ev.classList.add('dragging'); });
+        ev.addEventListener('dragend', function(){ ev.classList.remove('dragging'); document.querySelectorAll('.cal-cell.drop').forEach(function(c){ c.classList.remove('drop'); }); });
+        ev.addEventListener('click', function(e){ if(ev.classList.contains('dragging')) e.preventDefault(); });
+    });
+    document.querySelectorAll('.cal-cell[data-date]').forEach(function(cell){
+        cell.addEventListener('dragover', function(e){ if(moving){ e.preventDefault(); cell.classList.add('drop'); } });
+        cell.addEventListener('dragleave', function(){ cell.classList.remove('drop'); });
+        cell.addEventListener('drop', function(e){
+            e.preventDefault(); cell.classList.remove('drop');
+            if(!moving) return;
+            var tid = moving; moving = null;
+            fetch('/social/targets/'+tid+'/move', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({date: cell.dataset.date})})
+              .then(function(r){ return r.json(); })
+              .then(function(d){ if(d.ok){ window.location.reload(); } else { alert(d.error||'Could not move the post.'); } })
+              .catch(function(){ alert('Could not move the post.'); });
+        });
+    });
+})();
+</script>
 {% endblock %}

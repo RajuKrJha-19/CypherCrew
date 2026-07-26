@@ -1,0 +1,80 @@
+{% extends "base_studio.html" %}
+{% block title %}Engage · Social Studio | CypherCrew{% endblock %}
+
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Engage</h1>
+        <p>{% if selected_client %}Comments on {{ selected_client.client_name }}'s published posts{% else %}Comments across every published post{% endif %} — reply without leaving the Studio</p>
+    </div>
+    <div class="top-actions">
+        <form method="POST" action="{{ url_for('social.engage_sync') }}" data-turbo="false" style="margin:0;">
+            <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+            <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Fetch comments</button>
+        </form>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="social-filters" style="margin-bottom:14px;">
+    <a href="{{ url_for('social.engage', client=selected_client_id, status='open') }}" class="draft-chip {{ 'on' if status_f == 'open' }}">Open{% if open_total %} · {{ open_total }}{% endif %}</a>
+    <a href="{{ url_for('social.engage', client=selected_client_id, status='done') }}" class="draft-chip {{ 'on' if status_f == 'done' }}">Done</a>
+</div>
+
+{% if comments %}
+<div class="engage-list">
+    {% for c in comments %}
+    <div class="engage-card">
+        <div class="engage-head">
+            <span class="pf-chip {{ c.platform }}"><i class="{{ PF_ICON.get(c.platform,'fa-solid fa-share-nodes') }}"></i></span>
+            <div class="engage-who">
+                <strong>{{ c.author_name or 'Someone' }}</strong>
+                <span class="engage-meta">
+                    {% if c.target and c.target.post %}on “{{ c.target.post.title or 'a post' }}”{% endif %}
+                    {% if c.created_time %} · {{ c.created_time[:10] }}{% endif %}
+                </span>
+            </div>
+            {% if c.replied %}<span class="sp-pill success"><i class="fa-solid fa-reply"></i> Replied</span>{% endif %}
+        </div>
+
+        <div class="engage-body">{{ c.message or '' }}</div>
+
+        {% set thread = replies.get(c.external_id, []) %}
+        {% for r in thread %}
+        <div class="engage-reply">
+            <span class="engage-reply-who"><i class="fa-solid fa-share"></i> You</span>
+            <span>{{ r.message }}</span>
+        </div>
+        {% endfor %}
+
+        <div class="engage-actions">
+            <form method="POST" action="{{ url_for('social.engage_reply', comment_id=c.id) }}" data-turbo="false" class="engage-reply-form">
+                <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                <input type="text" name="message" aria-label="Reply to {{ c.author_name or 'comment' }}" placeholder="Write a reply…" autocomplete="off">
+                <button type="submit" class="btn btn-sm"><i class="fa-solid fa-paper-plane"></i> Reply</button>
+            </form>
+            <form method="POST" action="{{ url_for('social.engage_done', comment_id=c.id) }}" data-turbo="false" style="margin:0;">
+                <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                <button type="submit" class="mini-link">{{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-comments"></i></div>
+        <h3>{{ 'No open comments' if status_f == 'open' else 'Nothing here' }}</h3>
+        <p>Comments on your published posts show up here. Hit <strong>Fetch comments</strong> to pull the latest from the platforms.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

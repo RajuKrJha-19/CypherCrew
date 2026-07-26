@@ -154,7 +154,8 @@ def _process(job_id):
         else:
             step = provider.poll_publish(target, provider_state, token)
 
-        result = _apply_step(job, target, step, provider_state)
+        result = _apply_step(job, target, step, provider_state,
+                             provider=provider, token=token)
         db.session.commit()
         return {"job": job_id, "result": result}
 
@@ -163,7 +164,7 @@ def _process(job_id):
         return _handle_failure(job_id, exc)
 
 
-def _apply_step(job, target, step, provider_state):
+def _apply_step(job, target, step, provider_state, provider=None, token=None):
     status = getattr(step, "status", None)
 
     if status in (StepStatus.DONE.value, "done"):
@@ -190,6 +191,7 @@ def _apply_step(job, target, step, provider_state):
             "social publish OK target=%s platform=%s external_id=%s",
             target.id, target.platform, step.external_post_id,
         )
+        _post_first_comment(target, step, provider, token)
         _maybe_finalize_post(target)
         return "published"
 
@@ -226,6 +228,14 @@ def _handle_failure(job_id, exc):
                     ratelimit.release(target.social_account_id, window)
         if isinstance(error, AuthError) and target.account is not None:
             AccountManager.mark_needs_reauth(target.account)
+            # Tell whoever connected the channel that it needs reconnecting.
+            if target.account.connected_by_id:
+                audit.notify(
+                    target.account.connected_by_id,
+                    "Channel needs reconnecting",
+                    f"{target.account.display_name} can no longer publish - "
+                    "reconnect it in Social Studio → Accounts.",
+                    link="/social/accounts", actor_id=None)
         if job.state in ("dead", "failed"):
             target.status = "failed"
             audit.record(
@@ -234,6 +244,14 @@ def _handle_failure(job_id, exc):
                 detail={"error": job.last_error, "outcome": outcome},
                 message="Publish failed: " + (job.last_error or ""),
             )
+            post = target.post
+            if post and post.created_by_id:
+                audit.notify(
+                    post.created_by_id, "Post failed to publish",
+                    f"“{post.title or 'Your post'}” failed on "
+                    f"{target.platform}: {(job.last_error or '')[:120]}",
+                    link=f"/social/posts/{target.social_post_id}",
+                    actor_id=None)
 
     # last_error is a platform message, never a token - safe to log.
     current_app.logger.warning(
@@ -244,19 +262,56 @@ def _handle_failure(job_id, exc):
     return {"job": job_id, "result": outcome, "error": job.last_error}
 
 
+def _post_first_comment(target, step, provider, token):
+    """Best-effort: auto-post the target's first comment right after it goes
+    live. A failure here is logged but never fails the publish - the post is
+    already out."""
+    text = (getattr(target, "first_comment", None) or "").strip()
+    if not (text and provider and token and step.external_post_id):
+        return
+    if not (provider.capabilities and provider.capabilities.supports_first_comment):
+        return
+    if not hasattr(provider, "post_first_comment"):
+        return
+    try:
+        comment_id = provider.post_first_comment(
+            step.external_post_id, text, token)
+        audit.record(
+            "first_comment_posted", target_id=target.id,
+            post_id=target.social_post_id, task_id=_task_id(target),
+            detail={"comment_id": comment_id},
+        )
+    except Exception as exc:  # noqa: BLE001 - never break a live publish
+        current_app.logger.warning(
+            "first comment failed target=%s: %s", target.id, exc)
+
+
 def _task_id(target):
     post = target.post
     return post.task_id if post else None
 
 
 def _maybe_finalize_post(target):
-    """Roll the parent post's status up once all its targets settle."""
+    """Roll the parent post's status up once all its targets settle, and -
+    when the post came from a task - reflect completion back onto that task
+    (Client Review -> Published), so the ERP task lifecycle stays in sync."""
     post = target.post
     if post is None:
         return
     statuses = [t.status for t in post.targets]
     if all(s == "published" for s in statuses):
         post.status = "published"
+        # Tell the creator their (often scheduled) post is now live.
+        if post.created_by_id:
+            plats = sorted({t.platform for t in post.targets})
+            audit.notify(
+                post.created_by_id, "Post published",
+                f"“{post.title or 'Your post'}” is now live on "
+                + ", ".join(plats) + ".",
+                link=f"/social/posts/{post.id}", actor_id=None)
+        if post.task_id:
+            from app.social.services import task_link
+            task_link.mark_task_published(post)
     elif any(s == "published" for s in statuses) and any(s == "failed" for s in statuses):
         post.status = "partially_published"
     elif all(s == "failed" for s in statuses):

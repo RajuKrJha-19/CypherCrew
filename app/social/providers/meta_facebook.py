@@ -24,7 +24,15 @@ class MetaFacebookProvider(MetaBaseProvider):
         supports_native_scheduling=True,   # available, but engine owns timing
         max_carousel=10,
         max_caption_chars=63206,
+        supports_first_comment=True,
+        supports_delete=True,
+        supports_comments=True,
     )
+
+    def delete_post(self, external_post_id, token):
+        """Delete a Facebook Page post (or Reel/video) via the Graph API."""
+        self.graph().delete(external_post_id, token=token)
+        return True
 
     def _required_scopes(self):
         return ["pages_manage_posts", "pages_show_list"]

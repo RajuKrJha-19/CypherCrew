@@ -50,8 +50,10 @@ from app.models.social_post import (
     SocialPost,
     SocialPostTarget,
     SocialMediaAsset,
+    SocialHashtagSet,
 )
 from app.models.publish_job import PublishJob, PublishResult
+from app.models.social_comment import SocialComment
 from app.models.social_analytics import SocialAnalyticsSnapshot
 from app.models.social_audit import SocialAuditLog, ContentVersion
 from app.models.platform_rate_budget import PlatformRateBudget

@@ -1,25 +1,23 @@
-{% extends "base_app.html" %}
-{% block title %}{{ 'Edit post' if post else 'New post' }} · Social | CypherCrew{% endblock %}
+{% extends "base_studio.html" %}
+{% block title %}{{ 'Edit post' if post else 'New post' }} · Social Studio | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+{% set TYPES = [('image','fa-image','Image'),('carousel','fa-images','Carousel'),('reel','fa-film','Reel'),('story','fa-circle-plus','Story'),('video','fa-video','Video'),('text','fa-font','Text')] %}
+{% set platforms_present = accounts|map(attribute='platform')|unique|list %}
 
 {% block content %}
 <div class="page-header">
     <div>
         <h1>{{ 'Edit post' if post else 'Compose' }}</h1>
-        <p>Write once, preview per platform, and publish everywhere you’re connected</p>
+        <p>Write once, tailor per platform, preview, and publish everywhere you’re connected</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.drafts') }}" class="btn btn-secondary"><i class="fa-solid fa-layer-group"></i> Drafts</a>
+        <a href="{{ url_for('social.drafts', client=selected_client_id) }}" class="btn btn-secondary"><i class="fa-solid fa-layer-group"></i> Drafts</a>
     </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
-
 {% with messages = get_flashed_messages(with_categories=true) %}
-{% for category, message in messages %}
-<div class="alert {{ category }}">{{ message }}</div>
-{% endfor %}
+{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
 {% endwith %}
 
 {% if not accounts %}
@@ -35,124 +33,194 @@
 <form method="POST"
       action="{{ url_for('social.update_post', post_id=post.id) if post else url_for('social.create_post') }}"
       class="composer-3col" id="composerForm">
+    <input type="hidden" name="task_id" value="{{ task.id if task else (post.task_id if post else '') }}">
+
+    {% if task %}
+    <div class="cmp-task-banner">
+        <i class="fa-solid fa-diagram-project"></i>
+        <div><b>Composing for task:</b> {{ task.title }}{% if task.client %} · {{ task.client.client_name }}{% endif %}
+            <span>The deliverable files are loaded as media, and the task moves to <b>Published</b> automatically once this goes live.</span></div>
+        <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" data-turbo="false" class="cmp-task-link">Open task <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+    </div>
+    {% endif %}
 
     {# ================= LEFT: editor ================= #}
     <div class="social-card">
         <div class="social-card-body">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-                <label class="field">
-                    <span>Title <small>(internal)</small></span>
-                    <input type="text" name="title" value="{{ post.title or '' }}" placeholder="e.g. July launch">
-                </label>
-                <label class="field">
-                    <span>Client</span>
+                <label class="field"><span>Title <small>(internal)</small></span>
+                    <input type="text" name="title" value="{{ post.title or '' }}" placeholder="e.g. July launch"></label>
+                <label class="field"><span>Client</span>
                     <select name="client_id" id="clientSelect">
                         <option value="">— No client —</option>
                         {% for c in clients %}
-                        <option value="{{ c.id }}" {% if post and post.client_id == c.id %}selected{% endif %}>{{ c.client_name }}</option>
+                        <option value="{{ c.id }}" {% if (post and post.client_id == c.id) or (not post and default_client_id == c.id) %}selected{% endif %}>{{ c.client_name }}</option>
                         {% endfor %}
-                    </select>
-                </label>
+                    </select></label>
             </div>
 
+            {# --- Post type --- #}
+            <div class="cmp-section" style="margin-top:16px;">
+                <span class="cmp-label">Post type</span>
+                <div class="cmp-types" id="postTypes">
+                    {% for pt, ic, lbl in TYPES %}
+                    <label class="cmp-type {{ 'on' if post_type == pt }}">
+                        <input type="radio" name="post_type" value="{{ pt }}" {{ 'checked' if post_type == pt }}>
+                        <i class="fa-solid {{ ic }}"></i> {{ lbl }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="cmp-warn" id="postTypeWarn"></div>
+            </div>
+
+            {# --- Caption --- #}
             <div class="cmp-section" style="margin-top:16px;">
                 <span class="cmp-label">Caption <span class="cmp-count" id="captionCount">0</span></span>
                 <div class="cmp-emoji-bar" id="emojiBar">
-                    {% for e in ['😀','🔥','🎉','✨','👍','❤️','📢','🚀'] %}
-                    <button type="button" data-emoji="{{ e }}">{{ e }}</button>
-                    {% endfor %}
-                    <button type="button" class="cmp-tool" data-insert="#"><i class="fa-solid fa-hashtag"></i> Hashtag</button>
-                    <button type="button" class="cmp-tool" data-insert="@"><i class="fa-solid fa-at"></i> Mention</button>
+                    {% for e in ['😀','🔥','🎉','✨','👍','❤️','📢','🚀'] %}<button type="button" data-emoji="{{ e }}" aria-label="Insert {{ e }}">{{ e }}</button>{% endfor %}
+                    <button type="button" class="cmp-tool" data-insert="#" aria-label="Insert hashtag"><i class="fa-solid fa-hashtag"></i></button>
+                    <button type="button" class="cmp-tool" data-insert="@" aria-label="Insert mention"><i class="fa-solid fa-at"></i></button>
                 </div>
-                <textarea name="caption" id="captionInput" rows="7"
-                          placeholder="Write your caption…">{{ post.base_caption or '' }}</textarea>
+                <textarea name="caption" id="captionInput" aria-label="Caption" rows="6" placeholder="Write your caption…">{{ post.base_caption or '' }}</textarea>
+                <div class="cmp-toolbar-row" style="margin-top:8px;">
+                    <select class="cmp-set-select" id="hashtagSet" aria-label="Insert a saved hashtag set">
+                        <option value="">Insert hashtag set…</option>
+                        {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
+                    </select>
+                    <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
+                </div>
+
+                {# per-platform overrides #}
+                {% if platforms_present %}
+                <details class="cmp-overrides" id="overrides" {{ 'open' if platform_captions }}>
+                    <summary><i class="fa-solid fa-sliders"></i> Customise caption per platform</summary>
+                    {% for pf in platforms_present %}
+                    <div class="cmp-override" data-platform="{{ pf }}">
+                        <div class="cmp-override-head"><span class="pf-chip {{ pf }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i> {{ pf|capitalize }}</span></div>
+                        <textarea name="caption_{{ pf }}" aria-label="{{ pf|capitalize }} caption" placeholder="Leave empty to use the shared caption above">{{ platform_captions.get(pf, '') }}</textarea>
+                    </div>
+                    {% endfor %}
+                </details>
+                {% endif %}
             </div>
 
+            {# --- First comment --- #}
+            <div class="cmp-section cmp-first-comment" style="margin-top:16px;">
+                <span class="cmp-label">First comment <small>Auto-posted right after publish</small></span>
+                <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" placeholder="e.g. #hashtags or a link — kept out of the caption, posted as the first comment">{{ first_comment }}</textarea>
+                <span class="cmp-hint-inline" id="fcHint"></span>
+            </div>
+
+            {# --- Media: task deliverables (if from a task) --- #}
+            {% if task_assets %}
             <div class="cmp-section" style="margin-top:16px;">
-                <span class="cmp-label">Media <small id="mediaHint">Select a client to load its brand assets</small></span>
+                <span class="cmp-label"><i class="fa-solid fa-paperclip"></i> Deliverable files <small>from the task</small></span>
+                <div class="cmp-media-grid" id="taskMediaGrid">
+                    {% for a in task_assets %}
+                    <label class="cmp-asset" title="{{ a.filename }}">
+                        <input type="checkbox" name="task_file_ids" value="{{ a.id }}" data-url="{{ a.url or '' }}" {{ 'checked' if a.id in selected_task_file_ids }}>
+                        <span class="ord"></span>
+                        <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
+                        <span class="cmp-asset-name">{{ a.filename }}</span>
+                        <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# --- Media: direct upload (content sent to us, not from a task) --- #}
+            <div class="cmp-section" style="margin-top:16px;">
+                <span class="cmp-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload media <small>for content a client sent us to publish directly</small></span>
+                <label class="cmp-upload" id="uploadZone">
+                    <input type="file" id="uploadInput" accept="image/*,video/*" multiple hidden>
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Drag &amp; drop, or <b>browse</b> — images &amp; videos</span>
+                </label>
+                <div class="cmp-media-grid" id="uploadGrid">
+                    {% for u in uploaded_media %}
+                    <label class="cmp-asset selected" title="uploaded">
+                        <input type="checkbox" name="upload_media" value="{{ u.object_key }}::{{ u.mime }}" data-url="{{ u.url or '' }}" checked>
+                        <span class="ord"></span>
+                        <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
+                        <span class="cmp-asset-name">uploaded</span>
+                        <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# --- Media: brand assets --- #}
+            <div class="cmp-section" style="margin-top:16px;">
+                <span class="cmp-label">Brand assets <small id="mediaHint">Select a client to load its brand assets</small></span>
                 <div class="cmp-media-grid" id="mediaGrid"></div>
             </div>
+
+            {# --- Also share to Story --- #}
+            <label class="cmp-story-toggle" id="alsoStoryWrap" style="margin-top:14px;">
+                <input type="checkbox" name="also_story" id="alsoStory">
+                <span><i class="fa-brands fa-instagram"></i> Also share to <b>Story</b> <small id="alsoStoryHint">publishes the media as an Instagram Story alongside the post</small></span>
+            </label>
         </div>
     </div>
 
     {# ================= RIGHT: preview + options ================= #}
     <div class="composer-side-rail">
-        {# --- Live preview --- #}
         <div class="social-card">
             <div class="social-card-head">
                 <h3><i class="fa-solid fa-eye"></i> Live preview</h3>
-                <div class="preview-switch" id="previewSwitch">
-                    <button type="button" data-pf="facebook" class="active">Facebook</button>
-                    <button type="button" data-pf="instagram">Instagram</button>
-                </div>
+                <div class="preview-switch" id="previewSwitch"></div>
             </div>
             <div class="social-card-body">
                 <div class="phone-preview">
                     <div class="pp-head">
                         <div class="pp-ava facebook" id="ppAva"><i class="fa-brands fa-facebook"></i></div>
-                        <div>
-                            <div class="pp-name" id="ppName">Your Page</div>
-                            <div class="pp-sub" id="ppSub">Just now · 🌐</div>
-                        </div>
+                        <div><div class="pp-name" id="ppName">Your Page</div><div class="pp-sub" id="ppSub">Just now · 🌐</div></div>
                     </div>
-                    <div class="pp-caption" id="ppCaptionTop" style="display:none;"></div>
                     <div class="pp-media" id="ppMedia"><i class="fa-regular fa-image"></i></div>
-                    <div class="pp-actions" id="ppActions">
-                        <i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>
-                    </div>
+                    <div class="pp-actions" id="ppActions"><i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i></div>
                     <div class="pp-caption" id="ppCaption"><span class="ph">Your caption preview…</span></div>
+                    <div class="pp-first-comment" id="ppFirstComment" style="display:none;">
+                        <span class="av"></span><span class="bd"><b id="ppFcName">Your Page</b><span id="ppFcText"></span></span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {# --- Publishing options --- #}
         <div class="social-card">
             <div class="social-card-head"><h3><i class="fa-solid fa-sliders"></i> Publishing</h3></div>
             <div class="social-card-body">
                 <div class="cmp-section">
-                    <span class="cmp-label">Post type</span>
-                    <select name="post_type" id="postTypeSelect">
-                        {% for pt in ['image','carousel','reel','story','video','text','document'] %}
-                        <option value="{{ pt }}" {% if post_type == pt %}selected{% endif %}>{{ pt|capitalize }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="cmp-warn" id="postTypeWarn"></div>
-                </div>
-
-                <div class="cmp-section" style="margin-top:16px;">
                     <span class="cmp-label">Publish to <small id="accountCount"></small></span>
                     <div class="cmp-accounts">
                         {% for a in accounts %}
                         <label class="cmp-account {% if a.id in selected_account_ids %}on{% endif %}">
-                            <input type="checkbox" name="account_ids" value="{{ a.id }}"
-                                   data-platform="{{ a.platform }}" data-name="{{ a.display_name }}"
-                                   {% if a.id in selected_account_ids %}checked{% endif %}>
+                            <input type="checkbox" name="account_ids" value="{{ a.id }}" data-platform="{{ a.platform }}" data-name="{{ a.display_name }}" data-client="{{ a.client_id or '' }}" {% if a.id in selected_account_ids %}checked{% endif %}>
                             <span class="ava pf-{{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i></span>
                             <span class="nm">{{ a.display_name }}</span>
                         </label>
                         {% endfor %}
                     </div>
+                    <p class="cmp-hint-inline" id="accountsHint" style="display:none;"></p>
                 </div>
-
                 <div class="cmp-section" style="margin-top:16px;">
                     <span class="cmp-label">Schedule <small>Times are IST</small></span>
-                    <label class="cmp-radio">
-                        <input type="radio" name="publish_mode" value="schedule" id="modeSchedule" checked>
-                        Schedule for later
-                    </label>
-                    <input type="datetime-local" name="schedule" id="scheduleInput" value="{{ schedule_value }}">
-                    <label class="cmp-radio">
-                        <input type="radio" name="publish_mode" value="now" id="modeNow">
-                        Publish as soon as approved
-                    </label>
+                    <label class="cmp-radio"><input type="radio" name="publish_mode" value="schedule" checked> Schedule for later</label>
+                    <input type="datetime-local" name="schedule" id="scheduleInput" aria-label="Scheduled date and time (IST)" value="{{ schedule_value }}">
+                    <label class="cmp-radio"><input type="radio" name="publish_mode" value="now"> Publish as soon as approved</label>
                 </div>
-
-                <button type="submit" class="btn" style="width:100%; margin-top:18px;">
-                    <i class="fa-solid fa-floppy-disk"></i> {{ 'Save changes' if post else 'Save draft' }}
-                </button>
-                <p class="connect-note" style="text-align:center; margin-top:10px;">
-                    Saved as a draft — it publishes only after approval &amp; scheduling.
-                </p>
+                <div class="cmp-submit-row" style="display:flex; gap:8px; margin-top:18px;">
+                    <button type="submit" class="btn btn-secondary" style="flex:1;">
+                        <i class="fa-solid fa-floppy-disk"></i> {{ 'Save changes' if post else 'Save draft' }}
+                    </button>
+                    {% if not post or post.status in ['draft', 'rejected'] %}
+                    <button type="submit" name="action" value="submit" class="btn" style="flex:1;"
+                            title="Save and route this post to an approver">
+                        <i class="fa-solid fa-paper-plane"></i> Save &amp; submit
+                    </button>
+                    {% endif %}
+                </div>
+                <p class="connect-note" style="text-align:center; margin-top:10px;">Publishes only after approval &amp; scheduling.</p>
             </div>
         </div>
     </div>
@@ -163,147 +231,286 @@
     const caps = {{ capabilities|tojson }};
     const preselectedAssets = {{ selected_asset_ids|tojson }};
     const PF_LABEL = {facebook:"Facebook", instagram:"Instagram", youtube:"YouTube", x:"X", linkedin:"LinkedIn"};
-
+    const PF_ICON_JS = {facebook:"fa-brands fa-facebook", instagram:"fa-brands fa-instagram", youtube:"fa-brands fa-youtube", x:"fa-brands fa-x-twitter", linkedin:"fa-brands fa-linkedin"};
     const $ = id => document.getElementById(id);
     const clientSelect = $("clientSelect"), mediaGrid = $("mediaGrid"), mediaHint = $("mediaHint");
     const caption = $("captionInput"), captionCount = $("captionCount");
-    const postType = $("postTypeSelect"), postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount");
+    const postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount"), typeHintFc = $("fcHint");
     let previewPlatform = "facebook";
     let selectedMediaUrl = null;
 
-    // ---- caption count + preview ----
-    function maxChars() {
-        const checked = accountsChecked();
-        let m = Infinity;
-        checked.forEach(c => { const cap = caps[c.dataset.platform];
-            if (cap && cap.max_caption_chars) m = Math.min(m, cap.max_caption_chars); });
-        return m === Infinity ? null : m;
-    }
-    function updateCaption() {
-        const len = caption.value.length, m = maxChars();
-        captionCount.textContent = m ? `${len} / ${m}` : `${len}`;
-        captionCount.classList.toggle("over", m && len > m);
-        renderPreview();
-    }
+    function postType(){ var r=document.querySelector('input[name="post_type"]:checked'); return r?r.value:"image"; }
+    function accountsChecked(){ return [...document.querySelectorAll('input[name="account_ids"]:checked')]; }
+    function selectedPlatforms(){ return [...new Set(accountsChecked().map(c=>c.dataset.platform))]; }
+
+    function maxChars(){ let m=Infinity; accountsChecked().forEach(c=>{var cap=caps[c.dataset.platform]; if(cap&&cap.max_caption_chars)m=Math.min(m,cap.max_caption_chars);}); return m===Infinity?null:m; }
+    function updateCaption(){ const len=caption.value.length, m=maxChars(); captionCount.textContent=m?`${len} / ${m}`:`${len}`; captionCount.classList.toggle("over",m&&len>m); renderPreview(); }
     caption.addEventListener("input", updateCaption);
 
-    // ---- accounts ----
-    function accountsChecked(){ return [...document.querySelectorAll('input[name="account_ids"]:checked')]; }
-    function refreshAccounts() {
-        document.querySelectorAll('.cmp-account').forEach(l => {
-            l.classList.toggle("on", l.querySelector("input").checked);
-        });
-        const n = accountsChecked().length;
-        accountCount.textContent = n ? `${n} selected` : "none selected";
-        refreshTypeWarn();
-        updateCaption();
-    }
-    document.querySelectorAll('input[name="account_ids"]').forEach(c => c.addEventListener("change", refreshAccounts));
-
-    // ---- post type support warning ----
-    function refreshTypeWarn() {
-        const pt = postType.value, checked = accountsChecked();
-        if (!checked.length) { postTypeWarn.className = "cmp-warn"; return; }
-        const bad = [...new Set(checked.map(c => c.dataset.platform)
-            .filter(p => caps[p] && !caps[p].post_types.includes(pt)))];
-        if (bad.length) {
-            postTypeWarn.className = "cmp-warn warn show";
-            postTypeWarn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' +
-                pt + ' isn’t supported on: ' + bad.map(p => PF_LABEL[p]||p).join(", ");
-        } else {
-            postTypeWarn.className = "cmp-warn ok show";
-            postTypeWarn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Supported on all selected platforms';
+    // post type
+    $("postTypes").addEventListener("change", function(){
+        document.querySelectorAll('.cmp-type').forEach(l=>l.classList.toggle("on", l.querySelector("input").checked));
+        applyType(); refreshTypeWarn(); renderPreview();
+    });
+    function applyType(){
+        const pt=postType(), showMedia = pt!=="text";
+        mediaGrid.closest(".cmp-section").style.display = showMedia?"":"none";
+        var tg=$("taskMediaGrid"); if(tg) tg.closest(".cmp-section").style.display = showMedia?"":"none";
+        var uz=$("uploadZone"); if(uz) uz.closest(".cmp-section").style.display = showMedia?"":"none";
+        if(pt!=="carousel"){ // collapse to a single selection across ALL media grids (brand, task, uploads)
+            var checked=[...document.querySelectorAll(MEDIA_SEL_CHECKED)];
+            checked.slice(1).forEach(c=>c.checked=false);
         }
+        refreshStory();
+        refreshMediaSelection();
     }
-    postType.addEventListener("change", () => { refreshTypeWarn(); renderPreview(); });
 
-    // ---- emoji / insert helpers ----
-    function insertAtCursor(text) {
-        const s = caption.selectionStart, e = caption.selectionEnd;
-        caption.value = caption.value.slice(0, s) + text + caption.value.slice(e);
-        caption.focus(); caption.selectionStart = caption.selectionEnd = s + text.length;
-        updateCaption();
+    // accounts
+    function refreshAccounts(){
+        document.querySelectorAll('.cmp-account').forEach(l=>l.classList.toggle("on", l.querySelector("input").checked));
+        const sel=selectedPlatforms();
+        accountCount.textContent = accountsChecked().length ? `${accountsChecked().length} selected` : "none selected";
+        // per-platform override visibility
+        document.querySelectorAll('.cmp-override').forEach(o=>{ o.style.display = sel.includes(o.dataset.platform)?"":"none"; });
+        // first-comment hint
+        const fc = sel.filter(p=>caps[p]&&caps[p].supports_first_comment).map(p=>PF_LABEL[p]||p);
+        typeHintFc.textContent = fc.length ? "Posted on: "+fc.join(", ") : "Not supported on the selected platforms";
+        refreshPreviewTabs();
+        refreshStory();
+        refreshTypeWarn(); updateCaption();
     }
-    $("emojiBar").addEventListener("click", ev => {
-        const b = ev.target.closest("button"); if (!b) return;
-        insertAtCursor(b.dataset.emoji || b.dataset.insert || "");
+
+    // "Also share to Story" — applies to Instagram, for non-text/non-story posts.
+    const alsoStory=$("alsoStory"), alsoStoryWrap=$("alsoStoryWrap");
+    function refreshStory(){
+        if(!alsoStory) return;
+        const pt=postType(), igSel=selectedPlatforms().includes("instagram");
+        const ok = igSel && pt!=="text" && pt!=="story";
+        alsoStory.disabled = !ok;
+        if(!ok) alsoStory.checked=false;
+        alsoStoryWrap.classList.toggle("disabled", !ok);
+        alsoStoryWrap.classList.toggle("on", alsoStory.checked);
+        $("alsoStoryHint").textContent = igSel ? "publishes the media as an Instagram Story alongside the post" : "select an Instagram channel to enable";
+    }
+    if(alsoStory) alsoStory.addEventListener("change", ()=>alsoStoryWrap.classList.toggle("on", alsoStory.checked));
+    document.querySelectorAll('input[name="account_ids"]').forEach(c=>c.addEventListener("change", refreshAccounts));
+
+    function refreshTypeWarn(){
+        const pt=postType(), sel=selectedPlatforms();
+        if(!sel.length){ postTypeWarn.className="cmp-warn"; return; }
+        const bad=sel.filter(p=>caps[p]&&!caps[p].post_types.includes(pt)).map(p=>PF_LABEL[p]||p);
+        if(bad.length){ postTypeWarn.className="cmp-warn warn show"; postTypeWarn.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> '+pt+' isn’t supported on: '+bad.join(", "); }
+        else { postTypeWarn.className="cmp-warn ok show"; postTypeWarn.innerHTML='<i class="fa-solid fa-circle-check"></i> Works on all selected platforms'; }
+    }
+
+    // emoji / insert
+    function insertAtCursor(el, text){ const s=el.selectionStart,e=el.selectionEnd; el.value=el.value.slice(0,s)+text+el.value.slice(e); el.focus(); el.selectionStart=el.selectionEnd=s+text.length; }
+    $("emojiBar").addEventListener("click", ev=>{ const b=ev.target.closest("button"); if(!b)return; insertAtCursor(caption, b.dataset.emoji||b.dataset.insert||""); updateCaption(); });
+
+    // hashtag sets
+    $("hashtagSet").addEventListener("change", function(){ if(!this.value)return; const sep=caption.value && !caption.value.endsWith("\n")?"\n\n":""; caption.value = caption.value + sep + this.value; this.value=""; updateCaption(); });
+    $("saveSet").addEventListener("click", function(){
+        const tags=(caption.value.match(/#[\wÀ-ſ]+/g)||[]).join(" ");
+        if(!tags){ alert("No #hashtags found in the caption to save."); return; }
+        const name=prompt("Name this hashtag set:"); if(!name)return;
+        const body=new URLSearchParams({name:name, hashtags:tags, client_id:clientSelect.value||""});
+        fetch("{{ url_for('social.create_hashtag_set') }}", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:body})
+          .then(r=>r.json()).then(d=>{ if(d.id){ const o=document.createElement("option"); o.value=d.hashtags; o.textContent=d.name; $("hashtagSet").appendChild(o); alert("Saved “"+d.name+"”."); } else alert(d.error||"Could not save."); })
+          .catch(()=>alert("Could not save the set."));
     });
 
-    // ---- preview switch ----
-    $("previewSwitch").addEventListener("click", ev => {
-        const b = ev.target.closest("button"); if (!b) return;
-        previewPlatform = b.dataset.pf;
-        [...ev.currentTarget.children].forEach(c => c.classList.toggle("active", c === b));
-        renderPreview();
-    });
-
-    function renderPreview() {
-        const isIG = previewPlatform === "instagram";
-        const acct = accountsChecked().find(c => c.dataset.platform === previewPlatform);
-        const ava = $("ppAva");
-        ava.className = "pp-ava " + previewPlatform;
-        ava.innerHTML = '<i class="fa-brands fa-' + (isIG ? "instagram" : "facebook") + '"></i>';
-        $("ppName").textContent = acct ? acct.dataset.name : (isIG ? "your_handle" : "Your Page");
-        $("ppSub").textContent = isIG ? "Original audio" : "Just now · 🌐";
-
-        // caption placement: IG shows caption under media; FB shows it on top too
-        const text = caption.value.trim();
-        const cap = $("ppCaption");
-        if (text) { cap.textContent = text; } else { cap.innerHTML = '<span class="ph">Your caption preview…</span>'; }
-
-        // media
-        const media = $("ppMedia");
-        if (selectedMediaUrl) media.innerHTML = '<img src="' + selectedMediaUrl + '" alt="">';
-        else media.innerHTML = '<i class="fa-regular fa-image"></i>';
-
-        // actions row per platform
-        $("ppActions").innerHTML = isIG
-            ? '<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span style="margin-left:auto"><i class="fa-regular fa-bookmark"></i></span>'
-            : '<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>';
+    // preview — tabs adapt to the selected platforms (FB/IG/YouTube/LinkedIn/X)
+    const previewSwitch = $("previewSwitch");
+    const PP_NAME = {facebook:"Your Page", instagram:"your_handle", youtube:"Your Channel", linkedin:"Your Company", x:"yourhandle"};
+    const PP_SUB = {facebook:"Just now · 🌐", instagram:"Original audio", youtube:"Just now", linkedin:"Just now · 🌐", x:"now"};
+    const PP_ACTIONS = {
+        facebook:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>',
+        instagram:'<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span style="margin-left:auto"><i class="fa-regular fa-bookmark"></i></span>',
+        youtube:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-thumbs-down"></i><i class="fa-solid fa-share"></i>',
+        linkedin:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-paper-plane"></i>',
+        x:'<i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-heart"></i><i class="fa-solid fa-arrow-up-from-bracket"></i>'
+    };
+    function refreshPreviewTabs(){
+        const sel = selectedPlatforms(); const tabs = sel.length ? sel : ["facebook"];
+        if(!tabs.includes(previewPlatform)) previewPlatform = tabs[0];
+        previewSwitch.innerHTML = tabs.map(p=>`<button type="button" data-pf="${p}" class="${p===previewPlatform?'active':''}">${PF_LABEL[p]||p}</button>`).join("");
     }
+    previewSwitch.addEventListener("click", ev=>{ const b=ev.target.closest("button"); if(!b)return; previewPlatform=b.dataset.pf; [...previewSwitch.children].forEach(c=>c.classList.toggle("active",c===b)); renderPreview(); });
+    function renderPreview(){
+        const pf=previewPlatform, pt=postType();
+        const acct=accountsChecked().find(c=>c.dataset.platform===pf);
+        const ava=$("ppAva"); ava.className="pp-ava "+pf; ava.innerHTML='<i class="'+(PF_ICON_JS[pf]||"fa-solid fa-share-nodes")+'"></i>';
+        $("ppName").textContent = acct?acct.dataset.name:(PP_NAME[pf]||"Your account");
+        $("ppSub").textContent = PP_SUB[pf]||"Just now";
+        const text=caption.value.trim(); const cap=$("ppCaption");
+        if(text)cap.textContent=text; else cap.innerHTML='<span class="ph">Your caption preview…</span>';
+        const media=$("ppMedia"); let cls="pp-media";
+        if(pt==="reel"||pt==="story")cls+=" "+pt; else if(pf==="youtube")cls+=" yt";
+        media.className=cls;
+        let inner = selectedMediaUrl ? '<img src="'+selectedMediaUrl+'" alt="">' : '<i class="fa-regular fa-image"></i>';
+        if(pt==="reel"||pt==="video"||pf==="youtube") inner += '<span class="pp-play"><i class="fa-solid fa-play"></i></span>';
+        if(pt==="carousel"){ const n=Math.max(2, selectedMediaInputs().length||3); inner += '<span class="pp-dots">'+Array.from({length:Math.min(n,5)},(_,i)=>'<span class="'+(i===0?"on":"")+'"></span>').join("")+'</span>'; }
+        media.innerHTML=inner;
+        $("ppActions").innerHTML = PP_ACTIONS[pf] || PP_ACTIONS.facebook;
+        const fc=$("firstComment").value.trim(); const box=$("ppFirstComment");
+        if(fc){ box.style.display="flex"; $("ppFcName").textContent=acct?acct.dataset.name:(PP_NAME[pf]||"Your account"); $("ppFcText").textContent=fc; }
+        else box.style.display="none";
+    }
+    $("firstComment").addEventListener("input", renderPreview);
 
-    // ---- media assets ----
-    function selectedAssetInputs(){ return [...document.querySelectorAll('input[name="asset_ids"]:checked')]; }
-    function refreshMediaSelection() {
-        document.querySelectorAll('.cmp-asset').forEach(l => l.classList.toggle("selected", l.querySelector("input").checked));
-        const first = selectedAssetInputs()[0];
-        selectedMediaUrl = first ? (first.dataset.url || null) : null;
+    // media assets (spans BOTH the task-deliverables grid and brand-assets grid)
+    const MEDIA_SEL = 'input[name="asset_ids"], input[name="task_file_ids"], input[name="upload_media"]';
+    const MEDIA_SEL_CHECKED = 'input[name="asset_ids"]:checked, input[name="task_file_ids"]:checked, input[name="upload_media"]:checked';
+    function selectedMediaInputs(){ return [...document.querySelectorAll(MEDIA_SEL_CHECKED)]; }
+    function refreshMediaSelection(){
+        const checked=selectedMediaInputs();
+        document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
+        selectedMediaUrl = checked[0]?(checked[0].dataset.url||null):null;
         renderPreview();
     }
-    function renderAssets(assets) {
-        if (!assets.length) { mediaGrid.innerHTML = ""; mediaHint.textContent = "This client has no brand assets yet"; return; }
-        mediaHint.textContent = "Click to attach";
-        mediaGrid.innerHTML = assets.map(a => `
+    function mediaChanged(inp){
+        // single-media post types keep at most one selection, across both grids
+        if(postType()!=="carousel" && inp.checked){
+            document.querySelectorAll(MEDIA_SEL).forEach(o=>{ if(o!==inp)o.checked=false; });
+        }
+        refreshMediaSelection();
+    }
+    function renderAssets(assets){
+        if(!assets.length){ mediaGrid.innerHTML=""; mediaHint.textContent="This client has no brand assets yet"; return; }
+        mediaHint.textContent="Click to attach";
+        mediaGrid.innerHTML=assets.map(a=>`
             <label class="cmp-asset" title="${a.filename}">
-                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url || ''}"
-                       ${preselectedAssets.includes(a.id) ? "checked" : ""}>
-                <span class="cmp-asset-thumb">${a.is_image && a.url
-                    ? `<img src="${a.url}" loading="lazy" alt="">`
-                    : '<i class="fa-regular fa-file"></i>'}</span>
+                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url||''}" ${preselectedAssets.includes(a.id)?"checked":""}>
+                <span class="ord"></span>
+                <span class="cmp-asset-thumb">${a.is_image&&a.url?`<img src="${a.url}" loading="lazy" alt="">`:'<i class="fa-regular fa-file"></i>'}</span>
                 <span class="cmp-asset-name">${a.filename}</span>
                 <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
             </label>`).join("");
-        mediaGrid.querySelectorAll('input[name="asset_ids"]').forEach(c => c.addEventListener("change", refreshMediaSelection));
-        refreshMediaSelection();
+        mediaGrid.querySelectorAll('input[name="asset_ids"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
+        applyType();
     }
-    function loadAssets(clientId) {
-        if (!clientId) { mediaGrid.innerHTML = ""; mediaHint.textContent = "Select a client to load its brand assets"; selectedMediaUrl = null; renderPreview(); return; }
-        mediaHint.textContent = "Loading…";
-        fetch(`/social/api/clients/${clientId}/assets`).then(r => r.json())
-            .then(d => renderAssets(d.assets || []))
-            .catch(() => { mediaHint.textContent = "Could not load assets"; });
+    function loadAssets(clientId){
+        if(!clientId){ mediaGrid.innerHTML=""; mediaHint.textContent="Select a client to load its brand assets"; selectedMediaUrl=null; renderPreview(); return; }
+        mediaHint.textContent="Loading…";
+        fetch(`/social/api/clients/${clientId}/assets`).then(r=>r.json()).then(d=>renderAssets(d.assets||[])).catch(()=>{ mediaHint.textContent="Could not load assets"; });
     }
-    clientSelect.addEventListener("change", () => loadAssets(clientSelect.value));
+    // Client safety: only show channels bound to the selected client (or
+    // agency-wide, unbound). Mismatched channels are hidden + unchecked so
+    // you can't publish one client's post to another client's page.
+    function filterAccountsByClient(){
+        const cid = clientSelect.value; let hidden = 0;
+        document.querySelectorAll('.cmp-account').forEach(l=>{
+            const inp = l.querySelector('input'); const ac = inp.dataset.client || '';
+            const show = !ac || !cid || ac === cid;
+            l.style.display = show ? '' : 'none';
+            if(!show && inp.checked){ inp.checked = false; }
+            if(!show) hidden++;
+        });
+        const hint = $("accountsHint");
+        if(hint){ if(hidden && cid){ hint.style.display=''; hint.textContent = hidden + ' channel(s) hidden — they belong to other clients.'; } else hint.style.display='none'; }
+        refreshAccounts();
+    }
+    clientSelect.addEventListener("change", ()=>{ loadAssets(clientSelect.value); filterAccountsByClient(); });
 
-    // ---- init ----
-    // default preview platform to the first selected account's platform if it's FB/IG
-    const firstSel = accountsChecked()[0];
-    if (firstSel && ["facebook","instagram"].includes(firstSel.dataset.platform)) {
-        previewPlatform = firstSel.dataset.platform;
-        document.querySelectorAll('#previewSwitch button').forEach(b => b.classList.toggle("active", b.dataset.pf === previewPlatform));
+    // ---- @mention live autocomplete ----
+    const mentionMenu = document.createElement("div");
+    mentionMenu.className = "mention-menu";
+    document.body.appendChild(mentionMenu);
+    let mentionState = null, mentionTimer = null;
+    function closeMention(){ mentionMenu.classList.remove("show"); mentionState = null; }
+    function positionMenu(ta){ const r = ta.getBoundingClientRect();
+        mentionMenu.style.left = r.left + "px"; mentionMenu.style.top = (r.bottom + 4) + "px";
+        mentionMenu.style.width = Math.min(340, r.width) + "px"; }
+    function renderMention(items){
+        if(!items.length){ mentionMenu.innerHTML = '<div class="mm-empty">No matching channels</div>'; return; }
+        mentionMenu.innerHTML = items.map((m,i)=>`<div class="mention-item ${i===0?'active':''}" data-i="${i}">
+            <span class="av pf-${m.platform}"><i class="${PF_ICON_JS[m.platform]||'fa-solid fa-at'}"></i></span>
+            <span class="mm-body"><span class="h">@${m.handle}</span><span class="p">${m.platform}</span></span></div>`).join("");
     }
-    refreshAccounts();
-    if (clientSelect.value) loadAssets(clientSelect.value);
+    function applyMention(idx){
+        if(!mentionState) return; const {textarea, start, items} = mentionState; const m = items[idx]; if(!m) return;
+        const val = textarea.value, before = val.slice(0, start), after = val.slice(textarea.selectionStart);
+        const insert = "@" + m.handle + " ";
+        textarea.value = before + insert + after;
+        const pos = (before + insert).length; textarea.setSelectionRange(pos, pos); textarea.focus();
+        closeMention(); textarea.dispatchEvent(new Event("input"));
+    }
+    mentionMenu.addEventListener("mousedown", ev=>{ const it = ev.target.closest(".mention-item"); if(!it) return;
+        ev.preventDefault(); applyMention(parseInt(it.dataset.i)); });
+    function onMentionInput(ta){
+        const pos = ta.selectionStart, before = ta.value.slice(0, pos);
+        const match = before.match(/(?:^|\s)@([\w.]{0,30})$/);
+        if(!match){ closeMention(); return; }
+        const q = match[1], start = pos - q.length - 1;
+        clearTimeout(mentionTimer);
+        mentionTimer = setTimeout(()=>{
+            fetch(`/social/api/mentions?q=${encodeURIComponent(q)}&platform=${previewPlatform}`)
+              .then(r=>r.json()).then(d=>{ const items = d.suggestions||[];
+                  mentionState = {textarea: ta, start, items}; renderMention(items); positionMenu(ta); mentionMenu.classList.add("show");
+              }).catch(closeMention);
+        }, 120);
+    }
+    function attachMentions(ta){
+        ta.addEventListener("input", ()=>onMentionInput(ta));
+        ta.addEventListener("keydown", ev=>{
+            if(!mentionState || !mentionMenu.classList.contains("show")) return;
+            const items = mentionMenu.querySelectorAll(".mention-item"); if(!items.length) return;
+            let active = [...items].findIndex(x=>x.classList.contains("active"));
+            if(ev.key==="ArrowDown"){ ev.preventDefault(); active=(active+1)%items.length; }
+            else if(ev.key==="ArrowUp"){ ev.preventDefault(); active=(active-1+items.length)%items.length; }
+            else if(ev.key==="Enter"||ev.key==="Tab"){ ev.preventDefault(); applyMention(active<0?0:active); return; }
+            else if(ev.key==="Escape"){ closeMention(); return; }
+            else return;
+            items.forEach((x,i)=>x.classList.toggle("active", i===active));
+        });
+        ta.addEventListener("blur", ()=>setTimeout(closeMention, 150));
+    }
+    // App.on so Turbo tears this capturing window listener down on navigation
+    // instead of leaving a dormant one behind on every Compose revisit.
+    (window.App ? window.App.on.bind(window.App, window) : window.addEventListener.bind(window))("scroll", ()=>{ if(mentionState) positionMenu(mentionState.textarea); }, true);
+    attachMentions(caption);
+    document.querySelectorAll('.cmp-override textarea').forEach(attachMentions);
+
+    // task-deliverable checkboxes are server-rendered; wire them up
+    var taskGrid=$("taskMediaGrid");
+    if(taskGrid) taskGrid.querySelectorAll('input[name="task_file_ids"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
+
+    // ---- Direct media upload ----
+    const uploadZone=$("uploadZone"), uploadInput=$("uploadInput"), uploadGrid=$("uploadGrid");
+    function addUploaded(d){
+        const lab=document.createElement("label"); lab.className="cmp-asset selected"; lab.title=d.filename||"uploaded";
+        lab.innerHTML='<input type="checkbox" name="upload_media" value="'+d.object_key+'::'+d.mime+'" data-url="'+(d.url||"")+'" checked>'
+            +'<span class="ord"></span><span class="cmp-asset-thumb">'
+            +((d.is_image&&d.url)?'<img src="'+d.url+'" alt="">':'<i class="fa-regular fa-file-video"></i>')
+            +'</span><span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>';
+        uploadGrid.appendChild(lab);
+        lab.querySelector("input").addEventListener("change", function(){ mediaChanged(this); });
+        mediaChanged(lab.querySelector("input"));
+    }
+    function uploadFiles(files){
+        [...files].forEach(function(file){
+            const ph=document.createElement("div"); ph.className="cmp-asset cmp-uploading";
+            ph.innerHTML='<span class="cmp-asset-thumb"><i class="fa-solid fa-spinner fa-spin"></i></span><span class="cmp-asset-name">Uploading…</span>';
+            uploadGrid.appendChild(ph);
+            const fd=new FormData(); fd.append("file", file);
+            fetch("/social/api/upload", {method:"POST", body:fd})
+              .then(r=>r.json()).then(d=>{ ph.remove(); if(d.object_key){ addUploaded(d); } else { alert(d.error||"Upload failed."); } })
+              .catch(()=>{ ph.remove(); alert("Upload failed."); });
+        });
+    }
+    if(uploadInput) uploadInput.addEventListener("change", function(){ uploadFiles(this.files); this.value=""; });
+    if(uploadZone){
+        ["dragover","dragenter"].forEach(e=>uploadZone.addEventListener(e, ev=>{ ev.preventDefault(); uploadZone.classList.add("drag"); }));
+        ["dragleave","dragend"].forEach(e=>uploadZone.addEventListener(e, ()=>uploadZone.classList.remove("drag")));
+        uploadZone.addEventListener("drop", ev=>{ ev.preventDefault(); uploadZone.classList.remove("drag"); if(ev.dataTransfer&&ev.dataTransfer.files) uploadFiles(ev.dataTransfer.files); });
+    }
+    // wire server-rendered uploaded items (edit mode)
+    if(uploadGrid) uploadGrid.querySelectorAll('input[name="upload_media"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
+
+    // init
+    filterAccountsByClient();
+    refreshAccounts(); applyType();
+    if(clientSelect.value) loadAssets(clientSelect.value);
     renderPreview();
 })();
 </script>

@@ -1,0 +1,41 @@
+{# Social Studio's OWN left sidebar — the module's primary navigation, so the
+   Studio reads as a standalone product. "Back to CypherCrew" returns to the
+   ERP. Active state is derived from the endpoint; every link preserves the
+   active ?client= so the client context follows you across views. #}
+{% set ep = request.endpoint or '' %}
+{% macro nav_url(endpoint) -%}
+{{ url_for(endpoint, client=selected_client_id) if selected_client_id else url_for(endpoint) }}
+{%- endmacro %}
+<aside class="studio-sidebar" id="studioSidebar">
+  <div class="studio-brand">
+    <div class="logo"><i class="fa-solid fa-share-nodes"></i></div>
+    <div class="txt"><b>Social Studio</b><span>by CypherCrew</span></div>
+  </div>
+  <a class="studio-exit" href="{{ url_for('dashboard.index') }}" data-turbo="false">
+    <i class="fa-solid fa-arrow-left-long"></i> Back to CypherCrew
+  </a>
+
+  <nav class="studio-nav" aria-label="Social Studio navigation">
+    <a href="{{ nav_url('social.index') }}" class="{{ 'active' if ep == 'social.index' }}"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+    <a href="{{ nav_url('social.compose') }}" class="{{ 'active' if ep in ['social.compose', 'social.edit_post'] }}"><i class="fa-solid fa-pen-to-square"></i> Create post</a>
+    <a href="{{ nav_url('social.calendar') }}" class="{{ 'active' if ep == 'social.calendar' }}"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
+    <a href="{{ nav_url('social.approvals') }}" class="{{ 'active' if ep == 'social.approvals' }}"><i class="fa-solid fa-clipboard-check"></i> Approvals
+      {% if pending_approval_total %}<span class="nav-count">{{ pending_approval_total }}</span>{% endif %}</a>
+
+    <div class="studio-nav-section">Publishing</div>
+    <a href="{{ nav_url('social.queue') }}" class="{{ 'active' if ep == 'social.queue' }}"><i class="fa-solid fa-list-check"></i> Queue
+      {% if status is defined and (status.jobs.dead or status.jobs.failed) %}<span class="nav-count">{{ status.jobs.dead + status.jobs.failed }}</span>{% endif %}</a>
+    <a href="{{ nav_url('social.drafts') }}" class="{{ 'active' if ep in ['social.drafts', 'social.post_detail'] }}"><i class="fa-solid fa-layer-group"></i> Drafts</a>
+    <a href="{{ nav_url('social.history') }}" class="{{ 'active' if ep == 'social.history' }}"><i class="fa-solid fa-clock-rotate-left"></i> Published</a>
+
+    <div class="studio-nav-section">Grow</div>
+    <a href="{{ nav_url('social.library') }}" class="{{ 'active' if ep == 'social.library' }}"><i class="fa-solid fa-images"></i> Media library</a>
+    <a href="{{ nav_url('social.analytics') }}" class="{{ 'active' if ep == 'social.analytics' }}"><i class="fa-solid fa-chart-line"></i> Analytics</a>
+    <a href="{{ nav_url('social.engage') }}" class="{{ 'active' if ep == 'social.engage' }}"><i class="fa-solid fa-comments"></i> Engage
+      {% if engage_open_total %}<span class="nav-count">{{ engage_open_total }}</span>{% endif %}</a>
+
+    <div class="studio-nav-section">Setup</div>
+    <a href="{{ nav_url('social.accounts') }}" class="{{ 'active' if ep == 'social.accounts' or ep.startswith('oauth.') }}"><i class="fa-solid fa-plug"></i> Accounts</a>
+    <a href="{{ nav_url('social.settings') }}" class="{{ 'active' if ep == 'social.settings' }}"><i class="fa-solid fa-gear"></i> Settings</a>
+  </nav>
+</aside>

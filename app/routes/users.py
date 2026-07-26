@@ -158,7 +158,7 @@ def user_performance(user_id):
 
     overdue_tasks = base_query.filter(
         Task.deadline < now,
-        Task.status.in_(["Assigned", "In Progress"])
+        Task.status.in_(task_status.OVERDUE_STATUSES)
     ).count()
 
     completion_rate = round(

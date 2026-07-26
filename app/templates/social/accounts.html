@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Accounts · Social Publishing | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
@@ -23,7 +23,6 @@
     </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -58,12 +57,16 @@
                         </span>
                     </div>
                     <div class="account-actions">
-                        <a class="acct-icon-btn" href="{{ url_for('social.analytics') }}" title="View analytics">
+                        {% if a.status == 'needs_reauth' and a.platform in connectable %}
+                        <a class="btn btn-sm" data-turbo="false" href="{{ url_for('oauth.connect', platform=a.platform) }}" title="Reconnect this channel">
+                            <i class="fa-solid fa-rotate"></i> Reconnect</a>
+                        {% endif %}
+                        <a class="acct-icon-btn" href="{{ url_for('social.analytics') }}" title="View analytics" aria-label="View analytics">
                             <i class="fa-solid fa-chart-line"></i></a>
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=a.id) }}"
                               onsubmit="return confirm('Disconnect {{ a.display_name }}? Any Instagram account linked through it will stop publishing too.');"
                               style="margin:0;" data-turbo="false">
-                            <button type="submit" class="acct-icon-btn danger" title="Disconnect">
+                            <button type="submit" class="acct-icon-btn danger" title="Disconnect" aria-label="Disconnect account">
                                 <i class="fa-solid fa-link-slash"></i></button>
                         </form>
                     </div>
@@ -75,7 +78,8 @@
                         <i class="fa-brands fa-instagram"></i>
                     </div>
                     <div class="account-info">
-                        <span class="account-name">{{ '@' ~ ig.display_name if not ig.display_name.startswith('@') else ig.display_name }}</span>
+                        {% set ig_name = ig.display_name or ig.external_id or '' %}
+                        <span class="account-name">{{ ig_name if ig_name.startswith('@') else '@' ~ ig_name }}</span>
                         <span class="account-sub">
                             <span class="st-dot {{ ig.status }}"></span>
                             <span class="st-label">{{ ig.status|replace('_',' ') }}</span>
@@ -86,7 +90,7 @@
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=ig.id) }}"
                               onsubmit="return confirm('Disconnect {{ ig.display_name }}?');"
                               style="margin:0;" data-turbo="false">
-                            <button type="submit" class="acct-icon-btn danger" title="Disconnect Instagram">
+                            <button type="submit" class="acct-icon-btn danger" title="Disconnect Instagram" aria-label="Disconnect Instagram">
                                 <i class="fa-solid fa-link-slash"></i></button>
                         </form>
                     </div>
@@ -104,6 +108,16 @@
                     </form>
                 </div>
                 {% endif %}
+
+                <div class="account-bind">
+                    <span><i class="fa-solid fa-user-tie"></i> Serves client{% if g.children %} <small style="font-weight:500;">(applies to linked Instagram too)</small>{% endif %}</span>
+                    <form method="POST" action="{{ url_for('social.set_account_client', account_id=a.id) }}" data-turbo="false" style="margin:0;">
+                        <select name="client_id" onchange="this.form.submit()" aria-label="Assign this channel to a client">
+                            <option value="">Agency-wide</option>
+                            {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if a.client_id == c.id }}>{{ c.client_name }}</option>{% endfor %}
+                        </select>
+                    </form>
+                </div>
             </div>
             {% endfor %}
         </div>

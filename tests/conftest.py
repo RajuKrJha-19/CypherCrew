@@ -23,6 +23,17 @@ os.environ.setdefault("SOCIAL_ENGINE_ENABLED", "true")
 os.environ.setdefault("SOCIAL_TOKEN_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("SOCIAL_WORKER_TOKEN", "test-worker-token")
 os.environ.setdefault("AUTO_SEED", "false")
+# Tests drive the worker explicitly; the background auto-worker must stay off.
+os.environ.setdefault("SOCIAL_INPROCESS_WORKER", "false")
+# The suite asserts the pure SimulationProvider is registered for every
+# platform, so pin simulation mode and force the Graph emulator OFF - otherwise
+# a developer's .env (META_EMULATOR / META_APP_ID) would flip facebook +
+# instagram to the real adapter and break the simulation tests. The emulator
+# path is covered separately by the qa.py harness. Set (not setdefault) so an
+# ambient .env value can't win. load_dotenv (override=False) won't clobber these.
+os.environ["META_EMULATOR"] = "false"
+os.environ.pop("META_APP_ID", None)
+os.environ.setdefault("SOCIAL_SIMULATION_MODE", "true")
 
 import pytest  # noqa: E402
 
@@ -53,8 +64,10 @@ class FakeProvider(SocialProvider):
         post_types={"image", "carousel", "video"},
         publish_rate=(100, "24h"),
         max_carousel=10,
+        supports_first_comment=True,
     )
     mode = "ok"
+    comments = []  # (external_post_id, text) recorded by post_first_comment
 
     def build_oauth_url(self, state, redirect_uri):
         return f"https://fake.test/auth?state={state}"
@@ -87,6 +100,10 @@ class FakeProvider(SocialProvider):
 
     def fetch_analytics(self, target, token):
         return {"likes": 3, "reach": 10}
+
+    def post_first_comment(self, external_post_id, text, token):
+        FakeProvider.comments.append((external_post_id, text))
+        return "CMT1"
 
     def map_error(self, exc):
         m = FakeProvider.mode
@@ -129,6 +146,7 @@ def app():
 def session(app):
     with app.app_context():
         FakeProvider.mode = "ok"
+        FakeProvider.comments = []
         _clean()
         yield _db.session
         _db.session.rollback()

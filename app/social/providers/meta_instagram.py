@@ -20,6 +20,8 @@ class MetaInstagramProvider(MetaBaseProvider):
     # no standalone Instagram OAuth entry point - see AccountManager /
     # social.discover_instagram for the "refresh linked Instagram" action.
     connectable = False
+    # Instagram replies go to /{comment_id}/replies, not /comments.
+    comment_reply_edge = "replies"
     SCOPES = [
         "instagram_basic",
         "instagram_content_publish",
@@ -34,6 +36,8 @@ class MetaInstagramProvider(MetaBaseProvider):
         publish_rate=(100, "24h"),
         story_support=True,
         max_caption_chars=2200,
+        supports_first_comment=True,
+        supports_comments=True,
     )
 
     def _required_scopes(self):

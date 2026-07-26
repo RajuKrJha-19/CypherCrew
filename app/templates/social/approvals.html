@@ -1,0 +1,116 @@
+{% extends "base_studio.html" %}
+{% block title %}Approvals · Social Studio | CypherCrew{% endblock %}
+
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Approvals</h1>
+        <p>{% if selected_client %}Posts awaiting sign-off for {{ selected_client.client_name }}{% else %}Posts awaiting sign-off across all clients{% endif %}</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> New post</a>
+    </div>
+</div>
+
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{% if posts %}
+<form method="POST" action="{{ url_for('social.approvals_bulk') }}" id="approvalsForm" data-turbo="false">
+    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+    {% if can_approve %}
+    <div class="approvals-toolbar">
+        <label class="cmp-radio" style="padding:0;"><input type="checkbox" id="selectAll"> Select all ({{ posts|length }})</label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" name="reason" class="approval-reason" aria-label="Reason for send-back" placeholder="Reason for send-back (optional)">
+            <button type="submit" name="action" value="approve" class="btn"><i class="fa-solid fa-check"></i> Approve selected</button>
+            <button type="submit" name="action" value="reject" class="btn btn-secondary"
+                    onclick="return confirm('Send the selected posts back for changes?');"><i class="fa-solid fa-rotate-left"></i> Send back</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="approval-list">
+        {% for p in posts %}
+        <div class="approval-card">
+            {% if can_approve %}
+            <label class="approval-check"><input type="checkbox" name="post_ids" value="{{ p.id }}" aria-label="Select {{ p.title or 'post' }}"></label>
+            {% endif %}
+            {% if thumbs.get(p.id) %}
+            <a class="approval-thumb" href="{{ url_for('social.post_detail', post_id=p.id) }}"><img src="{{ thumbs[p.id] }}" alt="Post media" loading="lazy"></a>
+            {% endif %}
+            <div class="approval-body">
+                <a class="approval-title" href="{{ url_for('social.post_detail', post_id=p.id) }}">{{ p.title or 'Untitled post' }}</a>
+                <div class="approval-meta">
+                    {% if p.client %}<span class="sp-pill info"><i class="fa-solid fa-user-tie"></i> {{ p.client.client_name }}</span>{% endif %}
+                    <span class="approval-plats">
+                        {% for t in p.targets %}<span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i></span>{% endfor %}
+                    </span>
+                    <span class="approval-sub"><i class="fa-regular fa-user"></i> {{ p.created_by.name if p.created_by else 'Unknown' }}</span>
+                    <span class="approval-sub"><i class="fa-regular fa-clock"></i> {{ p.updated_at.strftime('%d %b, %H:%M') }}</span>
+                </div>
+                {% if p.base_caption %}<p class="approval-excerpt">{{ p.base_caption[:160] }}{% if p.base_caption|length > 160 %}…{% endif %}</p>{% endif %}
+            </div>
+            <div class="approval-actions">
+                <a href="{{ url_for('social.post_detail', post_id=p.id) }}" class="btn btn-ghost btn-sm"><i class="fa-solid fa-eye"></i> Review</a>
+                {% if can_approve %}
+                <button type="submit" form="single-approve-{{ p.id }}" class="btn btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</form>
+
+{% if can_approve %}
+{% for p in posts %}
+<form method="POST" id="single-approve-{{ p.id }}" action="{{ url_for('social.approve_post', post_id=p.id) }}" data-turbo="false" style="display:none;"></form>
+{% endfor %}
+{% endif %}
+
+<script>
+(function () {
+    var all = document.getElementById("selectAll");
+    if (all) all.addEventListener("change", function () {
+        document.querySelectorAll('input[name="post_ids"]').forEach(function (c) { c.checked = all.checked; });
+    });
+})();
+</script>
+{% else %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-clipboard-check"></i></div>
+        <h3>Inbox zero 🎉</h3>
+        <p>{% if selected_client %}No posts are waiting for approval for {{ selected_client.client_name }}.{% else %}Nothing is waiting for approval right now.{% endif %}</p>
+        <div class="actions"><a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> Compose a post</a></div>
+    </div>
+</div>
+{% endif %}
+
+{% if recently %}
+<div class="social-card" style="margin-top:20px;">
+    <div class="social-card-head"><h3><i class="fa-solid fa-circle-check"></i> Recently approved</h3></div>
+    <div class="sp-list">
+        {% for p in recently %}
+        <a class="sp-list-item" href="{{ url_for('social.post_detail', post_id=p.id) }}">
+            <div class="activity-ic success"><i class="fa-solid fa-check"></i></div>
+            <div class="sp-list-body">
+                <span class="sp-list-title">{{ p.title or 'Untitled post' }}</span>
+                <span class="sp-list-meta">
+                    {% if p.client %}<span>{{ p.client.client_name }}</span>{% endif %}
+                    <span class="sp-pill {{ 'warning' if p.status == 'scheduled' else 'success' }}">{{ p.status }}</span>
+                    {% if p.approved_by %}<span>by {{ p.approved_by.name }}</span>{% endif %}
+                </span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

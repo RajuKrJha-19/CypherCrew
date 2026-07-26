@@ -1,0 +1,63 @@
+{% extends "base_studio.html" %}
+{% block title %}Library · Social Studio | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Media Library</h1>
+        <p>{% if selected_client %}Brand assets for {{ selected_client.client_name }}{% else %}Pick a client to browse its brand assets{% endif %}</p>
+    </div>
+    {% if selected_client %}
+    <div class="top-actions">
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> Compose with these</a>
+    </div>
+    {% endif %}
+</div>
+
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{% if not selected_client %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-solid fa-images"></i></div>
+        <h3>Choose a client</h3>
+        <p>The Media Library is per client. Pick one from the <strong>client switcher</strong> above to browse its brand assets, logos and reference files.</p>
+    </div>
+</div>
+{% elif asset_count == 0 %}
+<div class="social-card">
+    <div class="social-empty">
+        <div class="ic"><i class="fa-regular fa-folder-open"></i></div>
+        <h3>No brand assets yet</h3>
+        <p>{{ selected_client.client_name }} has no brand assets uploaded. Add them on the client’s page, then they’ll appear here and in the composer.</p>
+    </div>
+</div>
+{% else %}
+{% for category, assets in by_category.items() %}
+<div class="social-card" style="margin-bottom:18px;">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-folder"></i> {{ category|capitalize }}</h2>
+        <span class="sp-pill">{{ assets|length }}</span>
+    </div>
+    <div class="social-card-body">
+        <div class="cmp-media-grid">
+            {% for a in assets %}
+            <div class="cmp-asset" title="{{ a.filename }}" style="cursor:default;">
+                <span class="cmp-asset-thumb">
+                    {% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">
+                    {% else %}<i class="fa-regular fa-file"></i>{% endif %}
+                </span>
+                <span class="cmp-asset-name">{{ a.filename }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

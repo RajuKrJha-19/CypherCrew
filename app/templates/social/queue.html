@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Queue · Social Publishing | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
@@ -21,7 +21,7 @@
     <div class="qc-foot">
         <span class="qc-meta">
             <i class="fa-solid fa-rotate"></i> {{ job.attempts }}/{{ job.max_attempts }}
-            · {{ job.updated_at.strftime('%d %b %H:%M') }}
+            · {{ job.updated_at.strftime('%d %b %H:%M') }}{% if t and t.post and t.post.client %} · {{ t.post.client.client_name }}{% endif %}
         </span>
         {% if retry %}
         <form method="POST" action="{{ url_for('social.requeue_job', job_id=job.id) }}" style="margin:0;">
@@ -36,7 +36,7 @@
 <div class="page-header">
     <div>
         <h1>Publishing queue</h1>
-        <p>Every scheduled publish as it moves from queued to live — with one-click retry on failures</p>
+        <p>Scheduled posts publish <strong>automatically</strong> at their time — this board shows them move from queued to live, with retry on failures. “Process now” just forces a run immediately.</p>
     </div>
     {% set is_engine_admin = can_manage_social_engine(current_user) %}
     {% if is_engine_admin %}
@@ -54,7 +54,6 @@
     {% endif %}
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -64,10 +63,11 @@
 
 {# ---- Filters ---- #}
 <form method="GET" class="social-filters">
+    {% if selected_client_id %}<input type="hidden" name="client" value="{{ selected_client_id }}">{% endif %}
     <div class="grow">
-        <input type="search" name="q" value="{{ q_search }}" placeholder="Search by post title or platform…">
+        <input type="search" name="q" value="{{ q_search }}" aria-label="Search the queue by post title or platform" placeholder="Search by post title or platform…">
     </div>
-    <select name="platform" onchange="this.form.submit()">
+    <select name="platform" onchange="this.form.submit()" aria-label="Filter by platform">
         <option value="">All platforms</option>
         {% for key, label, icon in platforms %}
         <option value="{{ key }}" {{ 'selected' if platform_f == key }}>{{ label }}</option>
@@ -75,7 +75,7 @@
     </select>
     <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-filter"></i> Filter</button>
     {% if platform_f or q_search %}
-    <a href="{{ url_for('social.queue') }}" class="btn btn-ghost">Clear</a>
+    <a href="{{ url_for('social.queue', client=selected_client_id) }}" class="btn btn-ghost">Clear</a>
     {% endif %}
 </form>
 

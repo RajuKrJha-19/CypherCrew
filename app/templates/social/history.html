@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Published · Social Publishing | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
@@ -11,9 +11,14 @@
         <h1>Published</h1>
         <p>Every publish attempt and its outcome, newest first</p>
     </div>
+    <div class="top-actions">
+        <form method="POST" action="{{ url_for('social.sync_history', client=selected_client_id) }}" style="margin:0;"
+              title="Check each live post still exists on its platform (catches posts deleted directly on Instagram/Facebook)">
+            <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Sync with platforms</button>
+        </form>
+    </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}

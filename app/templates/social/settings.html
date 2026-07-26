@@ -1,0 +1,114 @@
+{% extends "base_studio.html" %}
+{% block title %}Settings · Social Studio | CypherCrew{% endblock %}
+
+{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Settings</h1>
+        <p>How the Studio publishes, your saved hashtag sets, and connected channels</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{# ---- Publishing engine ---- #}
+<div class="social-card" style="margin-bottom:20px;">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-gears"></i> Publishing engine</h2>
+        <span class="sp-pill {{ 'success' if engine.enabled else 'danger' }}">{{ 'Enabled' if engine.enabled else 'Disabled' }}</span>
+    </div>
+    <div class="social-card-body">
+        <div class="settings-grid">
+            <div class="settings-stat">
+                <span class="k">Auto-publish</span>
+                <span class="v">{{ 'On' if engine.auto_worker else 'Off' }}{% if engine.auto_worker %} · every {{ engine.worker_interval }}s{% endif %}</span>
+                <span class="h">Scheduled posts publish automatically at their time — no manual queue run needed.</span>
+            </div>
+            <div class="settings-stat">
+                <span class="k">Mode</span>
+                <span class="v">{{ 'Simulation (local emulator)' if engine.simulation else 'Live (real platforms)' }}</span>
+                <span class="h">{% if engine.simulation %}Publishing is exercised against a local Meta emulator — safe for testing.{% else %}Posts go to the real platforms.{% endif %}</span>
+            </div>
+            <div class="settings-stat">
+                <span class="k">Token vault</span>
+                <span class="v">{{ 'Configured' if engine.token_vault else 'Not set' }}</span>
+                <span class="h">Encrypts connected-account tokens at rest.</span>
+            </div>
+            <div class="settings-stat">
+                <span class="k">Cron endpoints</span>
+                <span class="v">{{ 'Ready' if engine.cron_ready else 'Closed' }}</span>
+                <span class="h">Backup to the in-process worker for production scale-out.</span>
+            </div>
+        </div>
+        {% if is_engine_admin %}
+        <p class="connect-note" style="margin-top:14px;">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            Engine controls (retry, requeue, force-process) live on the
+            <a href="{{ url_for('social.queue', client=selected_client_id) }}">Queue</a> board.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+{# ---- Saved hashtag sets ---- #}
+<div class="social-card" style="margin-bottom:20px;">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-hashtag"></i> Saved hashtag sets</h2>
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="mini-link">Create in composer</a>
+    </div>
+    <div class="social-card-body">
+        {% if hashtag_sets %}
+        <div class="table-card" style="border:0;box-shadow:none;">
+            <table>
+                <thead><tr><th>Name</th><th>Scope</th><th>Hashtags</th><th></th></tr></thead>
+                <tbody>
+                    {% for hs in hashtag_sets %}
+                    <tr>
+                        <td><strong>{{ hs.name }}</strong></td>
+                        <td>{{ hs.client.client_name if hs.client else 'Agency-wide' }}</td>
+                        <td style="color:var(--color-text-muted);font-size:12.5px;max-width:420px;">{{ hs.hashtags }}</td>
+                        <td style="text-align:right;">
+                            <form method="POST" action="{{ url_for('social.delete_hashtag_set', set_id=hs.id, client=selected_client_id) }}" data-turbo="false" style="margin:0;"
+                                  onsubmit="return confirm('Delete the “{{ hs.name }}” hashtag set?');">
+                                <button type="submit" class="mini-link" style="color:var(--color-danger);"><i class="fa-solid fa-trash"></i> Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="connect-note" style="margin:0;">No saved hashtag sets yet. In the composer, type your hashtags and click <em>Save as set</em> to reuse them across posts.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ---- Connected channels ---- #}
+<div class="social-card">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-plug"></i> Connected channels</h2>
+        <a href="{{ url_for('social.accounts') }}" class="mini-link">Manage accounts</a>
+    </div>
+    <div class="social-card-body">
+        {% if accounts %}
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+            {% for a in accounts %}
+            <span class="pf-chip {{ a.platform }}" style="padding:6px 12px;">
+                <i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ a.display_name }}
+                {% if a.status != 'active' %}<span class="st-dot {{ a.status }}" style="margin-left:6px;"></span>{% endif %}
+            </span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="connect-note" style="margin:0;">No channels connected yet. Head to <a href="{{ url_for('social.accounts') }}">Accounts</a> to connect Facebook &amp; Instagram.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

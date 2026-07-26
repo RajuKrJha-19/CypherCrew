@@ -44,6 +44,14 @@ DESCRIPTIONS = {
 
     "manage_reports":
         "Submit and edit daily reports on behalf of the team.",
+
+    "manage_social":
+        "Use Social Studio - compose, schedule and publish social posts for "
+        "clients, and manage drafts, the calendar and approvals.",
+
+    "connect_social_accounts":
+        "Connect and disconnect the social channels (Facebook Pages, linked "
+        "Instagram accounts) that Social Studio publishes to.",
 }
 
 

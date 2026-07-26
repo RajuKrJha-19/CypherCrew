@@ -47,7 +47,9 @@
                 }, 300);
             }
             root.setAttribute("data-theme", theme);
-            btn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+            // role="switch" expects aria-checked (not aria-pressed); apply()
+            // runs at init below so the state is set from first paint.
+            btn.setAttribute("aria-checked", theme === "dark" ? "true" : "false");
         }
 
         btn.addEventListener("click", function () {

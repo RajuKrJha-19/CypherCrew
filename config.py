@@ -176,3 +176,15 @@ class Config:
     # Public base URL used to build OAuth redirect URIs (e.g.
     # https://crew.cypherms.com). Falls back to the request host when unset.
     SOCIAL_PUBLIC_BASE_URL = os.getenv("SOCIAL_PUBLIC_BASE_URL")
+
+    # In-process background worker. When on (default), a daemon thread inside
+    # the app periodically enqueues due scheduled posts and drains the publish
+    # queue - so scheduled posts publish AUTOMATICALLY with no external cron.
+    # Safe alongside external cron too (the queue is claim-based + idempotent).
+    # Turn OFF in tests, or in production if you drive the /internal/social/*
+    # endpoints from a real scheduler instead.
+    SOCIAL_INPROCESS_WORKER = (
+        os.getenv("SOCIAL_INPROCESS_WORKER", "True").lower() == "true"
+    )
+    # Seconds between background worker ticks.
+    SOCIAL_WORKER_INTERVAL = int(os.getenv("SOCIAL_WORKER_INTERVAL", "20"))

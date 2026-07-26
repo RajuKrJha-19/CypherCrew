@@ -2,6 +2,8 @@
 
 {% block title %}Calendar | CypherCrew{% endblock %}
 
+{% block body_class %}ds-screen{% endblock %}
+
 {% block content %}
             <div class="page-header">
                 <div>
@@ -31,9 +33,9 @@
                 <div class="calendar-nav">
                     {% if view == 'week' %}
                     <a href="{{ url_for('calendar.index', view='week', date=prev_week, client_id=selected_client, employee_id=selected_employee, status=selected_status) }}"
-                        class="calendar-nav-btn">‹</a>
+                        class="calendar-nav-btn" aria-label="Previous week" title="Previous week">‹</a>
                     <a href="{{ url_for('calendar.index', view='week', date=next_week, client_id=selected_client, employee_id=selected_employee, status=selected_status) }}"
-                        class="calendar-nav-btn">›</a>
+                        class="calendar-nav-btn" aria-label="Next week" title="Next week">›</a>
                     <a href="{{ url_for('calendar.index', view='week', date=this_week, client_id=selected_client, employee_id=selected_employee, status=selected_status) }}"
                         class="calendar-today-btn">This week</a>
                     {% elif view == 'list' %}
@@ -41,9 +43,9 @@
                         class="calendar-today-btn">Today</a>
                     {% else %}
                     <a href="{{ url_for('calendar.index', view='month', month=prev_month, year=prev_year, client_id=selected_client, employee_id=selected_employee, status=selected_status) }}"
-                        class="calendar-nav-btn">‹</a>
+                        class="calendar-nav-btn" aria-label="Previous month" title="Previous month">‹</a>
                     <a href="{{ url_for('calendar.index', view='month', month=next_month, year=next_year, client_id=selected_client, employee_id=selected_employee, status=selected_status) }}"
-                        class="calendar-nav-btn">›</a>
+                        class="calendar-nav-btn" aria-label="Next month" title="Next month">›</a>
                     <a href="{{ url_for('calendar.index') }}" class="calendar-today-btn">Today</a>
                     {% endif %}
                 </div>

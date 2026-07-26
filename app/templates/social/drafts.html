@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Drafts · Social Publishing | CypherCrew{% endblock %}
 
 {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
@@ -11,11 +11,10 @@
         <p>Drafts, pending approval, approved and scheduled</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.compose') }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
     </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -23,18 +22,37 @@
 {% endfor %}
 {% endwith %}
 
+<div class="social-filters" style="margin-bottom:14px;">
+    <a href="{{ url_for('social.drafts', client=selected_client_id) }}" class="draft-chip {{ 'on' if not status_f }}">All</a>
+    {% for s in statuses %}
+    <a href="{{ url_for('social.drafts', client=selected_client_id, status=s) }}" class="draft-chip {{ 'on' if status_f == s }}">{{ s.replace('_',' ')|capitalize }}</a>
+    {% endfor %}
+</div>
+
 {% if posts %}
+<form method="POST" action="{{ url_for('social.posts_bulk') }}" id="draftsBulk" data-turbo="false">
+<input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+<div class="approvals-toolbar">
+    <label class="cmp-radio" style="padding:0;"><input type="checkbox" id="selectAll"> Select all ({{ posts|length }})</label>
+    <div style="display:flex; gap:8px;">
+        <button type="submit" name="action" value="submit" class="btn"><i class="fa-solid fa-paper-plane"></i> Submit selected</button>
+        <button type="submit" name="action" value="delete" class="btn btn-secondary"
+                onclick="return confirm('Delete the selected draft(s)? This cannot be undone.');"><i class="fa-solid fa-trash"></i> Delete selected</button>
+    </div>
+</div>
 <div class="social-card">
     <div class="table-card" style="border:0;box-shadow:none;">
         <table>
             <thead>
-                <tr><th>Title</th><th>Client</th><th>Platforms</th><th>Status</th><th>Updated</th><th></th></tr>
+                <tr><th style="width:34px;"></th><th>Title</th><th>Client</th><th>Author</th><th>Platforms</th><th>Status</th><th>Updated</th><th></th></tr>
             </thead>
             <tbody>
                 {% for p in posts %}
                 <tr>
+                    <td><input type="checkbox" name="post_ids" value="{{ p.id }}" aria-label="Select {{ p.title or 'post' }}" style="width:15px;height:15px;accent-color:var(--color-primary);"></td>
                     <td><a href="{{ url_for('social.post_detail', post_id=p.id) }}">{{ p.title or 'Untitled post' }}</a></td>
                     <td>{{ p.client.client_name if p.client else '—' }}</td>
+                    <td style="font-size:12px;color:var(--color-text-muted);">{{ p.created_by.name if p.created_by else '—' }}</td>
                     <td>
                         <div style="display:flex; gap:5px; flex-wrap:wrap;">
                         {% for t in p.targets %}
@@ -51,13 +69,17 @@
         </table>
     </div>
 </div>
+</form>
+<script>
+(function(){ var all=document.getElementById("selectAll"); if(all) all.addEventListener("change", function(){ document.querySelectorAll('#draftsBulk input[name="post_ids"]').forEach(function(c){ c.checked=all.checked; }); }); })();
+</script>
 {% else %}
 <div class="social-card">
     <div class="social-empty">
         <div class="ic"><i class="fa-solid fa-layer-group"></i></div>
         <h3>No posts yet</h3>
         <p>Compose your first post — save it as a draft, route it for approval, then schedule it.</p>
-        <div class="actions"><a href="{{ url_for('social.compose') }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> Compose a post</a></div>
+        <div class="actions"><a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> Compose a post</a></div>
     </div>
 </div>
 {% endif %}

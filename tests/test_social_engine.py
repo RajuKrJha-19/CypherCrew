@@ -145,6 +145,26 @@ def test_worker_publishes_successfully(session, make_target):
     assert db.session.get(type(post), post.id).status == "published"
 
 
+def test_worker_posts_first_comment_after_publish(session, make_target):
+    """A target's first_comment is auto-posted once it goes live (composer
+    depth). Best-effort - but on success it must fire exactly once."""
+    from tests.conftest import FakeProvider
+    _, _, target = make_target()
+    target.first_comment = "#launch #cyphercrew"
+    db.session.commit()
+    scheduling.enqueue_due()
+    worker.drain()
+    assert ("EXT_POST_1", "#launch #cyphercrew") in FakeProvider.comments
+
+
+def test_worker_no_first_comment_when_empty(session, make_target):
+    from tests.conftest import FakeProvider
+    _, _, target = make_target()  # no first_comment
+    scheduling.enqueue_due()
+    worker.drain()
+    assert FakeProvider.comments == []
+
+
 def test_worker_pending_then_polls_to_done(session, make_target):
     _, _, target = make_target()
     FakeProvider.mode = "pending"
@@ -289,6 +309,86 @@ def test_simulation_oauth_loopback_stores_encrypted_token(session):
     # Token is encrypted at rest, and decrypts back to the real value.
     assert acct.token_ciphertext and acct.token_ciphertext != bundle.access_token
     assert AccountManager.access_token(acct) == bundle.access_token
+
+
+def test_delete_post_detaches_history(session):
+    """Deleting a post that has audit/version/result history must NOT hit a
+    FK violation (regression: social_audit_logs.post_id had no ON DELETE)."""
+    from app.routes.social import _detach_post_history
+    from app.models import (SocialPost, SocialPostTarget, SocialAuditLog,
+                            ContentVersion, PublishResult)
+    post = SocialPost(status="draft", title="x")
+    db.session.add(post)
+    db.session.flush()
+    t = SocialPostTarget(social_post_id=post.id, platform="fake",
+                         post_type="image", status="draft")
+    db.session.add(t)
+    db.session.flush()
+    db.session.add(SocialAuditLog(action="post_created", post_id=post.id,
+                                  target_id=t.id))
+    db.session.add(ContentVersion(social_post_id=post.id, target_id=t.id,
+                                  snapshot={}))
+    db.session.add(PublishResult(target_id=t.id, external_post_id="X"))
+    db.session.commit()
+
+    _detach_post_history(post)
+    db.session.delete(post)
+    db.session.commit()  # would raise IntegrityError without the detach
+
+    assert db.session.get(SocialPost, post.id) is None
+    # the audit row survives (trail preserved) but is detached
+    row = SocialAuditLog.query.filter_by(action="post_created").first()
+    assert row is not None and row.post_id is None
+
+
+def test_task_link_marks_published(session):
+    """A task-linked post going fully live moves the task to Published and
+    records the platforms - the automated equivalent of the manual gate."""
+    import pytest
+    from app.models import (Task, Client, ClientDeliverable, SocialPost,
+                            SocialPostTarget, TaskActivity)
+    from app.social.services import task_link
+    client = Client.query.first()
+    deliv = ClientDeliverable.query.first()
+    if not (client and deliv):
+        pytest.skip("no client/deliverable in DB")
+    task = Task(title="__qa_tasklink__", client_id=client.id,
+                deliverable_id=deliv.id, status="Client Review",
+                is_social_media=True, social_platforms="facebook")
+    db.session.add(task)
+    db.session.flush()
+    post = SocialPost(status="publishing", task_id=task.id)
+    db.session.add(post)
+    db.session.flush()
+    db.session.add(SocialPostTarget(
+        social_post_id=post.id, platform="facebook", post_type="image",
+        status="published"))
+    db.session.commit()
+    try:
+        task_link.mark_task_published(post)
+        db.session.commit()
+        fresh = db.session.get(Task, task.id)
+        assert fresh.status == "Published"
+        assert fresh.social_platforms_published == "facebook"
+        # idempotent
+        task_link.mark_task_published(post)
+    finally:
+        SocialPost.query.filter_by(task_id=task.id).update(
+            {"task_id": None}, synchronize_session=False)
+        TaskActivity.query.filter_by(task_id=task.id).delete()
+        db.session.delete(db.session.get(Task, task.id))
+        db.session.commit()
+
+
+def test_channel_client_safety_rule():
+    """A client-bound channel is only usable for that client's posts;
+    agency-wide channels and client-less posts are always allowed."""
+    from app.routes.social import _channel_client_ok
+    assert _channel_client_ok(None, None) is True       # agency post, agency chan
+    assert _channel_client_ok(None, 5) is True          # agency channel, any post
+    assert _channel_client_ok(5, None) is True           # bound channel, agency post
+    assert _channel_client_ok(5, 5) is True              # same client
+    assert _channel_client_ok(5, 9) is False             # cross-client -> blocked
 
 
 def test_shared_consent_group_discovers_siblings(session):

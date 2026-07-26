@@ -86,6 +86,11 @@ class SocialPostTarget(db.Model):
     caption = db.Column(db.Text, nullable=True)
     hashtags = db.Column(db.Text, nullable=True)
 
+    # Auto-posted as the first comment right after this target publishes
+    # (the standard "hashtags/link in first comment" pattern). Best-effort:
+    # a comment failure never fails the publish itself.
+    first_comment = db.Column(db.Text, nullable=True)
+
     scheduled_for = db.Column(db.DateTime, nullable=True)  # UTC
 
     # draft | pending_approval | approved | scheduled | publishing
@@ -162,3 +167,27 @@ class SocialMediaAsset(db.Model):
 
     def __repr__(self):
         return f"<SocialMediaAsset {self.id} {self.source}>"
+
+
+class SocialHashtagSet(db.Model):
+    """A reusable, named group of hashtags a team can insert into a caption
+    with one click. Optionally scoped to a client (nullable = shared across
+    the agency)."""
+
+    __tablename__ = "social_hashtag_sets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(
+        db.Integer, db.ForeignKey("clients.id"), nullable=True, index=True
+    )
+    name = db.Column(db.String(120), nullable=False)
+    hashtags = db.Column(db.Text, nullable=False)
+    created_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    client = db.relationship("Client")
+
+    def __repr__(self):
+        return f"<SocialHashtagSet {self.name}>"

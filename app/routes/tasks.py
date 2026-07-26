@@ -2022,6 +2022,30 @@ def edit_task(task_id):
                 )
             )
 
+        # A self-assigned owner without manage_tasks reaches this form, but the
+        # edit dropdown must not become a back door around the approval gate
+        # (e.g. jumping their own task straight to Published without review).
+        # Hold non-managers to the employee transition table; managers keep the
+        # any-to-any moves MANAGER_MOVES already grants them elsewhere.
+        can_manage_tasks = has_permission(current_user, "manage_tasks")
+        if (
+            new_status != task.status
+            and not can_manage_tasks
+            and not task_status.can_move(
+                task.status, new_status, can_manage=False
+            )
+        ):
+            flash(
+                "You can't move this task to that status.",
+                "error"
+            )
+            return redirect(
+                url_for(
+                    "tasks.edit_task",
+                    task_id=task.id
+                )
+            )
+
         if not new_title:
             flash(
                 "Task title is required.",
@@ -3043,11 +3067,12 @@ def kanban_update_status():
         "Assigned",
         "Core Review",
         "Client Review",
+        "Scheduled",
         "Published",
     ]:
 
-        # Moving back to Assigned (an undo) or forward to a review/done
-        # state stops the clock: bank whatever was worked and clear the
+        # Moving back to Assigned (an undo) or forward to a review/scheduled/
+        # done state stops the clock: bank whatever was worked and clear the
         # running timer so nothing accrues while the task sits there.
         if task.timer_started_at:
 
@@ -3660,6 +3685,15 @@ def reject_task(task_id):
     )
 
 
+def _task_social_posts(task_id):
+    """Social Studio posts created from this task (empty if the engine is off)."""
+    if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        return []
+    from app.models import SocialPost
+    return (SocialPost.query.filter_by(task_id=task_id)
+            .order_by(SocialPost.created_at.desc()).all())
+
+
 @tasks_bp.route("/<int:task_id>")
 @login_required
 def task_detail(task_id):
@@ -3785,6 +3819,8 @@ def task_detail(task_id):
         task_status=task_status,
         social=social,
         task_social_platform_keys=social.parse_platforms(task.social_platforms),
+        # Social posts spawned from this task (Studio integration).
+        social_posts=_task_social_posts(task.id),
         can_manage_tasks=has_permission(current_user, "manage_tasks"),
         current_status_seconds=current_status_seconds,
         current_status=task.status,

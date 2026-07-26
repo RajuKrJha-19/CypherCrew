@@ -7,6 +7,8 @@ enqueued twice, even if the scheduler cron overlaps a slow run.
 
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
 from app.models import PublishJob, SocialPostTarget
 
@@ -44,15 +46,26 @@ def enqueue_due(now=None):
         key = _idempotency_key(target)
         if PublishJob.query.filter_by(idempotency_key=key).first():
             continue
-        db.session.add(PublishJob(
-            target_id=target.id,
-            state="queued",
-            idempotency_key=key,
-            next_run_at=now,
-            priority=100,
-        ))
-        target.status = "publishing"
-        enqueued += 1
+        try:
+            # Insert inside a SAVEPOINT: this runs concurrently from every
+            # gunicorn worker's autoworker, the cron endpoint, and the manual
+            # button, so two runners can both pass the existence check above.
+            # The unique idempotency_key is the real guard - on a collision we
+            # roll back just this insert and move on, instead of letting one
+            # IntegrityError abort the whole batch's commit.
+            with db.session.begin_nested():
+                db.session.add(PublishJob(
+                    target_id=target.id,
+                    state="queued",
+                    idempotency_key=key,
+                    next_run_at=now,
+                    priority=100,
+                ))
+                db.session.flush()
+            target.status = "publishing"
+            enqueued += 1
+        except IntegrityError:
+            continue
 
     db.session.commit()
     return {"due": len(due), "enqueued": enqueued}

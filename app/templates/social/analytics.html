@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_studio.html" %}
 {% block title %}Analytics · Social Publishing | CypherCrew{% endblock %}
 
 {% block content %}
@@ -9,7 +9,6 @@
     </div>
 </div>
 
-{% include 'partials/social_nav.html' %}
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}

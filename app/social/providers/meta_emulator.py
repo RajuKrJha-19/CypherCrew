@@ -84,6 +84,19 @@ def node_edge(ver, node, edge):
         return jsonify(id=f"CONTAINER_{n}")
     if edge == "media_publish":
         return jsonify(id=f"IGMEDIA_{n}")
+    if edge == "comments":
+        if request.method == "GET":                # Engage: read comments
+            return jsonify(data=[
+                {"id": f"{node}_c1", "message": "Love this! 🔥 Where can I get it?",
+                 "from": {"id": "user_aditya", "name": "Aditya Rao"},
+                 "created_time": "2026-07-26T10:05:00+0000"},
+                {"id": f"{node}_c2", "message": "Great work team 👏",
+                 "from": {"id": "user_neha", "name": "Neha Sharma"},
+                 "created_time": "2026-07-26T11:32:00+0000"},
+            ], paging={})
+        return jsonify(id=f"COMMENT_{n}")          # POST: first comment / reply
+    if edge == "replies":                          # IG reply to a comment
+        return jsonify(id=f"REPLY_{n}")
     if edge == "insights":
         metrics = (request.args.get("metric") or "").split(",")
         return jsonify(data=[
@@ -99,8 +112,10 @@ def rupload(video_id):
     return jsonify(success=True, video_id=video_id)
 
 
-@meta_emulator_bp.route("/<ver>/<node>", methods=["GET"])
+@meta_emulator_bp.route("/<ver>/<node>", methods=["GET", "DELETE"])
 def node(ver, node):
+    if request.method == "DELETE":                 # delete a published post
+        return jsonify(success=True)
     raw_fields = request.args.get("fields", "") or ""
     fields = set(raw_fields.split(","))
     if "instagram_business_account" in raw_fields:  # Page -> linked IG (refresh)

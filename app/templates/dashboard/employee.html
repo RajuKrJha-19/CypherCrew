@@ -48,7 +48,7 @@
             </div>
         </a>
 
-        <a href="{{ url_for('tasks.list_tasks', status='Core Review') }}"
+        <a href="{{ url_for('tasks.list_tasks', status=task_status.NEEDS_REVIEW) }}"
            class="kpi-card dashboard-card-link">
             <div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div>
             <div class="kpi-content">

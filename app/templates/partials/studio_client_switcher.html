@@ -1,0 +1,61 @@
+{# Client-context switcher for the Studio top bar. Scopes every view to one
+   client (or "All clients"). List + selection are injected globally by
+   social_bp's context processor. Preserves the current view when switching. #}
+{# Switching client re-targets the CURRENT view — except single-post pages
+   (post_detail / edit_post) whose endpoint requires post_id (which we drop);
+   there we fall back to a safe list view so url_for can never BuildError. #}
+{% set ep = request.endpoint or 'social.index' %}
+{% set switch_ep = 'social.drafts' if ep in ['social.post_detail', 'social.edit_post'] else ep %}
+{% set base_args = dict(request.view_args or {}) %}
+{% set _ = base_args.pop('post_id', None) %}
+<details class="client-switcher" id="clientSwitcher">
+  <summary aria-label="Switch client">
+    {% if selected_client %}
+    <span class="cs-avatar">{{ selected_client.client_name[:2]|upper }}</span>
+    <span class="cs-name">{{ selected_client.client_name }}</span>
+    {% else %}
+    <span class="cs-avatar all"><i class="fa-solid fa-layer-group"></i></span>
+    <span class="cs-name">All clients</span>
+    {% endif %}
+    <i class="fa-solid fa-chevron-down cs-caret"></i>
+  </summary>
+  <div class="cs-menu" role="menu">
+    <div class="cs-search-wrap"><i class="fa-solid fa-magnifying-glass"></i>
+      <input type="search" class="cs-search" id="csSearch" placeholder="Search clients…" autocomplete="off"></div>
+    <div class="cs-list" id="csList">
+      <a class="cs-item {{ 'on' if not selected_client_id }}" data-name="all clients" role="menuitem"
+         href="{{ url_for(switch_ep, **base_args) }}">
+        <span class="cs-avatar all"><i class="fa-solid fa-layer-group"></i></span> All clients
+        {% if not selected_client_id %}<i class="fa-solid fa-check cs-tick"></i>{% endif %}
+      </a>
+      {% for c in studio_clients %}
+      <a class="cs-item {{ 'on' if selected_client_id == c.id }}" data-name="{{ c.client_name|lower }}" role="menuitem"
+         href="{{ url_for(switch_ep, client=c.id, **base_args) }}">
+        <span class="cs-avatar">{{ c.client_name[:2]|upper }}</span>
+        <span class="cs-item-name">{{ c.client_name }}{% if c.parent_client_id %}<small> · sub-client</small>{% endif %}</span>
+        {% if selected_client_id == c.id %}<i class="fa-solid fa-check cs-tick"></i>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+<script>
+(function () {
+    var search = document.getElementById("csSearch"), list = document.getElementById("csList");
+    if (search && list) search.addEventListener("input", function () {
+        var q = this.value.trim().toLowerCase();
+        list.querySelectorAll(".cs-item").forEach(function (el) {
+            el.style.display = (!q || (el.dataset.name || "").indexOf(q) !== -1) ? "" : "none";
+        });
+    });
+    // Attach the outside-click closer ONCE (querying the switcher live), so it
+    // doesn't stack a new document listener on every Turbo navigation.
+    if (!window.__csCloserBound) {
+        window.__csCloserBound = true;
+        document.addEventListener("click", function (e) {
+            var sw = document.getElementById("clientSwitcher");
+            if (sw && sw.open && !sw.contains(e.target)) sw.open = false;
+        });
+    }
+})();
+</script>
