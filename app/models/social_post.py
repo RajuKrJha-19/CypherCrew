@@ -38,6 +38,14 @@ class SocialPost(db.Model):
     )
     approved_at = db.Column(db.DateTime, nullable=True)
 
+    # Published directly on the platform, outside Social Studio (the user hit
+    # "Mark as manually published" on the task). Kept as a first-class record
+    # so the Studio's Published list and the task both reflect it, badged
+    # "Published outside Social Studio".
+    published_externally = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="false"
+    )
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, nullable=False, default=datetime.utcnow,

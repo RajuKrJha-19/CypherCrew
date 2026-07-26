@@ -252,6 +252,9 @@ def _handle_failure(job_id, exc):
                     f"{target.platform}: {(job.last_error or '')[:120]}",
                     link=f"/social/posts/{target.social_post_id}",
                     actor_id=None)
+            # Roll the post up (failed / partially_published) and reflect the
+            # "Publish failed · retry" state onto the originating task.
+            _maybe_finalize_post(target)
 
     # last_error is a platform message, never a token - safe to log.
     current_app.logger.warning(
@@ -309,10 +312,13 @@ def _maybe_finalize_post(target):
                 f"“{post.title or 'Your post'}” is now live on "
                 + ", ".join(plats) + ".",
                 link=f"/social/posts/{post.id}", actor_id=None)
-        if post.task_id:
-            from app.social.services import task_link
-            task_link.mark_task_published(post)
     elif any(s == "published" for s in statuses) and any(s == "failed" for s in statuses):
         post.status = "partially_published"
     elif all(s == "failed" for s in statuses):
         post.status = "failed"
+
+    # Reflect the post's settled state on the originating task (live / in
+    # queue / failed) in every case, not only on full success.
+    if post.task_id:
+        from app.social.services import task_link
+        task_link.sync_task_from_posts(task_link._task_of(post))

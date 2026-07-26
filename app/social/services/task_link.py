@@ -1,14 +1,25 @@
 """Bridge: reflect Social Studio publishing back onto the originating Task.
 
 When a SocialPost is created from a task (post.task_id set), the task's own
-lifecycle stays the single source of truth: a real API publish moves the task
-to Published and records which platforms went live - the automated equivalent
-of the manual "did you publish on X?" confirmation gate.
+lifecycle stays the single source of truth. One derivation, `_derive`, reads
+the linked posts' targets and maps them to a task board column + a publish
+sub-state badge, so the kanban/list/detail always agree:
 
-Safe to call from the background worker: it never touches current_user (it
-would be Anonymous there). Status timing reuses the task module's
-record_status_time so the duration buckets stay correct; the TaskActivity is
-written directly with a nullable actor (the system convention).
+    draft in Studio / no channels  -> Scheduled column, "Draft in Social Studio"
+    scheduled for later            -> Scheduled column, "Scheduled"
+    in the publish queue (now)     -> Published column, "In publish queue"
+    all targets live               -> Published column, "Live" (+ completed_at)
+    a target failed                -> Published column, "Publish failed · retry"
+    marked manually published      -> Published column, "Published outside Studio"
+
+Board column stays either Scheduled or Published (both already exist); the
+badge carries the nuance. `completed_at`/deliverable count are stamped ONLY
+when every target is truly live, so throughput metrics never count an
+in-queue or failed post as done.
+
+Safe to call from the background worker: never touches current_user; status
+timing reuses the task module's record_status_time so duration buckets stay
+correct; TaskActivity is written with a nullable actor (system convention).
 """
 
 from datetime import datetime
@@ -24,64 +35,137 @@ def _task_of(post):
     return db.session.get(Task, post.task_id)
 
 
-def mark_task_scheduled(post, actor_id=None):
-    """Move the task to 'Scheduled' when its post is scheduled to auto-publish.
-    It flips to 'Published' automatically once the post goes live."""
-    task = _task_of(post)
-    if task is None or task.status in ("Published", "Scheduled"):
+def linked_posts(task):
+    """Non-removed Social Studio posts created from this task, newest last."""
+    if task is None:
+        return []
+    from app.models import SocialPost
+    return (SocialPost.query
+            .filter(SocialPost.task_id == task.id,
+                    SocialPost.status != "removed")
+            .order_by(SocialPost.created_at.asc())
+            .all())
+
+
+def _derive(task):
+    """Map a task's linked posts to (board_status, badge). badge is a dict the
+    templates render, or None when the task has no Studio post yet."""
+    posts = linked_posts(task)
+    if not posts:
+        return None, None
+
+    if any(p.published_externally for p in posts):
+        return "Published", {
+            "label": "Published outside Studio", "tone": "muted",
+            "icon": "fa-arrow-up-right-from-square", "post_id": posts[-1].id}
+
+    targets = [t for p in posts for t in p.targets if t.status != "removed"]
+    pid = posts[-1].id
+
+    if not targets:
+        # Draft created but the client has no channels bound yet.
+        return "Scheduled", {
+            "label": "Draft in Studio · no channels bound", "tone": "warning",
+            "icon": "fa-triangle-exclamation", "post_id": pid,
+            "needs_channels": True}
+
+    statuses = [t.status for t in targets]
+    now = datetime.utcnow()
+    # A target scheduled for now-or-past is due for immediate publish - it's in
+    # the queue even if the worker hasn't flipped it to "publishing" yet.
+    due_now = any(t.status == "scheduled" and t.scheduled_for
+                  and t.scheduled_for <= now for t in targets)
+    sched_future = any(t.status == "scheduled" and t.scheduled_for
+                       and t.scheduled_for > now for t in targets)
+
+    if all(s == "published" for s in statuses):
+        links = [t.permalink for t in targets if t.permalink]
+        return "Published", {
+            "label": "Live", "tone": "success", "icon": "fa-circle-check",
+            "post_id": pid, "permalinks": links}
+
+    if any(s == "failed" for s in statuses):
+        return "Published", {
+            "label": "Publish failed · retry", "tone": "danger",
+            "icon": "fa-triangle-exclamation", "post_id": pid, "retry": True}
+
+    if any(s == "publishing" for s in statuses) or due_now:
+        return "Published", {
+            "label": "In publish queue", "tone": "warning",
+            "icon": "fa-paper-plane", "post_id": pid}
+
+    if sched_future:
+        return "Scheduled", {
+            "label": "Scheduled", "tone": "info", "icon": "fa-clock",
+            "post_id": pid}
+
+    # draft / pending_approval / approved: handed to Studio, not yet published.
+    return "Scheduled", {
+        "label": "Draft in Social Studio", "tone": "warning",
+        "icon": "fa-pen-to-square", "post_id": pid}
+
+
+def publish_badge(task):
+    """Render-time badge for kanban/list/detail. None for non-social tasks or
+    tasks with no linked Studio post."""
+    if not task or not getattr(task, "is_social_media", False):
+        return None
+    _, badge = _derive(task)
+    return badge
+
+
+def sync_task_from_posts(task, actor_id=None):
+    """Set the task's board column from its linked Studio posts. Idempotent -
+    only writes a status change when the column actually moves, and stamps
+    completed_at exactly once, when every target is live."""
+    if task is None:
         return
+    desired, badge = _derive(task)
+    if desired is None:
+        return
+    live = bool(badge) and badge.get("label") in ("Live",
+                                                   "Published outside Studio")
+
+    # A task that already reached Published is terminal for downward moves: a
+    # newly linked/rescheduled post must never drag a completed task back to
+    # Scheduled (which would bank time backward while completed_at stays set).
+    if task.completed_at and desired != "Published":
+        return
+
     from app.routes.tasks import record_status_time
     from app.models import TaskActivity
-    old = record_status_time(task, "Scheduled")
-    db.session.add(TaskActivity(
-        task_id=task.id, actor_id=actor_id, action="social_scheduled",
-        message="Scheduled via Social Studio - publishes automatically at the "
-        "set time.",
-        old_status=old, new_status="Scheduled", created_at=datetime.utcnow()))
+
+    if desired != task.status:
+        old = record_status_time(task, desired)
+        db.session.add(TaskActivity(
+            task_id=task.id, actor_id=actor_id, action="social_publish_state",
+            message="Social Studio: " + (badge.get("label") if badge else desired),
+            old_status=old, new_status=desired, created_at=datetime.utcnow()))
+
+    if live and not task.completed_at:
+        from app.utils.timezone import ist_now
+        task.completed_at = ist_now()
+        if task.deliverable is not None:
+            task.deliverable.completed_count = \
+                (task.deliverable.completed_count or 0) + 1
+        posts = linked_posts(task)
+        plats = sorted({t.platform for p in posts for t in p.targets
+                        if t.status == "published"})
+        if plats:
+            task.social_platforms_published = sp.format_platforms(plats)
+
+
+# -- Thin wrappers kept for existing call sites ---------------------------
+# They all route through the single derivation above, so behaviour stays
+# consistent no matter which event fired.
+
+def mark_task_scheduled(post, actor_id=None):
+    sync_task_from_posts(_task_of(post), actor_id=actor_id)
 
 
 def mark_task_unscheduled(post, actor_id=None):
-    """A scheduled post was reopened/unscheduled - send the task back to Client
-    Review so it can be re-scheduled or re-approved."""
-    task = _task_of(post)
-    if task is None or task.status != "Scheduled":
-        return
-    from app.routes.tasks import record_status_time
-    from app.models import TaskActivity
-    old = record_status_time(task, "Client Review")
-    db.session.add(TaskActivity(
-        task_id=task.id, actor_id=actor_id, action="social_unscheduled",
-        message="Unscheduled in Social Studio - back to Client Review.",
-        old_status=old, new_status="Client Review",
-        created_at=datetime.utcnow()))
+    sync_task_from_posts(_task_of(post), actor_id=actor_id)
 
 
 def mark_task_published(post, actor_id=None):
-    """Once every target of a task-linked post is live, move the task to
-    Published and stamp the platforms that went out. Idempotent."""
-    task = _task_of(post)
-    if task is None or task.status == "Published":
-        return
-    platforms = sorted({t.platform for t in post.targets
-                        if t.status == "published"})
-    if not platforms:
-        return
-    task.social_platforms_published = sp.format_platforms(platforms)
-    # Reuse the task module's timing-aware status change (no current_user use).
-    from app.routes.tasks import record_status_time
-    from app.models import TaskActivity
-    from app.utils.timezone import ist_now
-    old = record_status_time(task, "Published")
-    # Mirror the manual approve_task publish path so Social-Studio publishes
-    # count in throughput/turnaround metrics (which filter on completed_at) and
-    # the deliverable tally, instead of silently dropping out.
-    task.completed_at = ist_now()
-    if task.deliverable is not None:
-        task.deliverable.completed_count = \
-            (task.deliverable.completed_count or 0) + 1
-    db.session.add(TaskActivity(
-        task_id=task.id, actor_id=actor_id, action="published",
-        message=("Published via Social Studio: "
-                 + ", ".join(sp.label(p) for p in platforms) + "."),
-        old_status=old, new_status="Published",
-        created_at=datetime.utcnow()))
+    sync_task_from_posts(_task_of(post), actor_id=actor_id)

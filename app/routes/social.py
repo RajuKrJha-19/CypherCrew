@@ -23,7 +23,7 @@ from app.social.dto import TokenBundle
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
-    approval, audit, lifecycle, publishing, recovery, scheduling,
+    approval, audit, lifecycle, publishing, recovery, scheduling, task_link,
     versioning,
 )
 from app.social.services import engage as engage_svc
@@ -277,6 +277,73 @@ def _suggested_accounts_for_task(task):
         a.id for a in AccountManager.list_accounts()
         if a.platform in plats and _channel_client_ok(a.client_id, task.client_id)
     ]
+
+
+def create_draft_from_task(task, actor_id=None):
+    """Server-side handoff: turn an approved social task into a Social Studio
+    DRAFT the social team finalizes. Pre-fills the deliverable files as media
+    and the client's bound channels (matching the task's platforms) as targets.
+    Caption is left EMPTY on purpose - a task has no caption field yet; the
+    composer shows the task description as reference instead.
+
+    Returns {"post": SocialPost, "n_targets": int, "no_channels": bool}. When
+    the client has no channels bound, the draft is still created (no targets)
+    so the handoff isn't lost - the caller prompts the user to bind channels.
+    """
+    files = _task_deliverable_files(task)
+
+    def _is_video(f):
+        mt = (f.mime_type or "").lower()
+        name = (f.original_filename or f.object_key or "").lower()
+        ext = name.rsplit(".", 1)[-1] if "." in name else ""
+        # Browsers often upload video as application/octet-stream, so fall back
+        # to the extension rather than mislabelling a video as an image.
+        return mt.startswith("video") or ext in (
+            "mp4", "mov", "webm", "avi", "mkv", "m4v")
+
+    if not files:
+        post_type = "text"
+    elif any(_is_video(f) for f in files):
+        post_type = "video"
+    elif len(files) > 1:
+        post_type = "carousel"
+    else:
+        post_type = "image"
+
+    post = SocialPost(
+        task_id=task.id, client_id=task.client_id,
+        title=task.title, base_caption="", status="draft",
+        created_by_id=actor_id)
+    db.session.add(post)
+    db.session.flush()
+
+    media_items = [("task_file", tf) for tf in files]
+
+    def _add_media(target_id):
+        for i, (source, obj) in enumerate(media_items):
+            db.session.add(SocialMediaAsset(
+                target_id=target_id, source=source, object_key=obj.object_key,
+                mime_type=obj.mime_type, task_file_id=obj.id, role="main",
+                sort_order=i))
+
+    n_targets = 0
+    for account_id in _suggested_accounts_for_task(task):
+        account = db.session.get(SocialAccount, account_id)
+        if account is None or not _channel_client_ok(
+                account.client_id, post.client_id):
+            continue
+        t = SocialPostTarget(
+            social_post_id=post.id, social_account_id=account.id,
+            platform=account.platform, post_type=post_type, status="draft")
+        db.session.add(t)
+        db.session.flush()
+        _add_media(t.id)
+        n_targets += 1
+
+    versioning.snapshot_post(post, edited_by_id=actor_id)
+    audit.record("post_created_from_task", post_id=post.id, actor_id=actor_id,
+                 task_id=task.id, detail={"targets": n_targets})
+    return {"post": post, "n_targets": n_targets, "no_channels": n_targets == 0}
 
 
 def _capabilities_map():
@@ -1121,13 +1188,19 @@ def _apply_composer_form(post):
 
     # Resolve media from BOTH sources - the task's deliverable files first
     # (they are the creative), then any client brand assets - preserving order.
+    # Client safety (mirrors the channel rule below): media may only come from
+    # the POST's own client, so a tampered id can't attach Client A's
+    # confidential deliverable/brand asset to Client B's post.
+    post_cid = post.client_id
     asset_by_id = {
         a.id: a for a in ClientAsset.query.filter(
             ClientAsset.id.in_(asset_ids)).all()
+        if post_cid and a.client_id == post_cid
     } if asset_ids else {}
     tf_by_id = {
         f.id: f for f in TaskFile.query.filter(
             TaskFile.id.in_(task_file_ids)).all()
+        if post_cid and f.task and f.task.client_id == post_cid
     } if task_file_ids else {}
     media_items = [("task_file", tf_by_id[i]) for i in task_file_ids if i in tf_by_id]
     media_items += [("client_asset", asset_by_id[i]) for i in asset_ids if i in asset_by_id]
@@ -1412,9 +1485,11 @@ def schedule_post(post_id):
             target.scheduled_for = datetime.utcnow()
 
     result = publishing.schedule_post(post, actor_id=current_user.id)
-    if post.task_id and not publish_now:
-        from app.social.services import task_link
-        task_link.mark_task_scheduled(post, actor_id=current_user.id)
+    if post.task_id:
+        # Reflect the new state on the task now: "Scheduled" for a future time,
+        # or straight into the "In publish queue" (Published) lane for now.
+        task_link.sync_task_from_posts(
+            task_link._task_of(post), actor_id=current_user.id)
         db.session.commit()
     if result["problems"]:
         flash(
@@ -1587,13 +1662,25 @@ def calendar():
 @login_required
 def history():
     _guard()
+    cid = _client_arg()
     targets = (
-        _scope_targets(SocialPostTarget.query, _client_arg())
+        _scope_targets(SocialPostTarget.query, cid)
         .order_by(SocialPostTarget.updated_at.desc())
         .limit(100)
         .all()
     )
-    return render_template("social/history.html", targets=targets)
+    # Posts published directly on the platform (outside Studio) have no targets,
+    # so surface them as their own rows to keep the Published list complete.
+    external_posts = (
+        _scope_posts(
+            SocialPost.query.filter(SocialPost.published_externally.is_(True)),
+            cid)
+        .order_by(SocialPost.updated_at.desc())
+        .limit(50)
+        .all()
+    )
+    return render_template("social/history.html", targets=targets,
+                           external_posts=external_posts)
 
 
 # ======================================================================

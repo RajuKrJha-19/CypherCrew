@@ -5,6 +5,7 @@
     modes - only the surrounding chrome differs.
 #}
 {% extends "base_panel.html" if panel_mode else "base_app.html" %}
+{% from "partials/_publish_badge.html" import publish_badge %}
 
 {% block title %}#{{ task.task_code }} - {{ task.title }} | CypherCrew{% endblock %}
 
@@ -314,7 +315,10 @@
 
                         <div class="detail-row">
                             <span>Status</span>
-                            <strong>{{ task.status }}</strong>
+                            <strong style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                {{ task.status }}
+                                {{ publish_badge(task) }}
+                            </strong>
                         </div>
                     </div>
 
@@ -853,6 +857,23 @@ Submission Files
                         <div class="task-actions-box">
                             <div class="review-actions">
 
+                                {% if task.status == 'Client Review' and task.is_social_media and config.SOCIAL_ENGINE_ENABLED %}
+                                {# Social task: hand the approved creative to Social Studio
+                                   instead of the old "tick the platforms you posted" gate. #}
+                                <form method="POST" action="{{ url_for('tasks.send_to_social_studio', task_id=task.id) }}" data-turbo="false" style="margin:0;">
+                                    <button type="submit" class="review-btn approve-btn"
+                                        title="Approve the client sign-off and create a draft in Social Studio for the team to publish or schedule.">
+                                        <i class="fa-solid fa-share-nodes"></i> Approve &amp; Send to Social Studio
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('tasks.mark_manually_published', task_id=task.id) }}" data-turbo="false" style="margin:0;"
+                                    onsubmit="return confirm('Mark this as already published directly on the platform (outside Social Studio)?');">
+                                    <button type="submit" class="review-btn manual-publish-btn"
+                                        title="Use only if the post was published directly on the platform, not through Social Studio.">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Mark as manually published
+                                    </button>
+                                </form>
+                                {% else %}
                                 <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}"
                                     {% if task.status == 'Client Review' and task.is_social_media and task_social_platform_keys %}
                                     data-social-platforms='{{ social.confirm_payload(task.social_platforms)|tojson }}'
@@ -862,6 +883,7 @@ Submission Files
                                         Approve
                                     </button>
                                 </form>
+                                {% endif %}
 
                                 <form method="POST" action="{{ url_for('tasks.reject_task', task_id=task.id) }}"
                                     enctype="multipart/form-data" class="reject-form">

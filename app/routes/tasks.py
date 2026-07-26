@@ -116,7 +116,11 @@ def start_timer(task):
     if not task.started_at:
         task.started_at = now
 
-    task.timer_started_at = now
+    # Only start the clock if it isn't already running. Overwriting a live
+    # timer_started_at (e.g. a double-submit of Start on an In Progress task)
+    # would silently discard every second worked since the last start.
+    if task.timer_started_at is None:
+        task.timer_started_at = now
 
 
 def record_status_time(task, new_status):
@@ -163,10 +167,69 @@ def record_status_time(task, new_status):
         task.voided_at = None
         task.voided_by_id = None
 
+    # Leaving Published (a manager reworking a delivered task) reverses the
+    # completion side-effects, so throughput metrics and the deliverable tally
+    # stop counting a task that is being redone. Guarded on completed_at so we
+    # only ever undo a completion that was actually recorded.
+    if task.status == task_status.PUBLISHED \
+            and new_status != task_status.PUBLISHED and task.completed_at:
+        task.completed_at = None
+        if task.deliverable is not None and task.deliverable.completed_count:
+            task.deliverable.completed_count = \
+                max(0, (task.deliverable.completed_count or 0) - 1)
+
     task.status = new_status
     task.status_started_at = now
 
     return old_status
+
+
+def _social_needs_handoff(task):
+    """A social task, with the engine on, must reach Published through the
+    Social Studio handoff (Approve & Send / Mark manually published) - never a
+    bare board drag or edit-dropdown pick, which would skip the publish gate."""
+    return bool(
+        task.is_social_media
+        and current_app.config.get("SOCIAL_ENGINE_ENABLED")
+    )
+
+
+def apply_completion_effects(task, new_status):
+    """The completion side-effects a status change into a review/done state
+    must carry, applied identically no matter which path triggered it (approve
+    button, edit dropdown, or kanban drag). Idempotent: completed_at gates the
+    one-time deliverable count so a status re-entry never double-counts.
+
+    Assumes record_status_time has ALREADY moved task.status to new_status.
+    """
+    if new_status in ("Core Review", "Client Review", "Published"):
+        task.employee_completed = True
+        if not task.employee_completed_at:
+            task.employee_completed_at = ist_now()
+
+    if new_status == "Published" and not task.completed_at:
+        task.completed_at = ist_now()
+        if task.deliverable is not None:
+            task.deliverable.completed_count = \
+                (task.deliverable.completed_count or 0) + 1
+        if task.is_social_media and task.social_platforms \
+                and not task.social_platforms_published:
+            task.social_platforms_published = task.social_platforms
+
+
+def _notify_reviewers(task):
+    """Tell everyone who can approve that a task is waiting in review. Shared by
+    submit_review and the board-drag path so both notify identically."""
+    reviewers = [
+        u for u in User.query.filter_by(status="active").all()
+        if has_permission(u, "approve_tasks") and u.id != current_user.id
+    ]
+    for reviewer in reviewers:
+        create_notification(
+            user_id=reviewer.id, title="Review requested",
+            message=f"{current_user.name} submitted: {task.title}",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id, task_id=task.id)
 
 
 def format_seconds(seconds):
@@ -1383,7 +1446,7 @@ def add_task():
             backup_assignee_id=backup_assignee_id,
             fallback_hours=fallback_hours,
             is_social_media=is_social_media,
-            social_platforms=social_platforms_csv,
+            social_platforms=social_platforms_csv or None,
         )
 
         visibility_ids = request.form.getlist(
@@ -2046,6 +2109,21 @@ def edit_task(task_id):
                 )
             )
 
+        # A social task publishes through the Studio handoff, never the plain
+        # status dropdown - which would skip the publish gate + deliverable
+        # count. Block it here before any field is applied.
+        if (
+            new_status == "Published"
+            and new_status != task.status
+            and _social_needs_handoff(task)
+        ):
+            flash(
+                "Publish a social task from the task page using “Approve & "
+                "Send to Social Studio” or “Mark as manually published”.",
+                "error"
+            )
+            return redirect(url_for("tasks.edit_task", task_id=task.id))
+
         if not new_title:
             flash(
                 "Task title is required.",
@@ -2060,21 +2138,28 @@ def edit_task(task_id):
 
         task.title = new_title
         task.description = new_description
-        task.client_id = client_id
-        task.deliverable_id = deliverable_id
-        task.assigned_to_id = assigned_to_id
         task.priority = new_priority
         task.deadline = deadline
         task.quantity = quantity
         task.estimated_time = estimated_time
 
-        fallback_config_changed = (
-            old_backup_assignee_id != backup_assignee_id
-            or old_fallback_hours != fallback_hours
-        )
-
-        task.backup_assignee_id = backup_assignee_id
-        task.fallback_hours = fallback_hours
+        # Reassignment, client/deliverable retargeting and fallback config are
+        # manager-only (the inline quick-edit already enforces this). A
+        # self-assigned owner without manage_tasks reaches this form to edit
+        # their own task's content - they must not be able to push it onto
+        # someone else or move it to another client.
+        if can_manage_tasks:
+            task.client_id = client_id
+            task.deliverable_id = deliverable_id
+            task.assigned_to_id = assigned_to_id
+            fallback_config_changed = (
+                old_backup_assignee_id != backup_assignee_id
+                or old_fallback_hours != fallback_hours
+            )
+            task.backup_assignee_id = backup_assignee_id
+            task.fallback_hours = fallback_hours
+        else:
+            fallback_config_changed = False
 
         if fallback_config_changed:
 
@@ -2232,45 +2317,57 @@ def edit_task(task_id):
             changes.append(
                 ("Status", task.status, new_status)
             )
+            old_status_for_review = task.status
 
             if task.timer_started_at and new_status != "In Progress":
                 pause_timer(task)
 
             if new_status == "Published":
                 pause_timer(task)
-                task.completed_at = ist_now()
 
             record_status_time(
                 task,
                 new_status
             )
 
-            if new_status in ["Core Review", "Client Review", "Published"]:
-                task.employee_completed = True
+            # Same completion side-effects as the Approve button / board drag,
+            # so the edit dropdown can't produce a differently-counted task.
+            apply_completion_effects(task, new_status)
 
-                if not task.employee_completed_at:
-                    task.employee_completed_at = ist_now()
+            # Start the clock when moved into In Progress from the dropdown
+            # (the board path does this; the edit path used to leave it dead).
+            if new_status == "In Progress" and task.timer_started_at is None:
+                start_timer(task)
 
-        task.visible_to.clear()
+            # Notify reviewers when the edit pushes a task into review.
+            if new_status in ("Core Review", "Client Review") \
+                    and old_status_for_review not in (
+                        "Core Review", "Client Review"):
+                _notify_reviewers(task)
 
-        visibility_ids = request.form.getlist("visibility_ids")
+        # Visibility is a manager control too - don't let a self-assigned owner
+        # rewrite who can see the task.
+        if can_manage_tasks:
+            task.visible_to.clear()
 
-        for user_id in visibility_ids:
+            visibility_ids = request.form.getlist("visibility_ids")
 
-            try:
-                user_id = int(user_id)
+            for user_id in visibility_ids:
 
-            except (TypeError, ValueError):
-                continue
+                try:
+                    user_id = int(user_id)
 
-            user = User.query.filter(
-                User.id == user_id,
-                User.status == "active",
-                User.role.in_(["super_admin", "admin", "employee"])
-            ).first()
+                except (TypeError, ValueError):
+                    continue
 
-            if user and user not in task.visible_to:
-                task.visible_to.append(user)
+                user = User.query.filter(
+                    User.id == user_id,
+                    User.status == "active",
+                    User.role.in_(["super_admin", "admin", "employee"])
+                ).first()
+
+                if user and user not in task.visible_to:
+                    task.visible_to.append(user)
 
         new_visibility_names = sorted(
             [user.name for user in task.visible_to]
@@ -2315,7 +2412,9 @@ def edit_task(task_id):
                     task_id=task.id
                 )
 
-        else:
+        elif task.assigned_to_id and task.assigned_to_id != current_user.id:
+            # Don't ping the editor about their own edit (self-assigned owner,
+            # or a manager who is also the assignee).
             create_notification(
                 user_id=task.assigned_to_id,
                 title="Task Updated",
@@ -2864,7 +2963,11 @@ def submit_review(task_id):
         )
         return redirect(url_for("tasks.list_tasks"))
 
-    if task.status in ["Assigned", "In Progress"]:
+    # Only In Progress may be submitted to review: an Assigned (never-started)
+    # task jumping straight to Core Review is exactly what EMPLOYEE_MOVES
+    # forbids, and would enter review with no worked time recorded.
+    if task_status.can_move(task.status, "Core Review",
+                            has_permission(current_user, "manage_tasks")):
 
         pause_timer(task)
 
@@ -2885,26 +2988,18 @@ def submit_review(task_id):
             new_status="Core Review"
         )
 
-        reviewers = [
-            user for user in User.query.filter_by(status="active").all()
-            if has_permission(user, "approve_tasks")
-        ]
-
-        for reviewer in reviewers:
-            create_notification(
-                user_id=reviewer.id,
-                title="Review requested",
-                message=f"{current_user.name} submitted: {task.title}",
-                link=url_for("tasks.task_detail", task_id=task.id),
-                actor_id=current_user.id,
-                task_id=task.id
-            )
+        _notify_reviewers(task)
 
         db.session.commit()
 
         flash(
             "Task submitted for core review.",
             "success"
+        )
+    else:
+        flash(
+            "Start the task before submitting it for review.",
+            "error"
         )
 
     return redirect(url_for("tasks.list_tasks"))
@@ -2988,6 +3083,17 @@ def kanban_update_status():
             )
         }), 400
 
+    # A social task publishes through Social Studio, never a bare board drag -
+    # dragging to Published would skip the publish gate entirely.
+    if new_status == "Published" and _social_needs_handoff(task):
+        return jsonify({
+            "success": False,
+            "message": (
+                "Open the task and use “Approve & Send to Social Studio” "
+                "(or “Mark as manually published”) to publish a social task."
+            )
+        }), 400
+
     old_status = task.status
     previous_task = None
 
@@ -2996,8 +3102,7 @@ def kanban_update_status():
     # --------------------------------------------
 
     if (
-        not has_permission(current_user, "manage_tasks")
-        and new_status == "In Progress"
+        new_status == "In Progress"
         and task.assigned_to_id
     ):
 
@@ -3087,10 +3192,24 @@ def kanban_update_status():
 
             task.timer_started_at = None
 
+    # Completion side-effects (employee_completed / completed_at / deliverable
+    # count / social_platforms_published) so a board move to a review/done state
+    # carries the SAME effects as the Approve button - no more metrics that
+    # depend on which control the manager used.
+    apply_completion_effects(task, new_status)
+
+    # Reviewers only learn a task is waiting if we tell them - mirror
+    # submit_review so a board drag into review notifies them too.
+    if new_status in ("Core Review", "Client Review") \
+            and old_status not in ("Core Review", "Client Review"):
+        _notify_reviewers(task)
+
     add_activity(
         task,
         action="status_changed",
         message=f"{current_user.name} moved task from {old_status} to {new_status}.",
+        old_status=old_status,
+        new_status=new_status,
     )
 
     db.session.commit()
@@ -3478,7 +3597,8 @@ def approve_task(task_id):
         task.completed_at = ist_now()
         status_changed = True
 
-        task.deliverable.completed_count += 1
+        task.deliverable.completed_count = \
+            (task.deliverable.completed_count or 0) + 1
 
         flash(
             "Task published successfully.",
@@ -3508,6 +3628,158 @@ def approve_task(task_id):
     return redirect(
         request.referrer or url_for("tasks.list_tasks")
     )
+
+
+# ======================================================================
+# Social Studio handoff (Client Review -> publish)
+# ======================================================================
+
+def _social_team_user_ids(exclude_id=None):
+    """Active users who can act in Social Studio: both admin roles plus anyone
+    explicitly granted manage_social. Used to notify the team when a draft is
+    handed off from a task."""
+    from app.models import User, UserPermission, Permission
+    ids = {
+        u.id for u in User.query.filter(
+            User.status == "active",
+            User.role.in_(["super_admin", "admin"])).all()
+    }
+    rows = (db.session.query(UserPermission.user_id)
+            .join(Permission, Permission.id == UserPermission.permission_id)
+            .filter(Permission.code == "manage_social").all())
+    ids.update(r[0] for r in rows)
+    ids.discard(exclude_id)
+    return ids
+
+
+def _notify_social_team(title, message, link, exclude_id=None):
+    for uid in _social_team_user_ids(exclude_id=exclude_id):
+        create_notification(user_id=uid, title=title, message=message,
+                            link=link, actor_id=exclude_id)
+
+
+@tasks_bp.route("/<int:task_id>/send-to-social-studio", methods=["POST"])
+@login_required
+def send_to_social_studio(task_id):
+    """Client Review -> hand the approved creative to Social Studio as a draft
+    the social team finalizes and publishes. The publish-state then flows back
+    onto the task (Scheduled / In publish queue / Published / failed)."""
+    if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        abort(404)
+    if not has_permission(current_user, "approve_tasks"):
+        return redirect(url_for("dashboard.index"))
+    task = Task.query.get_or_404(task_id)
+    if not task.is_social_media:
+        flash("This isn't a social media task.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+    if task.status != "Client Review":
+        flash("Only a task in Client Review can be sent to Social Studio.",
+              "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    # Record the client sign-off (same completion flags approve_task sets).
+    task.employee_completed = True
+    if not task.employee_completed_at:
+        task.employee_completed_at = ist_now()
+
+    from app.routes.social import create_draft_from_task
+    from app.social.services import task_link
+    result = create_draft_from_task(task, actor_id=current_user.id)
+    post = result["post"]
+    db.session.flush()
+    task_link.sync_task_from_posts(task, actor_id=current_user.id)
+
+    add_activity(
+        task, action="sent_to_social_studio",
+        message=(f"Approved by {current_user.name} and sent to Social Studio "
+                 "as a draft to publish."))
+
+    _notify_social_team(
+        "New post to publish",
+        f"“{task.title}” was approved and sent to Social Studio.",
+        link=(url_for("social.edit_post", post_id=post.id)
+              if result["n_targets"] else url_for("social.drafts")),
+        exclude_id=current_user.id)
+
+    db.session.commit()
+    if result["no_channels"]:
+        flash("Sent to Social Studio — but this client has no channels "
+              "connected yet. Connect them in Social Studio → Accounts, then "
+              "open the draft to publish.", "info")
+    else:
+        flash("Approved and sent to Social Studio. The social team can publish "
+              "or schedule it now.", "success")
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/<int:task_id>/mark-manually-published", methods=["POST"])
+@login_required
+def mark_manually_published(task_id):
+    """For a post published directly on the platform, not through Studio. Marks
+    the task Published and creates an 'outside Studio' record so the Studio's
+    Published list and the task both reflect it."""
+    if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        abort(404)
+    if not has_permission(current_user, "approve_tasks"):
+        return redirect(url_for("dashboard.index"))
+    task = Task.query.get_or_404(task_id)
+    if task.status not in ("Client Review", "Scheduled"):
+        flash("Only a task awaiting publish can be marked manually published.",
+              "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    from app.models import SocialPost
+    from app.social.services import task_link
+    post = SocialPost(
+        task_id=task.id, client_id=task.client_id, title=task.title,
+        status="published", published_externally=True,
+        created_by_id=current_user.id, approved_by_id=current_user.id,
+        approved_at=ist_now())
+    db.session.add(post)
+    db.session.flush()
+    task_link.sync_task_from_posts(task, actor_id=current_user.id)
+    if task.is_social_media and task.social_platforms:
+        task.social_platforms_published = task.social_platforms
+    add_activity(
+        task, action="published",
+        message=(f"Marked manually published by {current_user.name} "
+                 "(published directly on the platform, outside Social Studio)."))
+    db.session.commit()
+    flash("Marked as published (outside Social Studio).", "success")
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/<int:task_id>/retry-publish", methods=["POST"])
+@login_required
+def retry_task_publish(task_id):
+    """Re-queue every failed publish target of this task's Studio post(s)."""
+    if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        abort(404)
+    if not (has_permission(current_user, "approve_tasks")
+            or has_permission(current_user, "manage_social")):
+        return redirect(url_for("dashboard.index"))
+    task = Task.query.get_or_404(task_id)
+    from app.social.services import task_link, recovery, publishing
+    n = 0
+    for post in task_link.linked_posts(task):
+        for t in post.targets:
+            if t.status != "failed":
+                continue
+            job = t.job
+            if job is not None and recovery.requeue_job(
+                    job, actor_id=current_user.id, commit=False):
+                pass
+            else:
+                publishing.publish_target_now(t, actor_id=current_user.id)
+            if post.status == "failed":
+                post.status = "publishing"
+            n += 1
+    task_link.sync_task_from_posts(task, actor_id=current_user.id)
+    db.session.commit()
+    flash(f"Re-queued {n} failed publish(es) — they'll go out on the next "
+          "worker run." if n else "Nothing to retry.",
+          "success" if n else "info")
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
 
 
 # Matches the reference_file input's accept="..." attribute in
@@ -3554,9 +3826,10 @@ def reject_task(task_id):
         "reference_file"
     )
 
-    if not message:
+    if len(message) < 10:
         flash(
-            "Rejection reason is required.",
+            "Rejection reason must be at least 10 characters - explain what "
+            "needs fixing.",
             "error"
         )
         return redirect(
@@ -3639,6 +3912,10 @@ def reject_task(task_id):
         file_path=file_path,
         file_type=file_type
     )
+
+    # Bank any running segment before resetting, so worked time already spent
+    # isn't discarded when the task goes back for rework.
+    pause_timer(task)
 
     old_status = record_status_time(
         task,
@@ -4128,6 +4405,18 @@ def delete_task_file(file_id):
                 task_id=task.id,
             )
         )
+
+    # A file pulled into a Social Studio post is referenced by a
+    # SocialMediaAsset (FK, no cascade), so deleting it would fail with a bare
+    # IntegrityError. Detect it and explain, instead of "please try again".
+    if current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        from app.models import SocialMediaAsset
+        if SocialMediaAsset.query.filter_by(task_file_id=task_file.id).first():
+            flash(
+                "This file is used in a Social Studio post — remove it from "
+                "the post (or delete the post) before deleting the file.",
+                "error")
+            return redirect(url_for("tasks.task_detail", task_id=task.id))
 
     filename = task_file.original_filename
     object_key = task_file.object_key

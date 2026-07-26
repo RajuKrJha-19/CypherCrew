@@ -241,8 +241,23 @@ def create_app():
             version = 0
         return _url_for("static", filename=filename, v=version)
 
+    def _social_publish_badge(task):
+        """Publish sub-state badge for a task's linked Studio post(s), or None.
+        Global so kanban cards, the task list and task detail render the same
+        badge without per-route wiring. Cheap + guarded (engine-gated)."""
+        if not app.config.get("SOCIAL_ENGINE_ENABLED"):
+            return None
+        try:
+            from app.social.services.task_link import publish_badge
+            return publish_badge(task)
+        except Exception:  # noqa: BLE001 - a badge must never break a page
+            return None
+
     app.jinja_env.globals.update(
         has_permission=has_permission,
+        # Publish-state badge (Draft in Studio / Scheduled / In queue / Live /
+        # failed / outside Studio) for a task, derived from its Studio post.
+        social_publish_badge=_social_publish_badge,
         # "May operate the Social Publishing engine" (owner/admin only) -
         # gates the internal ops controls (worker kick, retry/requeue) so
         # employees and managers never see engine machinery.

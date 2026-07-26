@@ -55,6 +55,25 @@
     {% set is_client = task.status == "Client Review" %}
     <div class="review-actions-new">
 
+        {% if is_client and task.is_social_media and config.SOCIAL_ENGINE_ENABLED %}
+        {# Social task: hand off to Social Studio, matching the task-detail page
+           (never the old "confirm the platforms you posted" gate). #}
+        <form method="POST" action="{{ url_for('tasks.send_to_social_studio', task_id=task.id) }}"
+            data-turbo="false" style="margin:0;">
+            <button type="submit" class="review-approve-btn"
+                title="Approve the client sign-off and send to Social Studio to publish or schedule.">
+                <i class="fa-solid fa-share-nodes"></i> Approve &amp; Send to Studio
+            </button>
+        </form>
+        <form method="POST" action="{{ url_for('tasks.mark_manually_published', task_id=task.id) }}"
+            data-turbo="false" style="margin:0;"
+            onsubmit="return confirm('Mark this as already published directly on the platform (outside Social Studio)?');">
+            <button type="submit" class="review-reject-toggle"
+                title="Use only if the post was published directly on the platform.">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Manually published
+            </button>
+        </form>
+        {% else %}
         <form method="POST" action="{{ url_for('tasks.approve_task', task_id=task.id) }}"
             class="review-move-form" data-task-id="{{ task.id }}"
             data-from-status="{{ task.status }}"
@@ -68,6 +87,7 @@
                 {% if is_client %}Approve &amp; Publish{% else %}Approve{% endif %}
             </button>
         </form>
+        {% endif %}
 
         <button type="button" class="review-reject-toggle" onclick="toggleReviewRejectBox(this)"
             title="Send this task back to the employee for changes">

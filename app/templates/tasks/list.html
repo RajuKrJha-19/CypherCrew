@@ -1,4 +1,5 @@
 {% extends "base_app.html" %}
+{% from "partials/_publish_badge.html" import publish_badge %}
 
 {% block title %}Tasks | CypherCrew{% endblock %}
 
@@ -316,6 +317,9 @@
                             •
                             {{ task.deliverable.deliverable_name }}
                         </p>
+
+                        {% set _pb = publish_badge(task) %}
+                        {% if _pb %}<div class="kanban-publish-badge">{{ _pb }}</div>{% endif %}
 
                         <div class="task-card-meta">
                             <span>
@@ -635,6 +639,8 @@
                                 <span class="status-pill">
                                     {{ task.status }}
                                 </span>
+                                {% set _pb = publish_badge(task, show_retry=False) %}
+                                {% if _pb %}<div style="margin-top:5px;">{{ _pb }}</div>{% endif %}
                             </td>
 
                             <td data-column="action">

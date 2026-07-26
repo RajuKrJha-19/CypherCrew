@@ -26,6 +26,26 @@
 {% endfor %}
 {% endwith %}
 
+{% if external_posts %}
+<div class="social-card" style="margin-bottom:18px;">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-arrow-up-right-from-square"></i> Published outside Social Studio</h2>
+        <span class="sp-pill muted">{{ external_posts|length }}</span>
+    </div>
+    <div class="social-card-body">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            {% for p in external_posts %}
+            <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);">
+                <span><strong>{{ p.title or 'Untitled post' }}</strong>{% if p.client %} · <span style="color:var(--color-text-muted);">{{ p.client.client_name }}</span>{% endif %}
+                    {% if p.task_id %} · <a href="{{ url_for('tasks.task_detail', task_id=p.task_id) }}" data-turbo="false" style="font-size:12px;">task</a>{% endif %}</span>
+                <span class="sp-pill muted"><i class="fa-solid fa-arrow-up-right-from-square"></i> Published outside Studio · {{ p.updated_at.strftime('%d %b %Y') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if targets %}
 <div class="social-card">
     <div class="table-card" style="border:0;box-shadow:none;">
@@ -48,7 +68,7 @@
         </table>
     </div>
 </div>
-{% else %}
+{% elif not external_posts %}
 <div class="social-card">
     <div class="social-empty">
         <div class="ic"><i class="fa-solid fa-clock-rotate-left"></i></div>
