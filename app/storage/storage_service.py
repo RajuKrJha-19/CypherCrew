@@ -661,6 +661,17 @@ class StorageService:
                 "upload_id is required."
             )
 
+        # Harden: the completed key must live under THIS task's own prefix and
+        # folder (clients/.../TASK-<code>/<folder>/...), so a tampered client
+        # can't register a TaskFile row pointing at an arbitrary object it
+        # happens to hold a valid upload_id for.
+        expected_segment = f"/TASK-{getattr(task, 'task_code', '')}/{folder_type}/"
+        if not (str(object_key).startswith("clients/")
+                and expected_segment in str(object_key)):
+            raise StorageServiceError(
+                "object_key does not match this task's storage location."
+            )
+
         if not parts:
             raise StorageServiceError(
                 "parts is required."

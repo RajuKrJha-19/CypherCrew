@@ -61,11 +61,17 @@ def run_task_fallback_reassignment():
 
         original_assignee = task.assigned_to
 
+        # Bank the time already spent in Assigned into pending_seconds before
+        # re-arming the clock, so the original assignee's pending time isn't
+        # discarded on the shift. record_status_time also resets
+        # status_started_at to now (same status, so it just re-arms).
+        from app.routes.tasks import record_status_time
+        record_status_time(task, "Assigned")
+
         task.assigned_to_id = task.backup_assignee_id
         task.employee_completed = False
         task.employee_completed_at = None
         task.fallback_triggered_at = now
-        task.status_started_at = now
 
         db.session.add(
             TaskActivity(

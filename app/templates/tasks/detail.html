@@ -276,6 +276,23 @@
                         </div>
                         {% endif %}
                         {% endif %}
+                        {% elif config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+                        {# Not flagged social - tell the user how to enable the
+                           Social Studio handoff instead of showing nothing. #}
+                        <div class="detail-row">
+                            <span>Social Studio</span>
+                            <strong style="font-weight:500;">
+                                <span style="color:var(--color-text-muted);font-size:13px;">
+                                    Not a social task.
+                                    {% if has_permission(current_user, 'manage_tasks') or task.assigned_to_id == current_user.id %}
+                                    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}">Enable “Social Media”</a>
+                                    (and pick platforms) to publish it via Social Studio.
+                                    {% else %}
+                                    Ask a manager to enable “Social Media” on it to publish via Social Studio.
+                                    {% endif %}
+                                </span>
+                            </strong>
+                        </div>
                         {% endif %}
 
                         <div class="detail-row">

@@ -1,6 +1,7 @@
 import os
 import csv
 import io
+import math
 from uuid import uuid4
 from werkzeug.utils import secure_filename
 from app.utils.timezone import ist_now
@@ -329,8 +330,9 @@ def parse_fallback_fields(assigned_to_id):
             "Backup assignee must be different from the assignee."
         )
 
-    backup_user = User.query.filter_by(
-        id=backup_assignee_id, status="active"
+    backup_user = User.query.filter(
+        User.id == backup_assignee_id, User.status == "active",
+        User.role.in_(["super_admin", "admin", "employee"])
     ).first()
 
     if not backup_user:
@@ -1273,6 +1275,14 @@ def add_task():
                 form_url
             )
 
+        # The dropdown restricts assignees to assignable roles, but a tampered
+        # POST could target any active user - validate the role server-side too.
+        if not User.query.filter(
+                User.id == assigned_to_id, User.status == "active",
+                User.role.in_(["super_admin", "admin", "employee"])).first():
+            flash("Please choose a valid, active assignee.", "error")
+            return redirect(form_url)
+
         try:
             quantity = float(
                 request.form.get("quantity") or 1
@@ -1295,7 +1305,8 @@ def add_task():
                 form_url
             )
 
-        if quantity <= 0 or estimated_time <= 0:
+        if not math.isfinite(quantity) or not math.isfinite(estimated_time) \
+                or quantity <= 0 or estimated_time <= 0:
             flash(
                 (
                     "Quantity and estimated time "
@@ -1732,7 +1743,8 @@ def self_assign_task():
             flash("Quantity and estimated time must be valid.", "error")
             return redirect(form_url)
 
-        if quantity <= 0 or estimated_time <= 0:
+        if not math.isfinite(quantity) or not math.isfinite(estimated_time) \
+                or quantity <= 0 or estimated_time <= 0:
             flash("Quantity and estimated time must be greater than zero.", "error")
             return redirect(form_url)
 
@@ -1971,7 +1983,17 @@ def edit_task(task_id):
                 )
             )
 
-        if quantity <= 0 or estimated_time <= 0:
+        # Validate the assignee's role server-side (the change is applied only
+        # for managers below, but a tampered POST shouldn't target a
+        # non-assignable active user).
+        if not User.query.filter(
+                User.id == assigned_to_id, User.status == "active",
+                User.role.in_(["super_admin", "admin", "employee"])).first():
+            flash("Please choose a valid, active assignee.", "error")
+            return redirect(url_for("tasks.edit_task", task_id=task.id))
+
+        if not math.isfinite(quantity) or not math.isfinite(estimated_time) \
+                or quantity <= 0 or estimated_time <= 0:
             flash(
                 "Quantity and estimated time must be greater than zero.",
                 "error"
@@ -4155,8 +4177,12 @@ def task_file_thumbnail(file_id):
         task_file.thumbnail_state == thumbnails.STATE_PENDING
         and thumbnails.supports(task_file)
     ):
-        thumbnails.generate(task_file.id)
-        db.session.refresh(task_file)
+        # Don't render inline: a large PDF/PSD would download (up to
+        # MAX_DOC_BYTES) and decode inside the request, tying up a worker while
+        # a grid fires many tile requests at once. Enqueue it for the
+        # background worker and serve the original this once - the tile heals
+        # on the next view.
+        thumbnails.schedule(task_file.id)
 
     key = task_file.thumbnail_key
 

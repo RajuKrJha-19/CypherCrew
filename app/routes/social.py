@@ -1540,8 +1540,11 @@ def upload_media():
                    os.path.basename(f.filename))[:80] or "upload"
     object_key = f"social_uploads/{uuid4().hex}_{safe}"
     try:
-        StorageService().put_bytes(
-            data=f.read(), object_key=object_key, content_type=mime)
+        # Stream the file straight to R2 rather than f.read() (which pulls the
+        # whole body - up to MAX_CONTENT_LENGTH, and this accepts video - into
+        # memory and can OOM the worker under a few concurrent uploads).
+        StorageService().upload(
+            file_obj=f.stream, object_key=object_key, content_type=mime)
     except (StorageServiceError, Exception):  # noqa: BLE001
         current_app.logger.exception("[social-upload] store failed")
         return jsonify(error="Upload failed — please try again."), 500

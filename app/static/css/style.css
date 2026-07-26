@@ -7009,26 +7009,15 @@ body.sidebar-collapsed .task-page-sticky-header{
 
 .review-actions{
     margin-top:10px !important;
-    display:grid !important;
-    grid-template-columns:96px 1fr !important;
+    display:flex !important;
+    flex-wrap:wrap !important;
     gap:8px !important;
-    align-items:start !important;
+    align-items:flex-start !important;
 }
 
 .review-actions form{
     margin:0 !important;
     display:block !important;
-}
-
-.review-actions form:first-child{
-    grid-column:1 !important;
-}
-
-.review-actions form:last-child{
-    grid-column:2 !important;
-    display:grid !important;
-    grid-template-columns:1fr 86px !important;
-    gap:8px !important;
 }
 
 .review-actions textarea{
@@ -7168,10 +7157,12 @@ body.sidebar-collapsed .task-page-sticky-header{
     border-bottom:1px solid var(--color-border) !important;
 }
 
-.review-actions,
-.review-actions form:last-child{
-    display:none !important;
-}
+/* NOTE: a previous "My tasks" CSS pass hid `.review-actions` globally with
+   display:none !important. But `.review-actions` is used ONLY on the task
+   detail page (the dashboard review cards use `.review-actions-new`), so that
+   rule was silently hiding the detail page's Approve / Reject / "Approve & Send
+   to Social Studio" buttons. Removed so those actions are visible where they
+   belong. The dashboard's `.review-actions-new` is unaffected. */
 
 .review-actions-new{
     margin-top:12px;
