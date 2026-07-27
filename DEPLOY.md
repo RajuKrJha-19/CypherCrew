@@ -7,13 +7,16 @@ is written so that data is never touched.
 
 ## What changed since the last deploy
 
-Two things need action beyond pulling the code:
+One thing needs action beyond pulling the code:
 
-1. **A new dependency** — `Pillow`, used to generate image thumbnails.
-2. **One database migration** — `e833b45cc876`, which adds two columns
-   to `task_files`.
+**One database migration** — `c3f7a91b60d4`, which widens `users.role`
+and adds a unique constraint plus audit columns to `user_permissions`.
+It is required: two of the new role values are 29 characters and the old
+column held 30, so the first person given one would otherwise fail to
+save.
 
-Everything else is templates, CSS and Python that ships with the pull.
+No new dependencies. Everything else is templates, CSS and Python that
+ships with the pull.
 
 ---
 
@@ -30,7 +33,7 @@ pg_dump "$DATABASE_URL" > ~/cyphercrew-backup-$(date +%F-%H%M).sql
 cd /path/to/CypherCrew
 git pull origin main
 
-# 3. Install dependencies (Pillow is new)
+# 3. Install dependencies
 source venv/bin/activate
 pip install -r requirements.txt
 
@@ -42,6 +45,65 @@ sudo systemctl restart cyphercrew     # or: supervisorctl restart, or your dyno 
 ```
 
 That is the whole deploy. The app works fully at this point.
+
+---
+
+## Social Studio configuration
+
+Studio is driven entirely by environment variables, and every one of them
+defaults to *off*. This is the section to read when a channel says
+**"Coming soon"** or **"Not enabled on this server"** — that state means
+no publishing adapter is registered for it, which is configuration, not
+missing code.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SOCIAL_ENGINE_ENABLED` | `False` | Master switch. Off means the whole Studio — routes, nav item, everything — is absent. |
+| `SOCIAL_SIMULATION_MODE` | `True` | Registers a demo adapter for every platform that has no real one. This is what makes YouTube, X, LinkedIn and Google Business connectable. |
+| `SOCIAL_TOKEN_KEY` | unset | Fernet key encrypting stored platform tokens. Without it no account can be connected at all. |
+| `SOCIAL_WORKER_TOKEN` | unset | Shared secret for the `/internal/social/*` cron endpoints. Without it they stay closed (403). |
+| `SOCIAL_PUBLIC_BASE_URL` | request host | The base the OAuth redirect URI is built from. Set it behind a proxy. |
+| `META_APP_ID` / `META_APP_SECRET` | unset | Real Facebook + Instagram publishing. Set these and the real adapters take over those two keys; everything else stays on whatever `SOCIAL_SIMULATION_MODE` provides. |
+
+### Why a channel shows "Coming soon"
+
+A platform is connectable only when an adapter is registered for it. That
+happens in one of two ways:
+
+- a **real** adapter, when its credentials are configured (today: Meta,
+  via `META_APP_ID`), or
+- the **simulation** adapter, when `SOCIAL_SIMULATION_MODE` is on.
+
+So a channel greyed out on a server almost always means
+`SOCIAL_SIMULATION_MODE=false` is set there, and that platform has no real
+credentials. Setting it to `true` brings YouTube, X, LinkedIn and Google
+Business up immediately, each marked **Demo** in the UI: the post travels
+the full pipeline — approval, scheduling, the queue, the timeline — and
+nothing is sent to the platform.
+
+Facebook and Instagram are unaffected by that switch when `META_APP_ID` is
+set: real adapters claim those two keys first, and simulation only fills
+what is left. Verified:
+
+```
+SOCIAL_SIMULATION_MODE unset/true, META_APP_ID set
+  -> facebook, instagram   real
+     youtube, x, linkedin, google_business   demo
+
+SOCIAL_SIMULATION_MODE=false, META_APP_ID set
+  -> facebook, instagram   real
+     everything else       "Coming soon"
+```
+
+### Checking it on a running server
+
+```bash
+flask shell
+>>> from app.social.registry import registry
+>>> sorted(registry.keys())
+```
+
+Whatever that prints is exactly what the Channels page will offer.
 
 ---
 
@@ -68,32 +130,41 @@ flask thumbnails-backfill --limit 200     # repeat until it reports 0 pending
 
 ## Why the migration is safe
 
-`migrations/versions/e833b45cc876_add_thumbnail_columns_to_task_files.py`
-does exactly three things:
+`migrations/versions/c3f7a91b60d4_role_catalog_and_permission_integrity.py`
+does four things:
 
-- adds `task_files.thumbnail_key` (nullable)
-- adds `task_files.thumbnail_state` with `server_default='pending'`
-- adds an index on `thumbnail_state`
+- widens `users.role` from `varchar(30)` to `varchar(50)`
+- de-duplicates `user_permissions`, then adds a unique constraint on
+  `(user_id, permission_id)`
+- adds `granted_at` and `granted_by_id` to `user_permissions`, both
+  nullable
+- indexes `users.role`
 
-All three are additive. No table is dropped, no column is removed, no
-row is written or deleted. Existing rows get `thumbnail_state='pending'`
-from the server default, which is accurate — none of them has a
-thumbnail yet — and they are filled in lazily as files are viewed.
+Only the de-duplication deletes anything, and only exact duplicate grants
+— the same permission held twice by the same person, which the old
+delete-all-then-reinsert save could produce on a double submit. It keeps
+the earliest of each pair. No permission is lost: holding a grant twice
+and holding it once mean the same thing.
 
-The `server_default` is load-bearing, not decoration: PostgreSQL rejects
-a `NOT NULL` column added to a populated table without one. It was
-tested against a table that already had rows.
+Everything else is additive, and `granted_at`/`granted_by_id` are
+nullable because rows that predate them have no honest value.
 
-**Do not run `flask db downgrade`.** The downgrade drops those two
-columns. There is no reason to run it, and on a live database it would
-throw away generated thumbnail references.
+The whole revision is written defensively — it inspects the live schema
+before each step and skips what is already there, so it is safe to run
+twice. That matters more than usual here: `users` and `user_permissions`
+predate Alembic entirely, so the migration chain has never described them
+and cannot recreate them.
+
+**Do not run `flask db downgrade`.** Narrowing `users.role` back to 30
+cannot hold the new role values, so the downgrade resets anyone on one of
+them to `employee` before shrinking the column. That is real data loss.
 
 ---
 
 ## Checks after deploying
 
 ```bash
-flask db current      # should print: e833b45cc876 (head)
+flask db current      # should print: c3f7a91b60d4 (head)
 flask db heads        # should print exactly one head
 ```
 
@@ -103,6 +174,9 @@ Then in the browser:
 - `/tasks/` — board fills the window, cards drag between columns
 - open a task — the side panel opens over the board
 - upload an image to a task — its thumbnail appears in the gallery
+- `/users/add` — the role dropdown lists all 15 roles, grouped
+- `/social/accounts` — every channel is either connectable or explains
+  why it is not (see the Social Studio section above)
 
 ---
 

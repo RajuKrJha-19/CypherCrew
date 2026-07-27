@@ -156,9 +156,18 @@
                 </div>
             </a>
             {% endif %}
-            {% for key, label, icon in platforms %}
-                {% if key not in ('facebook','instagram') %}
-                    {% if key in connectable %}
+            {#
+                Facebook and Instagram are the card above (one consent
+                covers both), so the loop is everything else. Computed once
+                because the footnote below has to ask the same question -
+                testing `platforms` directly counted Instagram as
+                unavailable, since it deliberately has no connect entry of
+                its own, and the hint then showed on every server.
+            #}
+            {% set other_platforms = platforms|rejectattr('0', 'in', ('facebook','instagram'))|list %}
+            {% set unavailable = other_platforms|rejectattr('0', 'in', connectable)|list %}
+            {% for key, label, icon in other_platforms %}
+                {% if key in connectable %}
                     <a class="connect-card ok" data-turbo="false" href="{{ url_for('oauth.connect', platform=key) }}">
                         <div class="connect-ic pf-{{ key }}"><i class="{{ icon }}"></i></div>
                         <div class="connect-body">
@@ -168,14 +177,25 @@
                         </div>
                     </a>
                     {% else %}
-                    <span class="connect-card soon">
+                    {#
+                        A platform lands here when no adapter is registered
+                        for it on this server. "Coming soon" was all it said,
+                        which reads as "not built yet" even when the code is
+                        there and only the configuration is missing - so the
+                        person who can actually fix it is told what to do.
+                    #}
+                    <span class="connect-card soon"
+                          title="No publishing adapter is registered for {{ label }} on this server.">
                         <div class="connect-ic pf-{{ key }}"><i class="{{ icon }}"></i></div>
                         <div class="connect-body">
                             <span class="connect-title">{{ label }}</span>
+                            {% if can_manage_social_engine(current_user) %}
+                            <span class="connect-note">Not enabled on this server</span>
+                            {% else %}
                             <span class="connect-note">Coming soon</span>
+                            {% endif %}
                         </div>
                     </span>
-                    {% endif %}
                 {% endif %}
             {% endfor %}
         </div>
@@ -185,6 +205,18 @@
             Business/Creator account linked to a Page you manage is discovered on connect. Linked one
             after connecting? Use <em>Refresh Instagram</em> above.</span>
         </p>
+
+        {# The one thing an admin staring at a greyed-out channel needs to
+           know, and the only place they will think to look for it. #}
+        {% if can_manage_social_engine(current_user) and unavailable %}
+        <p class="connect-note connect-footnote">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            <span>Channels marked <strong>Not enabled</strong> have no adapter registered on this
+            server. Set <code>SOCIAL_SIMULATION_MODE=true</code> to bring them up as demo channels
+            (the full pipeline runs, nothing is posted for real), or configure that platform's real
+            API credentials. See <em>DEPLOY.md</em>.</span>
+        </p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
