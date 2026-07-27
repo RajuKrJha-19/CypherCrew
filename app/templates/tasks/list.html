@@ -226,18 +226,28 @@
             <div class="board-shell">
                 {% for status, column_tasks in board_columns.items() %}
 
-                <section class="board-column" data-status="{{ status }}">
+                {# Scheduled and Published are set by the publish flow, never by
+                   a drag: dropping into one skips the sign-off, dragging out of
+                   one undoes it. Marked here so the board can refuse the drop
+                   rather than let it land and bounce back. #}
+                {% set locked = task_status.is_drag_locked(status) %}
+                <section class="board-column{{ ' is-locked' if locked }}"
+                         data-status="{{ status }}"
+                         {% if locked %}data-drop-locked="1"{% endif %}>
 
                     <div class="board-column-header"
-                        title="{{ status }} - {{ task_status.description(status) }}">
-                        <h2>{{ status }}</h2>
+                        title="{{ status }} - {{ task_status.description(status) }}{% if locked %} Set by the publish flow, not by dragging.{% endif %}">
+                        <h2>{{ status }}{% if locked %} <i class="fa-solid fa-lock" aria-hidden="true"></i>{% endif %}</h2>
                         <span title="{{ column_tasks|length }} task{{ '' if column_tasks|length == 1 else 's' }} in this column">{{ column_tasks|length }}</span>
                     </div>
 
                     {% for task in column_tasks %}
 
-                    <article class="task-card" draggable="true" data-task-id="{{ task.id }}"
-                        data-task-status="{{ task.status }}">
+                    <article class="task-card" draggable="{{ 'false' if locked else 'true' }}"
+                        data-task-id="{{ task.id }}"
+                        data-task-status="{{ task.status }}"
+                        data-task-title="{{ task.title }}"
+                        {% if task_status.needs_reason_to_leave(task.status) %}data-needs-reason="1"{% endif %}>
 
                         <div class="task-card-top">
 
@@ -636,11 +646,41 @@
                             </td>
 
                             <td data-column="status">
+                                {#
+                                    Editable in place, from the same list the
+                                    board drops into: task_status.hand_moves
+                                    leaves out the two that need a typed reason
+                                    (On Hold, Void) and the two the publish flow
+                                    owns (Scheduled, Published). Leaving a review
+                                    still asks for a reason - status-change.js
+                                    does the asking.
+                                #}
+                                {% set moves = task_status.hand_moves(
+                                        task.status,
+                                        can_manage or task.assigned_to_id == current_user.id
+                                   ) if (can_manage or task.assigned_to_id == current_user.id) else [] %}
+
+                                {% if moves %}
+                                <select class="status-select status-{{ task_status.css_modifier(task.status) }}"
+                                        data-status-select
+                                        data-task="{{ task.id }}"
+                                        data-current="{{ task.status }}"
+                                        data-title="{{ task.title }}"
+                                        {% if task_status.needs_reason_to_leave(task.status) %}data-needs-reason="1"{% endif %}
+                                        aria-label="Status of {{ task.title }}">
+                                    <option value="{{ task.status }}" selected>{{ task.status }}</option>
+                                    {% for move in moves %}
+                                    <option value="{{ move }}">{{ move }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
                                 <span class="status-pill">
                                     {{ task.status }}
                                 </span>
+                                {% endif %}
+
                                 {% set _pb = publish_badge(task, show_retry=False) %}
-                                {% if _pb %}<div style="margin-top:5px;">{{ _pb }}</div>{% endif %}
+                                {% if _pb %}<div class="status-cell-badge">{{ _pb }}</div>{% endif %}
                             </td>
 
                             <td data-column="action">
@@ -745,6 +785,56 @@
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/quick-edit.js') }}"></script>
 <script src="{{ url_for('static', filename='js/bulk-edit.js') }}"></script>
+{# Shared by the board's drag and the list's Status dropdown: the
+   reason dialog and the one request that moves a task. #}
+<script src="{{ asset_url('js/status-change.js') }}"></script>
+<script>
+    /*
+        Status dropdown in the list's Status column.
+
+        Same endpoint, same rules and the same reason dialog as dragging a
+        card - the two are one action with two affordances, so neither may
+        grow its own idea of what is allowed. On cancel or failure the
+        select snaps back to what the task actually is.
+    */
+    (function () {
+        document.addEventListener("change", async function (event) {
+
+            const select = event.target.closest("[data-status-select]");
+            if (!select) return;
+
+            const from = select.dataset.current;
+            const to = select.value;
+
+            if (!to || to === from) return;
+
+            select.disabled = true;
+
+            const result = await CypherStatus.changeStatus({
+                taskId: select.dataset.task,
+                to: to,
+                from: from,
+                title: select.dataset.title,
+                needsReason: select.dataset.needsReason === "1",
+            });
+
+            select.disabled = false;
+
+            if (!result.moved) {
+                select.value = from;
+                if (result.message) showToast(result.message, "error");
+                return;
+            }
+
+            // The row is stale the moment the status changes - the
+            // available moves, the pill colour and the Start button all
+            // depend on it. Reloading is honest and cheap here; patching
+            // half of it in place is what leaves boards lying.
+            showToast(result.message || "Status updated.", "success");
+            window.location.reload();
+        });
+    })();
+</script>
 <script>
     (function () {
         const STORAGE_KEY = "cypher_task_view";
@@ -1463,6 +1553,10 @@
         const kanbanCards = document.querySelectorAll(".task-card");
         const kanbanColumns = document.querySelectorAll(".board-column");
 
+        // From the server's own list, so the board and the rule it
+        // enforces cannot drift apart.
+        const REASON_FROM = {{ task_status.REASON_REQUIRED_FROM_STATUSES|tojson }};
+
         let draggedCard = null;
 
         function columnCardCount(column) {
@@ -1580,6 +1674,11 @@
 
             column.addEventListener("dragover", function (e) {
 
+                // No preventDefault means no drop: the browser refuses it
+                // for us, so a locked column never even flashes as a
+                // target. Same for a card that may not leave where it is.
+                if (column.dataset.dropLocked === "1") return;
+
                 e.preventDefault();
 
                 column.classList.add("drag-over");
@@ -1617,71 +1716,55 @@
                     return;
                 }
 
-                animateCardMove(draggedCard, function () {
-                    column.appendChild(draggedCard);
-                });
-
-                syncColumnChrome(oldColumn);
-                syncColumnChrome(column);
+                if (column.dataset.dropLocked === "1") {
+                    showToast(
+                        column.dataset.status + " is set by the publish flow, "
+                        + "not by dragging. Approve the task instead.",
+                        "error"
+                    );
+                    return;
+                }
 
                 const taskId = draggedCard.dataset.taskId;
                 const status = column.dataset.status;
                 const movedCard = draggedCard;
+                const fromStatus = movedCard.dataset.taskStatus;
+                const needsReason = movedCard.dataset.needsReason === "1";
 
-                fetch("/tasks/kanban/update-status", {
+                // Ask BEFORE the card lands. Moving it first and undoing it
+                // if the person cancels reads as a glitch; asking first
+                // makes "cancel" mean nothing happened.
+                CypherStatus.changeStatus({
+                    taskId: taskId,
+                    to: status,
+                    from: fromStatus,
+                    title: movedCard.dataset.taskTitle,
+                    needsReason: needsReason,
+                }).then(function (result) {
 
-                    method: "POST",
+                    if (!result.moved) {
+                        if (result.message) showToast(result.message, "error");
+                        return;
+                    }
 
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-
-                        task_id: taskId,
-
-                        status: status
-
-                    })
-
-                })
-                    .then(res => res.json())
-                    .then(function (data) {
-
-                        if (!data.success) {
-
-                            animateCardMove(movedCard, function () {
-                                oldColumn.appendChild(movedCard);
-                            });
-
-                            syncColumnChrome(oldColumn);
-                            syncColumnChrome(column);
-
-                            showToast(data.message || "Unable to update task status.", "error");
-
-                            return;
-
-                        }
-
-                        if (data.message) {
-
-                            showToast(data.message, "success");
-
-                        }
-
-                    })
-                    .catch(function () {
-
-                        animateCardMove(movedCard, function () {
-                            oldColumn.appendChild(movedCard);
-                        });
-
-                        syncColumnChrome(oldColumn);
-                        syncColumnChrome(column);
-
-                        showToast("Unable to update task. Check your connection and try again.", "error");
-
+                    animateCardMove(movedCard, function () {
+                        column.appendChild(movedCard);
                     });
+
+                    // The card now lives in a new status: its own rules
+                    // for leaving change with it.
+                    movedCard.dataset.taskStatus = status;
+                    if (REASON_FROM.indexOf(status) !== -1) {
+                        movedCard.dataset.needsReason = "1";
+                    } else {
+                        delete movedCard.dataset.needsReason;
+                    }
+
+                    syncColumnChrome(oldColumn);
+                    syncColumnChrome(column);
+
+                    if (result.message) showToast(result.message, "success");
+                });
 
             });
 

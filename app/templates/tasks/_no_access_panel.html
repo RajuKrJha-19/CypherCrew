@@ -1,0 +1,26 @@
+{% extends "base_panel.html" %}
+
+{#
+    "You cannot open this task", rendered INSIDE the task drawer.
+
+    It has to be served at the task's own url. task-panel.js watches the
+    iframe's path and reads any change as "the panel left the task", which
+    made it close itself and hard-reload the page behind - so a refused
+    task looked like a drawer that flashed open and vanished, saying
+    nothing at all. Same url, plain 403 body: the drawer stays put and the
+    person reads why.
+#}
+
+{% block title %}No access | CypherCrew{% endblock %}
+
+{% block content %}
+<div class="panel-denied">
+    <div class="ic"><i class="fa-solid fa-lock"></i></div>
+    <h2>You can’t open this task</h2>
+    <p>{{ message }}</p>
+    <p class="panel-denied-hint">
+        Task #{{ task_id }} · If you think this is wrong, ask the person who
+        assigned it to share it with you.
+    </p>
+</div>
+{% endblock %}

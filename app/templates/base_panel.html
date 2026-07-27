@@ -13,6 +13,13 @@
 
 {% block body_class %}panel-mode{% endblock %}
 
+{% block head %}
+{{ super() }}
+{# The drawer renders the real task page, comment thread and all, so the
+   emoji picker has to be loaded inside the iframe too. #}
+<script src="{{ asset_url('js/emoji-picker.js') }}" defer></script>
+{% endblock %}
+
 {% block body %}
 <main class="main main-panel">
     {% block content %}{% endblock %}

@@ -17,9 +17,14 @@
         viewer lacks manage_tasks / view_reports, so one link with
         a permission-aware label is enough - no second route needed.
     #}
-    {% set can_manage_tasks = has_permission(current_user,"manage_tasks") or current_user.role in ["admin", "super_admin"] %}
-    {% set can_review_tasks = current_user.role in ["admin", "super_admin"] or has_permission(current_user,"approve_tasks") %}
-    {% set can_view_reports = has_permission(current_user,"view_reports") or current_user.role in ["admin", "super_admin"] %}
+    {# These used to be three {% set %} copies of rules that also live in
+       the routes, in quick_create.html and in command_palette.html - four
+       places to keep in step, and the nav drifted out of step with what
+       the routes actually allowed. They are helpers now (Jinja globals),
+       so the label and the route can no longer disagree. #}
+    {% set can_manage_tasks = can_view_all_tasks(current_user) %}
+    {% set can_review_tasks = can_review(current_user) %}
+    {% set can_view_reports = has_permission(current_user,"view_reports") %}
 
     {#
         Header: brand on the left, collapse toggle on the right - the
@@ -75,7 +80,7 @@
        would leave that link floating without a heading. #}
     <span class="sidebar-nav-label">Company</span>
 
-    {% if has_permission(current_user,"manage_users") %}
+    {% if can_manage_users(current_user) %}
     <a href="{{ url_for('users.list_users') }}"
        class="{% if endpoint.startswith('users.') %}active{% endif %}">
         <i class="fa-solid fa-users"></i>
@@ -83,7 +88,7 @@
     </a>
     {% endif %}
 
-    {% if has_permission(current_user,"manage_permissions") %}
+    {% if can_manage_permissions(current_user) %}
     <a href="{{ url_for('permissions.list_permissions') }}"
        class="{% if endpoint.startswith('permissions.') %}active{% endif %}">
         <i class="fa-solid fa-key"></i>
@@ -128,7 +133,7 @@
         <span>Calendar</span>
     </a>
 
-    {% if can_manage_tasks %}
+    {% if can_manage_holidays(current_user) %}
     <a href="{{ url_for('holidays.list_holidays') }}"
        class="{% if endpoint.startswith('holidays.') %}active{% endif %}">
         <i class="fa-solid fa-umbrella-beach"></i>

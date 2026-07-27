@@ -24,7 +24,8 @@ from app.social.dto import (
 from app.social.errors import PermanentError, SocialError, TransientError
 
 
-SIM_PLATFORMS = ["instagram", "facebook", "linkedin", "youtube"]
+SIM_PLATFORMS = ["instagram", "facebook", "linkedin", "youtube", "x",
+                 "google_business"]
 
 # Per-platform capability profiles, mirroring the real July-2026 constraints
 # so the composer validates content the same way it will in production.
@@ -43,6 +44,15 @@ CAPABILITY_PROFILES = {
     "youtube": Capabilities(
         post_types={"video"}, supports_native_scheduling=True,
         requires_container_poll=True, max_caption_chars=5000),
+    # X counts characters, not bytes, and 280 is the free/basic tier limit -
+    # the composer should warn at the limit people actually publish under.
+    "x": Capabilities(
+        post_types={"text", "image", "video", "carousel"},
+        max_carousel=4, max_caption_chars=280),
+    # Google Business Profile "posts" (What's new / offers) carry one image
+    # and a 1500-character body, and cannot be threaded or carouselled.
+    "google_business": Capabilities(
+        post_types={"text", "image"}, max_caption_chars=1500),
 }
 
 # Accounts each simulated platform "unlocks" on connect.
@@ -51,6 +61,8 @@ SIM_ACCOUNTS = {
     "facebook": [("sim_fb_1", "Demo Brand Page", "page")],
     "linkedin": [("sim_li_1", "Demo Company", "organization")],
     "youtube": [("sim_yt_1", "Demo Channel", "channel")],
+    "x": [("sim_x_1", "Demo Handle", "profile")],
+    "google_business": [("sim_gbp_1", "Demo Location", "location")],
 }
 
 

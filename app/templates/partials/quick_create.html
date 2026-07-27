@@ -5,9 +5,9 @@
     permission, matching what each create route already enforces, so the
     menu never offers an action that would just bounce to the dashboard.
 #}
-{% set qc_manage_tasks = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
-{% set qc_manage_clients = has_permission(current_user, "manage_clients") or current_user.role in ["admin", "super_admin"] %}
-{% set qc_manage_users = has_permission(current_user, "manage_users") or current_user.role in ["admin", "super_admin"] %}
+{% set qc_manage_tasks = can_assign_tasks(current_user) %}
+{% set qc_manage_clients = can_manage_clients(current_user) %}
+{% set qc_manage_users = can_manage_users(current_user) %}
 
 <div class="quick-create" id="quickCreate">
 

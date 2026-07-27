@@ -39,7 +39,7 @@
             <input type="text" name="title" value="{{ task.title }}" required>
 
             <label>Description</label>
-            <textarea name="description" rows="5">{{ task.description or "" }}</textarea>
+            <textarea name="description" rows="5" data-emoji-field>{{ task.description or "" }}</textarea>
 
             <label>Client</label>
             <select name="client_id" id="clientSelect" required>
@@ -74,7 +74,7 @@
                 <option value="">Select Employee</option>
                 {% for employee in employees %}
                     <option value="{{ employee.id }}" {% if task.assigned_to_id == employee.id %}selected{% endif %}>
-                        {{ employee.name }} - {{ employee.role|replace("_", " ")|title }}
+                        {{ employee.name }} - {{ role_label(employee.role) }}
                     </option>
                 {% endfor %}
             </select>
@@ -99,7 +99,7 @@
                     >
                         {{ employee.name }}
                         -
-                        {{ employee.role|replace("_", " ")|title }}
+                        {{ role_label(employee.role) }}
                     </option>
                     {% endfor %}
                 </select>
@@ -173,11 +173,11 @@
                                     type="checkbox"
                                     name="visibility_ids"
                                     value="{{ employee.id }}"
-                                    data-name="{{ employee.name }} - {{ employee.role|replace('_', ' ')|title }}"
+                                    data-name="{{ employee.name }} - {{ role_label(employee.role) }}"
                                     {% if employee in task.visible_to %}checked{% endif %}
                                 >
                                 <span>
-                                    {{ employee.name }} - {{ employee.role|replace("_", " ")|title }}
+                                    {{ employee.name }} - {{ role_label(employee.role) }}
                                 </span>
                             </label>
                         {% endfor %}

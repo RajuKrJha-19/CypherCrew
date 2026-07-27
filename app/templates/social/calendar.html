@@ -1,13 +1,12 @@
 {% extends "base_studio.html" %}
-{% block title %}Calendar · Social Publishing | CypherCrew{% endblock %}
+{% block title %}Calendar · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 {% set DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Content calendar</h1>
+        <h1>Calendar</h1>
         <p>Every scheduled post at a glance — colour-coded by platform, in IST</p>
     </div>
     <div class="top-actions">
@@ -23,7 +22,7 @@
 {% endwith %}
 
 <div class="cal-toolbar">
-    <div style="display:flex; align-items:center; gap:12px;">
+    <div class="cal-toolbar-group">
         <span class="cal-title">{{ month_name }} {{ year }}</span>
         <div class="cal-nav">
             <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=prev_y, m=prev_m, client=selected_client_id) }}" title="Previous month" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></a>
@@ -31,11 +30,12 @@
             <a class="btn btn-secondary" href="{{ url_for('social.calendar', y=next_y, m=next_m, client=selected_client_id) }}" title="Next month" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></a>
         </div>
     </div>
+    {# Driven by the platform catalog: the hand-written list here still
+       said four platforms after two more were added. #}
     <div class="cal-legend">
-        <span><span class="st-dot" style="background:var(--sp-facebook)"></span> Facebook</span>
-        <span><span class="st-dot" style="background:var(--sp-instagram)"></span> Instagram</span>
-        <span><span class="st-dot" style="background:var(--sp-linkedin)"></span> LinkedIn</span>
-        <span><span class="st-dot" style="background:var(--sp-youtube)"></span> YouTube</span>
+        {% for key, label in PF_LABEL.items() %}
+        <span><span class="st-dot pf-dot-{{ key }}"></span> {{ label }}</span>
+        {% endfor %}
     </div>
 </div>
 
@@ -61,7 +61,7 @@
                    href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}"
                    {% if movable %}draggable="true" data-target-id="{{ t.id }}"{% endif %}
                    title="{{ (t.post.title if t.post else '') or t.caption or 'Post' }} · {{ t.platform }} · {{ t.status }}{{ ' · drag to reschedule' if movable }}">
-                    <span class="st-dot {{ t.status }}" style="width:6px;height:6px;"></span>
+                    <span class="st-dot sm {{ t.status }}"></span>
                     <i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i>
                     <span class="ce-time">{{ tm }}</span>
                     {{ (t.post.title if t.post else none) or t.caption or 'Post' }}

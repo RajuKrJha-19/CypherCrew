@@ -87,7 +87,7 @@
                         {{ r.employee.name }}
                     </a>
                 </td>
-                <td>{{ r.employee.role.replace("_", " ")|title }}</td>
+                <td>{{ role_label(r.employee.role) }}</td>
                 <td>{{ r.tasks }}</td>
                 <td>{{ r.completed }}</td>
                 <td>{{ r.published }}</td>

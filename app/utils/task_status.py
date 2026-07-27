@@ -136,6 +136,38 @@ SELECTABLE_STATUSES = [
     if status not in REASON_REQUIRED_STATUSES
 ]
 
+#: Statuses that cannot be reached OR left by hand - not by dragging a
+#: card, not from the status dropdown, not from the stepper.
+#:
+#: Both are the end of a decision taken somewhere else: Scheduled is set
+#: by Social Studio when an approved post is given a time, and Published
+#: is the delivery sign-off that comes out of Client Review. A card
+#: dropped into either would skip the decision, and one dragged out would
+#: quietly undo it. The real paths still exist - approve the task, or
+#: reschedule it in Studio.
+DRAG_LOCKED_STATUSES = [SCHEDULED, PUBLISHED]
+
+#: Leaving one of these overturns somebody's review, so it takes a
+#: written reason. Work does not come back out of review by accident,
+#: and the person who submitted it deserves to know why it did.
+#:
+#: Note the direction: REASON_REQUIRED_STATUSES is about where a task is
+#: going (On Hold, Void); this is about where it is coming FROM.
+REASON_REQUIRED_FROM_STATUSES = [CORE_REVIEW, CLIENT_REVIEW]
+
+#: Shortest reason worth recording. Enough to stop "asdf" and "ok".
+MIN_REASON_LENGTH = 4
+
+
+def is_drag_locked(status):
+    """May this status be set or left by hand?"""
+    return status in DRAG_LOCKED_STATUSES
+
+
+def needs_reason_to_leave(status):
+    """Does moving a task out of this status require a written reason?"""
+    return status in REASON_REQUIRED_FROM_STATUSES
+
 
 # ---------------------------------------------------------------
 # Filter groups
@@ -242,6 +274,26 @@ def allowed_moves(status, can_manage):
 
 def can_move(status, new_status, can_manage):
     return new_status in allowed_moves(status, can_manage)
+
+
+def hand_moves(status, can_manage):
+    """Statuses this task may be moved to BY HAND - the set a dropdown
+    should offer and a card may be dropped into.
+
+    Narrower than allowed_moves by the two rules a bare status change
+    cannot satisfy: On Hold and Void need a reason typed somewhere the
+    board has no room for, and Scheduled and Published belong to Studio
+    and the sign-off flow. Leaving a review still needs a reason, but the
+    UI can ask for that one, so those moves stay in the list.
+    """
+    if is_drag_locked(status):
+        return []
+
+    return [
+        candidate for candidate in allowed_moves(status, can_manage)
+        if candidate not in REASON_REQUIRED_STATUSES
+        and not is_drag_locked(candidate)
+    ]
 
 
 def duration_field(status):

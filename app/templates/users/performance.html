@@ -11,7 +11,7 @@
                     <p>
                         {{ user.designation or "Team Member" }}
                         •
-                        {{ user.role.replace("_", " ")|title }}
+                        {{ role_label(user.role) }}
                     </p>
                 </div>
 

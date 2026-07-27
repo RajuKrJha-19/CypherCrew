@@ -1,7 +1,11 @@
 {# Social Studio's OWN left sidebar — the module's primary navigation, so the
    Studio reads as a standalone product. "Back to CypherCrew" returns to the
    ERP. Active state is derived from the endpoint; every link preserves the
-   active ?client= so the client context follows you across views. #}
+   active ?client= so the client context follows you across views.
+
+   Every label is wrapped in a <span> so the collapsed rail can hide the
+   words and leave the icons — the ERP sidebar has collapsed that way from
+   the start, and this one could not collapse on desktop at all. #}
 {% set ep = request.endpoint or '' %}
 {% macro nav_url(endpoint) -%}
 {{ url_for(endpoint, client=selected_client_id) if selected_client_id else url_for(endpoint) }}
@@ -10,32 +14,94 @@
   <div class="studio-brand">
     <div class="logo"><i class="fa-solid fa-share-nodes"></i></div>
     <div class="txt"><b>Social Studio</b><span>by CypherCrew</span></div>
+    <button type="button" class="studio-collapse-btn" id="studioCollapseBtn"
+            aria-label="Collapse sidebar" title="Collapse sidebar">
+      <i class="fa-solid fa-angles-left"></i>
+    </button>
   </div>
-  <a class="studio-exit" href="{{ url_for('dashboard.index') }}" data-turbo="false">
-    <i class="fa-solid fa-arrow-left-long"></i> Back to CypherCrew
+  <a class="studio-exit" href="{{ url_for('dashboard.index') }}" data-turbo="false"
+     title="Back to CypherCrew">
+    <i class="fa-solid fa-arrow-left-long"></i> <span>Back to CypherCrew</span>
   </a>
 
   <nav class="studio-nav" aria-label="Social Studio navigation">
-    <a href="{{ nav_url('social.index') }}" class="{{ 'active' if ep == 'social.index' }}"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
-    <a href="{{ nav_url('social.compose') }}" class="{{ 'active' if ep in ['social.compose', 'social.edit_post'] }}"><i class="fa-solid fa-pen-to-square"></i> Create post</a>
-    <a href="{{ nav_url('social.calendar') }}" class="{{ 'active' if ep == 'social.calendar' }}"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
-    <a href="{{ nav_url('social.approvals') }}" class="{{ 'active' if ep == 'social.approvals' }}"><i class="fa-solid fa-clipboard-check"></i> Approvals
+    <a href="{{ nav_url('social.index') }}" title="Dashboard" class="{{ 'active' if ep == 'social.index' }}"><i class="fa-solid fa-gauge-high"></i> <span>Dashboard</span></a>
+    <a href="{{ nav_url('social.compose') }}" title="Create post" class="{{ 'active' if ep in ['social.compose', 'social.edit_post'] }}"><i class="fa-solid fa-pen-to-square"></i> <span>Create post</span></a>
+    <a href="{{ nav_url('social.calendar') }}" title="Calendar" class="{{ 'active' if ep == 'social.calendar' }}"><i class="fa-solid fa-calendar-days"></i> <span>Calendar</span></a>
+    <a href="{{ nav_url('social.approvals') }}" title="Approvals" class="{{ 'active' if ep == 'social.approvals' }}"><i class="fa-solid fa-clipboard-check"></i> <span>Approvals</span>
       {% if pending_approval_total %}<span class="nav-count">{{ pending_approval_total }}</span>{% endif %}</a>
 
     <div class="studio-nav-section">Publishing</div>
-    <a href="{{ nav_url('social.queue') }}" class="{{ 'active' if ep == 'social.queue' }}"><i class="fa-solid fa-list-check"></i> Queue
+    <a href="{{ nav_url('social.queue') }}" title="Queue" class="{{ 'active' if ep == 'social.queue' }}"><i class="fa-solid fa-list-check"></i> <span>Queue</span>
       {% if status is defined and (status.jobs.dead or status.jobs.failed) %}<span class="nav-count">{{ status.jobs.dead + status.jobs.failed }}</span>{% endif %}</a>
-    <a href="{{ nav_url('social.drafts') }}" class="{{ 'active' if ep in ['social.drafts', 'social.post_detail'] }}"><i class="fa-solid fa-layer-group"></i> Drafts</a>
-    <a href="{{ nav_url('social.history') }}" class="{{ 'active' if ep == 'social.history' }}"><i class="fa-solid fa-clock-rotate-left"></i> Published</a>
+    <a href="{{ nav_url('social.drafts') }}" title="Posts" class="{{ 'active' if ep in ['social.drafts', 'social.post_detail'] }}"><i class="fa-solid fa-layer-group"></i> <span>Posts</span></a>
+    <a href="{{ nav_url('social.history') }}" title="Published" class="{{ 'active' if ep == 'social.history' }}"><i class="fa-solid fa-clock-rotate-left"></i> <span>Published</span></a>
 
     <div class="studio-nav-section">Grow</div>
-    <a href="{{ nav_url('social.library') }}" class="{{ 'active' if ep == 'social.library' }}"><i class="fa-solid fa-images"></i> Media library</a>
-    <a href="{{ nav_url('social.analytics') }}" class="{{ 'active' if ep == 'social.analytics' }}"><i class="fa-solid fa-chart-line"></i> Analytics</a>
-    <a href="{{ nav_url('social.engage') }}" class="{{ 'active' if ep == 'social.engage' }}"><i class="fa-solid fa-comments"></i> Engage
+    <a href="{{ nav_url('social.library') }}" title="Media library" class="{{ 'active' if ep == 'social.library' }}"><i class="fa-solid fa-images"></i> <span>Media library</span></a>
+    <a href="{{ nav_url('social.analytics') }}" title="Analytics" class="{{ 'active' if ep == 'social.analytics' }}"><i class="fa-solid fa-chart-line"></i> <span>Analytics</span></a>
+    <a href="{{ nav_url('social.engage') }}" title="Engage" class="{{ 'active' if ep == 'social.engage' }}"><i class="fa-solid fa-comments"></i> <span>Engage</span>
       {% if engage_open_total %}<span class="nav-count">{{ engage_open_total }}</span>{% endif %}</a>
 
     <div class="studio-nav-section">Setup</div>
-    <a href="{{ nav_url('social.accounts') }}" class="{{ 'active' if ep == 'social.accounts' or ep.startswith('oauth.') }}"><i class="fa-solid fa-plug"></i> Accounts</a>
-    <a href="{{ nav_url('social.settings') }}" class="{{ 'active' if ep == 'social.settings' }}"><i class="fa-solid fa-gear"></i> Settings</a>
+    <a href="{{ nav_url('social.accounts') }}" title="Channels" class="{{ 'active' if ep == 'social.accounts' or ep.startswith('oauth.') }}"><i class="fa-solid fa-plug"></i> <span>Channels</span></a>
+    <a href="{{ nav_url('social.settings') }}" title="Settings" class="{{ 'active' if ep == 'social.settings' }}"><i class="fa-solid fa-gear"></i> <span>Settings</span></a>
   </nav>
 </aside>
+
+<script>
+(function () {
+    // Collapse to a rail, remembered across visits. Bound once and by
+    // delegation: the Studio shell is re-rendered by Turbo on every
+    // navigation, so a listener attached to the button itself would stack
+    // and the second click would toggle twice.
+    if (window.__studioCollapseBound) return;
+    window.__studioCollapseBound = true;
+
+    var KEY = "studio_nav_collapsed";
+
+    function stored() {
+        try { return localStorage.getItem(KEY) === "yes"; } catch (e) { return false; }
+    }
+
+    function setButton(collapsed) {
+        var btn = document.getElementById("studioCollapseBtn");
+        if (!btn) return;
+        var icon = btn.querySelector("i");
+        var label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        if (icon) {
+            icon.classList.toggle("fa-angles-left", !collapsed);
+            icon.classList.toggle("fa-angles-right", collapsed);
+        }
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
+    }
+
+    function apply(collapsed) {
+        document.body.classList.toggle("studio-nav-collapsed", collapsed);
+        setButton(collapsed);
+    }
+
+    document.addEventListener("click", function (event) {
+        var btn = event.target.closest
+            ? event.target.closest("#studioCollapseBtn") : null;
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        var collapsed = !document.body.classList.contains("studio-nav-collapsed");
+        try { localStorage.setItem(KEY, collapsed ? "yes" : "no"); } catch (e) {}
+        apply(collapsed);
+    });
+
+    apply(stored());
+
+    // Turbo renders a fresh <body> without the class; put it back before the
+    // new page is shown, or the rail flashes open on every navigation.
+    document.addEventListener("turbo:before-render", function (event) {
+        if (stored() && event.detail && event.detail.newBody) {
+            event.detail.newBody.classList.add("studio-nav-collapsed");
+        }
+    });
+    document.addEventListener("turbo:load", function () { setButton(stored()); });
+})();
+</script>

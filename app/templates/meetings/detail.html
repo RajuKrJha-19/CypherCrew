@@ -97,7 +97,7 @@
                             <div class="meeting-participant">
                                 <div>
                                     <strong>{{ user.name }}</strong>
-                                    <span>{{ user.role|replace("_", " ")|title }}</span>
+                                    <span>{{ role_label(user.role) }}</span>
                                 </div>
 
                                 <small>{{ user.email }}</small>

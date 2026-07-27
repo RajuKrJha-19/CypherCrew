@@ -48,6 +48,7 @@
                     <textarea
                         name="description"
                         rows="4"
+                        data-emoji-field
                         placeholder="What needs to be done? Add any specifics the assignee should know."
                     ></textarea>
 
@@ -122,7 +123,7 @@
                         <option value="{{ employee.id }}">
                             {{ employee.name }}
                             -
-                            {{ employee.role|replace("_", " ")|title }}
+                            {{ role_label(employee.role) }}
                         </option>
                         {% endfor %}
                     </select>
@@ -143,7 +144,7 @@
                             <option value="{{ employee.id }}">
                                 {{ employee.name }}
                                 -
-                                {{ employee.role|replace("_", " ")|title }}
+                                {{ role_label(employee.role) }}
                             </option>
                             {% endfor %}
                         </select>
@@ -225,13 +226,13 @@
                                         type="checkbox"
                                         name="visibility_ids"
                                         value="{{ employee.id }}"
-                                        data-name="{{ employee.name }} - {{ employee.role|replace('_', ' ')|title }}"
+                                        data-name="{{ employee.name }} - {{ role_label(employee.role) }}"
                                     >
 
                                     <span>
                                         {{ employee.name }}
                                         -
-                                        {{ employee.role|replace("_", " ")|title }}
+                                        {{ role_label(employee.role) }}
                                     </span>
                                 </label>
                                 {% endfor %}

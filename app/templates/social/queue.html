@@ -1,8 +1,6 @@
 {% extends "base_studio.html" %}
-{% block title %}Queue · Social Publishing | CypherCrew{% endblock %}
+{% block title %}Queue · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
-{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
 
 {% macro job_card(job, retry=False) %}
 {% set t = job.target %}
@@ -12,7 +10,7 @@
         <span class="sp-pill {{ 'danger' if job.state in ['failed','dead'] else ('' if job.state in ['succeeded','queued'] else 'info') }}">{{ job.state|replace('_',' ') }}</span>
     </div>
     <div class="qc-title">
-        {% if t and t.post %}<a href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}" style="color:inherit;">{{ t.post.title or 'Untitled post' }}</a>
+        {% if t and t.post %}<a class="qc-title-link" href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}">{{ t.post.title or 'Untitled post' }}</a>
         {% else %}Job #{{ job.id }}{% endif %}
     </div>
     {% if job.last_error and job.state in ['failed','dead'] %}
@@ -24,8 +22,8 @@
             · {{ job.updated_at.strftime('%d %b %H:%M') }}{% if t and t.post and t.post.client %} · {{ t.post.client.client_name }}{% endif %}
         </span>
         {% if retry %}
-        <form method="POST" action="{{ url_for('social.requeue_job', job_id=job.id) }}" style="margin:0;">
-            <button type="submit" class="mini-link"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
+        <form method="POST" action="{{ url_for('social.requeue_job', job_id=job.id) }}">
+            <button type="submit" class="row-action"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
         </form>
         {% endif %}
     </div>
@@ -35,19 +33,19 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Publishing queue</h1>
-        <p>Scheduled posts publish <strong>automatically</strong> at their time — this board shows them move from queued to live, with retry on failures. “Process now” just forces a run immediately.</p>
+        <h1>Queue</h1>
+        <p>Scheduled posts publish <strong>automatically</strong> at their time. This board follows them from queued to live, and holds anything that failed.</p>
     </div>
     {% set is_engine_admin = can_manage_social_engine(current_user) %}
     {% if is_engine_admin %}
     <div class="top-actions">
-        <form method="POST" action="{{ url_for('social.process_queue') }}" style="margin:0;">
-            <button type="submit" class="btn"><i class="fa-solid fa-play"></i> Process now</button>
+        <form method="POST" action="{{ url_for('social.process_queue') }}">
+            <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-play"></i> Process now</button>
         </form>
         {% if buckets.failed %}
-        <form method="POST" action="{{ url_for('social.requeue_all') }}" style="margin:0;"
+        <form method="POST" action="{{ url_for('social.requeue_all') }}"
               onsubmit="return confirm('Retry all {{ buckets.failed|length }} failed job(s)?');">
-            <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Retry all failed</button>
+            <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Retry {{ buckets.failed|length }} failed</button>
         </form>
         {% endif %}
     </div>

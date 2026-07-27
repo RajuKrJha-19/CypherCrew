@@ -34,6 +34,11 @@
 <script src="{{ url_for('static', filename='js/global-search.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/command-palette.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/video-thumb.js') }}" defer></script>
+{# Emoji picker: attaches itself to any field marked data-emoji-field -
+   comments, replies, task descriptions, the composer's caption. Global
+   because those fields appear on half a dozen pages and, in the comment
+   thread, are built after the page has rendered. #}
+<script src="{{ asset_url('js/emoji-picker.js') }}" defer></script>
 
 {# Always fetch fresh; teardown still runs on before-render so no
    pollers leak, and no stale snapshot is ever shown. #}

@@ -19,7 +19,7 @@
         </span>
         <span class="account-meta">
             <span class="account-name">{{ display_name }}</span>
-            <span class="account-role">{{ current_user.role.replace('_', ' ')|title }}</span>
+            <span class="account-role">{{ role_label(current_user.role) }}</span>
         </span>
         <i class="fa-solid fa-chevron-down account-caret"></i>
     </button>

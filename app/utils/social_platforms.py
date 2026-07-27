@@ -12,6 +12,10 @@ PLATFORMS = [
     ("youtube", "YouTube", "fa-brands fa-youtube"),
     ("x", "X", "fa-brands fa-x-twitter"),
     ("linkedin", "LinkedIn", "fa-brands fa-linkedin"),
+    # Google Business Profile - the posts that show on a business's Google
+    # Search/Maps listing. A publishing target like the rest, and one the
+    # local-business clients ask for by name.
+    ("google_business", "Google Business", "fa-brands fa-google"),
 ]
 
 PLATFORM_KEYS = [key for key, _label, _icon in PLATFORMS]

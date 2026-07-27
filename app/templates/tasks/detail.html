@@ -25,7 +25,21 @@
                             #{{ task.task_code }}
                         </span>
 
-                        <h1>{{ task.title }}</h1>
+                        {# Renaming is open to anyone who can open the task
+                           (see quick_update_task): the old rule was
+                           creator-and-assignee, which collapses the moment
+                           a task is transferred, leaving the new owner
+                           unable to correct the name of their own work. #}
+                        <div class="task-title-row">
+                            <h1 id="taskTitleText">{{ task.title }}</h1>
+                            {% if task.status not in task_status.TERMINAL_STATUSES %}
+                            <button type="button" class="task-title-edit" id="taskTitleEdit"
+                                    data-task="{{ task.id }}"
+                                    title="Rename this task" aria-label="Rename this task">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <p>
@@ -175,9 +189,9 @@
                                     can_manage_tasks
                                     or task.assigned_to_id == current_user.id
                                 )
-                                and item not in [
-                                    task_status.ON_HOLD, task_status.VOID
-                                ]
+                                and item in task_status.hand_moves(
+                                    task.status, can_manage_tasks
+                                )
                             %}
 
                             {#
@@ -489,7 +503,7 @@
                             <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task.id) }}"
                                 class="comment-form" id="commentForm">
 
-                                <textarea name="message" rows="1" id="commentInput"
+                                <textarea name="message" rows="1" id="commentInput" data-emoji-field
                                     placeholder="Write a comment...   (Ctrl + Enter to post)" required></textarea>
 
                                 <button type="submit" title="Post comment (Ctrl + Enter)">
@@ -1000,7 +1014,7 @@ Submission Files
                                     <div class="reject-box">
                                         <label>Rejection Message</label>
 
-                                        <textarea name="message" rows="4"
+                                        <textarea name="message" rows="4" data-emoji-field
                                             placeholder="Write reason or changes needed..." required></textarea>
 
                                         <label>Reference File</label>
@@ -1379,6 +1393,115 @@ Submission Files
    has to be wired up here to work in both places. #}
 <script src="{{ url_for('static', filename='js/social-publish-confirm.js') }}"></script>
 <script>
+    /*
+        Inline rename.
+
+        fetch, deliberately, never a <form>: this page also renders inside
+        the task drawer's iframe, and a form submit there is a navigation
+        the drawer did not ask for - task-panel.js marks itself dirty and
+        the next close() hard-reloads the board behind it, losing the
+        user's scroll position and filters. A fetch never touches the
+        frame.
+
+        Posts to the same /tasks/<id>/quick-update endpoint the board's
+        quick-edit popovers use, so there is one wire contract for
+        single-field edits, not two.
+    */
+    (function () {
+        const trigger = document.getElementById("taskTitleEdit");
+        const heading = document.getElementById("taskTitleText");
+
+        if (!trigger || !heading) return;
+
+        const taskId = trigger.dataset.task;
+        let editing = false;
+
+        function toast(message, type) {
+            if (typeof window.showToast === "function") {
+                window.showToast(message, type || "success");
+            }
+        }
+
+        async function save(input, original) {
+            const value = input.value.trim();
+
+            if (!value || value === original) {
+                finish(original);
+                return;
+            }
+
+            input.disabled = true;
+
+            try {
+                const res = await fetch("/tasks/" + taskId + "/quick-update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ field: "title", value: value }),
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    toast(data.message || "Could not rename this task.", "error");
+                    finish(original);
+                    return;
+                }
+
+                finish(value);
+                document.title = document.title.replace(original, value);
+                toast("Task renamed.");
+
+            } catch (err) {
+                toast("Could not rename this task.", "error");
+                finish(original);
+            }
+        }
+
+        function finish(title) {
+            const input = document.getElementById("taskTitleInput");
+            if (input) input.remove();
+            heading.textContent = title;
+            heading.hidden = false;
+            trigger.hidden = false;
+            editing = false;
+        }
+
+        trigger.addEventListener("click", function () {
+            if (editing) return;
+            editing = true;
+
+            const original = heading.textContent.trim();
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.id = "taskTitleInput";
+            input.className = "task-title-input";
+            input.maxLength = 255;
+            input.value = original;
+            input.setAttribute("aria-label", "Task name");
+
+            heading.hidden = true;
+            trigger.hidden = true;
+            heading.insertAdjacentElement("afterend", input);
+            input.focus();
+            input.select();
+
+            input.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    save(input, original);
+                } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    finish(original);
+                }
+            });
+
+            // Clicking away commits, the way every inline title field does.
+            input.addEventListener("blur", function () {
+                if (editing) save(input, original);
+            });
+        });
+    })();
+
     // Transfer form starts collapsed - it is an occasional action, not
     // something that should take up room on every task page.
     (function () {
@@ -1800,7 +1923,7 @@ Submission Files
                         id="comment-edit-form-${comment.id}"
                         style="display:none;"
                     >
-                        <textarea name="message" rows="3" required>${comment.message}</textarea>
+                        <textarea name="message" rows="3" data-emoji-field required>${comment.message}</textarea>
 
                         <div class="comment-edit-actions">
                             <button type="submit">Save</button>
@@ -1839,6 +1962,7 @@ Submission Files
                             name="message"
                             rows="2"
                             placeholder="Write a reply..."
+                            data-emoji-field
                             required
                         ></textarea>
 
@@ -1987,7 +2111,7 @@ Submission Files
                         id="comment-edit-form-${reply.id}"
                         style="display:none;"
                     >
-                        <textarea name="message" rows="3" required>${reply.message}</textarea>
+                        <textarea name="message" rows="3" data-emoji-field required>${reply.message}</textarea>
 
                         <div class="comment-edit-actions">
                             <button type="submit">Save</button>
@@ -2026,6 +2150,7 @@ Submission Files
                             name="message"
                             rows="2"
                             placeholder="Write a reply..."
+                            data-emoji-field
                             required
                         ></textarea>
 
@@ -2454,14 +2579,17 @@ Submission Files
 
         }
         </script>
+        <script src="{{ asset_url('js/status-change.js') }}"></script>
         <script>
+
+            const STEPPER_FROM = {{ task.status|tojson }};
+            const STEPPER_TITLE = {{ task.title|tojson }};
+            const STEPPER_NEEDS_REASON =
+                {{ task_status.needs_reason_to_leave(task.status)|tojson }};
 
             document.querySelectorAll(".status-bubble").forEach(function (bubble) {
 
                 bubble.addEventListener("click", async function () {
-                    console.log("Bubble clicked");
-                    console.log(this.dataset.taskId);
-                    console.log(this.dataset.status);
                     if (!this.classList.contains("clickable")) {
                         return;
                     }
@@ -2473,45 +2601,22 @@ Submission Files
                         return;
                     }
 
-                    try {
+                    // Shared with the board and the list dropdown, so the
+                    // three ways of moving a task ask the same questions.
+                    const result = await CypherStatus.changeStatus({
+                        taskId: taskId,
+                        to: status,
+                        from: STEPPER_FROM,
+                        title: STEPPER_TITLE,
+                        needsReason: STEPPER_NEEDS_REASON,
+                    });
 
-                        const response = await fetch("/tasks/kanban/update-status", {
-
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
-
-                            body: JSON.stringify({
-
-                                task_id: taskId,
-                                status: status
-
-                            })
-
-                        });
-
-                        const data = await response.json();
-
-                        if (!data.success) {
-
-                            showToast(data.message || "Unable to update task status.", "error");
-                            return;
-
-                        }
-
-                        location.reload();
-
+                    if (!result.moved) {
+                        if (result.message) showToast(result.message, "error");
+                        return;
                     }
 
-                    catch (error) {
-
-                        console.log(error);
-
-                        showToast("Unable to update task status. Check your connection and try again.", "error");
-
-                    }
+                    location.reload();
 
                 });
 

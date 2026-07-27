@@ -7,8 +7,10 @@ from flask import (
     request
 )
 
-from flask_login import login_required
+from flask_login import login_required, current_user
+from app.extensions import db
 from app.utils import task_status
+from app.utils.permissions import can_view_all_tasks
 
 from app.models import (
     Task,
@@ -23,6 +25,27 @@ calendar_bp = Blueprint(
     "calendar",
     __name__
 )
+
+
+def _visible_tasks():
+    """Task rows this viewer is allowed to see, as a query.
+
+    The calendar was the one task surface with no scoping at all: it ran a
+    bare Task.query, so anybody signed in could read the title, client,
+    assignee and deadline of every task in the company. Every other read
+    path (the board, the list, search, the CSV export) has always narrowed
+    to "assigned to me or shared with me" - this is the same rule, spelled
+    the same way as tasks.get_task_base_query.
+    """
+    if can_view_all_tasks(current_user):
+        return Task.query
+
+    return Task.query.filter(
+        db.or_(
+            Task.assigned_to_id == current_user.id,
+            Task.visible_to.any(User.id == current_user.id),
+        )
+    )
 
 
 @calendar_bp.route("/calendar")
@@ -88,7 +111,7 @@ def index():
         month
     )
 
-    query = Task.query.filter(
+    query = _visible_tasks().filter(
         Task.deadline.isnot(None)
     )
 
@@ -266,7 +289,7 @@ def index():
     # follow. It is computed here rather than summed from the filtered
     # `events` dict the grid is drawn from, which is what made the numbers
     # drift the moment a filter was applied.
-    summary_query = Task.query.filter(Task.deadline.isnot(None))
+    summary_query = _visible_tasks().filter(Task.deadline.isnot(None))
 
     if selected_client:
         summary_query = summary_query.filter(

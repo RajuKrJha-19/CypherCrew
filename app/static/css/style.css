@@ -763,6 +763,9 @@ body.sidebar-collapsed .topbar{
     width:32px;
     height:32px;
     border-radius:50%;
+    /* Clips the <img> to the circle regardless of its own radius, and
+       stops a tall/wide picture pushing the 60px top bar out of shape. */
+    overflow:hidden;
     display:inline-flex;
     align-items:center;
     justify-content:center;
@@ -1747,6 +1750,150 @@ input[type="file"]::file-selector-button:hover{
     color:var(--color-primary-hover);
     font-size:12px;
     font-weight:700;
+}
+
+/* ---- Status dropdown in the task list --------------------------------
+   Follows .qe-inline, the pattern the assignee and deadline cells in this
+   same table already use: reads as text, reveals itself as editable on
+   hover. A filled pill here sat in a row of plain cells looking like a
+   form control someone had dropped on the page. Status still carries its
+   colour - as the text, not as a block of background. */
+.status-select{
+    appearance:none;
+    -webkit-appearance:none;
+    /* Hug the selected option rather than the longest one. Without this a
+       browser sizes a <select> to fit "Client Review" on every row. */
+    field-sizing:content;
+    max-width:132px;
+    padding:1px 15px 1px 5px;
+    margin:-1px -3px;
+    border:1px solid transparent;
+    border-radius:var(--ds-radius-sm, 4px);
+    background-color:transparent;
+    color:var(--color-text);
+    font-size:12px;
+    font-weight:600;
+    font-family:inherit;
+    line-height:1.5;
+    cursor:pointer;
+    /* Caret drawn in, because appearance:none removes the native one.
+       Faint until the row is hovered, so a column of these does not read
+       as a wall of dropdowns. */
+    background-image:linear-gradient(45deg, transparent 50%, currentColor 50%),
+                     linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:calc(100% - 8px) calc(50% + 1px),
+                        calc(100% - 5px) calc(50% + 1px);
+    background-size:3px 3px, 3px 3px;
+    background-repeat:no-repeat;
+    opacity:.85;
+    transition:background-color .12s ease, border-color .12s ease, opacity .12s ease;
+}
+
+.status-select:hover,
+.status-select:focus-visible{
+    background-color:var(--ds-surface-sunken, var(--color-surface-muted));
+    border-color:var(--ds-border, var(--color-border));
+    opacity:1;
+    outline:none;
+}
+
+.status-select:disabled{ opacity:.5; cursor:progress; }
+
+/* The menu itself is drawn by the OS - keep it plain dark text so the
+   options stay readable whatever tone the trigger is showing. */
+.status-select option{ color:var(--color-text); font-weight:500; }
+
+/* Per-status tone, matching the board columns. */
+.status-select.status-assigned{ color:var(--color-primary); }
+.status-select.status-in-progress{ color:var(--color-accent); }
+.status-select.status-paused{ color:var(--color-text-muted); }
+.status-select.status-on-hold{ color:var(--color-warning); }
+.status-select.status-core-review,
+.status-select.status-client-review{ color:var(--color-warning); }
+.status-select.status-scheduled{ color:var(--color-primary); }
+.status-select.status-published{ color:var(--color-success); }
+.status-select.status-void{ color:var(--color-danger); }
+
+.status-cell-badge{ margin-top:4px; }
+
+/* ---- Board columns the publish flow owns -----------------------------
+   Scheduled and Published cannot be dragged into or out of. Marked
+   quietly - a dimmed column would read as "broken" rather than "not
+   yours to set". */
+.board-column.is-locked .board-column-header h2 i{
+    font-size:10px;
+    opacity:.5;
+    margin-left:4px;
+}
+
+.board-column.is-locked .task-card{ cursor:default; }
+
+/* ---- "Why is this leaving review?" ----------------------------------
+   Asked BEFORE the card lands, so cancelling means nothing moved. */
+.status-reason-overlay{
+    position:fixed;
+    inset:0;
+    z-index:5000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    background:rgba(15,23,42,.45);
+    backdrop-filter:blur(2px);
+}
+
+.status-reason-box{
+    width:min(440px, 100%);
+    padding:20px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-lg, 14px);
+    box-shadow:0 24px 64px rgba(15,23,42,.32);
+}
+
+.status-reason-box h3{
+    margin:0 0 6px;
+    font-size:16px;
+    font-weight:700;
+    color:var(--color-text);
+}
+
+.status-reason-box p{
+    margin:0 0 12px;
+    font-size:13px;
+    line-height:1.55;
+    color:var(--color-text-muted);
+}
+
+.status-reason-box textarea{
+    width:100%;
+    padding:10px 12px;
+    font-size:13.5px;
+    line-height:1.5;
+    color:var(--color-text);
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md, 10px);
+    resize:vertical;
+}
+
+.status-reason-box textarea:focus{
+    outline:none;
+    border-color:var(--color-primary);
+    box-shadow:var(--focus-ring);
+}
+
+.status-reason-error{
+    margin:8px 0 0 !important;
+    font-size:12px !important;
+    color:var(--color-danger) !important;
+}
+
+.status-reason-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:16px;
 }
 
 .task-detail-grid{
@@ -5337,6 +5484,69 @@ a.activity-tile:hover {
 
 }
 
+/* ---- Inline rename ---------------------------------------------------
+   The pencil sits beside the title and only appears on hover/focus, so
+   the header stays a heading rather than a toolbar. Its own row, because
+   .task-header-block is a column and the button would otherwise drop
+   underneath the heading. */
+.task-title-row{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    min-width:0;
+}
+
+.task-title-row h1{ min-width:0; }
+
+.task-title-edit{
+    align-self:flex-start;
+    width:28px;
+    height:28px;
+    margin-top:-4px;
+    padding:0;
+    display:inline-grid;
+    place-items:center;
+    border:1px solid transparent;
+    border-radius:var(--radius-sm, 8px);
+    background:transparent;
+    color:var(--color-text-subtle);
+    font-size:12px;
+    cursor:pointer;
+    opacity:0;
+    transition:opacity .12s ease, color .12s ease,
+               background .12s ease, border-color .12s ease;
+}
+
+.task-title-row:hover .task-title-edit,
+.task-title-edit:focus-visible{ opacity:1; }
+
+.task-title-edit:hover{
+    color:var(--color-text);
+    background:var(--color-surface-muted);
+    border-color:var(--color-border);
+}
+
+/* Sized like the heading it replaces, so the page does not jump when the
+   input swaps in. */
+.task-title-input{
+    width:100%;
+    max-width:720px;
+    padding:2px 10px;
+    font-size:inherit;
+    font-weight:700;
+    line-height:1.25;
+    color:var(--color-text);
+    background:var(--color-surface);
+    border:1px solid var(--color-primary);
+    border-radius:var(--radius-sm, 8px);
+    box-shadow:var(--focus-ring);
+}
+
+@media(hover:none){
+    /* No hover on touch - keep the affordance visible. */
+    .task-title-edit{ opacity:1; }
+}
+
 .task-detail-inline-id{
 
     float:right;
@@ -5927,7 +6137,7 @@ SKETCH STYLE DISCUSSION UI
     background: var(--color-surface);
 }
 
-.comment-form button {
+.comment-form button:not(.emoji-trigger) {
     width: 42px !important;
     height: 42px !important;
     min-width: 42px !important;
@@ -6115,7 +6325,7 @@ SKETCH STYLE DISCUSSION UI
     resize: vertical !important;
 }
 
-.comment-form button {
+.comment-form button:not(.emoji-trigger) {
     position: absolute !important;
     right: 12px !important;
     top: 13px !important;
@@ -6132,7 +6342,7 @@ SKETCH STYLE DISCUSSION UI
     padding: 0 !important;
 }
 
-.comment-form button::after {
+.comment-form button:not(.emoji-trigger)::after {
     content: "➤";
     font-size: 14px;
 }
@@ -9911,6 +10121,48 @@ body.panel-mode .main-panel{
     padding:22px;
 }
 
+/* "You cannot open this task", shown inside the drawer instead of the
+   drawer silently closing and reloading the page behind it. */
+.panel-denied{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    gap:12px;
+    padding:56px 24px;
+}
+
+.panel-denied .ic{
+    width:60px;
+    height:60px;
+    border-radius:var(--radius-lg, 14px);
+    display:grid;
+    place-items:center;
+    font-size:23px;
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+}
+
+.panel-denied h2{
+    margin:0;
+    font-size:17px;
+    font-weight:700;
+    color:var(--color-text);
+}
+
+.panel-denied p{
+    margin:0;
+    max-width:380px;
+    font-size:13.5px;
+    line-height:1.55;
+    color:var(--color-text-muted);
+}
+
+.panel-denied-hint{
+    font-size:12px !important;
+    color:var(--color-text-subtle) !important;
+}
+
 @media(max-width:900px){
 
     .task-drawer{
@@ -10765,6 +11017,64 @@ body.panel-mode .main-panel{
 }
 
 /* Permission checkboxes: name plus what it actually unlocks. */
+/* ---- Permissions screen ------------------------------------------
+   Eighteen codes grouped into six short fieldsets, with each row marked
+   against the role's defaults. The groups are the difference between a
+   list nobody reads and a set of decisions. */
+.permission-group{
+    border:0;
+    border-top:1px solid var(--color-border);
+    padding:14px 0 0;
+    margin:0 0 6px;
+}
+
+.permission-group:first-of-type{ border-top:0; padding-top:0; }
+
+.permission-group legend{
+    padding:0 0 6px;
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--color-text-muted);
+}
+
+.perm-chip{
+    display:inline-block;
+    margin-left:7px;
+    padding:1px 7px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+    vertical-align:middle;
+}
+
+.perm-chip.locked{
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+}
+
+.permission-item.is-locked{ opacity:.65; cursor:not-allowed; }
+
+.perm-summary{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+}
+
+.perm-diff{ margin-left:10px; display:inline-flex; gap:10px; font-size:13px; }
+.perm-added{ color:var(--ds-success); font-weight:600; }
+.perm-removed{ color:var(--color-danger); font-weight:600; }
+.perm-clean{ color:var(--color-text-muted); }
+.perm-none{ color:var(--color-text-subtle); font-size:13px; }
+
 .permission-list{
     display:flex;
     flex-direction:column;
@@ -14444,9 +14754,14 @@ body.ds-screen .selected-reference-file{
     color:var(--color-primary);
 }
 
-.profile-role-badge.role-super_admin{ background:var(--ds-warning-bg); color:var(--ds-warning); }
-.profile-role-badge.role-admin{ background:var(--color-primary-soft); color:var(--color-primary); }
-.profile-role-badge.role-employee{ background:var(--ds-success-bg); color:var(--ds-success); }
+/* Coloured by TIER, not by role value. Fifteen roles would otherwise mean
+   fifteen rules, and the sixteenth would render unstyled until somebody
+   remembered this file. See roles.badge_class. */
+.profile-role-badge.role-tier-owner{ background:var(--ds-warning-bg); color:var(--ds-warning); }
+.profile-role-badge.role-tier-management{ background:var(--color-primary-soft); color:var(--color-primary); }
+.profile-role-badge.role-tier-senior{ background:var(--ds-success-bg); color:var(--ds-success); }
+.profile-role-badge.role-tier-junior{ background:var(--color-surface-muted); color:var(--color-text-secondary); }
+.profile-role-badge.role-tier-general{ background:var(--color-surface-muted); color:var(--color-text-muted); }
 
 .profile-hero-meta{
     display:flex;
@@ -14527,6 +14842,96 @@ body.ds-screen .selected-reference-file{
 .avatar-upload-form input[type=file]{ font-size:13px; color:var(--ds-text-secondary); max-width:100%; }
 .profile-remove-btn{ color:var(--color-danger); }
 
+/* ---- Crop dialog shown by avatar-cropper.js after a file is chosen ----
+   The viewport is a square with a circular mask over it, because the
+   circle is what every avatar slot actually shows - cropping to a square
+   and being surprised by the circle is the thing this avoids. */
+.avatar-crop-overlay{
+    position:fixed;
+    inset:0;
+    z-index:5000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    background:rgba(15,23,42,.45);
+    backdrop-filter:blur(2px);
+}
+
+.avatar-crop-box{
+    width:min(340px, 100%);
+    max-height:90vh;
+    overflow-y:auto;
+    padding:20px;
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-lg, 14px);
+    box-shadow:0 24px 64px rgba(15,23,42,.32);
+}
+
+.avatar-crop-box h3{ margin:0 0 6px; font-size:16px; }
+
+.avatar-crop-box p{
+    margin:0 0 14px;
+    color:var(--color-text-muted);
+    font-size:13px;
+    line-height:1.5;
+}
+
+.avatar-crop-stage{
+    position:relative;
+    width:260px;
+    height:260px;
+    margin:0 auto;
+    border-radius:var(--radius-md, 10px);
+    overflow:hidden;
+    background:var(--color-surface-muted);
+}
+
+.avatar-crop-viewport{
+    position:absolute;
+    inset:0;
+    cursor:grab;
+    touch-action:none;      /* we drive panning ourselves via pointer events */
+}
+
+.avatar-crop-viewport:active{ cursor:grabbing; }
+
+.avatar-crop-viewport img{
+    position:absolute;
+    max-width:none;         /* the script sizes it; no global img cap */
+    user-select:none;
+    -webkit-user-drag:none;
+}
+
+/* Everything outside the circle, dimmed. Pointer-transparent so the drag
+   underneath still works. */
+.avatar-crop-mask{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:radial-gradient(circle at 50% 50%,
+        rgba(15,23,42,0) 0 49.5%,
+        rgba(15,23,42,.55) 50%);
+}
+
+.avatar-crop-zoom{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:14px 0 16px;
+    color:var(--color-text-muted);
+    font-size:12px;
+}
+
+.avatar-crop-zoom input[type=range]{ flex:1 1 auto; accent-color:var(--color-primary); }
+
+.avatar-crop-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+}
+
 .profile-form-grid{
     display:grid;
     grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -14605,6 +15010,153 @@ body.ds-screen .selected-reference-file{
     padding:0 4px;
     border-radius:4px;
     white-space:nowrap;
+}
+
+/* ---- Emoji picker (emoji-picker.js) --------------------------------
+   The trigger is inserted next to any field carrying data-emoji, so it
+   has to look deliberate in three different layouts: inline in the
+   comment composer's flex row, and under a block textarea on the task
+   and compose forms. */
+.emoji-trigger{
+    flex:0 0 auto;
+    align-self:flex-end;
+    /* display:flex rather than inline-flex so the auto margin can push it
+       to the right edge under a block textarea. */
+    margin:6px 0 0 auto;
+    width:34px;
+    height:34px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border:1px solid transparent;
+    border-radius:var(--ds-radius-md, 10px);
+    background:transparent;
+    color:var(--color-text-muted);
+    font-size:15px;
+    line-height:1;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.emoji-trigger:hover,
+.emoji-trigger[aria-expanded="true"]{
+    background:var(--color-surface-muted);
+    border-color:var(--color-border);
+    color:var(--color-text);
+}
+
+/* The comment composer positions its send button absolutely, inside the
+   textarea's right padding. The trigger tucks in beside it rather than
+   below the box, which is where Instagram and Facebook put it too. */
+.comment-form{ position:relative; }
+
+/* Room for it: the textarea reserves 58px on the right for the send
+   button, and the trigger now sits inside that gutter too. */
+.comment-form textarea[data-emoji-field]{ padding-right:96px !important; }
+
+.comment-form .emoji-trigger{
+    position:absolute;
+    right:56px;
+    top:14px;
+    width:32px;
+    height:32px;
+    margin:0;
+    align-self:auto;
+    background:transparent;
+}
+
+.emoji-panel{
+    position:fixed;
+    /* Same tier as the mention popover: above the topbar (2000), below
+       the true modal layer. */
+    z-index:3000;
+    width:320px;
+    max-width:calc(100vw - 16px);
+    padding:10px;
+    background:var(--ds-surface, #fff);
+    border:1px solid var(--ds-border, #e5e7f0);
+    border-radius:var(--ds-radius-md, 12px);
+    box-shadow:0 16px 40px rgba(15,23,42,.22);
+}
+
+.emoji-search{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 0 8px;
+}
+
+.emoji-search i{ color:var(--color-text-subtle); font-size:12px; }
+
+.emoji-search input{
+    flex:1 1 auto;
+    height:32px;
+    padding:0 10px;
+    font-size:13px;
+    border:1px solid var(--color-border);
+    border-radius:var(--ds-radius-md, 8px);
+    background:var(--color-surface);
+    color:var(--color-text);
+}
+
+.emoji-tabs{
+    display:flex;
+    gap:2px;
+    padding-bottom:8px;
+    border-bottom:1px solid var(--color-border);
+    overflow-x:auto;
+    scrollbar-width:none;
+}
+
+.emoji-tabs::-webkit-scrollbar{ display:none; }
+
+.emoji-tab{
+    flex:0 0 auto;
+    width:30px;
+    height:28px;
+    padding:0;
+    border:0;
+    border-radius:8px;
+    background:transparent;
+    font-size:15px;
+    line-height:1;
+    cursor:pointer;
+    opacity:.65;
+}
+
+.emoji-tab:hover{ background:var(--color-surface-muted); opacity:1; }
+.emoji-tab.active{ background:var(--color-primary-soft); opacity:1; }
+
+.emoji-grid{
+    display:grid;
+    grid-template-columns:repeat(8, 1fr);
+    gap:2px;
+    max-height:224px;
+    overflow-y:auto;
+    padding-top:8px;
+}
+
+.emoji-cell{
+    aspect-ratio:1;
+    padding:0;
+    border:0;
+    border-radius:8px;
+    background:transparent;
+    font-size:19px;
+    line-height:1;
+    cursor:pointer;
+}
+
+.emoji-cell:hover{ background:var(--color-surface-muted); }
+
+.emoji-empty{
+    grid-column:1 / -1;
+    margin:14px 0;
+    text-align:center;
+    font-size:13px;
+    color:var(--color-text-muted);
 }
 
 .mention-suggest{
@@ -15529,11 +16081,13 @@ body.cmdk-open{ overflow:hidden; }
     --sp-instagram:#e4405f;
     --sp-youtube:#ff0000;
     --sp-linkedin:#0a66c2;
+    --sp-google_business:#1a73e8;
     --sp-x:#111827;
     --sp-facebook-soft:#e7f0fe;
     --sp-instagram-soft:#fdecef;
     --sp-youtube-soft:#ffeaea;
     --sp-linkedin-soft:#e6f0f9;
+    --sp-google_business-soft:#e8f0fe;
     --sp-x-soft:#eef0f4;
 }
 :root[data-theme="dark"]{
@@ -15541,11 +16095,13 @@ body.cmdk-open{ overflow:hidden; }
     --sp-instagram:#ff6b8a;
     --sp-youtube:#ff5252;
     --sp-linkedin:#4a9ee0;
+    --sp-google_business:#5a9cf8;
     --sp-x:#e6e8ec;
     --sp-facebook-soft:#18233a;
     --sp-instagram-soft:#331c22;
     --sp-youtube-soft:#331a1a;
     --sp-linkedin-soft:#152534;
+    --sp-google_business-soft:#14243a;
     --sp-x-soft:#20242c;
 }
 
@@ -15631,6 +16187,8 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .social-card-link:hover{ text-decoration:underline; }
 .social-card-body{ padding:16px 18px; }
 .social-card-body.flush{ padding:0; }
+/* A card's last strip - a single full-width action under a list. */
+.social-card-body.is-footer{ border-top:1px solid var(--color-border); }
 
 /* ---- Account cards (platform grouped) ------------------------------ */
 .account-grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
@@ -15644,27 +16202,46 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .account-row{ display:flex; align-items:center; gap:13px; padding:15px 16px; }
 .account-row + .account-row{ border-top:1px dashed var(--color-border); }
 .account-row.is-child{ padding-left:22px; background:var(--color-surface-muted); }
-.account-avatar{
+.account-row.is-split{ justify-content:space-between; }
+/* Platform ink for a bare icon (not a chip). */
+.pf-ink-instagram{ color:var(--sp-instagram); }
+.pf-ink-facebook{ color:var(--sp-facebook); }
+.connect-footnote{ margin-top:14px; display:flex; gap:8px; align-items:flex-start; }
+/* channel-avatar / channel-name, NOT account-avatar / account-name: the
+   top-bar identity chip (see "Account menu") already owns those two names,
+   and this block - being later in the sheet at equal specificity - was
+   silently repainting the signed-in user's avatar as a 44px rounded square
+   inside a 60px top bar. Distinct component, distinct name. */
+.channel-avatar{
     position:relative; flex:0 0 auto; width:44px; height:44px; border-radius:12px;
     display:grid; place-items:center; font-size:19px; color:#fff;
 }
-.account-avatar.pf-facebook{ background:var(--sp-facebook); }
-.account-avatar.pf-instagram{ background:linear-gradient(135deg,#833ab4,#fd1d1d 55%,#fcb045); }
-.account-avatar.pf-youtube{ background:var(--sp-youtube); }
-.account-avatar.pf-linkedin{ background:var(--sp-linkedin); }
-.account-avatar.pf-x{ background:var(--sp-x); }
-.account-avatar .pf-badge{
+.channel-avatar.pf-facebook{ background:var(--sp-facebook); }
+.channel-avatar.pf-instagram{ background:linear-gradient(135deg,#833ab4,#fd1d1d 55%,#fcb045); }
+.channel-avatar.pf-youtube{ background:var(--sp-youtube); }
+.channel-avatar.pf-linkedin{ background:var(--sp-linkedin); }
+.channel-avatar.pf-google_business{ background:var(--sp-google_business); }
+.channel-avatar.pf-x{ background:var(--sp-x); }
+/* Compact channel tile, for list rows rather than the channel card. */
+.channel-avatar.sm{ width:36px; height:36px; font-size:15px; border-radius:10px; }
+.channel-avatar .pf-badge{
     position:absolute; right:-4px; bottom:-4px; width:19px; height:19px; border-radius:50%;
     display:grid; place-items:center; font-size:9px; color:#fff;
     border:2px solid var(--color-surface);
 }
 .account-info{ min-width:0; flex:1 1 auto; display:flex; flex-direction:column; gap:2px; }
-.account-name{ font-size:14px; font-weight:650; color:var(--color-text);
+.channel-name{ font-size:14px; font-weight:650; color:var(--color-text);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .account-sub{ font-size:12px; color:var(--color-text-muted);
     display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .account-type-tag{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
     color:var(--color-text-subtle); }
+/* "Demo": this channel is served by the SimulationProvider - the post runs
+   the whole pipeline and reports success without reaching the platform.
+   Warning-coloured on purpose; it must not read as decoration. */
+.demo-tag{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    padding:1px 6px; border-radius:999px; white-space:nowrap;
+    background:var(--ds-warning-bg); color:var(--ds-warning); }
 .account-actions{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
 .acct-icon-btn{
     width:32px; height:32px; border-radius:var(--radius-sm); border:1px solid var(--color-border);
@@ -15685,6 +16262,16 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .st-dot.needs_reauth,.st-dot.failed,.st-dot.dead,.st-dot.rejected{ background:var(--color-danger); }
 .st-dot.scheduled,.st-dot.pending_approval,.st-dot.queued,.st-dot.approved{ background:var(--color-warning); }
 .st-dot.publishing,.st-dot.in_flight,.st-dot.uploading,.st-dot.awaiting_remote{ background:var(--color-accent); }
+.st-dot.sm{ width:6px; height:6px; }
+/* Legend dots, one per catalogued platform. The calendar legend used to
+   hand-write four of these inline and silently went stale when the
+   catalog grew. */
+.st-dot.pf-dot-facebook{ background:var(--sp-facebook); }
+.st-dot.pf-dot-instagram{ background:var(--sp-instagram); }
+.st-dot.pf-dot-youtube{ background:var(--sp-youtube); }
+.st-dot.pf-dot-linkedin{ background:var(--sp-linkedin); }
+.st-dot.pf-dot-x{ background:var(--sp-x); }
+.st-dot.pf-dot-google_business{ background:var(--sp-google_business); }
 .st-label{ font-size:12px; font-weight:600; color:var(--color-text-muted); text-transform:capitalize; }
 
 .sp-pill{ display:inline-flex; align-items:center; gap:6px; padding:3px 9px;
@@ -15694,16 +16281,21 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .sp-pill.danger{ background:var(--color-danger-soft); color:var(--color-danger); }
 .sp-pill.warning{ background:var(--color-warning-soft); color:var(--color-warning); }
 .sp-pill.info{ background:var(--color-primary-soft); color:var(--color-primary); }
+/* Used by Published ("outside Studio") and the queue - it had no rule at
+   all, so those pills rendered as the default tone. */
+.sp-pill.muted{ background:var(--color-surface-muted); color:var(--color-text-muted); }
 
 /* ---- Platform chip -------------------------------------------------- */
 .pf-chip{ display:inline-flex; align-items:center; gap:6px; padding:3px 9px 3px 7px;
     border-radius:var(--radius-full); font-size:11px; font-weight:650;
     background:var(--color-surface-sunken); color:var(--color-text); }
 .pf-chip i{ font-size:12px; }
+.pf-chip.lg{ padding:6px 12px; font-size:12px; }
 .pf-chip.facebook{ background:var(--sp-facebook-soft); color:var(--sp-facebook); }
 .pf-chip.instagram{ background:var(--sp-instagram-soft); color:var(--sp-instagram); }
 .pf-chip.youtube{ background:var(--sp-youtube-soft); color:var(--sp-youtube); }
 .pf-chip.linkedin{ background:var(--sp-linkedin-soft); color:var(--sp-linkedin); }
+.pf-chip.google_business{ background:var(--sp-google_business-soft); color:var(--sp-google_business); }
 .pf-chip.x{ background:var(--sp-x-soft); color:var(--sp-x); }
 
 /* ---- Upcoming / list rows ------------------------------------------ */
@@ -15713,6 +16305,10 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
     transition:background var(--dur) var(--ease); }
 .sp-list-item:first-child{ border-top:0; }
 .sp-list-item:hover{ background:var(--color-surface-muted); }
+/* A row that is a record, not a link. Was written inline as
+   style="cursor:default" on three different pages. */
+.sp-list-item.is-static{ cursor:default; }
+.sp-list-item.is-static:hover{ background:transparent; }
 .sp-when{ flex:0 0 auto; width:52px; text-align:center; display:flex; flex-direction:column; gap:1px; }
 .sp-when .d{ font-size:17px; font-weight:700; color:var(--color-text); line-height:1; }
 .sp-when .m{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
@@ -15760,6 +16356,12 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .social-empty h3{ margin:0; font-size:16px; font-weight:700; color:var(--color-text); }
 .social-empty p{ margin:0; font-size:13px; color:var(--color-text-muted); max-width:420px; line-height:1.55; }
 .social-empty .actions{ margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+/* The same empty state, sized for a panel inside a card rather than a
+   whole page. Was three inline overrides on the dashboard. */
+.social-empty.sm{ padding:30px 20px; }
+.social-empty.sm .ic{ width:48px; height:48px; font-size:19px; }
+.social-empty.sm h3{ font-size:14px; }
+.empty-text{ margin:0; }
 
 /* ---- Connect an account (provider buttons) ------------------------- */
 .connect-grid{ display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
@@ -15777,10 +16379,125 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .connect-ic.pf-meta{ background:linear-gradient(135deg,#0081fb,#833ab4 55%,#fd1d1d); }
 .connect-ic.pf-youtube{ background:var(--sp-youtube); }
 .connect-ic.pf-linkedin{ background:var(--sp-linkedin); }
+.connect-ic.pf-google_business{ background:var(--sp-google_business); }
 .connect-ic.pf-x{ background:var(--sp-x); }
 .connect-body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .connect-title{ font-size:13px; font-weight:650; }
 .connect-note{ font-size:11px; color:var(--color-text-muted); }
+
+/* ====================================================================
+   Studio layout primitives
+   --------------------------------------------------------------------
+   Every Studio page was laying itself out with inline styles - a
+   `style="display:flex;gap:8px"` here, a `style="margin-bottom:18px"`
+   there, `style="border:0;box-shadow:none"` on each table - so no two
+   pages stacked, spaced or aligned quite the same. These are the six
+   things those inline styles were reaching for, named once.
+   ==================================================================== */
+
+/* Vertical rhythm between the blocks of a page. Replaces the assorted
+   margin-bottom:18px / 20px sprinkled on individual cards. */
+.studio-section + .studio-section{ margin-top:20px; }
+
+/* The bar that sits above a list: selection and filters on the left,
+   actions on the right. Was .approvals-toolbar, which two other pages
+   had borrowed under a name that no longer described it. */
+.studio-toolbar{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 14px; margin:0 0 14px; flex-wrap:wrap;
+    background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-xs);
+}
+.studio-toolbar-group{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.approvals-toolbar{ /* old name, same thing - kept so nothing breaks */
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 14px; margin:0 0 14px; flex-wrap:wrap;
+    background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-xs);
+}
+
+/* A table that lives inside a .social-card: the card already draws the
+   border and shadow, so the table must not draw them again. */
+.studio-table{ border:0; box-shadow:none; border-radius:0; }
+.studio-table table{ margin:0; }
+.studio-table th.tight, .studio-table td.tight{ width:34px; }
+.studio-table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+/* The Published table lists one row per platform, so the post's own name
+   has to travel with it - otherwise "delete this one" is a decision made
+   without knowing what it is. */
+.history-post-link{
+    display:block;
+    margin-top:3px;
+    font-size:12px;
+    color:var(--color-text-muted);
+    text-decoration:none;
+    max-width:260px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.history-post-link:hover{ color:var(--color-primary); text-decoration:underline; }
+
+/* Row-level actions. One shape for the thing that used to be a
+   .mini-link on one page, a .btn.btn-sm on the next and a bare <a> on
+   the third. */
+.row-actions{ display:flex; align-items:center; gap:6px; justify-content:flex-end; }
+.row-action{
+    display:inline-flex; align-items:center; gap:6px;
+    height:28px; padding:0 10px;
+    font-size:12px; font-weight:600; white-space:nowrap;
+    border:1px solid var(--color-border); border-radius:var(--radius-sm);
+    background:var(--color-surface); color:var(--color-text-muted);
+    text-decoration:none; cursor:pointer;
+    transition:color .12s, border-color .12s, background .12s;
+}
+.row-action:hover{ color:var(--color-text); border-color:var(--color-border-strong);
+    background:var(--color-surface-muted); }
+.row-action.danger:hover{ color:var(--color-danger); border-color:var(--color-danger-border);
+    background:var(--color-danger-soft); }
+.row-action i{ font-size:11px; }
+.qc-title-link{ color:inherit; text-decoration:none; }
+.qc-title-link:hover{ color:var(--color-primary); }
+
+/* ---- Post detail --------------------------------------------------- */
+.post-headline{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* A pill that is also a link should not gain the underline. */
+.sp-pill.as-link{ text-decoration:none; }
+/* Caption / first comment: author's line breaks preserved, read as prose. */
+.post-copy{ margin:0; white-space:pre-wrap; line-height:1.6; }
+.field-hint.is-ok{ color:var(--color-success); }
+.field-hint.is-stacked{ margin-top:5px; }
+
+/* Right-hand controls in a card head (a link, a pill, a small form). */
+.social-card-tools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* Small text tones, so a colour never has to be spelled inline. */
+.t-muted{ color:var(--color-text-muted); }
+.t-subtle{ color:var(--color-text-subtle); }
+.t-danger{ color:var(--color-danger); }
+.t-sm{ font-size:12px; }
+.t-cap{ text-transform:capitalize; }
+.u-nowrap{ white-space:nowrap; }
+.u-right{ text-align:right; }
+.u-full{ width:100%; }
+
+/* A horizontal run of chips/badges that wraps cleanly. */
+.chip-row{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+
+/* A form wrapping a single button is a layout accident, not a section:
+   inside these containers it must not become the page's flex column.
+   This is what every `style="margin:0"` on a one-button form was for. */
+.top-actions form,
+.studio-toolbar form,
+.social-card-head form,
+.row-actions form,
+.engage-actions form,
+.social-actionbar form{ display:inline-flex; margin:0; gap:8px; }
+
+/* Checkbox in a table cell / toolbar, at a readable size. */
+.studio-check{ width:16px; height:16px; accent-color:var(--color-primary); cursor:pointer; }
+.studio-check-label{ display:inline-flex; align-items:center; gap:8px;
+    font-size:13px; font-weight:600; color:var(--color-text); cursor:pointer; }
 
 /* ---- Filters bar ---------------------------------------------------- */
 .social-filters{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 18px; }
@@ -15824,6 +16541,9 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .settings-stat .k{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--color-text-muted); }
 .settings-stat .v{ font-size:15px; font-weight:600; color:var(--color-text); }
 .settings-stat .h{ font-size:11.5px; color:var(--color-text-subtle); line-height:1.4; }
+.settings-footnote{ margin-top:14px; }
+/* Hashtag sets can be long; keep the column from stretching the table. */
+.settings-tags{ max-width:420px; }
 
 /* ---- Task publish-state badge (Social Studio -> task) --------------- */
 .pub-badge{ display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px;
@@ -15900,6 +16620,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .analytic-soon{ position:absolute; top:12px; right:12px; }
 
 /* ---- Calendar grid -------------------------------------------------- */
+.cal-toolbar-group{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .cal-toolbar{ display:flex; align-items:center; justify-content:space-between; gap:12px;
     margin:0 0 16px; flex-wrap:wrap; }
 .cal-title{ font-size:17px; font-weight:700; color:var(--color-text); min-width:170px; }
@@ -15927,6 +16648,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .cal-event.instagram{ border-left-color:var(--sp-instagram); }
 .cal-event.youtube{ border-left-color:var(--sp-youtube); }
 .cal-event.linkedin{ border-left-color:var(--sp-linkedin); }
+.cal-event.google_business{ border-left-color:var(--sp-google_business); }
 .cal-event.x{ border-left-color:var(--sp-x); }
 .cal-event .ce-time{ color:var(--color-text-subtle); font-weight:700; }
 .cal-more{ font-size:11px; font-weight:600; color:var(--color-text-muted); padding:1px 7px; }
@@ -15964,6 +16686,16 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 @media(max-width:1180px){ .composer-3col .composer-side-rail{ position:static; } }
 .cmp-section{ display:flex; flex-direction:column; gap:7px; }
 .cmp-section + .cmp-section{ margin-top:18px; }
+/* The composer's first section sits under a field pair, not under another
+   section, so it needs the same gap - this is what six copies of
+   style="margin-top:16px" were doing. */
+.cmp-field-pair + .cmp-section{ margin-top:18px; }
+.cmp-field-pair{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:640px){ .cmp-field-pair{ grid-template-columns:1fr; } }
+.cmp-submit-row{ display:flex; gap:8px; margin-top:18px; }
+.cmp-submit-row .btn{ flex:1; justify-content:center; }
+.cmp-submit-note{ text-align:center; margin-top:10px; }
+.pp-save{ margin-left:auto; }
 .cmp-label{ font-size:12px; font-weight:650; color:var(--color-text); display:flex; align-items:center;
     justify-content:space-between; gap:8px; }
 .cmp-label small{ font-weight:500; color:var(--color-text-subtle); }
@@ -15978,6 +16710,8 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .cmp-count.over{ color:var(--color-danger); }
 
 .cmp-media-grid{ display:grid; gap:9px; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); }
+/* Library tiles are records, not pickers - the composer's are clickable. */
+.cmp-asset.is-static{ cursor:default; }
 .cmp-asset{ position:relative; display:flex; flex-direction:column; border:1px solid var(--color-border);
     border-radius:var(--radius-md); overflow:hidden; cursor:pointer; background:var(--color-surface);
     transition:border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
@@ -16008,6 +16742,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .cmp-account .ava.pf-instagram{ background:linear-gradient(135deg,#833ab4,#fd1d1d 55%,#fcb045); }
 .cmp-account .ava.pf-youtube{ background:var(--sp-youtube); }
 .cmp-account .ava.pf-linkedin{ background:var(--sp-linkedin); }
+.cmp-account .ava.pf-google_business{ background:var(--sp-google_business); }
 .cmp-account .ava.pf-x{ background:var(--sp-x); }
 .cmp-account .nm{ font-size:12px; font-weight:600; color:var(--color-text); min-width:0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -16104,26 +16839,47 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 /* ---- Studio sidebar ---- */
 .studio-sidebar{ position:sticky; top:0; height:100vh; display:flex; flex-direction:column;
     background:var(--color-surface); border-right:1px solid var(--color-border); z-index:40; }
-.studio-brand{ display:flex; align-items:center; gap:10px; padding:16px 16px 12px; }
+.studio-brand{ display:flex; align-items:center; gap:10px; padding:16px 14px 12px; }
 .studio-brand .logo{ width:34px; height:34px; border-radius:10px; flex:0 0 auto; display:grid; place-items:center;
     color:#fff; font-size:16px; background:linear-gradient(135deg,var(--color-primary),#7c3aed); }
-.studio-brand .txt{ display:flex; flex-direction:column; line-height:1.1; min-width:0; }
-.studio-brand .txt b{ font-size:14px; font-weight:750; color:var(--color-text); letter-spacing:-.01em; }
-.studio-brand .txt span{ font-size:11px; color:var(--color-text-subtle); }
+.studio-brand .txt{ display:flex; flex-direction:column; line-height:1.15; min-width:0; }
+.studio-brand .txt b{ font-size:13.5px; font-weight:650; color:var(--color-text); letter-spacing:-.01em; }
+.studio-brand .txt span{ font-size:10.5px; color:var(--color-text-subtle); }
+
+/* Collapse control, mirroring the ERP sidebar's. */
+.studio-collapse-btn{
+    margin-left:auto; flex:0 0 auto; width:28px; height:28px; padding:0;
+    display:grid; place-items:center; cursor:pointer;
+    border:1px solid transparent; border-radius:var(--radius-sm);
+    background:transparent; color:var(--color-text-subtle); font-size:11px;
+    transition:color .12s, background .12s, border-color .12s;
+}
+.studio-collapse-btn:hover{ color:var(--color-text); background:var(--color-surface-muted);
+    border-color:var(--color-border); }
+
 .studio-exit{ display:flex; align-items:center; gap:9px; margin:0 12px 8px; padding:8px 11px;
     border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-muted);
-    color:var(--color-text-muted); font-size:12px; font-weight:600; text-decoration:none;
+    color:var(--color-text-muted); font-size:12px; font-weight:500; text-decoration:none;
     transition:all var(--dur) var(--ease); }
 .studio-exit:hover{ color:var(--color-text); border-color:var(--color-border-strong); background:var(--color-surface-sunken); text-decoration:none; }
 .studio-nav{ flex:1 1 auto; overflow-y:auto; padding:6px 8px 16px; display:flex; flex-direction:column; gap:1px; }
-.studio-nav-section{ font-size:10px; font-weight:750; text-transform:uppercase; letter-spacing:.07em;
-    color:var(--color-text-subtle); padding:14px 12px 5px; }
+
+/* Weight carries the hierarchy: section labels recede, idle items sit at
+   normal weight, and only the current page is emphasised. Every one of
+   these used to be 600-750, so nothing stood out - the whole sidebar read
+   as highlighted and the active item had nothing to be louder than. */
+.studio-nav-section{ font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--color-text-subtle); opacity:.75; padding:14px 12px 5px; }
 .studio-nav a{ position:relative; display:flex; align-items:center; gap:11px; padding:9px 12px;
-    border-radius:var(--radius-md); color:var(--color-text-muted); font-size:13px; font-weight:600;
+    border-radius:var(--radius-md); color:var(--color-text-muted); font-size:13px; font-weight:500;
     text-decoration:none; transition:background var(--dur) var(--ease), color var(--dur) var(--ease); }
-.studio-nav a i{ width:18px; text-align:center; font-size:14px; opacity:.9; flex:0 0 auto; }
+.studio-nav a i{ width:18px; text-align:center; font-size:14px; opacity:.7; flex:0 0 auto;
+    transition:opacity var(--dur) var(--ease); }
 .studio-nav a:hover{ background:var(--color-surface-muted); color:var(--color-text); text-decoration:none; }
-.studio-nav a.active{ background:var(--color-primary-soft); color:var(--color-primary); }
+.studio-nav a:hover i{ opacity:.9; }
+.studio-nav a.active{ background:var(--color-primary-soft); color:var(--color-primary); font-weight:650; }
+.studio-nav a.active i{ opacity:1; }
+.studio-nav a > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .studio-nav a .nav-count{ margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:var(--radius-full);
     font-size:10.5px; font-weight:750; color:#fff; background:var(--color-danger); display:grid; place-items:center; }
 .studio-nav a.soon{ opacity:.55; cursor:default; }
@@ -16144,6 +16900,52 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 /* Off-canvas overlay: inert on desktop (never a grid cell), only the mobile
    drawer turns it into a fixed backdrop below. */
 .studio-backdrop{ display:none; }
+
+/* ---- Collapsed rail (desktop) --------------------------------------
+   Icons only, at roughly the ERP rail's width, remembered in localStorage.
+   Every link keeps a title attribute, so the label is still reachable. */
+body.studio-nav-collapsed .studio-layout{ grid-template-columns:68px minmax(0,1fr); }
+/* Logo, then the expand control beneath it - kept in flow rather than
+   floated into the corner, where it would sit on top of the exit link. */
+body.studio-nav-collapsed .studio-brand{
+    flex-direction:column; gap:8px; padding:14px 0 10px; justify-content:center; }
+body.studio-nav-collapsed .studio-brand .txt{ display:none; }
+body.studio-nav-collapsed .studio-collapse-btn{ margin:0; width:26px; height:26px; }
+body.studio-nav-collapsed .studio-exit{ margin:0 auto 8px; padding:8px 0; width:44px; justify-content:center; }
+body.studio-nav-collapsed .studio-exit span{ display:none; }
+body.studio-nav-collapsed .studio-nav{ padding:6px 10px 16px; }
+body.studio-nav-collapsed .studio-nav a{ justify-content:center; padding:10px 0; gap:0; }
+body.studio-nav-collapsed .studio-nav a > span:not(.nav-count){ display:none; }
+/* No room for a number beside a centred icon, so the badge becomes the dot
+   every mail client uses for the same job. */
+body.studio-nav-collapsed .studio-nav a .nav-count{
+    position:absolute; top:5px; right:9px; margin:0;
+    min-width:8px; width:8px; height:8px; padding:0; font-size:0; }
+body.studio-nav-collapsed .studio-nav-section{
+    padding:12px 0 5px; text-align:center; font-size:0; }
+/* A hairline stands in for the section name the rail cannot show. */
+body.studio-nav-collapsed .studio-nav-section::after{
+    content:""; display:block; width:18px; height:1px; margin:0 auto;
+    background:var(--color-border); }
+
+@media(max-width:900px){
+    /* Collapsing is a desktop affordance: the off-canvas drawer stays full
+       width whatever the stored preference says. */
+    body.studio-nav-collapsed .studio-layout{ grid-template-columns:1fr; }
+    body.studio-nav-collapsed .studio-sidebar{ width:230px; }
+    body.studio-nav-collapsed .studio-brand{
+        flex-direction:row; gap:10px; padding:16px 14px 12px; justify-content:flex-start; }
+    body.studio-nav-collapsed .studio-brand .txt{ display:flex; }
+    body.studio-nav-collapsed .studio-exit span,
+    body.studio-nav-collapsed .studio-nav a > span:not(.nav-count){ display:block; }
+    body.studio-nav-collapsed .studio-nav a{ justify-content:flex-start; padding:9px 12px; gap:11px; }
+    body.studio-nav-collapsed .studio-nav-section{ font-size:10px; text-align:left; padding:14px 12px 5px; }
+    body.studio-nav-collapsed .studio-nav-section::after{ display:none; }
+    body.studio-nav-collapsed .studio-collapse-btn{ display:none; }
+    body.studio-nav-collapsed .studio-exit{ width:auto; margin:0 12px 8px; padding:8px 11px; justify-content:flex-start; }
+    body.studio-nav-collapsed .studio-nav a .nav-count{
+        position:static; width:auto; height:18px; min-width:18px; padding:0 5px; font-size:10.5px; }
+}
 
 /* the module tab strip is now the sidebar, so pages can drop their own
    .page-header top-margin a touch for a tighter, app-like canvas */
@@ -16226,6 +17028,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .mention-item .av.pf-instagram{ background:linear-gradient(135deg,#833ab4,#fd1d1d 55%,#fcb045); }
 .mention-item .av.pf-youtube{ background:var(--sp-youtube); }
 .mention-item .av.pf-linkedin{ background:var(--sp-linkedin); }
+.mention-item .av.pf-google_business{ background:var(--sp-google_business); }
 .mention-item .av.pf-x{ background:var(--sp-x); }
 .mention-item .mm-body{ min-width:0; display:flex; flex-direction:column; }
 .mention-item .h{ font-size:13px; font-weight:650; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -16234,6 +17037,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 /* preview avatars + aspect for all platforms */
 .pp-ava.youtube{ background:var(--sp-youtube); }
 .pp-ava.linkedin{ background:var(--sp-linkedin); }
+.pp-ava.google_business{ background:var(--sp-google_business); }
 .pp-ava.x{ background:var(--sp-x); }
 .pp-media.yt{ aspect-ratio:16/9; }
 

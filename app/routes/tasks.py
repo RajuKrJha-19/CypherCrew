@@ -39,7 +39,11 @@ from app.models import (
     TaskFile,
     TaskTransferRequest
 )
-from app.utils.permissions import can_use_social, has_permission
+from app.utils.permissions import (
+    can_assign_tasks, can_publish, can_use_social, can_view_all_tasks,
+    has_permission,
+)
+from app.utils import roles
 from app.utils.notifications import create_notification
 from app.utils.mentions import notify_mentioned_users, find_mentioned_users
 from app.utils import task_status
@@ -224,7 +228,8 @@ def _notify_reviewers(task):
     submit_review and the board-drag path so both notify identically."""
     reviewers = [
         u for u in User.query.filter_by(status="active").all()
-        if has_permission(u, "approve_tasks") and u.id != current_user.id
+        if (has_permission(u, "approve_tasks")
+            or has_permission(u, "publish_tasks")) and u.id != current_user.id
     ]
     for reviewer in reviewers:
         create_notification(
@@ -333,7 +338,7 @@ def parse_fallback_fields(assigned_to_id):
 
     backup_user = User.query.filter(
         User.id == backup_assignee_id, User.status == "active",
-        User.role.in_(["super_admin", "admin", "employee"])
+        User.role.in_(roles.ALL_ROLE_VALUES)
     ).first()
 
     if not backup_user:
@@ -424,15 +429,89 @@ def apply_task_search(query, search):
     )
 
 
-def get_task_base_query():
+def can_view_task(task):
+    """May the signed-in user see this task at all?
 
-    if has_permission(current_user, "manage_tasks"):
+    The same rule task_detail applies, lifted out so the write paths can
+    ask it too. add_comment and reply_comment never did: the page was
+    scoped but the POST behind it was not, so any signed-in user could
+    comment on any task id - and @-mention people from a task they could
+    not open.
+
+    The last clause is the transfer one. Being asked to take a task over
+    has to come with sight of it: the Accept and Decline buttons live on
+    the task page, and the person being asked is - by definition - not
+    the assignee yet. The query runs only when the cheap in-memory checks
+    have already failed, so the common path never touches the database
+    for it.
+    """
+    if task is None:
+        return False
+
+    if can_view_all_tasks(current_user):
+        return True
+
+    if (task.assigned_to_id == current_user.id
+            or current_user in task.visible_to):
+        return True
+
+    return TaskTransferRequest.is_pending_party(task.id, current_user.id)
+
+
+def _task_access_denied(task_id):
+    """The answer to "you may not open this task".
+
+    Two shapes, because there are two ways in. Inside the task drawer the
+    reply must stay on the SAME url: task-panel.js watches the iframe's
+    path and treats a change as "the panel left the task", so a redirect
+    made the drawer close itself and hard-reload the page behind it - the
+    user saw a panel flash open and vanish, with nothing said. Rendering a
+    403 at the same address keeps the drawer open and lets it explain.
+
+    Everywhere else it is a flash and a redirect. The redirect was already
+    there; the flash was not, so a plain navigation dumped people on the
+    task list with no idea why.
+    """
+    message = (
+        "You do not have access to this task. If someone has asked you to "
+        "take it over, open the request from your notifications."
+    )
+
+    if request.args.get("panel") == "1":
+        return render_template(
+            "tasks/_no_access_panel.html",
+            message=message,
+            task_id=task_id,
+        ), 403
+
+    flash(message, "error")
+    return redirect(url_for("tasks.list_tasks"))
+
+
+def get_task_base_query():
+    """Tasks this user may see, as a query.
+
+    Mirrors can_view_task, including the pending-transfer clause - a task
+    someone has been asked to take belongs on their board while they
+    decide, not only behind a notification link.
+    """
+
+    if can_view_all_tasks(current_user):
         return Task.query
 
     return Task.query.filter(
         db.or_(
             Task.assigned_to_id == current_user.id,
-            Task.visible_to.any(User.id == current_user.id)
+            Task.visible_to.any(User.id == current_user.id),
+            Task.transfer_requests.any(
+                db.and_(
+                    TaskTransferRequest.status == TaskTransferRequest.PENDING,
+                    db.or_(
+                        TaskTransferRequest.to_user_id == current_user.id,
+                        TaskTransferRequest.from_user_id == current_user.id,
+                    ),
+                )
+            ),
         )
     )
 
@@ -920,7 +999,7 @@ def task_files_panel(task_id, folder_type):
 
     task = Task.query.get_or_404(task_id)
 
-    if not has_permission(current_user, "manage_tasks"):
+    if not can_view_all_tasks(current_user):
 
         can_view = (
             task.assigned_to_id == current_user.id
@@ -1186,7 +1265,7 @@ def add_task():
     # if there is one, survives the round trip.
     form_url = url_for("tasks.add_task", **panel_args())
 
-    if not has_permission(current_user, "manage_tasks"):
+    if not can_assign_tasks(current_user):
         flash(
             (
                 "You don't have permission to assign tasks. "
@@ -1211,13 +1290,7 @@ def add_task():
         User.query
         .filter(
             User.status == "active",
-            User.role.in_(
-                [
-                    "super_admin",
-                    "admin",
-                    "employee",
-                ]
-            ),
+            User.role.in_(roles.ALL_ROLE_VALUES),
         )
         .order_by(User.name.asc())
         .all()
@@ -1280,7 +1353,7 @@ def add_task():
         # POST could target any active user - validate the role server-side too.
         if not User.query.filter(
                 User.id == assigned_to_id, User.status == "active",
-                User.role.in_(["super_admin", "admin", "employee"])).first():
+                User.role.in_(roles.ALL_ROLE_VALUES)).first():
             flash("Please choose a valid, active assignee.", "error")
             return redirect(form_url)
 
@@ -1478,13 +1551,7 @@ def add_task():
                 .filter(
                     User.id == user_id,
                     User.status == "active",
-                    User.role.in_(
-                        [
-                            "super_admin",
-                            "admin",
-                            "employee",
-                        ]
-                    ),
+                    User.role.in_(roles.ALL_ROLE_VALUES),
                 )
                 .first()
             )
@@ -1916,7 +1983,7 @@ def edit_task(task_id):
 
     employees = User.query.filter(
         User.status == "active",
-        User.role.in_(["super_admin", "admin", "employee"])
+        User.role.in_(roles.ALL_ROLE_VALUES)
     ).order_by(
         User.name.asc()
     ).all()
@@ -1989,7 +2056,7 @@ def edit_task(task_id):
         # non-assignable active user).
         if not User.query.filter(
                 User.id == assigned_to_id, User.status == "active",
-                User.role.in_(["super_admin", "admin", "employee"])).first():
+                User.role.in_(roles.ALL_ROLE_VALUES)).first():
             flash("Please choose a valid, active assignee.", "error")
             return redirect(url_for("tasks.edit_task", task_id=task.id))
 
@@ -2386,7 +2453,7 @@ def edit_task(task_id):
                 user = User.query.filter(
                     User.id == user_id,
                     User.status == "active",
-                    User.role.in_(["super_admin", "admin", "employee"])
+                    User.role.in_(roles.ALL_ROLE_VALUES)
                 ).first()
 
                 if user and user not in task.visible_to:
@@ -2866,8 +2933,7 @@ def void_task(task_id):
         task.status, task_status.VOID, True
     ):
         flash(
-            f"A task in {task.status} cannot be voided.",
-            "error"
+               "error"
         )
         return redirect(
             url_for("tasks.task_detail", task_id=task.id)
@@ -3043,6 +3109,7 @@ def kanban_update_status():
 
     task_id = data.get("task_id")
     new_status = data.get("status")
+    reason = (data.get("reason") or "").strip()
 
     task = Task.query.get_or_404(task_id)
         # -------------------------------------------------
@@ -3105,6 +3172,44 @@ def kanban_update_status():
                 f"Open the task to {verb} - a reason is required."
             )
         }), 400
+
+    # Scheduled and Published are the end of a decision made elsewhere -
+    # Studio schedules an approved post, and Published is the client
+    # sign-off. Setting either by hand skips that decision; dragging a
+    # task out of one quietly undoes it.
+    if task_status.is_drag_locked(new_status):
+        return jsonify({
+            "success": False,
+            "message": (
+                f"{new_status} is set by the publish flow, not by hand. "
+                "Approve the task (or schedule it in Social Studio) instead."
+            )
+        }), 400
+
+    if task_status.is_drag_locked(task.status):
+        return jsonify({
+            "success": False,
+            "message": (
+                f"A {task.status} task cannot be moved from here. "
+                "Open the task if it needs to be reopened."
+            )
+        }), 400
+
+    # Coming back out of a review overturns somebody's decision, so it
+    # takes a reason. The UI asks for one before it sends the move;
+    # needs_reason tells a caller that skipped the prompt what to do.
+    if task_status.needs_reason_to_leave(task.status):
+
+        if len(reason) < task_status.MIN_REASON_LENGTH:
+            return jsonify({
+                "success": False,
+                "needs_reason": True,
+                "from_status": task.status,
+                "message": (
+                    f"Say why this task is leaving {task.status} "
+                    "- the assignee will see it on the timeline."
+                ),
+            }), 400
 
     # A social task publishes through Social Studio, never a bare board drag -
     # dragging to Published would skip the publish gate entirely.
@@ -3227,10 +3332,20 @@ def kanban_update_status():
             and old_status not in ("Core Review", "Client Review"):
         _notify_reviewers(task)
 
+    message = (
+        f"{current_user.name} moved task from {old_status} to {new_status}."
+    )
+
+    # The reason belongs on the timeline, next to the move it explains -
+    # that is the only place the assignee will look to find out why their
+    # submitted work came back.
+    if reason and task_status.needs_reason_to_leave(old_status):
+        message = f"{message} Reason: {reason}"
+
     add_activity(
         task,
         action="status_changed",
-        message=f"{current_user.name} moved task from {old_status} to {new_status}.",
+        message=message,
         old_status=old_status,
         new_status=new_status,
     )
@@ -3257,12 +3372,12 @@ def assignable_users():
     """Active users a task can be assigned to - JSON, for the inline
     assignee picker. Managers only, since only they can reassign."""
 
-    if not has_permission(current_user, "manage_tasks"):
+    if not can_assign_tasks(current_user):
         return jsonify({"users": []})
 
     users = User.query.filter(
         User.status == "active",
-        User.role.in_(["super_admin", "admin", "employee"]),
+        User.role.in_(roles.ALL_ROLE_VALUES),
     ).order_by(User.name.asc()).all()
 
     return jsonify(
@@ -3282,18 +3397,24 @@ def quick_update_task(task_id):
 
     task = Task.query.get_or_404(task_id)
 
-    is_self_assigned_owner = (
-        task.created_by_id == current_user.id
-        and task.assigned_to_id == current_user.id
-    )
-    can_manage = has_permission(current_user, "manage_tasks")
-
-    if not can_manage and not is_self_assigned_owner:
+    # The door: you must be able to see the task at all. Beyond this the
+    # rule is PER FIELD, because they are not the same decision - renaming
+    # a task is housekeeping anyone working on it may do, while moving its
+    # deadline or its owner is not. Each branch below states its own rule
+    # as its first statement; do not lift one back up here.
+    if not can_view_task(task):
         return jsonify({"success": False, "message": "Permission denied."}), 403
 
     # Published / Void are terminal - no quiet edits.
     if task.status in task_status.TERMINAL_STATUSES:
         return jsonify({"success": False, "message": "This task is closed."}), 400
+
+    is_self_assigned_owner = (
+        task.created_by_id == current_user.id
+        and task.assigned_to_id == current_user.id
+    )
+    can_manage = has_permission(current_user, "manage_tasks")
+    can_edit_fields = can_manage or is_self_assigned_owner
 
     data = request.get_json(silent=True) or {}
     field = (data.get("field") or "").strip()
@@ -3301,7 +3422,38 @@ def quick_update_task(task_id):
 
     changes = []
 
-    if field == "priority":
+    if field == "title":
+
+        # Anyone who can open the task may rename it. The rule used to be
+        # the creator-and-assignee one below, which collapses the moment a
+        # task is transferred - so the new owner could not even correct the
+        # name of the task they had just been handed.
+        if not isinstance(value, str):
+            return jsonify({"success": False, "message": "Invalid task name."}), 400
+
+        new_title = value.strip()
+
+        if not new_title:
+            return jsonify({"success": False, "message": "Task name cannot be empty."}), 400
+
+        # Task.title is String(255). Refused rather than truncated: a
+        # silently shortened title is a corrupted one.
+        if len(new_title) > 255:
+            return jsonify({
+                "success": False,
+                "message": "Task name must be 255 characters or fewer.",
+            }), 400
+
+        if new_title != task.title:
+            changes.append(("Task Name", task.title, new_title))
+            task.title = new_title
+
+        display = new_title
+
+    elif field == "priority":
+
+        if not can_edit_fields:
+            return jsonify({"success": False, "message": "Permission denied."}), 403
 
         if value not in ("Low", "Medium", "High", "Urgent"):
             return jsonify({"success": False, "message": "Invalid priority."}), 400
@@ -3313,6 +3465,9 @@ def quick_update_task(task_id):
         display = value
 
     elif field == "deadline":
+
+        if not can_edit_fields:
+            return jsonify({"success": False, "message": "Permission denied."}), 403
 
         new_deadline = None
 
@@ -3517,11 +3672,28 @@ def bulk_update_tasks():
 @tasks_bp.route("/<int:task_id>/approve", methods=["POST"])
 @login_required
 def approve_task(task_id):
+    """Approve whatever gate the task is currently sitting at.
 
-    if not has_permission(current_user, "approve_tasks"):
-        return redirect(url_for("dashboard.index"))
+    Two gates, two permissions. Core Review is the craft check - a senior
+    editor signing off a junior's cut - and needs `approve_tasks`. Client
+    Review is the client-facing sign-off that marks the work delivered,
+    and needs `publish_tasks`. They used to be the same permission, which
+    meant there was no way to let someone review work without also letting
+    them declare it delivered.
+    """
 
     task = Task.query.get_or_404(task_id)
+
+    if task.status == "Client Review":
+        allowed = can_publish(current_user)
+    else:
+        allowed = has_permission(current_user, "approve_tasks") \
+            or can_publish(current_user)
+
+    if not allowed:
+        flash("You do not have permission to approve at this stage.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
     status_changed = False
 
     if task.status in ["Core Review", "Client Review", "Published"]:
@@ -3665,7 +3837,7 @@ def _social_team_user_ids(exclude_id=None):
     ids = {
         u.id for u in User.query.filter(
             User.status == "active",
-            User.role.in_(["super_admin", "admin"])).all()
+            User.role.in_(roles.MANAGEMENT_ROLES)).all()
     }
     rows = (db.session.query(UserPermission.user_id)
             .join(Permission, Permission.id == UserPermission.permission_id)
@@ -3689,7 +3861,9 @@ def send_to_social_studio(task_id):
     onto the task (Scheduled / In publish queue / Published / failed)."""
     if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
         abort(404)
-    if not has_permission(current_user, "approve_tasks"):
+    # Handing work to Studio is the client-facing step, so it is the
+    # publish permission rather than the craft-review one.
+    if not can_publish(current_user):
         return redirect(url_for("dashboard.index"))
     task = Task.query.get_or_404(task_id)
     if not task.is_social_media:
@@ -3743,7 +3917,9 @@ def mark_manually_published(task_id):
     Published list and the task both reflect it."""
     if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
         abort(404)
-    if not has_permission(current_user, "approve_tasks"):
+    # Declaring something already live is the same sign-off as publishing
+    # it from here, so it takes the same permission.
+    if not can_publish(current_user):
         return redirect(url_for("dashboard.index"))
     task = Task.query.get_or_404(task_id)
     if task.status not in ("Client Review", "Scheduled"):
@@ -3779,6 +3955,7 @@ def retry_task_publish(task_id):
     if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
         abort(404)
     if not (has_permission(current_user, "approve_tasks")
+            or can_publish(current_user)
             or can_use_social(current_user)):
         return redirect(url_for("dashboard.index"))
     task = Task.query.get_or_404(task_id)
@@ -3999,6 +4176,12 @@ def _task_social_posts(task_id):
 def task_detail(task_id):
 
     task = Task.query.get_or_404(task_id)
+
+    # Checked first. It used to sit below four TaskFile queries, which ran
+    # in full for a request that was about to be refused.
+    if not can_view_task(task):
+        return _task_access_denied(task_id)
+
     reference_files = (
         TaskFile.query
         .filter_by(
@@ -4045,16 +4228,6 @@ def task_detail(task_id):
         )
         .all()
     )
-
-    if not has_permission(current_user, "manage_tasks"):
-
-        can_view = (
-            task.assigned_to_id == current_user.id
-            or current_user in task.visible_to
-        )
-
-        if not can_view:
-            return redirect(url_for("tasks.list_tasks"))
 
     live_seconds = get_live_worked_seconds(task)
     current_status_seconds = 0
@@ -4103,7 +4276,7 @@ def task_detail(task_id):
             .filter(
                 User.status == "active",
                 User.id != current_user.id,
-                User.role.in_(["super_admin", "admin", "employee"]),
+                User.role.in_(roles.ALL_ROLE_VALUES),
             )
             .order_by(User.name.asc())
             .all()
@@ -4170,7 +4343,7 @@ def task_detail(task_id):
 def _can_view_task_file(task_file):
     """Same rule the preview and download routes apply."""
 
-    if has_permission(current_user, "manage_tasks"):
+    if can_view_all_tasks(current_user):
         return True
 
     if task_file.folder_type == "submission":
@@ -4262,7 +4435,7 @@ def task_feedback_file(feedback_id):
     feedback = TaskFeedback.query.get_or_404(feedback_id)
 
     if not (
-        has_permission(current_user, "manage_tasks")
+        can_view_all_tasks(current_user)
         or current_user.id in (feedback.sender_id, feedback.receiver_id)
         or (feedback.task and feedback.task.assigned_to_id == current_user.id)
     ):
@@ -4296,7 +4469,7 @@ def preview_task_file(file_id):
     task_file = TaskFile.query.get_or_404(file_id)
     task = task_file.task
 
-    if not has_permission(current_user, "manage_tasks"):
+    if not can_view_all_tasks(current_user):
 
         can_view = (
             task_file.folder_type == "submission"
@@ -4368,7 +4541,7 @@ def download_task_file(file_id):
     task_file = TaskFile.query.get_or_404(file_id)
     task = task_file.task
 
-    if not has_permission(current_user, "manage_tasks"):
+    if not can_view_all_tasks(current_user):
 
         can_view = (
             task_file.folder_type == "submission"
@@ -4909,6 +5082,15 @@ def add_comment(task_id):
 
     task = Task.query.get_or_404(task_id)
 
+    if not can_view_task(task):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "success": False,
+                "message": "You do not have access to this task.",
+            }), 403
+        flash("You do not have access to this task.", "error")
+        return redirect(url_for("tasks.list_tasks"))
+
     message = request.form.get(
         "message",
         ""
@@ -4990,6 +5172,15 @@ def reply_comment(comment_id):
 
     comment = TaskComment.query.get_or_404(comment_id)
     task = comment.task
+
+    if not can_view_task(task):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "success": False,
+                "message": "You do not have access to this task.",
+            }), 403
+        flash("You do not have access to this task.", "error")
+        return redirect(url_for("tasks.list_tasks"))
 
     message = request.form.get("message", "").strip()
 

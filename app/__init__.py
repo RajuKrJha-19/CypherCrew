@@ -219,8 +219,13 @@ def create_app():
 
     from app.utils.permissions import (
         has_permission, can_manage_clients, can_manage_social_engine,
-        can_use_social, can_connect_social_accounts,
+        can_use_social, can_connect_social_accounts, can_view_all_tasks,
+        can_assign_tasks, can_view_team_performance, can_manage_users,
+        can_manage_permissions, can_manage_leaves, can_manage_holidays,
+        can_manage_meetings, can_publish, can_review,
     )
+    from app.utils import roles as roles_module
+    from app.utils.social_platforms import PLATFORM_ICONS, PLATFORM_LABELS
     from app.utils import task_status as task_status_module
     from app.utils.greeting import greet, today_label
     from app.utils.avatars import (
@@ -263,6 +268,13 @@ def create_app():
         # gates the internal ops controls (worker kick, retry/requeue) so
         # employees and managers never see engine machinery.
         can_manage_social_engine=can_manage_social_engine,
+        # Platform label/icon lookups, from the one catalog in
+        # utils/social_platforms. Globals because every Studio template
+        # needs them: they used to be a {% set %} literal copy-pasted into
+        # a dozen templates, so adding a platform meant editing all twelve
+        # and any one that was missed silently rendered a bare key.
+        PF_LABEL=PLATFORM_LABELS,
+        PF_ICON=PLATFORM_ICONS,
         # "May work in Social Studio" (admin/super_admin, or the explicit
         # manage_social permission) - gates the Social tab itself and the
         # task-detail handoff controls.
@@ -273,6 +285,28 @@ def create_app():
         # manage_clients permission) - distinct from "may read it",
         # which is now every signed-in user. See the helper's docstring.
         can_manage_clients=can_manage_clients,
+        # The rest of the capability vocabulary. Globals for the same reason
+        # as the ones above: the sidebar, the command palette and the quick-
+        # create menu each used to carry their own {% set %} copy of the
+        # rule, so a guard change had to be made in four places and the nav
+        # drifted out of step with the routes.
+        can_view_all_tasks=can_view_all_tasks,
+        can_assign_tasks=can_assign_tasks,
+        can_view_team_performance=can_view_team_performance,
+        can_manage_users=can_manage_users,
+        can_manage_permissions=can_manage_permissions,
+        can_manage_leaves=can_manage_leaves,
+        can_manage_holidays=can_manage_holidays,
+        can_manage_meetings=can_manage_meetings,
+        can_publish=can_publish,
+        can_review=can_review,
+        # Role display, from the one catalog in utils/roles. role_label is
+        # what makes "super_admin" read as "Owner" everywhere at once,
+        # instead of eighteen templates each doing .replace("_"," ")|title.
+        role_label=roles_module.label,
+        role_badge_class=roles_module.badge_class,
+        role_grouped_options=roles_module.grouped_options,
+        assignable_roles=roles_module.assignable_by,
         # Status names, groups and descriptions. A global because it is
         # pure constants shared by the dashboards, the task list and the
         # KPI cards - passing it per route meant a partial that used it

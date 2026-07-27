@@ -1,10 +1,10 @@
 {% extends "base_studio.html" %}
-{% block title %}Library · Social Studio | CypherCrew{% endblock %}
+{% block title %}Media library · Social Studio | CypherCrew{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Media Library</h1>
+        <h1>Media library</h1>
         <p>{% if selected_client %}Brand assets for {{ selected_client.client_name }}{% else %}Pick a client to browse its brand assets{% endif %}</p>
     </div>
     {% if selected_client %}
@@ -39,7 +39,7 @@
 </div>
 {% else %}
 {% for category, assets in by_category.items() %}
-<div class="social-card" style="margin-bottom:18px;">
+<div class="social-card studio-section">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-folder"></i> {{ category|capitalize }}</h2>
         <span class="sp-pill">{{ assets|length }}</span>
@@ -47,7 +47,7 @@
     <div class="social-card-body">
         <div class="cmp-media-grid">
             {% for a in assets %}
-            <div class="cmp-asset" title="{{ a.filename }}" style="cursor:default;">
+            <div class="cmp-asset is-static" title="{{ a.filename }}">
                 <span class="cmp-asset-thumb">
                     {% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">
                     {% else %}<i class="fa-regular fa-file"></i>{% endif %}

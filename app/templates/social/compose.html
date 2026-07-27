@@ -1,7 +1,6 @@
 {% extends "base_studio.html" %}
 {% block title %}{{ 'Edit post' if post else 'New post' }} · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 {% set TYPES = [('image','fa-image','Image'),('carousel','fa-images','Carousel'),('reel','fa-film','Reel'),('story','fa-circle-plus','Story'),('video','fa-video','Video'),('text','fa-font','Text')] %}
 {% set platforms_present = accounts|map(attribute='platform')|unique|list %}
 
@@ -47,7 +46,7 @@
     {# ================= LEFT: editor ================= #}
     <div class="social-card">
         <div class="social-card-body">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div class="cmp-field-pair">
                 <label class="field"><span>Title <small>(internal)</small></span>
                     <input type="text" name="title" value="{{ post.title or '' }}" placeholder="e.g. July launch"></label>
                 <label class="field"><span>Client</span>
@@ -60,7 +59,7 @@
             </div>
 
             {# --- Post type --- #}
-            <div class="cmp-section" style="margin-top:16px;">
+            <div class="cmp-section">
                 <span class="cmp-label">Post type</span>
                 <div class="cmp-types" id="postTypes">
                     {% for pt, ic, lbl in TYPES %}
@@ -74,15 +73,15 @@
             </div>
 
             {# --- Caption --- #}
-            <div class="cmp-section" style="margin-top:16px;">
+            <div class="cmp-section">
                 <span class="cmp-label">Caption <span class="cmp-count" id="captionCount">0</span></span>
                 <div class="cmp-emoji-bar" id="emojiBar">
                     {% for e in ['😀','🔥','🎉','✨','👍','❤️','📢','🚀'] %}<button type="button" data-emoji="{{ e }}" aria-label="Insert {{ e }}">{{ e }}</button>{% endfor %}
                     <button type="button" class="cmp-tool" data-insert="#" aria-label="Insert hashtag"><i class="fa-solid fa-hashtag"></i></button>
                     <button type="button" class="cmp-tool" data-insert="@" aria-label="Insert mention"><i class="fa-solid fa-at"></i></button>
                 </div>
-                <textarea name="caption" id="captionInput" aria-label="Caption" rows="6" placeholder="Write your caption…">{{ post.base_caption or '' }}</textarea>
-                <div class="cmp-toolbar-row" style="margin-top:8px;">
+                <textarea name="caption" id="captionInput" aria-label="Caption" rows="6" data-emoji-field placeholder="Write your caption…">{{ post.base_caption or '' }}</textarea>
+                <div class="cmp-toolbar-row">
                     <select class="cmp-set-select" id="hashtagSet" aria-label="Insert a saved hashtag set">
                         <option value="">Insert hashtag set…</option>
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
@@ -105,15 +104,15 @@
             </div>
 
             {# --- First comment --- #}
-            <div class="cmp-section cmp-first-comment" style="margin-top:16px;">
+            <div class="cmp-section cmp-first-comment">
                 <span class="cmp-label">First comment <small>Auto-posted right after publish</small></span>
-                <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" placeholder="e.g. #hashtags or a link — kept out of the caption, posted as the first comment">{{ first_comment }}</textarea>
+                <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" data-emoji-field placeholder="e.g. #hashtags or a link — kept out of the caption, posted as the first comment">{{ first_comment }}</textarea>
                 <span class="cmp-hint-inline" id="fcHint"></span>
             </div>
 
             {# --- Media: task deliverables (if from a task) --- #}
             {% if task_assets %}
-            <div class="cmp-section" style="margin-top:16px;">
+            <div class="cmp-section">
                 <span class="cmp-label"><i class="fa-solid fa-paperclip"></i> Deliverable files <small>from the task</small></span>
                 <div class="cmp-media-grid" id="taskMediaGrid">
                     {% for a in task_assets %}
@@ -130,7 +129,7 @@
             {% endif %}
 
             {# --- Media: direct upload (content sent to us, not from a task) --- #}
-            <div class="cmp-section" style="margin-top:16px;">
+            <div class="cmp-section">
                 <span class="cmp-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload media <small>for content a client sent us to publish directly</small></span>
                 <label class="cmp-upload" id="uploadZone">
                     <input type="file" id="uploadInput" accept="image/*,video/*" multiple hidden>
@@ -151,13 +150,13 @@
             </div>
 
             {# --- Media: brand assets --- #}
-            <div class="cmp-section" style="margin-top:16px;">
+            <div class="cmp-section">
                 <span class="cmp-label">Brand assets <small id="mediaHint">Select a client to load its brand assets</small></span>
                 <div class="cmp-media-grid" id="mediaGrid"></div>
             </div>
 
             {# --- Also share to Story --- #}
-            <label class="cmp-story-toggle" id="alsoStoryWrap" style="margin-top:14px;">
+            <label class="cmp-story-toggle" id="alsoStoryWrap">
                 <input type="checkbox" name="also_story" id="alsoStory">
                 <span><i class="fa-brands fa-instagram"></i> Also share to <b>Story</b> <small id="alsoStoryHint">publishes the media as an Instagram Story alongside the post</small></span>
             </label>
@@ -180,7 +179,7 @@
                     <div class="pp-media" id="ppMedia"><i class="fa-regular fa-image"></i></div>
                     <div class="pp-actions" id="ppActions"><i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i></div>
                     <div class="pp-caption" id="ppCaption"><span class="ph">Your caption preview…</span></div>
-                    <div class="pp-first-comment" id="ppFirstComment" style="display:none;">
+                    <div class="pp-first-comment" id="ppFirstComment" hidden>
                         <span class="av"></span><span class="bd"><b id="ppFcName">Your Page</b><span id="ppFcText"></span></span>
                     </div>
                 </div>
@@ -201,26 +200,26 @@
                         </label>
                         {% endfor %}
                     </div>
-                    <p class="cmp-hint-inline" id="accountsHint" style="display:none;"></p>
+                    <p class="cmp-hint-inline" id="accountsHint" hidden></p>
                 </div>
-                <div class="cmp-section" style="margin-top:16px;">
+                <div class="cmp-section">
                     <span class="cmp-label">Schedule <small>Times are IST</small></span>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="schedule" checked> Schedule for later</label>
                     <input type="datetime-local" name="schedule" id="scheduleInput" aria-label="Scheduled date and time (IST)" value="{{ schedule_value }}">
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="now"> Publish as soon as approved</label>
                 </div>
-                <div class="cmp-submit-row" style="display:flex; gap:8px; margin-top:18px;">
-                    <button type="submit" class="btn btn-secondary" style="flex:1;">
+                <div class="cmp-submit-row">
+                    <button type="submit" class="btn btn-secondary">
                         <i class="fa-solid fa-floppy-disk"></i> {{ 'Save changes' if post else 'Save draft' }}
                     </button>
                     {% if not post or post.status in ['draft', 'rejected'] %}
-                    <button type="submit" name="action" value="submit" class="btn" style="flex:1;"
+                    <button type="submit" name="action" value="submit" class="btn"
                             title="Save and route this post to an approver">
                         <i class="fa-solid fa-paper-plane"></i> Save &amp; submit
                     </button>
                     {% endif %}
                 </div>
-                <p class="connect-note" style="text-align:center; margin-top:10px;">Publishes only after approval &amp; scheduling.</p>
+                <p class="connect-note cmp-submit-note">Publishes only after approval &amp; scheduling.</p>
             </div>
         </div>
     </div>
@@ -230,8 +229,10 @@
 (function () {
     const caps = {{ capabilities|tojson }};
     const preselectedAssets = {{ selected_asset_ids|tojson }};
-    const PF_LABEL = {facebook:"Facebook", instagram:"Instagram", youtube:"YouTube", x:"X", linkedin:"LinkedIn"};
-    const PF_ICON_JS = {facebook:"fa-brands fa-facebook", instagram:"fa-brands fa-instagram", youtube:"fa-brands fa-youtube", x:"fa-brands fa-x-twitter", linkedin:"fa-brands fa-linkedin"};
+    // Piped from the server's platform catalog, not restated here - a
+    // hand-copied list goes stale the day a platform is added.
+    const PF_LABEL = {{ PF_LABEL|tojson }};
+    const PF_ICON_JS = {{ PF_ICON|tojson }};
     const $ = id => document.getElementById(id);
     const clientSelect = $("clientSelect"), mediaGrid = $("mediaGrid"), mediaHint = $("mediaHint");
     const caption = $("captionInput"), captionCount = $("captionCount");
@@ -325,7 +326,7 @@
     const PP_SUB = {facebook:"Just now · 🌐", instagram:"Original audio", youtube:"Just now", linkedin:"Just now · 🌐", x:"now"};
     const PP_ACTIONS = {
         facebook:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>',
-        instagram:'<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span style="margin-left:auto"><i class="fa-regular fa-bookmark"></i></span>',
+        instagram:'<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span class="pp-save"><i class="fa-regular fa-bookmark"></i></span>',
         youtube:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-thumbs-down"></i><i class="fa-solid fa-share"></i>',
         linkedin:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-paper-plane"></i>',
         x:'<i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-heart"></i><i class="fa-solid fa-arrow-up-from-bracket"></i>'
@@ -353,8 +354,8 @@
         media.innerHTML=inner;
         $("ppActions").innerHTML = PP_ACTIONS[pf] || PP_ACTIONS.facebook;
         const fc=$("firstComment").value.trim(); const box=$("ppFirstComment");
-        if(fc){ box.style.display="flex"; $("ppFcName").textContent=acct?acct.dataset.name:(PP_NAME[pf]||"Your account"); $("ppFcText").textContent=fc; }
-        else box.style.display="none";
+        if(fc){ box.hidden=false; $("ppFcName").textContent=acct?acct.dataset.name:(PP_NAME[pf]||"Your account"); $("ppFcText").textContent=fc; }
+        else box.hidden=true;
     }
     $("firstComment").addEventListener("input", renderPreview);
 
@@ -407,7 +408,7 @@
             if(!show) hidden++;
         });
         const hint = $("accountsHint");
-        if(hint){ if(hidden && cid){ hint.style.display=''; hint.textContent = hidden + ' channel(s) hidden — they belong to other clients.'; } else hint.style.display='none'; }
+        if(hint){ if(hidden && cid){ hint.hidden=false; hint.textContent = hidden + ' channel(s) hidden — they belong to other clients.'; } else hint.hidden=true; }
         refreshAccounts();
     }
     clientSelect.addEventListener("change", ()=>{ loadAssets(clientSelect.value); filterAccountsByClient(); });

@@ -38,11 +38,22 @@
 
     <div class="profile-avatar-actions">
         <h3>Profile Picture</h3>
-        <p class="profile-empty">PNG, JPG, GIF or WEBP · up to 5&nbsp;MB</p>
+        <p class="profile-empty">PNG, JPG, GIF or WEBP · up to 5&nbsp;MB · you
+            choose the square after picking a file</p>
 
+        {# Choosing a file opens the crop dialog (avatar-cropper.js), which
+           submits this same form with the cropped image in place of the
+           original. The Upload button is the no-JS path and still posts the
+           file as-is.
+
+           data-turbo="false" so the response is a full page load: the top
+           bar is data-turbo-permanent, so under Turbo it would keep showing
+           the OLD avatar (or your initials) until something forced a real
+           reload - you'd set a picture and appear not to have one. #}
         <form method="POST"
               action="{{ url_for('profile.upload_avatar') }}"
               enctype="multipart/form-data"
+              data-turbo="false"
               class="avatar-upload-form">
             <input type="file" name="avatar" id="avatarInput" accept="image/png,image/jpeg,image/gif,image/webp" required>
             <button type="submit" class="btn">
@@ -51,8 +62,10 @@
         </form>
 
         {% if user.avatar_key %}
+        {# Same reason as the upload form above: the top bar must re-render. #}
         <form method="POST"
               action="{{ url_for('profile.remove_avatar') }}"
+              data-turbo="false"
               onsubmit="return confirm('Remove your profile picture?')">
             <button type="submit" class="btn-ghost profile-remove-btn">
                 <i class="fa-solid fa-trash-can"></i> Remove picture
@@ -107,7 +120,7 @@
         <p class="profile-readonly-note">
             <i class="fa-solid fa-lock"></i>
             Your email (<strong>{{ user.email }}</strong>) and role
-            (<strong>{{ user.role.replace("_", " ")|title }}</strong>) are managed by an administrator.
+            (<strong>{{ role_label(user.role) }}</strong>) are managed by an administrator.
         </p>
 
         <button type="submit" class="btn">
@@ -115,4 +128,6 @@
         </button>
     </form>
 </section>
+
+<script src="{{ asset_url('js/avatar-cropper.js') }}" defer></script>
 {% endblock %}

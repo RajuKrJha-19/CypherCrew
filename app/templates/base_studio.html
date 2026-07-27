@@ -18,6 +18,9 @@
 <script src="{{ url_for('static', filename='js/turbo-app.js') }}"></script>
 <script src="{{ url_for('static', filename='js/command-palette.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/video-thumb.js') }}" defer></script>
+{# Same picker the ERP side uses - the composer's caption and first
+   comment are exactly the fields it exists for. #}
+<script src="{{ asset_url('js/emoji-picker.js') }}" defer></script>
 <meta name="turbo-cache-control" content="no-cache">
 {% endblock %}
 

@@ -1,8 +1,6 @@
 {% extends "base_studio.html" %}
-{% block title %}Social Publishing | CypherCrew{% endblock %}
+{% block title %}Dashboard · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
-{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
 {% set MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
 {% set ACT = {
   'post_created':('fa-plus','info','created a draft'),
@@ -153,14 +151,14 @@
                             <span class="sp-pill">{{ t.post_type }}</span>
                         </span>
                     </div>
-                    <i class="fa-solid fa-chevron-right" style="color:var(--color-text-subtle);"></i>
+                    <i class="fa-solid fa-chevron-right t-subtle"></i>
                 </a>
                 {% endfor %}
             </div>
             {% else %}
-            <div class="social-empty" style="padding:30px 20px;">
-                <div class="ic" style="width:48px;height:48px;font-size:19px;"><i class="fa-regular fa-calendar"></i></div>
-                <h3 style="font-size:14px;">Nothing scheduled yet</h3>
+            <div class="social-empty sm">
+                <div class="ic"><i class="fa-regular fa-calendar"></i></div>
+                <h3>Nothing scheduled yet</h3>
                 <p>Compose a post and pick a time — it’ll show up here and on the calendar.</p>
                 <div class="actions"><a href="{{ url_for('social.compose', client=cq) }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> Create a post</a></div>
             </div>
@@ -187,7 +185,7 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="social-card-body"><p class="empty-text" style="margin:0;">No activity yet.</p></div>
+            <div class="social-card-body"><p class="empty-text">No activity yet.</p></div>
             {% endif %}
         </div>
     </div>
@@ -196,14 +194,14 @@
         {# ---- Connected accounts summary ---- #}
         <div class="social-card">
             <div class="social-card-head">
-                <h3><i class="fa-solid fa-plug"></i> Channels</h3>
-                <a class="social-card-link" href="{{ url_for('social.accounts') }}">Manage <i class="fa-solid fa-arrow-right"></i></a>
+                <h2><i class="fa-solid fa-plug"></i> Channels</h2>
+                <div class="social-card-tools"><a class="social-card-link" href="{{ url_for('social.accounts') }}">Manage <i class="fa-solid fa-arrow-right"></i></a></div>
             </div>
             <div class="sp-list">
                 {% for g in groups %}
                 {% set a = g.account %}
-                <div class="sp-list-item" style="cursor:default;">
-                    <div class="account-avatar pf-{{ a.platform }}" style="width:36px;height:36px;font-size:15px;border-radius:10px;">
+                <div class="sp-list-item is-static">
+                    <div class="channel-avatar sm pf-{{ a.platform }}">
                         <i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i>
                     </div>
                     <div class="sp-list-body">
@@ -217,15 +215,15 @@
                 </div>
                 {% endfor %}
             </div>
-            <div class="social-card-body" style="border-top:1px solid var(--color-border);">
+            <div class="social-card-body is-footer">
                 {% if has_facebook %}
-                <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false" style="margin:0;">
-                    <button type="submit" class="btn btn-secondary" style="width:100%;">
+                <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false" class="u-full">
+                    <button type="submit" class="btn btn-secondary u-full">
                         <i class="fa-brands fa-instagram"></i> Refresh linked Instagram
                     </button>
                 </form>
                 {% else %}
-                <a href="{{ url_for('social.accounts') }}" class="btn btn-secondary" style="width:100%;">
+                <a href="{{ url_for('social.accounts') }}" class="btn btn-secondary u-full">
                     <i class="fa-solid fa-plus"></i> Add a channel
                 </a>
                 {% endif %}
@@ -234,7 +232,7 @@
 
         {# ---- Quick actions ---- #}
         <div class="social-card">
-            <div class="social-card-head"><h3><i class="fa-solid fa-bolt"></i> Quick actions</h3></div>
+            <div class="social-card-head"><h2><i class="fa-solid fa-bolt"></i> Quick actions</h2></div>
             <div class="social-card-body">
                 <div class="quick-actions">
                     <a class="quick-action" href="{{ url_for('social.compose', client=cq) }}"><i class="fa-solid fa-pen-to-square"></i> New post</a>

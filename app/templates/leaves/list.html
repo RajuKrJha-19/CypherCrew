@@ -31,7 +31,7 @@
         {% endif %}
         {% endwith %}
 
-        {% set can_manage = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
+        {% set can_manage = can_manage_leaves(current_user) %}
 
         <div class="dashboard-grid {% if not can_manage %}dashboard-grid-single{% endif %}">
 

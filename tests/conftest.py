@@ -199,3 +199,267 @@ def make_target(session):
         return acct, post, target
 
     return _make
+
+
+# ======================================================================
+# Users, roles and permissions
+#
+# The engine fixtures above deliberately never touch a business-domain
+# table. These do - they have to create real users - so they are fenced
+# two ways: every account they make carries the PYTEST_EMAIL_PREFIX, and
+# cleanup only ever deletes rows matching it. DATABASE_URL is shared with
+# the developer's own database, and a naive "DELETE FROM users" here would
+# take their account and every task hanging off it.
+# ======================================================================
+
+#: Every account these tests create starts with this. Nothing without it
+#: is ever deleted.
+PYTEST_EMAIL_PREFIX = "pytest-role-"
+
+
+@pytest.fixture(scope="session")
+def permission_catalog(app):
+    """The permission rows, seeded once. Uses seed_permissions() rather
+    than seed_database() so the DEFAULT_ADMIN_* environment variables are
+    not needed just to run the suite."""
+    from app.seed import seed_permissions
+
+    with app.app_context():
+        seed_permissions()
+
+    yield
+
+
+def _delete_children_of(table, ids):
+    """Delete every row in every table holding a foreign key to
+    `table`.`id` with one of these ids."""
+    from sqlalchemy import inspect, text
+
+    if not ids:
+        return
+
+    inspector = inspect(_db.engine)
+    id_list = ", ".join(str(int(i)) for i in ids)
+
+    for other in inspector.get_table_names():
+        for fk in inspector.get_foreign_keys(other):
+            if fk.get("referred_table") != table:
+                continue
+            for column in fk.get("constrained_columns", []):
+                _db.session.execute(text(
+                    f"DELETE FROM {other} WHERE {column} IN ({id_list})"
+                ))
+
+
+def _purge_test_rows():
+    """Remove everything these fixtures create, in dependency order.
+
+    Tasks first: a task holds a foreign key to its assignee, so a leftover
+    from a test that failed part-way through would otherwise block every
+    later run's user cleanup - and the cleanup is the only thing keeping
+    this suite from touching the developer's own account.
+    """
+    from app.models import (
+        Client, ClientDeliverable, ClientMonthlyTarget, Task, TaskComment,
+        User, UserPermission,
+    )
+
+    task_ids = [
+        row.id for row in _db.session.query(Task.id)
+        .filter(Task.title.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
+    ]
+
+    if task_ids:
+        # Whatever hangs off a task - comments, the activity trail, files -
+        # has to go first. Asking the database which tables reference
+        # `tasks` beats keeping a hand-written list in step with the
+        # schema: commenting alone writes to two of them.
+        _delete_children_of("tasks", task_ids)
+
+        Task.query.filter(
+            Task.id.in_(task_ids)
+        ).delete(synchronize_session=False)
+
+    client_ids = [
+        row.id for row in _db.session.query(Client.id)
+        .filter(Client.client_name.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
+    ]
+
+    if client_ids:
+        target_ids = [
+            row.id for row in _db.session.query(ClientMonthlyTarget.id)
+            .filter(ClientMonthlyTarget.client_id.in_(client_ids)).all()
+        ]
+        if target_ids:
+            ClientDeliverable.query.filter(
+                ClientDeliverable.monthly_target_id.in_(target_ids)
+            ).delete(synchronize_session=False)
+            ClientMonthlyTarget.query.filter(
+                ClientMonthlyTarget.id.in_(target_ids)
+            ).delete(synchronize_session=False)
+
+        Client.query.filter(
+            Client.id.in_(client_ids)
+        ).delete(synchronize_session=False)
+
+    user_ids = [
+        row.id for row in
+        _db.session.query(User.id)
+        .filter(User.email.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
+    ]
+
+    if user_ids:
+        UserPermission.query.filter(
+            UserPermission.user_id.in_(user_ids)
+        ).delete(synchronize_session=False)
+        UserPermission.query.filter(
+            UserPermission.granted_by_id.in_(user_ids)
+        ).delete(synchronize_session=False)
+        User.query.filter(
+            User.id.in_(user_ids)
+        ).delete(synchronize_session=False)
+
+    _db.session.commit()
+
+
+@pytest.fixture()
+def make_user(app, permission_catalog):
+    """Factory: make_user(role, permissions=[...]) -> User.
+
+    Yields inside an app context so the returned objects stay attached to
+    a live session for the duration of the test.
+    """
+    from werkzeug.security import generate_password_hash
+
+    from app.models import Permission, User, UserPermission
+
+    with app.app_context():
+        _purge_test_rows()
+
+        counter = {"n": 0}
+
+        def _make(role, permissions=(), status="active", name=None):
+            counter["n"] += 1
+            n = counter["n"]
+
+            user = User(
+                name=name or f"Test {role} {n}",
+                email=f"{PYTEST_EMAIL_PREFIX}{n}@example.invalid",
+                phone="0000000000",
+                password_hash=generate_password_hash("not-a-real-password"),
+                role=role,
+                status=status,
+            )
+            _db.session.add(user)
+            _db.session.flush()
+
+            for code in permissions:
+                permission = Permission.query.filter_by(code=code).first()
+                assert permission is not None, f"unseeded permission {code}"
+                _db.session.add(UserPermission(
+                    user_id=user.id, permission_id=permission.id,
+                ))
+
+            _db.session.commit()
+            return user
+
+        yield _make
+
+        _purge_test_rows()
+
+
+@pytest.fixture()
+def login(client):
+    """Sign a user in by writing the Flask-Login session directly, so the
+    permission tests do not depend on the login form or on rate limits."""
+    from flask import g
+
+    def _login(user):
+        with client.session_transaction() as session:
+            session["_user_id"] = str(user.id)
+            session["_fresh"] = True
+
+        # Flask-Login caches the resolved user on `g`, and `g` belongs to
+        # the APP context - which a test holding its own app_context()
+        # keeps open across several requests. Without this, switching user
+        # mid-test silently keeps serving the first one.
+        g.pop("_login_user", None)
+
+        return client
+
+    return _login
+
+
+@pytest.fixture(autouse=True)
+def _no_csrf(app):
+    """Forms in tests post without a token.
+
+    CSRF is exercised by csrf.js and the real browser flow; making every
+    test thread a token through would test Flask-WTF rather than this
+    application's authorisation rules.
+    """
+    previous = app.config.get("WTF_CSRF_ENABLED", True)
+    app.config["WTF_CSRF_ENABLED"] = False
+    yield
+    app.config["WTF_CSRF_ENABLED"] = previous
+
+
+@pytest.fixture()
+def make_task(app, make_user):
+    """Factory: make_task(assignee) -> Task, on a throwaway client.
+
+    tasks.client_id is NOT NULL, so a task needs a client even when the
+    test only cares about who may read it. Both are prefixed and removed
+    afterwards, like the users.
+    """
+    from app.models import (
+        Client, ClientDeliverable, ClientMonthlyTarget, Task, TaskComment,
+    )
+
+    with app.app_context():
+
+        def _make(assignee, title="pytest-role-task"):
+            # A task needs a client AND a deliverable - both columns are
+            # NOT NULL - so the whole little chain gets built and torn
+            # down again.
+            client = Client(
+                client_name=f"{PYTEST_EMAIL_PREFIX}client",
+                status="active",
+            )
+            _db.session.add(client)
+            _db.session.flush()
+
+            target = ClientMonthlyTarget(
+                client_id=client.id, month=1, year=2026,
+            )
+            _db.session.add(target)
+            _db.session.flush()
+
+            deliverable = ClientDeliverable(
+                monthly_target_id=target.id,
+                service_name="Testing",
+                deliverable_name="pytest deliverable",
+            )
+            _db.session.add(deliverable)
+            _db.session.flush()
+
+            task = Task(
+                title=title,
+                status="Assigned",
+                client_id=client.id,
+                deliverable_id=deliverable.id,
+                assigned_to_id=assignee.id,
+                created_by_id=assignee.id,
+                deadline=datetime.utcnow() + timedelta(days=2),
+            )
+            _db.session.add(task)
+            _db.session.commit()
+
+            return task
+
+        yield _make
+
+        # One cleanup path, shared with the user fixture: it walks the
+        # foreign keys, so a comment or an activity row written by the
+        # test itself cannot wedge the delete.
+        _purge_test_rows()

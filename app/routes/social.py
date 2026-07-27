@@ -31,8 +31,8 @@ from app.social.services import (
 from app.social.services import engage as engage_svc
 from app.social.services.accounts import AccountManager
 from app.utils.permissions import (
-    can_connect_social_accounts, can_manage_social_engine, can_use_social,
-    has_permission,
+    can_connect_social_accounts, can_manage_social_engine, can_publish,
+    can_use_social, has_permission,
 )
 from app.utils.social_platforms import (
     PLATFORMS, label as platform_label, parse_platforms,
@@ -72,6 +72,20 @@ def _connectable_keys():
     Instagram is excluded - it is discovered through the Facebook consent."""
     return [k for k in registry.keys()
             if getattr(registry.get(k), "connectable", True)]
+
+
+def _simulated_keys():
+    """Platforms currently served by the SimulationProvider rather than a
+    real adapter.
+
+    Surfaced in the UI (a "Demo" badge) because the two are otherwise
+    indistinguishable once a channel is connected: the connect flow, the
+    composer, the queue and the published state all behave identically, and
+    a post to a simulated channel reports success without anything reaching
+    the platform. Someone has to be told which is which, and the page where
+    channels are connected is where they'll look."""
+    return {k for k, p in registry.all().items()
+            if getattr(p, "is_simulation", False)}
 
 
 def _grouped_accounts(accounts):
@@ -429,14 +443,14 @@ def index():
         platforms=PLATFORMS,
         available=registry.keys(),
         connectable=_connectable_keys(),
+        simulated=_simulated_keys(),
         status=engine_status.engine_status(),
         upcoming=upcoming,
         recent=recent,
         published_today=published_today,
         drafts_count=drafts_count,
         pending_approval=pending_approval,
-        can_approve=(has_permission(current_user, "approve_tasks")
-                     or has_permission(current_user, "publish_tasks")),
+        can_approve=can_publish(current_user),
         has_facebook=any(a.platform == "facebook" for a in accounts),
         to_ist=_to_ist_input,
     )
@@ -454,6 +468,7 @@ def accounts():
         platforms=PLATFORMS,
         available=registry.keys(),
         connectable=_connectable_keys(),
+        simulated=_simulated_keys(),
         clients=_studio_clients(),
         has_facebook=any(a.platform == "facebook" for a in accts),
         has_instagram=any(a.platform == "instagram" for a in accts),
@@ -555,8 +570,11 @@ def analytics():
 # ----------------------------------------------------------------------
 
 def _can_approve():
-    return (has_permission(current_user, "approve_tasks")
-            or has_permission(current_user, "publish_tasks"))
+    # Approving a post is the client-facing sign-off, so it is the
+    # publish permission alone. It used to accept `approve_tasks` too,
+    # which is now the craft gate on the task board - a senior editor
+    # reviewing a cut has no business releasing a client's post.
+    return can_publish(current_user)
 
 
 def _notify_submit(post):
@@ -936,6 +954,21 @@ def move_target(target_id):
     return jsonify(ok=True, when=_to_ist_display(target.scheduled_for))
 
 
+def _back_to(post_id):
+    """Where a remove should return to.
+
+    Taking a post down is something you do from the Published list as
+    often as from the post itself, and bouncing to the post page each time
+    loses the list you were working through. The caller names the screen
+    with a token rather than a URL - a raw `next=` parameter here would be
+    an open redirect on a button that deletes things.
+    """
+    if request.form.get("back") == "history":
+        return redirect(url_for("social.history", client=_client_arg()))
+
+    return redirect(url_for("social.post_detail", post_id=post_id))
+
+
 @social_bp.route("/targets/<int:target_id>/remove", methods=["POST"])
 @login_required
 def remove_target(target_id):
@@ -946,15 +979,13 @@ def remove_target(target_id):
     target = SocialPostTarget.query.get_or_404(target_id)
     if target.status != "published":
         flash("Only a published post can be removed.", "error")
-        return redirect(url_for("social.post_detail",
-                                post_id=target.social_post_id))
+        return _back_to(target.social_post_id)
     note = lifecycle.remove_target(target, actor_id=current_user.id)
     lifecycle._rollup_removed(target.post)
     db.session.commit()
-    flash(note or f"Removed the {target.platform} post.",
+    flash(note or f"Removed the {platform_label(target.platform)} post.",
           "info" if note else "success")
-    return redirect(url_for("social.post_detail",
-                            post_id=target.social_post_id))
+    return _back_to(target.social_post_id)
 
 
 @social_bp.route("/posts/<int:post_id>/remove", methods=["POST"])
@@ -963,17 +994,26 @@ def remove_post(post_id):
     """Remove every published platform of a post at once."""
     _guard()
     post = SocialPost.query.get_or_404(post_id)
+
+    live = [t for t in post.targets if t.status == "published"]
+
+    if not live:
+        flash("Nothing to remove - none of this post's platforms are live.",
+              "error")
+        return _back_to(post.id)
+
     notes = []
-    for target in post.targets:
-        if target.status == "published":
-            n = lifecycle.remove_target(target, actor_id=current_user.id)
-            if n:
-                notes.append(n)
+    for target in live:
+        n = lifecycle.remove_target(target, actor_id=current_user.id)
+        if n:
+            notes.append(n)
+
     lifecycle._rollup_removed(post)
     db.session.commit()
-    flash(" ".join(notes) or "Removed from all platforms.",
+    flash(" ".join(notes)
+          or f"Removed from {len(live)} platform(s).",
           "info" if notes else "success")
-    return redirect(url_for("social.post_detail", post_id=post.id))
+    return _back_to(post.id)
 
 
 @social_bp.route("/history/sync", methods=["POST"])
@@ -1350,8 +1390,7 @@ def post_detail(post_id):
         post=post,
         problems=problems,
         media_previews=media_previews,
-        can_approve=has_permission(current_user, "approve_tasks")
-        or has_permission(current_user, "publish_tasks"),
+        can_approve=can_publish(current_user),
         to_ist=_to_ist_input,
         to_ist_display=_to_ist_display,
     )
@@ -1429,8 +1468,7 @@ def submit_post(post_id):
 @social_bp.route("/posts/<int:post_id>/approve", methods=["POST"])
 @login_required
 def approve_post(post_id):
-    if not (has_permission(current_user, "approve_tasks")
-            or has_permission(current_user, "publish_tasks")):
+    if not can_publish(current_user):
         abort(403)
     post = SocialPost.query.get_or_404(post_id)
     approval.approve_post(post, current_user.id)
@@ -1449,8 +1487,7 @@ def approve_post(post_id):
 @social_bp.route("/posts/<int:post_id>/reject", methods=["POST"])
 @login_required
 def reject_post(post_id):
-    if not (has_permission(current_user, "approve_tasks")
-            or has_permission(current_user, "publish_tasks")):
+    if not can_publish(current_user):
         abort(403)
     post = SocialPost.query.get_or_404(post_id)
     reason = (request.form.get("reason") or "").strip()

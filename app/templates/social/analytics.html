@@ -1,5 +1,5 @@
 {% extends "base_studio.html" %}
-{% block title %}Analytics · Social Publishing | CypherCrew{% endblock %}
+{% block title %}Analytics · Social Studio | CypherCrew{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -51,14 +51,13 @@
 </div>
 
 {% if accounts %}
-<div class="social-card" style="margin-top:20px;">
+<div class="social-card studio-section">
     <div class="social-card-head"><h2><i class="fa-solid fa-plug"></i> Channels that will report</h2></div>
     <div class="social-card-body">
-        <div class="sp-list" style="gap:0;">
-            {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
+        <div class="sp-list">
             {% for a in accounts %}
-            <div class="sp-list-item" style="cursor:default;padding-left:0;padding-right:0;">
-                <span class="pf-chip {{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ a.platform|capitalize }}</span>
+            <div class="sp-list-item is-static">
+                <span class="pf-chip {{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(a.platform, a.platform|capitalize) }}</span>
                 <div class="sp-list-body"><span class="sp-list-title">{{ a.display_name }}</span></div>
                 <span class="sp-pill">Ready</span>
             </div>

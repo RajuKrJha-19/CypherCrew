@@ -1,7 +1,6 @@
 {% extends "base_studio.html" %}
 {% block title %}Settings · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 
 {% block content %}
 <div class="page-header">
@@ -18,10 +17,10 @@
 {% endwith %}
 
 {# ---- Publishing engine ---- #}
-<div class="social-card" style="margin-bottom:20px;">
+<div class="social-card studio-section">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-gears"></i> Publishing engine</h2>
-        <span class="sp-pill {{ 'success' if engine.enabled else 'danger' }}">{{ 'Enabled' if engine.enabled else 'Disabled' }}</span>
+        <div class="social-card-tools"><span class="sp-pill {{ 'success' if engine.enabled else 'danger' }}">{{ 'Enabled' if engine.enabled else 'Disabled' }}</span></div>
     </div>
     <div class="social-card-body">
         <div class="settings-grid">
@@ -47,7 +46,7 @@
             </div>
         </div>
         {% if is_engine_admin %}
-        <p class="connect-note" style="margin-top:14px;">
+        <p class="connect-note settings-footnote">
             <i class="fa-solid fa-screwdriver-wrench"></i>
             Engine controls (retry, requeue, force-process) live on the
             <a href="{{ url_for('social.queue', client=selected_client_id) }}">Queue</a> board.
@@ -57,27 +56,31 @@
 </div>
 
 {# ---- Saved hashtag sets ---- #}
-<div class="social-card" style="margin-bottom:20px;">
+<div class="social-card studio-section">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-hashtag"></i> Saved hashtag sets</h2>
-        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="mini-link">Create in composer</a>
+        <div class="social-card-tools">
+            <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="row-action"><i class="fa-solid fa-plus"></i> Create in composer</a>
+        </div>
     </div>
     <div class="social-card-body">
         {% if hashtag_sets %}
-        <div class="table-card" style="border:0;box-shadow:none;">
+        <div class="table-card studio-table">
             <table>
-                <thead><tr><th>Name</th><th>Scope</th><th>Hashtags</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Scope</th><th>Hashtags</th><th class="u-right">Action</th></tr></thead>
                 <tbody>
                     {% for hs in hashtag_sets %}
                     <tr>
                         <td><strong>{{ hs.name }}</strong></td>
                         <td>{{ hs.client.client_name if hs.client else 'Agency-wide' }}</td>
-                        <td style="color:var(--color-text-muted);font-size:12.5px;max-width:420px;">{{ hs.hashtags }}</td>
-                        <td style="text-align:right;">
-                            <form method="POST" action="{{ url_for('social.delete_hashtag_set', set_id=hs.id, client=selected_client_id) }}" data-turbo="false" style="margin:0;"
+                        <td class="t-muted t-sm settings-tags">{{ hs.hashtags }}</td>
+                        <td>
+                            <div class="row-actions">
+                            <form method="POST" action="{{ url_for('social.delete_hashtag_set', set_id=hs.id, client=selected_client_id) }}" data-turbo="false"
                                   onsubmit="return confirm('Delete the “{{ hs.name }}” hashtag set?');">
-                                <button type="submit" class="mini-link" style="color:var(--color-danger);"><i class="fa-solid fa-trash"></i> Delete</button>
+                                <button type="submit" class="row-action danger"><i class="fa-solid fa-trash"></i> Delete</button>
                             </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -85,7 +88,7 @@
             </table>
         </div>
         {% else %}
-        <p class="connect-note" style="margin:0;">No saved hashtag sets yet. In the composer, type your hashtags and click <em>Save as set</em> to reuse them across posts.</p>
+        <p class="connect-note">No saved hashtag sets yet. In the composer, type your hashtags and click <em>Save as set</em> to reuse them across posts.</p>
         {% endif %}
     </div>
 </div>
@@ -94,20 +97,22 @@
 <div class="social-card">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-plug"></i> Connected channels</h2>
-        <a href="{{ url_for('social.accounts') }}" class="mini-link">Manage accounts</a>
+        <div class="social-card-tools">
+            <a href="{{ url_for('social.accounts') }}" class="row-action"><i class="fa-solid fa-sliders"></i> Manage accounts</a>
+        </div>
     </div>
     <div class="social-card-body">
         {% if accounts %}
-        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+        <div class="chip-row">
             {% for a in accounts %}
-            <span class="pf-chip {{ a.platform }}" style="padding:6px 12px;">
+            <span class="pf-chip {{ a.platform }} lg">
                 <i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ a.display_name }}
-                {% if a.status != 'active' %}<span class="st-dot {{ a.status }}" style="margin-left:6px;"></span>{% endif %}
+                {% if a.status != 'active' %}<span class="st-dot {{ a.status }}"></span>{% endif %}
             </span>
             {% endfor %}
         </div>
         {% else %}
-        <p class="connect-note" style="margin:0;">No channels connected yet. Head to <a href="{{ url_for('social.accounts') }}">Accounts</a> to connect Facebook &amp; Instagram.</p>
+        <p class="connect-note">No channels connected yet. Head to <a href="{{ url_for('social.accounts') }}">Accounts</a> to connect Facebook &amp; Instagram.</p>
         {% endif %}
     </div>
 </div>

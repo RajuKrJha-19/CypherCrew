@@ -98,6 +98,34 @@ class TaskTransferRequest(db.Model):
             status=cls.PENDING,
         ).first()
 
+    @classmethod
+    def is_pending_party(cls, task_id, user_id):
+        """Is this user on either side of a live request for this task?
+
+        Both sides, not just the person being asked: the one who opened
+        the request has to be able to watch it, and the recipient has to
+        be able to reach the task at all - the Accept and Decline buttons
+        live on the task page, and a transfer recipient is by definition
+        not the assignee. Without this the notification they are sent
+        opens a page they are bounced off, and the transfer can never be
+        answered.
+
+        Deliberately scoped to PENDING, so the access expires the moment
+        the request is accepted, declined or cancelled. That is why this
+        is a rule rather than a row in task_visibility: nothing has to
+        remember to take it away again.
+        """
+        if not task_id or not user_id:
+            return False
+
+        return db.session.query(
+            cls.query.filter(
+                cls.task_id == task_id,
+                cls.status == cls.PENDING,
+                db.or_(cls.to_user_id == user_id, cls.from_user_id == user_id),
+            ).exists()
+        ).scalar()
+
     def __repr__(self):
         return (
             f"<TaskTransferRequest task={self.task_id} "

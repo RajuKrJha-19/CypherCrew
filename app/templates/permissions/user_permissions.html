@@ -1,6 +1,6 @@
 {% extends "base_app.html" %}
 
-{% block title %}Permissions{% endblock %}
+{% block title %}{{ user.name }} · Permissions{% endblock %}
 
 {% block body_class %}ds-screen{% endblock %}
 
@@ -8,10 +8,14 @@
 <div class="page-header">
     <div>
         <h1>{{ user.name }}</h1>
-        <p>Manage user permissions</p>
+        <p>
+            <span class="profile-role-badge {{ role_badge_class(user.role) }}">{{ role_label(user.role) }}</span>
+            {{ user.email }}
+        </p>
     </div>
 
     <div class="top-actions">
+        <a href="{{ url_for('permissions.list_permissions') }}" class="btn btn-secondary">← All users</a>
     </div>
 </div>
 
@@ -23,59 +27,99 @@
 {% endif %}
 {% endwith %}
 
+{% if is_owner_account %}
+<p class="form-note">
+    <i class="fa-solid fa-circle-info"></i>
+    The owner has every permission unconditionally, and holds no
+    permission rows at all - that is what makes the account impossible to
+    lock out. These checkboxes do not restrict them.
+</p>
+{% endif %}
+
+{#
+    The diff against the role's defaults, not a raw count. "Senior Video
+    Editor, +1 / -1" is the sentence somebody actually needs when they
+    open this page; how many boxes are ticked is not.
+#}
+<div class="form-card perm-summary">
+    <div>
+        <strong>{{ role_label(user.role) }} defaults</strong>
+        {% if added or removed %}
+        <span class="perm-diff">
+            {% if added %}<span class="perm-added">+{{ added|length }} added</span>{% endif %}
+            {% if removed %}<span class="perm-removed">−{{ removed|length }} removed</span>{% endif %}
+        </span>
+        {% else %}
+        <span class="perm-diff"><span class="perm-clean">matching exactly</span></span>
+        {% endif %}
+    </div>
+
+    {% if not is_owner_account %}
+    {# Its own form, and POST-only: applying defaults replaces the whole
+       set, so it must not be a button that a stray Enter inside the
+       checkbox form below could reach. #}
+    <form method="POST"
+          action="{{ url_for('permissions.apply_defaults', user_id=user.id) }}"
+          onsubmit="return confirm('Reset {{ user.name }} to the {{ role_label(user.role) }} defaults? Any custom permissions will be removed.')"
+          style="margin:0;">
+        <button type="submit" class="btn btn-secondary">
+            <i class="fa-solid fa-rotate-left"></i> Apply role defaults
+        </button>
+    </form>
+    {% endif %}
+</div>
+
 <div class="form-card">
 
 <form method="POST">
 
-    {% if user.role == "super_admin" %}
-    <p class="form-note">
-        <i class="fa-solid fa-circle-info"></i>
-        Super admins already have every permission, so these checkboxes
-        do not restrict them.
-    </p>
-    {% else %}
     <p class="form-note">
         <i class="fa-solid fa-circle-info"></i>
         Anything left unticked stays hidden for this user. Changes apply
         the next time they load a page.
     </p>
-    {% endif %}
 
     {#
-        The description sits inline rather than in a tooltip: this is a
-        list of consequential choices, and you have to read them to
-        decide, which is exactly what a hover-only hint prevents.
+        Descriptions sit inline rather than in a tooltip: this is a list of
+        consequential choices, and you have to read them to decide, which
+        is exactly what a hover-only hint prevents.
     #}
-    <div class="permission-list">
+    {% for group_label, rows in groups %}
+    <fieldset class="permission-group">
+        <legend>{{ group_label }}</legend>
 
-        {% for permission in permissions %}
+        <div class="permission-list">
+            {% for row in rows %}
+            <label class="permission-item{% if row.locked %} is-locked{% endif %}">
 
-        <label class="permission-item">
+                <input
+                    type="checkbox"
+                    name="permissions"
+                    value="{{ row.code }}"
+                    {% if row.held %}checked{% endif %}
+                    {% if row.locked %}disabled{% endif %}
+                >
 
-            <input
-                type="checkbox"
-                name="permissions"
-                value="{{ permission.id }}"
-                {% if permission.id in assigned %}checked{% endif %}
-            >
+                <span class="permission-text">
+                    <strong>
+                        {{ row.name }}
+                        {% if row.is_default %}<span class="perm-chip">Role default</span>{% endif %}
+                        {% if row.locked %}<span class="perm-chip locked">Owner only</span>{% endif %}
+                    </strong>
 
-            <span class="permission-text">
-                <strong>{{ permission.name }}</strong>
+                    {% if row.description %}
+                    <small>{{ row.description }}</small>
+                    {% endif %}
+                </span>
 
-                {% set note = permission_description(permission.code) %}
-                {% if note %}
-                <small>{{ note }}</small>
-                {% endif %}
-            </span>
+            </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+    {% endfor %}
 
-        </label>
-
-        {% endfor %}
-
-    </div>
-
-    <button type="submit">
-        Save Permissions
+    <button type="submit" class="btn">
+        <i class="fa-solid fa-check"></i> Save permissions
     </button>
 
 </form>

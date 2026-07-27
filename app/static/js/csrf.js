@@ -12,6 +12,14 @@
       2. submit injector - on any same-origin non-GET form submission, adds
          a hidden csrf_token field if one isn't already there. Covers
          native, non-fetch form posts.
+      3. form.submit() patch - the same injection, for code that submits a
+         form programmatically. This one is not optional: calling
+         form.submit() fires NO submit event, so mechanism 2 never sees it
+         and the POST goes out with no token at all. That is what made the
+         "Serves client" dropdown on the Channels page fail with "Your
+         session timed out"; the pattern (onchange="this.form.submit()")
+         is used on filter bars across the app, so it is fixed here at the
+         prototype rather than call site by call site.
 
     The token comes from <meta name="csrf-token"> in the head, rendered by
     the server on every page.
@@ -65,10 +73,7 @@
         };
     }
 
-    // 2) submit injector (capture phase, so it runs before Turbo's own
-    // submit handler and the field is present when Turbo serialises it) ---
-    document.addEventListener("submit", function (e) {
-        var form = e.target;
+    function injectField(form) {
         if (!form || form.tagName !== "FORM") return;
 
         var method = form.getAttribute("method") || "GET";
@@ -82,5 +87,21 @@
         input.name = "csrf_token";
         input.value = token();
         form.appendChild(input);
+    }
+
+    // 2) submit injector (capture phase, so it runs before Turbo's own
+    // submit handler and the field is present when Turbo serialises it) ---
+    document.addEventListener("submit", function (e) {
+        injectField(e.target);
     }, true);
+
+    // 3) form.submit() patch - see the header. Same injection, on the path
+    // that never reaches listener 2. -----------------------------------
+    if (window.HTMLFormElement && HTMLFormElement.prototype.submit) {
+        var nativeSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function () {
+            injectField(this);
+            return nativeSubmit.apply(this, arguments);
+        };
+    }
 })();

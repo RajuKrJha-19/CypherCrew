@@ -6,6 +6,8 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import Leave, User
 from app.utils.permissions import has_permission
+from app.utils.permissions import can_manage_leaves as _can_manage_leaves
+from app.utils import roles
 from app.utils.timezone import ist_now
 
 
@@ -17,10 +19,10 @@ leaves_bp = Blueprint(
 
 
 def can_manage_leaves():
-    return (
-        has_permission(current_user, "manage_tasks")
-        or current_user.role in ["admin", "super_admin"]
-    )
+    # The rule itself lives in utils/permissions with every other
+    # capability - this used to be "manage_tasks OR admin", which quietly
+    # handed people-operations powers to anyone made a team lead.
+    return _can_manage_leaves(current_user)
 
 
 @leaves_bp.route("/", methods=["GET", "POST"])
@@ -29,7 +31,7 @@ def list_leaves():
 
     users = User.query.filter(
         User.status == "active",
-        User.role.in_(["super_admin", "admin", "employee"])
+        User.role.in_(roles.ALL_ROLE_VALUES)
     ).order_by(User.name.asc()).all()
 
     if request.method == "POST":

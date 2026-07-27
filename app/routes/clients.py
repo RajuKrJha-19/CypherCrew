@@ -15,6 +15,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import User, Client, ClientMonthlyTarget, ClientDeliverable, Task, ClientAsset
 from app.utils.permissions import has_permission, can_manage_clients
+from app.utils import roles
 from app.utils.timezone import ist_now
 from app.utils import client_assets as client_asset_catalog
 from app.storage.storage_service import StorageService, StorageServiceError
@@ -94,9 +95,13 @@ def list_clients():
         error_out=False
     )
 
+    # Who may be set as a client's owning manager. Kept as its own name in
+    # the role catalog rather than "whoever is an admin", because widening
+    # it (a Senior Social Media Manager owning their own accounts, say) is
+    # a policy call and should be made there, in one visible place.
     managers = User.query.filter(
         User.status == "active",
-        User.role.in_(["admin", "super_admin"])
+        User.role.in_(roles.CLIENT_MANAGER_ROLES)
     ).order_by(User.name.asc()).all()
 
     is_filtered = bool(search or selected_status or selected_manager)
@@ -572,11 +577,36 @@ def add_client_asset(client_id):
     )
 
 
+def _asset_readable(asset):
+    """May the signed-in user fetch this brand asset?
+
+    Reading a client's assets is deliberately open to the whole team - the
+    logo, fonts and guidelines are what everyone needs to do creative work
+    (see client_detail). What was not intended is that these two routes
+    took an id and nothing else, so an asset belonging to an INACTIVE
+    client - one the list deliberately hides from everyone but a manager -
+    was still fetchable by anybody who guessed the number.
+    """
+    client = asset.client if asset is not None else None
+
+    if client is None:
+        return can_manage_clients(current_user)
+
+    if (client.status or "active") == "active":
+        return True
+
+    return can_manage_clients(current_user)
+
+
 @clients_bp.route("/assets/<int:asset_id>/preview")
 @login_required
 def preview_client_asset(asset_id):
 
     asset = ClientAsset.query.get_or_404(asset_id)
+
+    if not _asset_readable(asset):
+        flash("That asset is not available.", "error")
+        return redirect(url_for("clients.list_clients"))
 
     try:
         preview_url = StorageService().preview_url(
@@ -604,6 +634,10 @@ def preview_client_asset(asset_id):
 def download_client_asset(asset_id):
 
     asset = ClientAsset.query.get_or_404(asset_id)
+
+    if not _asset_readable(asset):
+        flash("That asset is not available.", "error")
+        return redirect(url_for("clients.list_clients"))
 
     try:
         download_url = StorageService().download_url(

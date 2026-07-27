@@ -1,7 +1,6 @@
 {% extends "base_studio.html" %}
 {% block title %}Approvals · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 
 {% block content %}
 <div class="page-header">
@@ -10,7 +9,8 @@
         <p>{% if selected_client %}Posts awaiting sign-off for {{ selected_client.client_name }}{% else %}Posts awaiting sign-off across all clients{% endif %}</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> New post</a>
+        <a href="{{ url_for('social.drafts', client=selected_client_id, status='pending_approval') }}" class="btn btn-secondary"><i class="fa-solid fa-layer-group"></i> All posts</a>
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
     </div>
 </div>
 
@@ -25,12 +25,14 @@
 <form method="POST" action="{{ url_for('social.approvals_bulk') }}" id="approvalsForm" data-turbo="false">
     <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
     {% if can_approve %}
-    <div class="approvals-toolbar">
-        <label class="cmp-radio" style="padding:0;"><input type="checkbox" id="selectAll"> Select all ({{ posts|length }})</label>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div class="studio-toolbar">
+        <label class="studio-check-label">
+            <input type="checkbox" id="selectAll" class="studio-check"> Select all ({{ posts|length }})
+        </label>
+        <div class="studio-toolbar-group">
             <input type="text" name="reason" class="approval-reason" aria-label="Reason for send-back" placeholder="Reason for send-back (optional)">
-            <button type="submit" name="action" value="approve" class="btn"><i class="fa-solid fa-check"></i> Approve selected</button>
-            <button type="submit" name="action" value="reject" class="btn btn-secondary"
+            <button type="submit" name="action" value="approve" class="btn btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+            <button type="submit" name="action" value="reject" class="btn btn-secondary btn-sm"
                     onclick="return confirm('Send the selected posts back for changes?');"><i class="fa-solid fa-rotate-left"></i> Send back</button>
         </div>
     </div>
@@ -58,7 +60,7 @@
                 {% if p.base_caption %}<p class="approval-excerpt">{{ p.base_caption[:160] }}{% if p.base_caption|length > 160 %}…{% endif %}</p>{% endif %}
             </div>
             <div class="approval-actions">
-                <a href="{{ url_for('social.post_detail', post_id=p.id) }}" class="btn btn-ghost btn-sm"><i class="fa-solid fa-eye"></i> Review</a>
+                <a href="{{ url_for('social.post_detail', post_id=p.id) }}" class="row-action"><i class="fa-solid fa-eye"></i> Review</a>
                 {% if can_approve %}
                 <button type="submit" form="single-approve-{{ p.id }}" class="btn btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
                 {% endif %}
@@ -70,7 +72,7 @@
 
 {% if can_approve %}
 {% for p in posts %}
-<form method="POST" id="single-approve-{{ p.id }}" action="{{ url_for('social.approve_post', post_id=p.id) }}" data-turbo="false" style="display:none;"></form>
+<form method="POST" id="single-approve-{{ p.id }}" action="{{ url_for('social.approve_post', post_id=p.id) }}" data-turbo="false" hidden></form>
 {% endfor %}
 {% endif %}
 
@@ -94,8 +96,8 @@
 {% endif %}
 
 {% if recently %}
-<div class="social-card" style="margin-top:20px;">
-    <div class="social-card-head"><h3><i class="fa-solid fa-circle-check"></i> Recently approved</h3></div>
+<div class="social-card studio-section">
+    <div class="social-card-head"><h2><i class="fa-solid fa-circle-check"></i> Recently approved</h2></div>
     <div class="sp-list">
         {% for p in recently %}
         <a class="sp-list-item" href="{{ url_for('social.post_detail', post_id=p.id) }}">

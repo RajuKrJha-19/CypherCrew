@@ -33,15 +33,26 @@ class User(db.Model, UserMixin):
         nullable=False
     )
 
+    #: One of app.utils.roles.ALL_ROLE_VALUES. Deliberately a plain string
+    #: with no CHECK constraint: the catalog validates on the way in (see
+    #: roles.can_assign_role), and a database constraint would turn adding
+    #: a role into a migration. Indexed because the team dashboards and
+    #: every people-picker filter on it. 50 rather than 30 - the longest
+    #: value, senior_social_media_executive, is 29 characters, and one
+    #: character of headroom is not headroom.
     role = db.Column(
-        db.String(30),
-        nullable=False
+        db.String(50),
+        nullable=False,
+        index=True
     )
 
+    #: foreign_keys is required now that user_permissions points at users
+    #: twice - once for the holder, once for whoever granted it.
     permissions = db.relationship(
         "UserPermission",
         backref="user",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        foreign_keys="UserPermission.user_id"
     )
 
     designation = db.Column(

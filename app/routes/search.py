@@ -18,10 +18,9 @@ from sqlalchemy import or_, cast, String
 
 from app.models import Task, Client, User, Note
 from app.utils.permissions import has_permission
+from app.utils import roles
 
 search_bp = Blueprint("search", __name__, url_prefix="/search")
-
-ADMIN_ROLES = ("admin", "super_admin")
 
 #: Below this length a query is too noisy to be useful - two characters
 #: is the point most directory searches start returning signal.
@@ -31,7 +30,8 @@ MIN_QUERY = 2
 def _can(permission):
     """A manager-or-permitted check, matching how the sidebar and the
     individual modules decide who may see the clients / people lists."""
-    return current_user.role in ADMIN_ROLES or has_permission(current_user, permission)
+    return roles.is_management(current_user.role) \
+        or has_permission(current_user, permission)
 
 
 def _snippet(text, length=90):
@@ -169,8 +169,8 @@ def search_users(term, limit):
             "type": "user",
             "url": url_for("users.user_performance", user_id=user.id),
             "title": user.name,
-            "subtitle": user.designation or user.role.replace("_", " ").title(),
-            "status": user.role.replace("_", " ").title(),
+            "subtitle": user.designation or roles.label(user.role),
+            "status": roles.label(user.role),
         }
         for user in rows
     ]

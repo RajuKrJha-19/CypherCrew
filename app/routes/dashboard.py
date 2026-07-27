@@ -5,7 +5,8 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.utils.timezone import ist_now
-from app.utils.permissions import has_permission
+from app.utils.permissions import has_permission, can_view_team_performance
+from app.utils import roles
 from app.utils import task_status
 from app.utils import social_platforms as social
 from app.utils.cache import ttl_cache
@@ -28,17 +29,16 @@ dashboard_bp = Blueprint(
 @dashboard_bp.route("/")
 @login_required
 def index():
+    """Send each person to the dashboard that fits their role.
 
-    if current_user.role == "super_admin":
-        return redirect(url_for("dashboard.super_admin"))
-
-    if current_user.role == "admin":
-        return redirect(url_for("dashboard.admin"))
-
-    if current_user.role == "employee":
-        return redirect(url_for("dashboard.employee"))
-
-    return redirect(url_for("auth.logout"))
+    The role catalog resolves this, and anything it does not recognise gets
+    the individual dashboard. That fallback is the whole reason this is not
+    an if-chain any more: the previous version listed exactly three roles
+    and fell through to `auth.logout`, so the first person given any other
+    role would have been signed out every time they signed in - an endless
+    login loop with no error message to explain it.
+    """
+    return redirect(url_for(roles.dashboard_endpoint(current_user.role)))
 
 
 def build_team():
@@ -94,6 +94,13 @@ def build_team():
 @dashboard_bp.route("/super-admin")
 @login_required
 def super_admin():
+
+    # Guarded, not merely unreachable. Until now the only thing keeping
+    # people off this page was that dashboard.index did not redirect them
+    # here - typing the URL was enough to read company-wide delivery
+    # figures, workload and per-person performance.
+    if not can_view_team_performance(current_user):
+        return redirect(url_for("dashboard.index"))
 
     tasks = Task.query.all()
 
@@ -156,6 +163,10 @@ def super_admin():
 @login_required
 def admin():
 
+    # Same hole as /super-admin, same fix. See that route.
+    if not can_view_team_performance(current_user):
+        return redirect(url_for("dashboard.index"))
+
     user_permissions = [
         item.permission.name
         for item in current_user.permissions
@@ -213,7 +224,7 @@ def api_overview():
     # which loop and issue one query per employee/client. Polling those
     # every few seconds is exactly the slowdown a live-refresh feature
     # should not introduce, so only this cheap overview is exposed here.
-    if current_user.role not in ["admin", "super_admin"]:
+    if not can_view_team_performance(current_user):
         return jsonify(success=False), 403
 
     overview = build_overview()
@@ -244,7 +255,11 @@ def api_my_stats():
 @login_required
 def my_tasks():
 
-    if current_user.role not in ["admin", "super_admin"] and not has_permission(current_user, "approve_tasks"):
+    # The review queue belongs to whoever reviews: the craft gate
+    # (approve_tasks), the client sign-off (publish_tasks), or an admin.
+    if not (roles.is_management(current_user.role)
+            or has_permission(current_user, "approve_tasks")
+            or has_permission(current_user, "publish_tasks")):
         return redirect(url_for("dashboard.index"))
 
     # Each review card reads the task's client, deliverable and assignee -
@@ -365,7 +380,7 @@ def build_workload():
     ]
 
     employees = User.query.filter(
-        User.role == "employee",
+        User.role.in_(roles.TEAM_MEMBER_ROLES),
         User.status == "active"
     ).order_by(User.name.asc()).all()
 
@@ -440,7 +455,7 @@ def build_workload():
 def build_company_health():
 
     employees = User.query.filter(
-        User.role == "employee",
+        User.role.in_(roles.TEAM_MEMBER_ROLES),
         User.status == "active"
     ).all()
 
@@ -516,7 +531,7 @@ def get_task_estimated_seconds(task):
 def build_live_employees():
 
     employees = User.query.filter(
-        User.role == "employee",
+        User.role.in_(roles.TEAM_MEMBER_ROLES),
         User.status == "active"
     ).order_by(
         User.name.asc()
@@ -762,7 +777,7 @@ def build_overview():
 
     active_employees = User.query.filter(
         User.status == "active",
-        User.role == "employee"
+        User.role.in_(roles.TEAM_MEMBER_ROLES)
     ).count()
 
     meetings_today = Meeting.query.filter(
@@ -1151,7 +1166,7 @@ def build_overdue_tasks():
 def build_top_employees():
 
     employees = User.query.filter(
-        User.role == "employee",
+        User.role.in_(roles.TEAM_MEMBER_ROLES),
         User.status == "active"
     ).order_by(
         User.name.asc()

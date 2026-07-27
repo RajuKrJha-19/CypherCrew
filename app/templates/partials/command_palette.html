@@ -8,16 +8,16 @@
     Built as a Jinja list piped through tojson so there are no hand-managed
     commas to break when a permission hides an entry.
 #}
-{% set cp_manage_tasks = has_permission(current_user, "manage_tasks") or current_user.role in ["admin", "super_admin"] %}
-{% set cp_review = current_user.role in ["admin", "super_admin"] or has_permission(current_user, "approve_tasks") %}
-{% set cp_reports = has_permission(current_user, "view_reports") or current_user.role in ["admin", "super_admin"] %}
+{% set cp_manage_tasks = can_assign_tasks(current_user) %}
+{% set cp_review = can_review(current_user) %}
+{% set cp_reports = has_permission(current_user, "view_reports") %}
 {# Creating a client is curation (manager-only); *reaching* the client
    list is not - everyone needs it for brand assets. Two flags, because
    one would either hide the section from the team or hand out the
    create action. #}
 {% set cp_manage_clients = can_manage_clients(current_user) %}
-{% set cp_users = has_permission(current_user, "manage_users") %}
-{% set cp_perms = has_permission(current_user, "manage_permissions") %}
+{% set cp_users = can_manage_users(current_user) %}
+{% set cp_perms = can_manage_permissions(current_user) %}
 
 {% set commands = [] %}
 

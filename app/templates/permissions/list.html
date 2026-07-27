@@ -51,13 +51,28 @@
 
 <td>{{ user.email }}</td>
 
-<td>{{ user.role }}</td>
 <td>
-    {% for item in user.permissions %}
-        <span class="tag">{{ item.permission.name }}</span>
+    <span class="profile-role-badge {{ role_badge_class(user.role) }}">{{ role_label(user.role) }}</span>
+</td>
+
+{#
+    A tag per permission was readable at twelve codes and is not at
+    eighteen. What matters at a glance is whether this person still
+    matches their role, and by how much they do not.
+#}
+<td>
+    {% set state = summary[user.id] %}
+    {% if state.owner %}
+        <span class="tag">Every permission</span>
+    {% elif state.added or state.removed %}
+        <span class="tag">Customised</span>
+        {% if state.added %}<span class="perm-added">+{{ state.added|length }}</span>{% endif %}
+        {% if state.removed %}<span class="perm-removed">−{{ state.removed|length }}</span>{% endif %}
+    {% elif state.count %}
+        <span class="tag">Role defaults ({{ state.count }})</span>
     {% else %}
-        -
-    {% endfor %}
+        <span class="perm-none">No permissions</span>
+    {% endif %}
 </td>
 
 <td>

@@ -11,6 +11,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import DailyReport, Task, User
 from app.utils.permissions import has_permission
+from app.utils import roles
 
 
 reports_bp = Blueprint(
@@ -181,7 +182,7 @@ def timesheet_csv():
         emp = r["employee"]
         writer.writerow([
             emp.name,
-            emp.role.replace("_", " ").title(),
+            roles.label(emp.role),
             r["tasks"],
             r["worked_hours"],
             r["completed"],

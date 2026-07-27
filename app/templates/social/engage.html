@@ -1,7 +1,6 @@
 {% extends "base_studio.html" %}
 {% block title %}Engage · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
 
 {% block content %}
 <div class="page-header">
@@ -10,7 +9,7 @@
         <p>{% if selected_client %}Comments on {{ selected_client.client_name }}'s published posts{% else %}Comments across every published post{% endif %} — reply without leaving the Studio</p>
     </div>
     <div class="top-actions">
-        <form method="POST" action="{{ url_for('social.engage_sync') }}" data-turbo="false" style="margin:0;">
+        <form method="POST" action="{{ url_for('social.engage_sync') }}" data-turbo="false">
             <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
             <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Fetch comments</button>
         </form>
@@ -23,7 +22,7 @@
 {% endfor %}
 {% endwith %}
 
-<div class="social-filters" style="margin-bottom:14px;">
+<div class="social-filters">
     <a href="{{ url_for('social.engage', client=selected_client_id, status='open') }}" class="draft-chip {{ 'on' if status_f == 'open' }}">Open{% if open_total %} · {{ open_total }}{% endif %}</a>
     <a href="{{ url_for('social.engage', client=selected_client_id, status='done') }}" class="draft-chip {{ 'on' if status_f == 'done' }}">Done</a>
 </div>
@@ -60,9 +59,11 @@
                 <input type="text" name="message" aria-label="Reply to {{ c.author_name or 'comment' }}" placeholder="Write a reply…" autocomplete="off">
                 <button type="submit" class="btn btn-sm"><i class="fa-solid fa-paper-plane"></i> Reply</button>
             </form>
-            <form method="POST" action="{{ url_for('social.engage_done', comment_id=c.id) }}" data-turbo="false" style="margin:0;">
+            <form method="POST" action="{{ url_for('social.engage_done', comment_id=c.id) }}" data-turbo="false">
                 <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
-                <button type="submit" class="mini-link">{{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
+                <button type="submit" class="row-action">
+                    <i class="fa-solid {{ 'fa-rotate-left' if status_f == 'done' else 'fa-check' }}"></i>
+                    {{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
             </form>
         </div>
     </div>

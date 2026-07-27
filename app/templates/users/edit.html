@@ -38,12 +38,30 @@
                 <label>New Password</label>
                 <input type="password" name="password" placeholder="Leave blank to keep old password">
 
-                {% if current_user.role == "super_admin" %}
+                {# Shown to anyone who may hand out at least one role, and
+                   never for your own account - changing your own role is
+                   refused server-side, in either direction. #}
+                {% set assignable = assignable_roles(current_user) %}
+                {% if assignable and user.id != current_user.id %}
                     <label>Role</label>
                     <select name="role" required>
-                        <option value="admin" {% if user.role == "admin" %}selected{% endif %}>Admin</option>
-                        <option value="employee" {% if user.role == "employee" %}selected{% endif %}>Employee</option>
+                        {% for group, group_roles in role_grouped_options(assignable) %}
+                        <optgroup label="{{ group }}">
+                            {% for role in group_roles %}
+                            <option value="{{ role.value }}" {% if user.role == role.value %}selected{% endif %}>{{ role.label }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                        {# A role this person cannot assign (or one retired
+                           from the catalog) still has to survive a save,
+                           so it stays selectable as itself. #}
+                        {% if user.role not in assignable %}
+                        <option value="{{ user.role }}" selected>{{ role_label(user.role) }} (current)</option>
+                        {% endif %}
                     </select>
+                    <small class="field-hint">Changing the role does not
+                        change existing permissions. Use Permissions →
+                        Apply role defaults for that.</small>
                 {% endif %}
 
                 <label>Designation</label>

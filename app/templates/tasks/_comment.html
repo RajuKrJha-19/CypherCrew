@@ -65,7 +65,7 @@
                 id="comment-edit-form-{{ comment.id }}"
                 style="display:none;"
             >
-                <textarea name="message" rows="3" required>{{ comment.message|linkify }}</textarea>
+                <textarea name="message" rows="3" data-emoji-field required>{{ comment.message|linkify }}</textarea>
 
                 <div class="comment-edit-actions">
                     <button type="submit">Save</button>

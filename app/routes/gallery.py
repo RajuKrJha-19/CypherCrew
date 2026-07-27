@@ -7,7 +7,7 @@ from sqlalchemy import or_, cast, String
 
 from app.extensions import db
 from app.models import TaskFile, User, Task, Client, task_visibility
-from app.utils.permissions import has_permission
+from app.utils.permissions import has_permission, can_view_all_tasks
 
 
 gallery_bp = Blueprint(
@@ -30,7 +30,7 @@ def _scope_to_viewer(query):
     directly rather than Task.visible_to.any(User...), so it never
     collides with the uploader `User` join these queries already carry.
     """
-    if has_permission(current_user, "manage_tasks"):
+    if can_view_all_tasks(current_user):
         return query
 
     return query.filter(

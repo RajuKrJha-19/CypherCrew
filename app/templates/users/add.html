@@ -38,13 +38,24 @@
                 <label>Password</label>
                 <input type="password" name="password" required>
 
+                {# Built from the role catalog and filtered to what this
+                   person may actually hand out, so the form cannot offer a
+                   choice the server will reject. The account starts with
+                   that role's default permissions. #}
                 <label>Role</label>
                 <select name="role" required>
-                    {% if current_user.role == "super_admin" %}
-                        <option value="admin">Admin</option>
-                    {% endif %}
-                    <option value="employee">Employee</option>
+                    <option value="">Select a role…</option>
+                    {% for group, group_roles in role_grouped_options(assignable_roles(current_user)) %}
+                    <optgroup label="{{ group }}">
+                        {% for role in group_roles %}
+                        <option value="{{ role.value }}">{{ role.label }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
                 </select>
+                <small class="field-hint">The role sets this person's
+                    starting permissions. You can fine-tune them afterwards
+                    from Permissions.</small>
 
                 <label>Designation</label>
                 <input type="text" name="designation" placeholder="SEO Executive, Designer, Developer">

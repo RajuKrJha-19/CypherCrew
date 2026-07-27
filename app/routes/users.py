@@ -7,7 +7,10 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import User, Task
-from app.utils import task_status
+from app.utils import roles, task_status
+from app.utils.permissions import (
+    apply_role_defaults, can_manage_users as _can_manage_users,
+)
 
 
 users_bp = Blueprint(
@@ -18,7 +21,33 @@ users_bp = Blueprint(
 
 
 def can_manage_users():
-    return current_user.role in ["super_admin", "admin"]
+    """May this person reach the user-administration screens at all?
+
+    Honours the `manage_users` permission now. It always claimed to -
+    the sidebar and the command palette both revealed the Users screen to
+    anyone holding it - but the routes tested the role instead, so the
+    grant produced a link that bounced you straight back to the dashboard.
+    """
+    return _can_manage_users(current_user)
+
+
+def may_administer(target):
+    """May the signed-in user create, edit or inspect this person?
+
+    Only downwards. The owner may administer anybody; everyone else is
+    limited to people who are not administrators themselves, so an admin
+    cannot edit a fellow admin's account (or the owner's) and cannot use
+    the edit form as a route to their own promotion.
+
+    This replaces three copies of `user.role != "employee"`, which meant
+    the same thing back when "employee" was the only non-administrator
+    role. With thirteen of them, the question is about tier, not about one
+    particular value.
+    """
+    if roles.is_owner(current_user.role):
+        return True
+
+    return not roles.is_management(getattr(target, "role", None))
 
 
 @users_bp.route("/")
@@ -114,8 +143,8 @@ def user_performance(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    if current_user.role == "admin" and user.role != "employee":
-        flash("Admin can view only employee performance.", "error")
+    if not may_administer(user):
+        flash("You can only view performance for your own team.", "error")
         return redirect(url_for("users.list_users"))
 
     now = datetime.utcnow()
@@ -246,8 +275,12 @@ def add_user():
             flash("Name, email, password and role are required.", "error")
             return redirect(url_for("users.add_user"))
 
-        if current_user.role == "admin" and role != "employee":
-            flash("Admin can create only employee accounts.", "error")
+        # The dropdown only offers roles this person may hand out, but a
+        # form post is just a string - this is what actually stops one.
+        # Previously nothing did: any value at all was written straight
+        # into the column.
+        if not roles.can_assign_role(current_user, role):
+            flash("You cannot create an account with that role.", "error")
             return redirect(url_for("users.add_user"))
 
         existing_user = User.query.filter_by(
@@ -269,9 +302,23 @@ def add_user():
         )
 
         db.session.add(user)
+        db.session.flush()
+
+        # The whole point of the role catalog: a new Senior Video Editor
+        # can review a junior's work the moment the account exists, rather
+        # than after somebody remembers to visit the permissions screen.
+        granted = apply_role_defaults(user, granted_by=current_user)
+
         db.session.commit()
 
-        flash("User created successfully.", "success")
+        if granted:
+            flash(
+                f"User created with the {roles.label(role)} defaults "
+                f"({len(granted)} permissions).",
+                "success",
+            )
+        else:
+            flash("User created successfully.", "success")
 
         return redirect(url_for("users.list_users"))
 
@@ -287,13 +334,20 @@ def edit_user(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    if user.id == current_user.id and current_user.role == "super_admin":
-        if request.method == "POST" and request.form.get("role") != "super_admin":
-            flash("You cannot downgrade your own Super Admin role.", "error")
-            return redirect(url_for("users.list_users"))
+    # Nobody changes their own role - not even the owner. It used to be
+    # phrased as "the Super Admin may not downgrade themselves", which
+    # protected the one account that could not be recreated; the general
+    # rule protects the other direction too, where an admin edits their
+    # own account into something more powerful.
+    is_self = user.id == current_user.id
 
-    if current_user.role == "admin" and user.role != "employee":
-        flash("Admin can edit only employee accounts.", "error")
+    if is_self and request.method == "POST" \
+            and request.form.get("role") not in (None, user.role):
+        flash("You cannot change your own role.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if not may_administer(user):
+        flash("You can only edit accounts below your own role.", "error")
         return redirect(url_for("users.list_users"))
 
     if request.method == "POST":
@@ -303,8 +357,15 @@ def edit_user(user_id):
         user.designation = request.form.get("designation", "").strip()
         user.status = request.form.get("status")
 
-        if current_user.role == "super_admin":
-            user.role = request.form.get("role")
+        new_role = request.form.get("role")
+
+        if new_role and new_role != user.role and not is_self:
+
+            if not roles.can_assign_role(current_user, new_role):
+                flash("You cannot assign that role.", "error")
+                return redirect(url_for("users.edit_user", user_id=user.id))
+
+            user.role = new_role
 
         password = request.form.get("password", "")
 

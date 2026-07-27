@@ -1,25 +1,23 @@
 {% extends "base_studio.html" %}
-{% block title %}Accounts · Social Publishing | CypherCrew{% endblock %}
+{% block title %}Channels · Social Studio | CypherCrew{% endblock %}
 
-{% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin'} %}
-{% set PF_LABEL = {'facebook':'Facebook','instagram':'Instagram','youtube':'YouTube','x':'X','linkedin':'LinkedIn'} %}
 {% set TYPE_LABEL = {'page':'Facebook Page','ig_business':'Instagram Business','organization':'Organization','channel':'Channel','system_user':'System user'} %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Connected accounts</h1>
-        <p>Channels CypherCrew can publish to. Instagram rides on the Facebook Page it’s linked to.</p>
+        <h1>Channels</h1>
+        <p>Where the Studio can publish. Instagram rides on the Facebook Page it’s linked to.</p>
     </div>
     <div class="top-actions">
         {% if has_facebook %}
-        <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false" style="margin:0;">
+        <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false">
             <button type="submit" class="btn btn-secondary">
                 <i class="fa-brands fa-instagram"></i> Refresh Instagram
             </button>
         </form>
         {% endif %}
-        <a href="{{ url_for('social.compose') }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
+        <a href="#connect" class="btn"><i class="fa-solid fa-plus"></i> Connect a channel</a>
     </div>
 </div>
 
@@ -31,10 +29,10 @@
 {% endwith %}
 
 {% if groups %}
-<div class="social-card" style="margin-bottom:20px;">
+<div class="social-card studio-section">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-plug"></i> Your channels</h2>
-        <span class="sp-pill info">{{ accounts|length }} connected</span>
+        <div class="social-card-tools"><span class="sp-pill info">{{ accounts|length }} connected</span></div>
     </div>
     <div class="social-card-body">
         <div class="account-grid">
@@ -42,17 +40,21 @@
             {% set a = g.account %}
             <div class="account-card">
                 <div class="account-row">
-                    <div class="account-avatar pf-{{ a.platform }}">
+                    <div class="channel-avatar pf-{{ a.platform }}">
                         <i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i>
                     </div>
                     <div class="account-info">
-                        <span class="account-name">{{ a.display_name }}</span>
+                        <span class="channel-name">{{ a.display_name }}</span>
                         <span class="account-sub">
                             <span class="st-dot {{ a.status }}"></span>
                             <span class="st-label">{{ a.status|replace('_',' ') }}</span>
                             <span class="account-type-tag">· {{ TYPE_LABEL.get(a.account_type, a.account_type) }}</span>
+                            {# A simulated channel publishes "successfully" without
+                               anything leaving the building - say so on the row,
+                               not just at connect time. #}
+                            {% if a.platform in simulated %}<span class="demo-tag" title="Demo channel: posts run through the full pipeline but nothing reaches {{ PF_LABEL.get(a.platform, a.platform) }}.">Demo</span>{% endif %}
                         </span>
-                        <span class="account-sub" style="font-size:11px;color:var(--color-text-subtle);">
+                        <span class="account-sub t-subtle">
                             <i class="fa-regular fa-clock"></i> Synced {{ a.updated_at.strftime('%d %b %Y') }}
                         </span>
                     </div>
@@ -65,7 +67,7 @@
                             <i class="fa-solid fa-chart-line"></i></a>
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=a.id) }}"
                               onsubmit="return confirm('Disconnect {{ a.display_name }}? Any Instagram account linked through it will stop publishing too.');"
-                              style="margin:0;" data-turbo="false">
+                              data-turbo="false">
                             <button type="submit" class="acct-icon-btn danger" title="Disconnect" aria-label="Disconnect account">
                                 <i class="fa-solid fa-link-slash"></i></button>
                         </form>
@@ -74,12 +76,12 @@
 
                 {% for ig in g.children %}
                 <div class="account-row is-child">
-                    <div class="account-avatar pf-instagram" style="width:36px;height:36px;font-size:15px;border-radius:10px;">
+                    <div class="channel-avatar sm pf-instagram">
                         <i class="fa-brands fa-instagram"></i>
                     </div>
                     <div class="account-info">
                         {% set ig_name = ig.display_name or ig.external_id or '' %}
-                        <span class="account-name">{{ ig_name if ig_name.startswith('@') else '@' ~ ig_name }}</span>
+                        <span class="channel-name">{{ ig_name if ig_name.startswith('@') else '@' ~ ig_name }}</span>
                         <span class="account-sub">
                             <span class="st-dot {{ ig.status }}"></span>
                             <span class="st-label">{{ ig.status|replace('_',' ') }}</span>
@@ -89,7 +91,7 @@
                     <div class="account-actions">
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=ig.id) }}"
                               onsubmit="return confirm('Disconnect {{ ig.display_name }}?');"
-                              style="margin:0;" data-turbo="false">
+                              data-turbo="false">
                             <button type="submit" class="acct-icon-btn danger" title="Disconnect Instagram" aria-label="Disconnect Instagram">
                                 <i class="fa-solid fa-link-slash"></i></button>
                         </form>
@@ -98,21 +100,26 @@
                 {% endfor %}
 
                 {% if a.platform == 'facebook' and not g.children %}
-                <div class="account-row is-child" style="justify-content:space-between;">
-                    <span class="account-sub" style="font-size:12px;">
-                        <i class="fa-brands fa-instagram" style="color:var(--sp-instagram);"></i>
+                <div class="account-row is-child is-split">
+                    <span class="account-sub">
+                        <i class="fa-brands fa-instagram pf-ink-instagram"></i>
                         No Instagram Business account linked yet
                     </span>
-                    <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false" style="margin:0;">
-                        <button class="mini-link" type="submit">Refresh</button>
+                    <form method="POST" action="{{ url_for('social.discover_instagram') }}" data-turbo="false">
+                        <button class="row-action" type="submit"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
                     </form>
                 </div>
                 {% endif %}
 
                 <div class="account-bind">
-                    <span><i class="fa-solid fa-user-tie"></i> Serves client{% if g.children %} <small style="font-weight:500;">(applies to linked Instagram too)</small>{% endif %}</span>
-                    <form method="POST" action="{{ url_for('social.set_account_client', account_id=a.id) }}" data-turbo="false" style="margin:0;">
-                        <select name="client_id" onchange="this.form.submit()" aria-label="Assign this channel to a client">
+                    <span><i class="fa-solid fa-user-tie"></i> Serves client{% if g.children %} <small>(applies to linked Instagram too)</small>{% endif %}</span>
+                    <form method="POST" action="{{ url_for('social.set_account_client', account_id=a.id) }}" data-turbo="false">
+                        {# requestSubmit(), not submit(): this is a POST, and
+                           only requestSubmit fires the submit event csrf.js
+                           listens for. (form.submit() is patched to inject
+                           the token too, but going through the real event
+                           keeps Turbo and validation in the loop.) #}
+                        <select name="client_id" onchange="this.form.requestSubmit()" aria-label="Assign this channel to a client">
                             <option value="">Agency-wide</option>
                             {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if a.client_id == c.id }}>{{ c.client_name }}</option>{% endfor %}
                         </select>
@@ -126,13 +133,13 @@
 {% endif %}
 
 {# ---- Connect a channel ---- #}
-<div class="social-card">
+<div class="social-card" id="connect">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-circle-plus"></i> Connect a channel</h2>
     </div>
     <div class="social-card-body">
         {% if not groups %}
-        <p class="social-page-lead" style="margin-top:0;">
+        <p class="social-page-lead">
             Authorize CypherCrew to publish on your behalf. You choose which Pages
             to connect during authorization — nothing is posted without approval.
         </p>
@@ -143,8 +150,9 @@
             <a class="connect-card ok" data-turbo="false" href="{{ url_for('oauth.connect', platform='facebook') }}">
                 <div class="connect-ic pf-meta"><i class="fa-brands fa-facebook"></i></div>
                 <div class="connect-body">
-                    <span class="connect-title">Facebook &amp; Instagram</span>
-                    <span class="connect-note">Pages + linked Instagram, one login</span>
+                    <span class="connect-title">Facebook &amp; Instagram{% if 'facebook' in simulated %}
+                        <span class="demo-tag" title="Demo channel: posts run through the full pipeline but nothing is sent to Facebook or Instagram. Configure META_APP_ID to connect for real.">Demo</span>{% endif %}</span>
+                    <span class="connect-note">{{ 'Demo connection — nothing is posted for real' if 'facebook' in simulated else 'Pages + linked Instagram, one login' }}</span>
                 </div>
             </a>
             {% endif %}
@@ -154,8 +162,9 @@
                     <a class="connect-card ok" data-turbo="false" href="{{ url_for('oauth.connect', platform=key) }}">
                         <div class="connect-ic pf-{{ key }}"><i class="{{ icon }}"></i></div>
                         <div class="connect-body">
-                            <span class="connect-title">{{ label }}</span>
-                            <span class="connect-note">Connect account</span>
+                            <span class="connect-title">{{ label }}{% if key in simulated %}
+                                <span class="demo-tag" title="Demo channel: posts run through the full pipeline but nothing is sent to {{ label }}. Swaps to the real connection once its API credentials are configured.">Demo</span>{% endif %}</span>
+                            <span class="connect-note">{{ 'Demo connection — nothing is posted for real' if key in simulated else 'Connect account' }}</span>
                         </div>
                     </a>
                     {% else %}
@@ -170,8 +179,8 @@
                 {% endif %}
             {% endfor %}
         </div>
-        <p class="connect-note" style="margin-top:14px; display:flex; gap:8px; align-items:flex-start;">
-            <i class="fa-brands fa-instagram" style="color:var(--sp-instagram); margin-top:2px;"></i>
+        <p class="connect-note connect-footnote">
+            <i class="fa-brands fa-instagram pf-ink-instagram"></i>
             <span><strong>Instagram</strong> is connected automatically with Facebook — an Instagram
             Business/Creator account linked to a Page you manage is discovered on connect. Linked one
             after connecting? Use <em>Refresh Instagram</em> above.</span>

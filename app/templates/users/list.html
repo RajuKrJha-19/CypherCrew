@@ -28,11 +28,15 @@
 
                 <input type="text" name="q" value="{{ search }}" placeholder="Search by name, email or designation">
 
-                <select name="role" onchange="this.form.submit()">
+                <select name="role" onchange="this.form.requestSubmit()">
                     <option value="">All Roles</option>
-                    <option value="employee" {% if selected_role=="employee" %}selected{% endif %}>Employee</option>
-                    <option value="admin" {% if selected_role=="admin" %}selected{% endif %}>Admin</option>
-                    <option value="super_admin" {% if selected_role=="super_admin" %}selected{% endif %}>Super Admin</option>
+                    {% for group, group_roles in role_grouped_options() %}
+                    <optgroup label="{{ group }}">
+                        {% for role in group_roles %}
+                        <option value="{{ role.value }}" {% if selected_role==role.value %}selected{% endif %}>{{ role.label }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
                 </select>
 
                 <select name="status" onchange="this.form.submit()">
@@ -86,7 +90,7 @@
                             </td>
                             <td>{{ user.email }}</td>
                             <td>{{ user.phone or "-" }}</td>
-                            <td>{{ user.role.replace("_", " ")|title }}</td>
+                            <td>{{ role_label(user.role) }}</td>
                             <td>{{ user.designation or "-" }}</td>
                             <td>
                                 <span class="badge {{ user.status }}">
