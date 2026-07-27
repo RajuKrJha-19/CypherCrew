@@ -166,6 +166,39 @@ class StorageService:
 
         return service_name
 
+    #: Characters no filesystem will accept in a name. The display name
+    #: ends up as the browser's download filename, so these are stripped
+    #: rather than passed through - but nothing else is: spaces and
+    #: capitalisation are kept deliberately (see _build_display_filename).
+    _FILENAME_ILLEGAL = r'\/:*?"<>|'
+
+    @classmethod
+    def _clean_filename_segment(cls, value, fallback=""):
+        """Make `value` safe inside a filename while leaving it readable.
+
+        Deliberately NOT _slugify_segment: that lowercases and hyphenates
+        ("Kargil Vijay Diwas" -> "kargil-vijay-diwas"), which is right for
+        an object key but wrong for a name a person reads in their
+        downloads folder. Here only characters a filesystem rejects are
+        removed, plus the underscore we use as the field separator - so a
+        title containing one cannot fake an extra field.
+        """
+
+        text = str(value or "").strip()
+
+        if not text:
+            return fallback
+
+        cleaned = "".join(
+            " " if ch in cls._FILENAME_ILLEGAL or ch == "_" else ch
+            for ch in text
+        )
+
+        # Collapse runs of whitespace left by the removals.
+        cleaned = " ".join(cleaned.split())
+
+        return cleaned or fallback
+
     def _build_display_filename(
         self,
         *,
@@ -174,7 +207,10 @@ class StorageService:
     ):
         """
         Build the user-facing filename shown in the gallery, task detail
-        and download prompt: TASK-<id>-<client>-<task-name>-<dd-mm-yy>.
+        and download prompt:
+
+            <task code>_<client code>_<task title>_<dd-mm-yy>.<ext>
+            1277_VMC_Kargil Vijay Diwas_26-07-26.pdf
 
         This replaces whatever name the uploader's file had - browsers
         default to "final v2 (3).psd" and every file in a task otherwise
@@ -182,13 +218,23 @@ class StorageService:
         task and the upload date makes files self-describing outside
         the app.
 
-        Uses IST (UTC+5:30) for the date, matching the rest of the
-        app's date display (see gallery._scope_to_viewer's date
-        grouping).
+        The date is the day the file is UPLOADED, not the task's own
+        date, and uses IST (UTC+5:30) to match how the rest of the app
+        displays dates (see the gallery's date grouping).
         """
 
         client = getattr(task, "client", None)
-        client_name = getattr(client, "client_name", None) if client else None
+
+        # Client.code is the curated short code, falling back to initials.
+        client_code = self._clean_filename_segment(
+            getattr(client, "code", None) if client else None,
+            fallback="CLIENT",
+        )
+
+        title = self._clean_filename_segment(
+            getattr(task, "title", None),
+            fallback="Untitled",
+        )
 
         extension = ""
 
@@ -198,11 +244,11 @@ class StorageService:
         upload_date = datetime.utcnow() + timedelta(hours=5, minutes=30)
 
         return (
-            "-".join(
+            "_".join(
                 [
-                    f"TASK-{task.task_code}",
-                    self._slugify_segment(client_name),
-                    self._slugify_segment(getattr(task, "title", None)),
+                    str(task.task_code),
+                    client_code,
+                    title,
                     upload_date.strftime("%d-%m-%y"),
                 ]
             )

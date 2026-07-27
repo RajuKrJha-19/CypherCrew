@@ -42,6 +42,7 @@ from app.models.note import (
 )
 from app.models.task_file import TaskFile
 from app.models.client_asset import ClientAsset
+from app.models.task_transfer import TaskTransferRequest
 
 # --- Social Publishing Engine ---
 from app.models.social_account import SocialAccount

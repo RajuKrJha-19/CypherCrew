@@ -99,6 +99,48 @@ def can_manage_clients(user):
     )
 
 
+def can_use_social(user):
+    """True for anyone allowed to work in Social Studio - composing,
+    scheduling and publishing posts, and the drafts/calendar/approvals
+    around them.
+
+    Both admin roles qualify outright, on top of the explicit
+    manage_social permission. Admins already count as the social team
+    everywhere else (they are notified on every task handoff, and they
+    alone operate the engine's retry/requeue machinery), so leaving them
+    locked out of the surface those notifications point at was a gap, not
+    a policy. manage_social stays as the way to hand Studio to an
+    employee who is not an admin.
+    """
+
+    if user is None:
+        return False
+
+    return (
+        user.role in ("admin", "super_admin")
+        or has_permission(user, "manage_social")
+    )
+
+
+def can_connect_social_accounts(user):
+    """True for anyone allowed to connect or disconnect the channels
+    Studio publishes to, and to bind a channel to a client.
+
+    Widened to both admin roles for the same reason as can_use_social:
+    Channels is part of the Social tab, and an admin who can compose but
+    cannot connect a Page would find half the tab dead. The explicit
+    connect_social_accounts permission still covers non-admins.
+    """
+
+    if user is None:
+        return False
+
+    return (
+        user.role in ("admin", "super_admin")
+        or has_permission(user, "connect_social_accounts")
+    )
+
+
 def can_manage_social_engine(user):
     """True for anyone allowed to operate the Social Publishing *engine* -
     the internal machinery: kicking the worker/scheduler, retrying or

@@ -36,9 +36,10 @@ from app.models import (
     TaskActivity,
     TaskSequence,
     TaskComment,
-    TaskFile
+    TaskFile,
+    TaskTransferRequest
 )
-from app.utils.permissions import has_permission
+from app.utils.permissions import can_use_social, has_permission
 from app.utils.notifications import create_notification
 from app.utils.mentions import notify_mentioned_users, find_mentioned_users
 from app.utils import task_status
@@ -3778,7 +3779,7 @@ def retry_task_publish(task_id):
     if not current_app.config.get("SOCIAL_ENGINE_ENABLED"):
         abort(404)
     if not (has_permission(current_user, "approve_tasks")
-            or has_permission(current_user, "manage_social")):
+            or can_use_social(current_user)):
         return redirect(url_for("dashboard.index"))
     task = Task.query.get_or_404(task_id)
     from app.social.services import task_link, recovery, publishing
@@ -4087,6 +4088,27 @@ def task_detail(task_id):
         TaskActivity.created_at.desc()
     ).all()
 
+    # --- Transfer request state -------------------------------------
+    # The same rule the POST route enforces, evaluated once here so the
+    # button and the route can never disagree about who may transfer.
+    pending_transfer = TaskTransferRequest.pending_for(task.id)
+
+    can_request_transfer = _transfer_blocked_reason(task, current_user) is None
+
+    transfer_candidates = []
+
+    if can_request_transfer:
+        transfer_candidates = (
+            User.query
+            .filter(
+                User.status == "active",
+                User.id != current_user.id,
+                User.role.in_(["super_admin", "admin", "employee"]),
+            )
+            .order_by(User.name.asc())
+            .all()
+        )
+
     comments = (
         TaskComment.query
         .filter_by(
@@ -4133,6 +4155,12 @@ def task_detail(task_id):
             .order_by(User.name.asc())
             .all()
         ],
+        # Transfer request state for this task: the one live request (if
+        # any) plus the people it could be handed to. Both computed here
+        # so the template only decides what to show, not who may act.
+        pending_transfer=pending_transfer,
+        can_request_transfer=can_request_transfer,
+        transfer_candidates=transfer_candidates,
         reference_files=reference_files,
         working_files=working_files,
         final_files=final_files,
@@ -5087,5 +5115,311 @@ def delete_comment(comment_id):
     db.session.commit()
 
     flash("Comment deleted.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+# ===========================
+# Task transfer requests
+#
+# An employee handing their task to a teammate. Peer-to-peer: the
+# recipient accepting is what moves the task - no manager sign-off,
+# since managers can already reassign directly. They are notified when
+# a transfer lands so a task changing hands is never invisible to
+# whoever owns delivery.
+# ===========================
+
+def _transfer_blocked_reason(task, requester):
+    """Why `requester` may not open a transfer on `task`, or None.
+
+    Returned as a message rather than a bool so the caller can say what
+    is wrong instead of a blanket "not allowed".
+    """
+
+    if task.assigned_to_id != requester.id:
+        return "Only the person a task is assigned to can transfer it."
+
+    if task.status in task_status.TERMINAL_STATUSES:
+        return f"A {task.status} task cannot be transferred."
+
+    if TaskTransferRequest.pending_for(task.id):
+        return "This task already has a transfer request awaiting a reply."
+
+    return None
+
+
+@tasks_bp.route("/<int:task_id>/transfer/request", methods=["POST"])
+@login_required
+def request_task_transfer(task_id):
+
+    task = Task.query.get_or_404(task_id)
+
+    blocked = _transfer_blocked_reason(task, current_user)
+
+    if blocked:
+        flash(blocked, "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    to_user_raw = (request.form.get("to_user_id") or "").strip()
+
+    if not to_user_raw.isdigit():
+        flash("Choose a teammate to transfer this task to.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    to_user_id = int(to_user_raw)
+
+    if to_user_id == current_user.id:
+        flash("You cannot transfer a task to yourself.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    to_user = User.query.filter_by(id=to_user_id, status="active").first()
+
+    if not to_user:
+        flash("That teammate is not available.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    message = (request.form.get("message") or "").strip() or None
+
+    transfer = TaskTransferRequest(
+        task_id=task.id,
+        from_user_id=current_user.id,
+        to_user_id=to_user.id,
+        message=message,
+    )
+    db.session.add(transfer)
+
+    activity_message = (
+        f"{current_user.name} asked {to_user.name} to take over this task."
+    )
+
+    if message:
+        activity_message += f"\nReason: {message}"
+
+    add_activity(
+        task,
+        action="transfer_requested",
+        message=activity_message,
+    )
+
+    notify_message = (
+        f"{current_user.name} wants to transfer '{task.title}' to you."
+    )
+
+    if message:
+        notify_message += f" Reason: {message}"
+
+    create_notification(
+        user_id=to_user.id,
+        title="Task transfer request",
+        message=notify_message,
+        link=url_for("tasks.task_detail", task_id=task.id),
+        actor_id=current_user.id,
+        task_id=task.id,
+        email=True,
+    )
+
+    db.session.commit()
+
+    flash(f"Transfer request sent to {to_user.name}.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/transfer/<int:transfer_id>/accept", methods=["POST"])
+@login_required
+def accept_task_transfer(transfer_id):
+
+    transfer = TaskTransferRequest.query.get_or_404(transfer_id)
+    task = transfer.task
+
+    if transfer.to_user_id != current_user.id:
+        flash("Only the person asked can accept this transfer.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    if not transfer.is_pending:
+        flash("This transfer request has already been answered.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    # Re-validated here, not just at request time: the task may have been
+    # reassigned by a manager, or closed, in the meantime - in which case
+    # honouring the old request would silently undo that.
+    if task.assigned_to_id != transfer.from_user_id:
+        transfer.status = TaskTransferRequest.CANCELLED
+        transfer.responded_at = datetime.utcnow()
+        db.session.commit()
+
+        flash(
+            "This task was reassigned since the request was sent, so the "
+            "transfer no longer applies.",
+            "error",
+        )
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    if task.status in task_status.TERMINAL_STATUSES:
+        transfer.status = TaskTransferRequest.CANCELLED
+        transfer.responded_at = datetime.utcnow()
+        db.session.commit()
+
+        flash(
+            f"This task is {task.status} and can no longer be transferred.",
+            "error",
+        )
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    previous_assignee = task.assigned_to
+    previous_name = previous_assignee.name if previous_assignee else "the previous assignee"
+
+    # Bank whatever the outgoing assignee spent in the current status, and
+    # stop a running timer, so their time is recorded against them and the
+    # new assignee starts from zero. Same treatment the automatic
+    # backup-assignee shift applies (see services/task_fallback.py).
+    pause_timer(task)
+    record_status_time(task, task.status)
+
+    task.assigned_to_id = current_user.id
+    task.employee_completed = False
+    task.employee_completed_at = None
+
+    transfer.status = TaskTransferRequest.ACCEPTED
+    transfer.responded_at = datetime.utcnow()
+
+    add_activity(
+        task,
+        action="transfer_accepted",
+        message=f"{current_user.name} accepted the transfer from {previous_name}.",
+    )
+
+    link = url_for("tasks.task_detail", task_id=task.id)
+
+    create_notification(
+        user_id=transfer.from_user_id,
+        title="Transfer accepted",
+        message=f"{current_user.name} took over '{task.title}'.",
+        link=link,
+        actor_id=current_user.id,
+        task_id=task.id,
+        email=True,
+    )
+
+    # Whoever owns delivery should know the task changed hands, even
+    # though their approval was not required.
+    watcher_id = task.created_by_id
+
+    if watcher_id and watcher_id not in (transfer.from_user_id, current_user.id):
+        create_notification(
+            user_id=watcher_id,
+            title="Task transferred",
+            message=(
+                f"'{task.title}' moved from {previous_name} "
+                f"to {current_user.name}."
+            ),
+            link=link,
+            actor_id=current_user.id,
+            task_id=task.id,
+        )
+
+    db.session.commit()
+
+    flash(f"You have taken over '{task.title}'.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/transfer/<int:transfer_id>/decline", methods=["POST"])
+@login_required
+def decline_task_transfer(transfer_id):
+
+    transfer = TaskTransferRequest.query.get_or_404(transfer_id)
+    task = transfer.task
+
+    if transfer.to_user_id != current_user.id:
+        flash("Only the person asked can decline this transfer.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    if not transfer.is_pending:
+        flash("This transfer request has already been answered.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    reason = (request.form.get("response_message") or "").strip() or None
+
+    transfer.status = TaskTransferRequest.REJECTED
+    transfer.response_message = reason
+    transfer.responded_at = datetime.utcnow()
+
+    activity_message = f"{current_user.name} declined the transfer."
+
+    if reason:
+        activity_message += f"\nReason: {reason}"
+
+    add_activity(
+        task,
+        action="transfer_declined",
+        message=activity_message,
+    )
+
+    notify_message = f"{current_user.name} declined to take '{task.title}'."
+
+    if reason:
+        notify_message += f" Reason: {reason}"
+
+    create_notification(
+        user_id=transfer.from_user_id,
+        title="Transfer declined",
+        message=notify_message,
+        link=url_for("tasks.task_detail", task_id=task.id),
+        actor_id=current_user.id,
+        task_id=task.id,
+        email=True,
+    )
+
+    db.session.commit()
+
+    flash("Transfer request declined.", "success")
+
+    return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+
+@tasks_bp.route("/transfer/<int:transfer_id>/cancel", methods=["POST"])
+@login_required
+def cancel_task_transfer(transfer_id):
+
+    transfer = TaskTransferRequest.query.get_or_404(transfer_id)
+    task = transfer.task
+
+    # The requester withdrawing, or a manager clearing a request that is
+    # blocking their own reassignment.
+    if not (
+        transfer.from_user_id == current_user.id
+        or has_permission(current_user, "manage_tasks")
+    ):
+        flash("You cannot cancel this transfer request.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    if not transfer.is_pending:
+        flash("This transfer request has already been answered.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
+
+    transfer.status = TaskTransferRequest.CANCELLED
+    transfer.responded_at = datetime.utcnow()
+
+    add_activity(
+        task,
+        action="transfer_cancelled",
+        message=f"{current_user.name} cancelled the transfer request.",
+    )
+
+    if transfer.to_user_id != current_user.id:
+        create_notification(
+            user_id=transfer.to_user_id,
+            title="Transfer request withdrawn",
+            message=f"The request to transfer '{task.title}' to you was cancelled.",
+            link=url_for("tasks.task_detail", task_id=task.id),
+            actor_id=current_user.id,
+            task_id=task.id,
+        )
+
+    db.session.commit()
+
+    flash("Transfer request cancelled.", "success")
 
     return redirect(url_for("tasks.task_detail", task_id=task.id))

@@ -157,8 +157,9 @@
     </a>
 
     {# Social Publishing Engine - only visible when the feature flag is on
-       and the viewer can manage social. #}
-    {% if config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+       and the viewer can work in Studio (both admin roles, or the explicit
+       manage_social permission). #}
+    {% if config.SOCIAL_ENGINE_ENABLED and can_use_social(current_user) %}
     <a href="{{ url_for('social.index') }}"
        class="{% if endpoint.startswith('social.') or endpoint.startswith('oauth.') %}active{% endif %}">
         <i class="fa-solid fa-share-nodes"></i>

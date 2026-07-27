@@ -15,6 +15,15 @@ class Client(db.Model):
         nullable=False
     )
 
+    #: Short client code used in uploaded-file names, e.g. "VMC" for
+    #: Venus Media Company. Optional - `code` below falls back to
+    #: initials - because it cannot be derived reliably: an
+    #: abbreviation is a naming choice ("Venus" -> "VMC"), not
+    #: something the full name always contains.
+    short_code = db.Column(
+        db.String(12)
+    )
+
     company_name = db.Column(
         db.String(150)
     )
@@ -73,6 +82,29 @@ class Client(db.Model):
     assigned_manager = db.relationship(
         "User"
     )
+
+    @property
+    def code(self):
+        """Short code for this client, for uploaded-file names.
+
+        The curated `short_code` when set, otherwise initials of the
+        client name ("Hope Plus IVF" -> "HPI"). The fallback exists so
+        a client added before this field, or one nobody has got round
+        to coding, still produces a usable filename rather than an
+        empty segment - but it is a guess, and a one-word name gives a
+        one-letter code, which is why the field is offered.
+        """
+
+        curated = (self.short_code or "").strip()
+
+        if curated:
+            return curated
+
+        words = [w for w in (self.client_name or "").split() if w[:1].isalnum()]
+
+        initials = "".join(w[0] for w in words[:4]).upper()
+
+        return initials or "CLIENT"
 
     @classmethod
     def ordered_with_sub_clients(cls, status="active"):

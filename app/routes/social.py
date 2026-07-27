@@ -1,8 +1,10 @@
 """Social Publishing Engine UI + JSON API.
 
 Registered only when SOCIAL_ENGINE_ENABLED (see app/__init__.py), so the
-whole surface is absent unless the engine is turned on. Gated by the
-manage_social / connect_social_accounts permissions.
+whole surface is absent unless the engine is turned on. Gated by
+can_use_social / can_connect_social_accounts - both admin roles, plus
+anyone holding the matching manage_social / connect_social_accounts
+permission.
 """
 
 from datetime import datetime, timedelta
@@ -28,7 +30,10 @@ from app.social.services import (
 )
 from app.social.services import engage as engage_svc
 from app.social.services.accounts import AccountManager
-from app.utils.permissions import has_permission, can_manage_social_engine
+from app.utils.permissions import (
+    can_connect_social_accounts, can_manage_social_engine, can_use_social,
+    has_permission,
+)
 from app.utils.social_platforms import (
     PLATFORMS, label as platform_label, parse_platforms,
 )
@@ -51,7 +56,7 @@ _NO_INSTAGRAM = (
 
 
 def _guard():
-    if not has_permission(current_user, "manage_social"):
+    if not can_use_social(current_user):
         abort(403)
 
 
@@ -462,7 +467,7 @@ def set_account_client(account_id):
     """Bind a channel to a client (or 'Agency-wide' = no client). This is
     what makes publishing client-safe: the composer only offers a client's
     own channels, and the server refuses a cross-client target."""
-    if not has_permission(current_user, "connect_social_accounts"):
+    if not can_connect_social_accounts(current_user):
         abort(403)
     account = SocialAccount.query.get_or_404(account_id)
     client_id = request.form.get("client_id", type=int)
@@ -491,7 +496,7 @@ def discover_instagram():
     """Refresh: discover IG Business accounts linked to ALREADY-connected
     Facebook Pages, using each Page's stored token. No OAuth - this is the
     Buffer/Meta Business Suite behaviour where Instagram rides on Facebook."""
-    if not has_permission(current_user, "connect_social_accounts"):
+    if not can_connect_social_accounts(current_user):
         abort(403)
     ig = registry.get("instagram")
     fb_accounts = AccountManager.list_accounts(platform="facebook")
@@ -1812,7 +1817,7 @@ def delete_hashtag_set(set_id):
 @social_bp.route("/accounts/<int:account_id>/disconnect", methods=["POST"])
 @login_required
 def disconnect_account(account_id):
-    if not has_permission(current_user, "connect_social_accounts"):
+    if not can_connect_social_accounts(current_user):
         abort(403)
     account = SocialAccount.query.get_or_404(account_id)
     AccountManager.disconnect(account)

@@ -323,6 +323,39 @@
                 <div class="table-card">
                     <h2 class="card-title">Client Info</h2>
 
+                    {#
+                        Editable in place: there is no edit-client screen,
+                        and every existing client predates this field, so
+                        this is the only way to set it. Shows the effective
+                        code (curated, or initials) with the fallback
+                        called out so it is obvious which one is in play.
+                    #}
+                    <form method="POST"
+                          action="{{ url_for('clients.update_client_short_code', client_id=client.id) }}"
+                          class="short-code-row">
+                        <label for="shortCodeInput">Short Code</label>
+
+                        <div class="short-code-controls">
+                            <input type="text"
+                                   id="shortCodeInput"
+                                   name="short_code"
+                                   value="{{ client.short_code or '' }}"
+                                   placeholder="{{ client.code }}"
+                                   maxlength="12"
+                                   aria-describedby="shortCodeHint">
+                            <button type="submit">Save</button>
+                        </div>
+
+                        <p class="form-hint" id="shortCodeHint">
+                            Used in uploaded file names:
+                            <code>{{ '%s_%s_Task title_%s'|format(
+                                task_code_example, client.code, today_ddmmyy) }}</code>
+                            {%- if not client.short_code %}
+                            &mdash; currently auto-derived from the client name.
+                            {%- endif %}
+                        </p>
+                    </form>
+
                     <div class="detail-row">
                         <span>Company</span>
                         <strong>{{ client.company_name or "-" }}</strong>

@@ -15,6 +15,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import User, Client, ClientMonthlyTarget, ClientDeliverable, Task, ClientAsset
 from app.utils.permissions import has_permission, can_manage_clients
+from app.utils.timezone import ist_now
 from app.utils import client_assets as client_asset_catalog
 from app.storage.storage_service import StorageService, StorageServiceError
 
@@ -170,6 +171,7 @@ def add_client():
 
         client = Client(
             client_name=client_name,
+            short_code=(request.form.get("short_code") or "").strip() or None,
             company_name=request.form.get("company_name"),
             phone=request.form.get("phone"),
             email=request.form.get("email"),
@@ -290,7 +292,46 @@ def client_detail(client_id):
         assets_by_category=assets_by_category,
         can_manage=can_manage,
         can_edit_deliverables=can_edit_deliverables,
+        # Illustrative only - shows the short code in the shape it will
+        # actually appear in, rather than describing it in prose.
+        task_code_example="1277",
+        today_ddmmyy=ist_now().strftime("%d-%m-%y"),
     )
+
+
+@clients_bp.route("/<int:client_id>/short-code", methods=["POST"])
+@login_required
+def update_client_short_code(client_id):
+    """Set the client's short code from the client page.
+
+    There is no full edit-client screen, and the code is needed on
+    clients that already exist (every client predates the field), so
+    it is editable in place on the one page that already shows it.
+    """
+
+    if not can_manage_clients(current_user):
+        return redirect(url_for("dashboard.index"))
+
+    client = Client.query.get_or_404(client_id)
+
+    short_code = (request.form.get("short_code") or "").strip()
+
+    if len(short_code) > 12:
+        flash("Short code must be 12 characters or fewer.", "error")
+        return redirect(url_for("clients.client_detail", client_id=client.id))
+
+    client.short_code = short_code or None
+    db.session.commit()
+
+    if short_code:
+        flash(f"Short code set to {client.code}.", "success")
+    else:
+        flash(
+            f"Short code cleared - falling back to {client.code}.",
+            "success",
+        )
+
+    return redirect(url_for("clients.client_detail", client_id=client.id))
 
 
 @clients_bp.route("/<int:client_id>/deliverables/add", methods=["POST"])

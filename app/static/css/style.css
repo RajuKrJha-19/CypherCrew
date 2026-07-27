@@ -10355,6 +10355,100 @@ body.panel-mode .main-panel{
     }
 }
 
+/* Task transfer request - sits in the task detail card under
+   "Assigned To". One panel, three states (asked of you / awaiting
+   their reply / offer it to someone). */
+.transfer-panel{
+    padding:12px 0 4px;
+    border-bottom:1px solid var(--color-surface-sunken);
+}
+
+.transfer-panel-title{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 8px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--color-neutral);
+}
+
+.transfer-panel-title i{
+    color:var(--color-text-muted);
+}
+
+.transfer-panel-note{
+    margin:0 0 10px;
+    padding:8px 10px;
+    border-radius:var(--radius-sm);
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    font-size:12.5px;
+    line-height:1.5;
+}
+
+.transfer-panel-actions{
+    display:inline-flex;
+    margin:0 8px 8px 0;
+}
+
+.transfer-decline-form{
+    display:flex;
+    gap:8px;
+    margin-top:4px;
+}
+
+.transfer-decline-form input{
+    flex:1 1 auto;
+    min-width:0;
+}
+
+.transfer-decline-form button{
+    flex:0 0 auto;
+}
+
+/* Inline "Short Code" editor in the Client Info card - the client's
+   abbreviation used in uploaded file names. Editable here because
+   there is no separate edit-client screen. */
+.short-code-row{
+    padding-bottom:14px;
+    margin-bottom:6px;
+    border-bottom:1px solid var(--color-surface-sunken);
+}
+
+.short-code-row > label{
+    display:block;
+    margin-bottom:6px;
+    font-size:13px;
+    color:var(--color-text-muted);
+}
+
+.short-code-controls{
+    display:flex;
+    gap:8px;
+}
+
+.short-code-controls input{
+    flex:1 1 auto;
+    min-width:0;
+    text-transform:uppercase;
+}
+
+.short-code-controls button{
+    flex:0 0 auto;
+    padding:0 14px;
+}
+
+.short-code-row .form-hint{
+    margin:8px 0 0;
+    line-height:1.6;
+}
+
+.short-code-row code{
+    font-size:11.5px;
+    word-break:break-all;
+}
+
 .deliverables-head{
     display:flex;
     align-items:center;
@@ -15421,7 +15515,11 @@ body.cmdk-open{ overflow:hidden; }
 /* =====================================================================
    SOCIAL PUBLISHING MODULE — premium SaaS design layer
    Scoped under .social-* / .sp-* / .pf-* so nothing here touches global
-   components. Built on existing --color-*/--radius-*/--shadow- tokens, so
+   components. Built on the existing --color-, --radius- and --shadow-
+   token families. Do not write those as globs with a trailing star and
+   slash inside a comment: that sequence ends the comment early, and the
+   :root block below then gets eaten as a bad selector's body - which is
+   exactly how the light-theme platform colours went missing once. So
    light + dark themes are inherited. Platform brand tokens are the only
    additions (with a dark override below).
    ===================================================================== */

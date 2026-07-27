@@ -230,6 +230,94 @@
                             <strong>{{ task.assigned_to.name if task.assigned_to else "-" }}</strong>
                         </div>
 
+                        {#
+                            Transfer request. Three mutually exclusive
+                            states, so the card never shows a control the
+                            viewer cannot use:
+                              - you were asked      -> Accept / Decline
+                              - you did the asking  -> pending + Cancel
+                              - it is yours, free   -> Request Transfer
+                            A manager can also cancel a pending request,
+                            since one would otherwise block their own
+                            reassignment.
+                        #}
+                        {% if pending_transfer %}
+                        <div class="transfer-panel">
+
+                            {% if pending_transfer.to_user_id == current_user.id %}
+                            <p class="transfer-panel-title">
+                                <i class="fa-solid fa-right-left"></i>
+                                {{ pending_transfer.from_user.name }} wants to transfer this task to you
+                            </p>
+
+                            {% if pending_transfer.message %}
+                            <p class="transfer-panel-note">"{{ pending_transfer.message }}"</p>
+                            {% endif %}
+
+                            <form method="POST"
+                                  action="{{ url_for('tasks.accept_task_transfer', transfer_id=pending_transfer.id) }}"
+                                  class="transfer-panel-actions">
+                                <button type="submit" class="review-btn approve-btn">Accept</button>
+                            </form>
+
+                            <form method="POST"
+                                  action="{{ url_for('tasks.decline_task_transfer', transfer_id=pending_transfer.id) }}"
+                                  class="transfer-decline-form">
+                                <input type="text" name="response_message"
+                                       placeholder="Reason (optional)" maxlength="300">
+                                <button type="submit" class="btn-secondary">Decline</button>
+                            </form>
+
+                            {% else %}
+                            <p class="transfer-panel-title">
+                                <i class="fa-regular fa-clock"></i>
+                                Transfer to {{ pending_transfer.to_user.name }} - awaiting their reply
+                            </p>
+
+                            {% if pending_transfer.message %}
+                            <p class="transfer-panel-note">"{{ pending_transfer.message }}"</p>
+                            {% endif %}
+
+                            {% if pending_transfer.from_user_id == current_user.id or can_manage_tasks %}
+                            <form method="POST"
+                                  action="{{ url_for('tasks.cancel_task_transfer', transfer_id=pending_transfer.id) }}"
+                                  class="transfer-panel-actions">
+                                <button type="submit" class="btn-secondary">Cancel request</button>
+                            </form>
+                            {% endif %}
+                            {% endif %}
+
+                        </div>
+
+                        {% elif can_request_transfer and transfer_candidates %}
+                        <div class="transfer-panel">
+                            <button type="button" class="btn-secondary" id="toggleTransferForm"
+                                    aria-expanded="false" aria-controls="transferForm">
+                                <i class="fa-solid fa-right-left"></i> Request Transfer
+                            </button>
+
+                            <form method="POST"
+                                  action="{{ url_for('tasks.request_task_transfer', task_id=task.id) }}"
+                                  class="inline-upload-form" id="transferForm">
+                                <div class="inline-upload-row">
+                                    <select name="to_user_id" required aria-label="Transfer to">
+                                        <option value="">Transfer to...</option>
+                                        {% for candidate in transfer_candidates %}
+                                        <option value="{{ candidate.id }}">{{ candidate.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="text" name="message"
+                                           placeholder="Reason (optional)" maxlength="300">
+                                    <button type="submit">Send</button>
+                                </div>
+                                <p class="form-hint">
+                                    They will be notified and the task moves to
+                                    them only if they accept.
+                                </p>
+                            </form>
+                        </div>
+                        {% endif %}
+
                         {% if task.backup_assignee_id and task.fallback_hours %}
                         <div class="detail-row"
                             title="Auto-shifts to the backup if this task is still Assigned {{ task.fallback_hours }}h after it was last assigned.">
@@ -253,7 +341,7 @@
                                 {% endfor %}
                             </strong>
                         </div>
-                        {% if config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+                        {% if config.SOCIAL_ENGINE_ENABLED and can_use_social(current_user) %}
                         <div class="detail-row">
                             <span></span>
                             <strong>
@@ -276,7 +364,7 @@
                         </div>
                         {% endif %}
                         {% endif %}
-                        {% elif config.SOCIAL_ENGINE_ENABLED and has_permission(current_user, 'manage_social') %}
+                        {% elif config.SOCIAL_ENGINE_ENABLED and can_use_social(current_user) %}
                         {# Not flagged social - tell the user how to enable the
                            Social Studio handoff instead of showing nothing. #}
                         <div class="detail-row">
@@ -1188,6 +1276,12 @@ Submission Files
                                     🟡
                                     {% elif activity.action == "auto_reassigned" %}
                                     🔄
+                                    {% elif activity.action in ["transfer_requested", "transfer_cancelled"] %}
+                                    ↗
+                                    {% elif activity.action == "transfer_accepted" %}
+                                    🤝
+                                    {% elif activity.action == "transfer_declined" %}
+                                    ↩
                                     {% elif activity.action == "submitted_review" %}
                                     📤
                                     {% elif activity.action == "approved_core_review" %}
@@ -1217,6 +1311,14 @@ Submission Files
                                         Auto Paused
                                         {% elif activity.action == "auto_reassigned" %}
                                         Auto-Reassigned to Backup
+                                        {% elif activity.action == "transfer_requested" %}
+                                        Transfer Requested
+                                        {% elif activity.action == "transfer_accepted" %}
+                                        Transfer Accepted
+                                        {% elif activity.action == "transfer_declined" %}
+                                        Transfer Declined
+                                        {% elif activity.action == "transfer_cancelled" %}
+                                        Transfer Cancelled
                                         {% elif activity.action == "submitted_review" %}
                                         Submitted for Core Review
                                         {% elif activity.action == "approved_core_review" %}
@@ -1276,6 +1378,26 @@ Submission Files
    base_app's head scripts, so the Approve & Publish confirm checklist
    has to be wired up here to work in both places. #}
 <script src="{{ url_for('static', filename='js/social-publish-confirm.js') }}"></script>
+<script>
+    // Transfer form starts collapsed - it is an occasional action, not
+    // something that should take up room on every task page.
+    (function () {
+        const toggle = document.getElementById("toggleTransferForm");
+        const form = document.getElementById("transferForm");
+
+        if (!toggle || !form) return;
+
+        toggle.addEventListener("click", function () {
+            const opening = form.classList.toggle("show");
+            toggle.setAttribute("aria-expanded", opening ? "true" : "false");
+
+            if (opening) {
+                const first = form.querySelector("select");
+                if (first) first.focus();
+            }
+        });
+    })();
+</script>
 <script>
     // Preview opens in the in-page viewer instead of a new tab. The anchor
     // keeps its href and target so middle-click / "open in new tab" still

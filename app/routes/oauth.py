@@ -15,7 +15,7 @@ from app.social.errors import SocialError
 from app.social.oauth.manager import OAuthManager
 from app.social.services.accounts import AccountManager
 from app.social.tokens.vault import VaultDisabled, get_vault
-from app.utils.permissions import has_permission
+from app.utils.permissions import can_connect_social_accounts
 from app.utils.social_platforms import label as platform_label
 
 
@@ -52,7 +52,7 @@ def _account_phrase(platform, count):
 
 
 def _connect_guard():
-    if not has_permission(current_user, "connect_social_accounts"):
+    if not can_connect_social_accounts(current_user):
         abort(403)
 
 

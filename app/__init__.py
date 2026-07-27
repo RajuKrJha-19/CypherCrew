@@ -219,6 +219,7 @@ def create_app():
 
     from app.utils.permissions import (
         has_permission, can_manage_clients, can_manage_social_engine,
+        can_use_social, can_connect_social_accounts,
     )
     from app.utils import task_status as task_status_module
     from app.utils.greeting import greet, today_label
@@ -262,6 +263,12 @@ def create_app():
         # gates the internal ops controls (worker kick, retry/requeue) so
         # employees and managers never see engine machinery.
         can_manage_social_engine=can_manage_social_engine,
+        # "May work in Social Studio" (admin/super_admin, or the explicit
+        # manage_social permission) - gates the Social tab itself and the
+        # task-detail handoff controls.
+        can_use_social=can_use_social,
+        # "May connect/disconnect channels" - the Channels half of the tab.
+        can_connect_social_accounts=can_connect_social_accounts,
         # "May curate this client" (admin/super_admin, or the explicit
         # manage_clients permission) - distinct from "may read it",
         # which is now every signed-in user. See the helper's docstring.

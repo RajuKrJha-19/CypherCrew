@@ -29,6 +29,18 @@
                     <label>Client Name</label>
                     <input type="text" name="client_name" placeholder="e.g. Hope Plus IVF" required>
 
+                    <div class="form-group">
+                        <label>Short Code</label>
+
+                        <p class="form-hint">
+                            Used in uploaded file names, e.g.
+                            <code>1277_VMC_Kargil Vijay Diwas_26-07-26.pdf</code>.
+                            Leave blank to use the client name's initials.
+                        </p>
+
+                        <input type="text" name="short_code" placeholder="e.g. VMC" maxlength="12">
+                    </div>
+
                     <label>Company Name</label>
                     <input type="text" name="company_name" placeholder="Registered business name, if different">
 
