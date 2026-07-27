@@ -8794,8 +8794,13 @@ TASK LIST TOOLBAR
 
 .task-list-toolbar{
     display:flex;
-    justify-content:space-between;
     align-items:center;
+    flex-wrap:wrap;
+    /* The toolbar is sized by its contents, so justify-content had no
+       free space to distribute and the buttons sat flush against each
+       other - Export CSV and Columns were touching. Spacing has to come
+       from a gap, not from the alignment. */
+    gap:10px;
     margin-top:18px;
     margin-bottom:18px;
 }
@@ -8803,7 +8808,23 @@ TASK LIST TOOLBAR
 .task-list-toolbar-left{
     display:flex;
     align-items:center;
-    gap:2px;
+    gap:10px;
+}
+
+/* Export CSV and Columns are .mini-link, which is sized for a table cell
+   (5px padding) - next to the 40px dropdown buttons they sat short, so
+   the row read as two different toolbars. Same height, same radius.
+   Named individually rather than as ".task-list-toolbar .mini-link":
+   "Reset Default" lives inside the Columns menu and is also a .mini-link,
+   and it should stay menu-sized. */
+.toolbar-export-btn,
+#columnCustomizerBtn{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    height:40px;
+    padding:0 13px;
+    border-radius:10px;
 }
 
 .task-toolbar-dropdown{
