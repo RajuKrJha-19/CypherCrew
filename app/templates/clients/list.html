@@ -35,24 +35,24 @@
 
     <form method="GET" class="filter-bar filter-bar-flow" id="clientFilterForm">
 
-        <input type="text" name="q" value="{{ search }}" placeholder="Search by name, company or industry">
+        <input type="text" name="q" value="{{ search }}" placeholder="Search by name, company or industry" aria-label="Search clients">
 
         {% if can_manage %}
-        <select name="status" onchange="this.form.submit()">
+        <select name="status" onchange="this.form.submit()" aria-label="Filter by status">
             <option value="">All Statuses</option>
             <option value="active" {% if selected_status=="active" %}selected{% endif %}>Active</option>
             <option value="inactive" {% if selected_status=="inactive" %}selected{% endif %}>Inactive</option>
         </select>
         {% endif %}
 
-        <select name="manager" onchange="this.form.submit()">
+        <select name="manager" onchange="this.form.submit()" aria-label="Filter by manager">
             <option value="">All Managers</option>
             {% for m in managers %}
             <option value="{{ m.id }}" {% if selected_manager == m.id|string %}selected{% endif %}>{{ m.name }}</option>
             {% endfor %}
         </select>
 
-        <select name="sort" onchange="this.form.submit()">
+        <select name="sort" onchange="this.form.submit()" aria-label="Sort clients">
             <option value="newest" {% if sort=="newest" %}selected{% endif %}>Newest</option>
             <option value="oldest" {% if sort=="oldest" %}selected{% endif %}>Oldest</option>
             <option value="name_asc" {% if sort=="name_asc" %}selected{% endif %}>Name A–Z</option>

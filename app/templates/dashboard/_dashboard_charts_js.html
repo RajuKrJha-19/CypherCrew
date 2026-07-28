@@ -266,7 +266,11 @@
         if (window.Chart) {
             drawDashboardCharts();
         } else if (window.__chartjsLoading) {
-            var chartWait = window.setInterval(function () {
+            // App.setInterval also clears this on Turbo navigation, so a
+            // visit that leaves before Chart.js finishes loading doesn't
+            // leave the 40ms poll running.
+            var _si = window.App ? window.App.setInterval : window.setInterval;
+            var chartWait = _si(function () {
                 if (window.Chart) {
                     window.clearInterval(chartWait);
                     drawDashboardCharts();

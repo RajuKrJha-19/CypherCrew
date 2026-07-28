@@ -46,6 +46,20 @@ class BaseStorageProvider(ABC):
         """
         raise NotImplementedError
 
+    def list_files(
+        self,
+        *,
+        prefix,
+    ):
+        """
+        List objects under `prefix` as {"object_key", "last_modified"} dicts.
+
+        Concrete (not abstract) with a safe empty default: a provider without
+        listing support makes the media GC a no-op (finds nothing to delete)
+        rather than crashing it.
+        """
+        return []
+
     @abstractmethod
     def generate_download_url(
         self,

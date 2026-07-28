@@ -41,7 +41,33 @@ def run_task_fallback_reassignment():
 
     shifted = 0
 
-    for task in candidates:
+    for candidate in candidates:
+
+        # Lock the row and re-read it before shifting. This endpoint is hit by
+        # system cron; if two runs overlap, both would otherwise see the same
+        # fallback_triggered_at IS NULL candidate and shift it twice - double
+        # notifications, and record_status_time banked twice. FOR UPDATE
+        # SKIP LOCKED lets a second run pass over a row the first still holds,
+        # and the guard is re-checked under the lock because the task's state
+        # (status, fallback_triggered_at) may have changed since the scan.
+        task = (
+            Task.query
+            .filter(Task.id == candidate.id)
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+
+        if task is None:
+            continue
+
+        if (
+            task.status != task_status.ASSIGNED
+            or task.fallback_triggered_at is not None
+            or not task.backup_assignee_id
+            or task.fallback_hours is None
+            or task.status_started_at is None
+        ):
+            continue
 
         deadline = task.status_started_at + timedelta(
             hours=task.fallback_hours

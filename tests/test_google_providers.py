@@ -129,7 +129,8 @@ class _Resp:
 def test_a_fresh_session_reports_zero_bytes(monkeypatch):
     """308 with no Range header means Google has nothing yet."""
     monkeypatch.setattr(requests, "put", lambda *a, **k: _Resp(308))
-    assert YouTubeProvider()._session_offset("https://s", 100, "tok") == 0
+    assert YouTubeProvider()._session_offset("https://s", 100, "tok") \
+        == ("resume", 0)
 
 
 def test_a_partial_session_resumes_from_the_next_byte(monkeypatch):
@@ -138,12 +139,19 @@ def test_a_partial_session_resumes_from_the_next_byte(monkeypatch):
     monkeypatch.setattr(
         requests, "put",
         lambda *a, **k: _Resp(308, headers={"Range": "bytes=0-999"}))
-    assert YouTubeProvider()._session_offset("https://s", 5000, "tok") == 1000
+    assert YouTubeProvider()._session_offset("https://s", 5000, "tok") \
+        == ("resume", 1000)
 
 
-def test_a_finished_session_reports_complete(monkeypatch):
-    monkeypatch.setattr(requests, "put", lambda *a, **k: _Resp(201))
-    assert YouTubeProvider()._session_offset("https://s", 100, "tok") is None
+def test_a_finished_session_carries_the_video_id(monkeypatch):
+    """When the session already holds the finished video, its id lives only
+    on that final response - the offset probe must carry it out, or the poll
+    finalises with no id and fails a completed upload."""
+    monkeypatch.setattr(
+        requests, "put",
+        lambda *a, **k: _Resp(201, payload={"id": "VID999"}))
+    assert YouTubeProvider()._session_offset("https://s", 100, "tok") \
+        == ("done", "VID999")
 
 
 def test_an_expired_session_is_transient(monkeypatch):
@@ -161,7 +169,8 @@ def test_an_interrupted_upload_stays_pending(monkeypatch, app):
     state = {"session_uri": "https://s", "source_url": "https://r2",
              "size": 5000, "mime": "video/mp4"}
 
-    monkeypatch.setattr(provider, "_session_offset", lambda *a, **k: 1000)
+    monkeypatch.setattr(provider, "_session_offset",
+                        lambda *a, **k: ("resume", 1000))
     monkeypatch.setattr(provider, "_upload_from", lambda *a, **k: None)
 
     with app.app_context():
@@ -176,7 +185,8 @@ def test_a_completed_upload_returns_the_video(monkeypatch, app):
     state = {"session_uri": "https://s", "source_url": "https://r2",
              "size": 5000, "mime": "video/mp4"}
 
-    monkeypatch.setattr(provider, "_session_offset", lambda *a, **k: 0)
+    monkeypatch.setattr(provider, "_session_offset",
+                        lambda *a, **k: ("resume", 0))
     monkeypatch.setattr(provider, "_upload_from", lambda *a, **k: "VID123")
 
     with app.app_context():
@@ -185,6 +195,29 @@ def test_a_completed_upload_returns_the_video(monkeypatch, app):
     assert step.status == "done"
     assert step.external_post_id == "VID123"
     assert step.permalink == "https://www.youtube.com/watch?v=VID123"
+
+
+def test_a_session_finished_out_of_band_still_finalises(monkeypatch, app):
+    """If the upload completed on a prior cycle, the next poll learns the id
+    from the offset probe alone and finalises without re-uploading a byte.
+    Before the fix this read a never-stored provider_state['video_id'] and
+    raised, stranding a video that had actually published."""
+    provider = YouTubeProvider()
+    state = {"session_uri": "https://s", "source_url": "https://r2",
+             "size": 5000, "mime": "video/mp4"}
+
+    monkeypatch.setattr(provider, "_session_offset",
+                        lambda *a, **k: ("done", "VID123"))
+
+    def _fail(*a, **k):
+        raise AssertionError("_upload_from must not run for a finished session")
+    monkeypatch.setattr(provider, "_upload_from", _fail)
+
+    with app.app_context():
+        step = provider.poll_publish(SimpleNamespace(), state, "tok")
+
+    assert step.status == "done"
+    assert step.external_post_id == "VID123"
 
 
 def test_an_upload_that_finishes_with_no_id_is_retried(app):

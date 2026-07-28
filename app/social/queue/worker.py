@@ -369,10 +369,21 @@ def _maybe_finalize_post(target):
     """Roll the parent post's status up once all its targets settle, and -
     when the post came from a task - reflect completion back onto that task
     (Client Review -> Published), so the ERP task lifecycle stays in sync."""
-    post = target.post
+    from app.models import SocialPost, SocialPostTarget
+    # Sibling targets of one post publish CONCURRENTLY (the drain thread pool,
+    # e.g. an IG feed post + its companion Story). Without serialising here,
+    # each thread set its own target "published" (uncommitted) and read the
+    # others as still unpublished, so NONE ran the "all published" rollup and a
+    # fully-live post was stranded at "scheduled". Lock the post row so threads
+    # serialise, and read target statuses fresh from the DB (own flushed change
+    # + siblings' committed changes) so the last committer finalises correctly.
+    post = (db.session.query(SocialPost)
+            .filter(SocialPost.id == target.social_post_id)
+            .with_for_update().first())
     if post is None:
         return
-    statuses = [t.status for t in post.targets]
+    statuses = [s for (s,) in db.session.query(SocialPostTarget.status)
+                .filter(SocialPostTarget.social_post_id == post.id).all()]
 
     # A target that is "blocked" settles the post just like a failed one.
     # Without this a post with one published platform and one that could

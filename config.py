@@ -209,6 +209,11 @@ class Config:
     SOCIAL_WORKER_BATCH = int(os.getenv("SOCIAL_WORKER_BATCH", "10"))
     SOCIAL_WORKER_THREADS = int(os.getenv("SOCIAL_WORKER_THREADS", "3"))
 
+    # Grace window (hours) before the media GC deletes an unreferenced
+    # social_uploads/ object - long enough that an in-flight composer upload
+    # is never mistaken for an orphan.
+    SOCIAL_UPLOAD_GC_HOURS = int(os.getenv("SOCIAL_UPLOAD_GC_HOURS", "24"))
+
     # Public base URL used to build OAuth redirect URIs (e.g.
     # https://crew.cypherms.com). Falls back to the request host when unset.
     SOCIAL_PUBLIC_BASE_URL = os.getenv("SOCIAL_PUBLIC_BASE_URL")

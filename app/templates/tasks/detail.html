@@ -1683,7 +1683,9 @@ Submission Files
             }
         }
 
-        setInterval(updateWorkedTimer, 1000);
+        // App.setInterval clears this on Turbo navigation; otherwise a
+        // fresh timer stacks on every back-and-forth and the clock races.
+        (window.App ? window.App.setInterval : window.setInterval)(updateWorkedTimer, 1000);
         {% endif %}
     </script>
 
@@ -1714,7 +1716,8 @@ Submission Files
         }
 
         {% if task.status != "Published" %}
-        setInterval(updateStatusDuration, 1000);
+        // App.setInterval clears this on Turbo navigation (see worked-timer).
+        (window.App ? window.App.setInterval : window.setInterval)(updateStatusDuration, 1000);
         {% endif %}
     </script>
 

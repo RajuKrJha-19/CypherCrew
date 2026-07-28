@@ -266,7 +266,12 @@
             if (next) next.click();
         }
 
-        document.addEventListener("keydown", function (event) {
+        // App.on so Turbo tears this document-level keydown handler down when
+        // you leave Engage. Without teardown it stacked on every visit AND kept
+        // preventDefault-ing Arrow/j/k on OTHER Studio pages (document survives
+        // body swaps), silently breaking arrow-key page scrolling Studio-wide.
+        (window.App ? window.App.on.bind(window.App, document)
+                    : document.addEventListener.bind(document))("keydown", function (event) {
             const composing = /^(INPUT|TEXTAREA|SELECT)$/.test(
                 (event.target.tagName || ""));
 

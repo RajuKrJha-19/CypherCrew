@@ -180,6 +180,43 @@ class R2StorageProvider(BaseStorageProvider):
                 f"Unable to delete object: {clean_object_key}"
             ) from error
 
+    def list_files(
+        self,
+        *,
+        prefix,
+    ):
+        """
+        List every object under `prefix`.
+
+        Returns a list of {"object_key", "last_modified"} dicts, paginated
+        so a bucket with more than 1000 matching objects is fully walked.
+        Used by the media garbage collector to find orphaned uploads.
+        """
+
+        if not prefix or not str(prefix).strip():
+            raise ValueError("prefix is required.")
+
+        clean_prefix = str(prefix).strip().lstrip("/")
+
+        try:
+            out = []
+            paginator = self.client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=clean_prefix,
+            ):
+                for obj in page.get("Contents", []):
+                    out.append({
+                        "object_key": obj["Key"],
+                        "last_modified": obj.get("LastModified"),
+                    })
+            return out
+
+        except (ClientError, BotoCoreError) as error:
+            raise RuntimeError(
+                f"Unable to list objects under: {clean_prefix}"
+            ) from error
+
     def get_bytes(
         self,
         *,

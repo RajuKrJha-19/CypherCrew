@@ -199,7 +199,7 @@
                         <option value="">— choose a published post —</option>
                         {% for t in linkable_targets %}
                         <option value="{{ t.id }}" {{ 'selected' if story_link_target_id == t.id }}>
-                            {{ t.post.title or t.caption[:60] if t.caption else 'Untitled' }}
+                            {{ (t.post.title if t.post else None) or (t.caption[:60] if t.caption else None) or 'Untitled' }}
                             · {{ t.platform }} · {{ t.updated_at.strftime('%d %b') }}
                         </option>
                         {% endfor %}
@@ -474,8 +474,12 @@
             '<i class="fa-solid '+(blockers.length?"fa-triangle-exclamation":"fa-circle-check")+'"></i> '
             + lines.join(" · ");
 
-        // Block the submit rather than letting a doomed target be created.
-        document.querySelectorAll('button[name="action"], .cmp-submit button')
+        // Block "Save & submit" (routing to approval) on a doomed target -
+        // but never the plain "Save draft", which must stay usable for
+        // work in progress. (The old `.cmp-submit button` selector matched
+        // nothing; the class is `.cmp-submit-row`, and disabling draft-save
+        // there would have been wrong anyway.)
+        document.querySelectorAll('button[name="action"]')
             .forEach(b=>{ b.disabled = blockers.length>0; });
     }
 

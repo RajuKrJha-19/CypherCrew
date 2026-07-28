@@ -421,6 +421,12 @@
     (function () {
         "use strict";
 
+        // Delegated on document, so bind ONCE per tab. This studio page re-runs
+        // its script on every Turbo visit; without this guard the click handler
+        // stacked and fired N times (N clipboard writes + overlapping flashes).
+        if (window.__postCopyBound) return;
+        window.__postCopyBound = true;
+
         function flash(button, text) {
             const original = button.innerHTML;
             button.innerHTML = '<i class="fa-solid fa-check"></i> ' + text;

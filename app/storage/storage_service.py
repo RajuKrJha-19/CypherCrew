@@ -844,6 +844,15 @@ class StorageService:
             object_key=object_key,
         )
 
+    def list_files(
+        self,
+        *,
+        prefix,
+    ):
+        return self.provider.list_files(
+            prefix=prefix,
+        )
+
     def preview_url(
         self,
         *,

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-from app.utils.timezone import ist_now, IST_OFFSET
+from app.utils.timezone import ist_now, IST_OFFSET, ist_date
 from flask import Blueprint, render_template, redirect, url_for, jsonify, request
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -741,13 +741,13 @@ def build_overview():
 
     this_month_tasks = Task.query.filter(
         not_void,
-        db.func.date(Task.created_at) >= current_month_start
+        ist_date(Task.created_at) >= current_month_start
     ).count()
 
     last_month_tasks = Task.query.filter(
         not_void,
-        db.func.date(Task.created_at) >= last_month_start,
-        db.func.date(Task.created_at) < current_month_start
+        ist_date(Task.created_at) >= last_month_start,
+        ist_date(Task.created_at) < current_month_start
     ).count()
 
     task_growth = get_growth_data(
@@ -902,13 +902,14 @@ def _format_turnaround(seconds):
 
 def _count_created(start, end):
 
-    # created_at is stored in UTC (default=datetime.utcnow), which is
-    # the same convention build_overview() compares against - kept
-    # consistent here rather than corrected in one place only.
+    # created_at is stored in UTC (default=datetime.utcnow) but the window is
+    # IST dates, so shift into IST before taking the date - otherwise tasks
+    # created between IST 00:00-05:30 are counted on the wrong day (or dropped
+    # from "today"). completed_at/employee_completed_at below are already IST.
     return Task.query.filter(
         Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
-        db.func.date(Task.created_at) >= start,
-        db.func.date(Task.created_at) <= end,
+        ist_date(Task.created_at) >= start,
+        ist_date(Task.created_at) <= end,
     ).count()
 
 

@@ -159,13 +159,15 @@ class YouTubeProvider(GoogleBaseProvider, SocialProvider):
         size = provider_state.get("size")
         mime = provider_state.get("mime") or "video/*"
 
-        offset = self._session_offset(session_uri, size, token)
-        if offset is None:
-            # The session answered with the finished video resource.
-            return self._done(provider_state.get("video_id"), token)
+        kind, value = self._session_offset(session_uri, size, token)
+        if kind == "done":
+            # The session already answered with the finished video resource;
+            # `value` is its id, read straight off that response (it is never
+            # in provider_state - start_publish only stored the session uri).
+            return self._done(value, token)
 
         video_id = self._upload_from(session_uri, provider_state["source_url"],
-                                     offset, size, mime, token)
+                                     value, size, mime, token)
         if video_id is None:
             # Interrupted - stay PENDING and resume next cycle.
             return PublishStep(status=StepStatus.PENDING.value,
@@ -199,9 +201,12 @@ class YouTubeProvider(GoogleBaseProvider, SocialProvider):
             return None
 
     def _session_offset(self, session_uri, size, token):
-        """How many bytes YouTube already holds.
+        """Ask YouTube where the upload stands.
 
-        None means the upload is already complete.
+        Returns ("done", video_id) when the session already answered with the
+        finished video resource - the id is read straight off that response,
+        the only place it exists (start_publish never stored it). Otherwise
+        ("resume", offset) with how many bytes YouTube already holds.
         """
         resp = requests.put(
             session_uri,
@@ -213,11 +218,12 @@ class YouTubeProvider(GoogleBaseProvider, SocialProvider):
             timeout=60,
         )
         if resp.status_code in (200, 201):
-            return None
+            return ("done", (resp.json() or {}).get("id") if resp.content
+                    else None)
         if resp.status_code == 308:
             rng = resp.headers.get("Range")
             # No Range header means nothing has been stored yet.
-            return int(rng.split("-")[1]) + 1 if rng else 0
+            return ("resume", int(rng.split("-")[1]) + 1 if rng else 0)
         if resp.status_code == 404:
             raise TransientError(
                 "YouTube upload session expired; it will start again.")
@@ -271,9 +277,11 @@ class YouTubeProvider(GoogleBaseProvider, SocialProvider):
 
     # -- Deletion ----------------------------------------------------------
 
-    def delete_post(self, target, token):
+    def delete_post(self, external_post_id, token):
+        # Contract matches Meta's delete_post(external_post_id, token):
+        # lifecycle.remove_target passes the id STRING, not the target object.
         GoogleClient(API).delete("videos", token=token,
-                                 params={"id": target.external_post_id})
+                                 params={"id": external_post_id})
         return True
 
     # -- Comments ----------------------------------------------------------

@@ -926,20 +926,33 @@ def duplicate_post(post_id):
         base_caption=src.base_caption)
     db.session.add(dup)
     db.session.flush()
+    # old target id -> new target id, so a story's "link to this other post"
+    # (story_link_target_id points at a SIBLING target) can be re-pointed at
+    # the copied sibling instead of dangling back to the source post.
+    id_map = {}
     for t in src.targets:
         nt = SocialPostTarget(
             social_post_id=dup.id, social_account_id=t.social_account_id,
             platform=t.platform, post_type=t.post_type, caption=t.caption,
             hashtags=t.hashtags, first_comment=t.first_comment,
+            story_style=t.story_style,
             status="draft", scheduled_for=None)
         db.session.add(nt)
         db.session.flush()
+        id_map[t.id] = nt.id
         for m in t.media:
             db.session.add(SocialMediaAsset(
                 target_id=nt.id, source=m.source, task_file_id=m.task_file_id,
                 client_asset_id=m.client_asset_id, object_key=m.object_key,
                 role=m.role, sort_order=m.sort_order, alt_text=m.alt_text,
                 mime_type=m.mime_type))
+    # Second pass: remap sibling story links now every new id exists (a link
+    # may point forward to a target created later in the first pass).
+    for t in src.targets:
+        if t.story_link_target_id and t.story_link_target_id in id_map:
+            db.session.query(SocialPostTarget).filter_by(
+                id=id_map[t.id]).update(
+                    {"story_link_target_id": id_map[t.story_link_target_id]})
     versioning.snapshot_post(dup, edited_by_id=current_user.id)
     audit.record("post_duplicated", post_id=dup.id, actor_id=current_user.id,
                  detail={"from_post": src.id})
@@ -967,6 +980,14 @@ def _detach_post_history(post):
     # (the delete routes block published posts, but this keeps it robust).
     PublishResult.query.filter(
         PublishResult.target_id.in_(tids)).delete(synchronize_session=False)
+    # PublishJobs FK to targets with no ON DELETE. A scheduled or failed post
+    # is deletable and its targets carry jobs - and a target can carry MORE
+    # than one (schedule + a publish-now retry), which the scalar target.job
+    # cascade can't be trusted to clear. Delete them all by target_id, the
+    # same way remove_target does, or db.session.delete(post) 500s on the
+    # orphaned FK.
+    PublishJob.query.filter(
+        PublishJob.target_id.in_(tids)).delete(synchronize_session=False)
     # Analytics snapshots and Engage comments also FK to the targets with no
     # cascade. A 'removed' post is deletable and its targets were live, so both
     # may exist - without clearing them the delete 500s on an FK violation.
@@ -980,12 +1001,16 @@ def _detach_post_history(post):
 
 
 def _cancel_pending_jobs(post):
-    """Delete any not-yet-run jobs for a post's targets (safe: only 'queued',
-    never a job already claimed/publishing/succeeded)."""
-    for t in post.targets:
-        job = t.job
-        if job is not None and job.state == "queued":
-            db.session.delete(job)
+    """Delete every not-yet-run job for a post's targets (safe: only 'queued',
+    never a job already claimed/publishing/succeeded). Filters by target_id
+    rather than the scalar target.job, so if a target somehow holds more than
+    one queued job they are all cancelled, not just the newest."""
+    tids = [t.id for t in post.targets]
+    if tids:
+        PublishJob.query.filter(
+            PublishJob.target_id.in_(tids),
+            PublishJob.state == "queued",
+        ).delete(synchronize_session=False)
 
 
 @social_bp.route("/posts/<int:post_id>/reopen", methods=["POST"])
@@ -1545,6 +1570,14 @@ def _apply_composer_form(post):
     })
 
     # Rebuild targets from scratch (drafts only) - simplest correct model.
+    # Detach audit rows first: SocialAuditLog.target_id is a plain FK with no
+    # cascade, so a "target_remapped" (or any) audit row pointing at a target
+    # we're about to delete would otherwise 500 the save with an IntegrityError.
+    old_target_ids = [t.id for t in post.targets]
+    if old_target_ids:
+        SocialAuditLog.query.filter(
+            SocialAuditLog.target_id.in_(old_target_ids)
+        ).update({"target_id": None}, synchronize_session=False)
     for t in list(post.targets):
         db.session.delete(t)
     db.session.flush()
@@ -1894,6 +1927,11 @@ def approve_post(post_id):
     if not can_publish(current_user):
         abort(403)
     post = SocialPost.query.get_or_404(post_id)
+    # Guard the current status (like approvals_bulk): a stale/direct POST must
+    # not regress an already scheduled/published post back to "approved".
+    if post.status != "pending_approval":
+        flash("This post isn't awaiting approval.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     approval.approve_post(post, current_user.id)
     if post.created_by_id and post.created_by_id != current_user.id:
         audit.notify(
@@ -1913,6 +1951,9 @@ def reject_post(post_id):
     if not can_publish(current_user):
         abort(403)
     post = SocialPost.query.get_or_404(post_id)
+    if post.status != "pending_approval":
+        flash("This post isn't awaiting approval.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     reason = (request.form.get("reason") or "").strip()
     post.status = "rejected"
     audit.record("rejected", post_id=post.id, actor_id=current_user.id,
@@ -2179,9 +2220,12 @@ def _published_post_rows(cid, limit=150):
             del_targets = [{"id": t.id, "platform": t.platform}
                            for t in post.targets if t.status == "published"]
             statuses = [t.status for t in post.targets]
+            # "blocked" (rate-gate refusal) settles a target just like
+            # "failed" - a post live on some platforms but blocked/failed on
+            # others is partially published, not cleanly published.
             if statuses and all(s == "removed" for s in statuses):
                 status = "removed"
-            elif any(s == "failed" for s in statuses) \
+            elif any(s in ("failed", "blocked") for s in statuses) \
                     and any(s == "published" for s in statuses):
                 status = "partially_published"
             else:

@@ -451,7 +451,7 @@ def edit_deliverable(deliverable_id):
         deliverable=deliverable
     )
 
-@clients_bp.route("/deliverable/<int:deliverable_id>/delete")
+@clients_bp.route("/deliverable/<int:deliverable_id>/delete", methods=["POST"])
 @login_required
 def delete_deliverable(deliverable_id):
 
@@ -673,6 +673,17 @@ def delete_client_asset(asset_id):
         return redirect(
             url_for("clients.client_detail", client_id=client_id)
         )
+
+    # A brand asset pulled into a Social Studio post is referenced by a
+    # SocialMediaAsset (FK, no cascade); deleting it would fail with a bare
+    # IntegrityError caught below as a misleading "try again". Detect + explain.
+    if current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        from app.models import SocialMediaAsset
+        if SocialMediaAsset.query.filter_by(client_asset_id=asset.id).first():
+            flash("This asset is used in a Social Studio post — remove it from "
+                  "the post (or delete the post) before deleting the asset.",
+                  "error")
+            return redirect(url_for("clients.client_detail", client_id=client_id))
 
     filename = asset.original_filename
     object_key = asset.object_key

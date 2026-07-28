@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import User, Task
 from app.utils import periods, roles, task_status
+from app.utils.timezone import ist_date, ist_now
 from app.utils.permissions import (
     apply_role_defaults, can_manage_users as _can_manage_users,
 )
@@ -146,7 +147,10 @@ def user_performance(user_id):
         flash("You can only view performance for your own team.", "error")
         return redirect(url_for("users.list_users"))
 
-    now = datetime.utcnow()
+    # Deadlines are naive IST wall-clock (from a datetime-local input), and
+    # every other overdue check in the app compares to ist_now(); using utcnow()
+    # here would under-count overdue by up to 5.5h and disagree with them.
+    now = ist_now()
 
     # Same presets as the dashboard's Performance band, plus All time -
     # these figures are plain totals, so an unbounded window is a
@@ -169,8 +173,8 @@ def user_performance(user_id):
         # `created_at < end` would silently drop everything made on the
         # last day of it.
         base_query = base_query.filter(
-            db.func.date(Task.created_at) >= period["start"],
-            db.func.date(Task.created_at) <= period["end"],
+            ist_date(Task.created_at) >= period["start"],
+            ist_date(Task.created_at) <= period["end"],
         )
 
     total_assigned = base_query.count()

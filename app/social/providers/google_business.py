@@ -181,8 +181,10 @@ class GoogleBusinessProvider(GoogleBaseProvider, SocialProvider):
 
     # -- Deletion ----------------------------------------------------------
 
-    def delete_post(self, target, token):
-        GoogleClient(POSTS_API).delete(target.external_post_id, token=token)
+    def delete_post(self, external_post_id, token):
+        # Contract matches Meta's delete_post(external_post_id, token):
+        # lifecycle.remove_target passes the id STRING, not the target object.
+        GoogleClient(POSTS_API).delete(external_post_id, token=token)
         return True
 
     # -- Analytics ---------------------------------------------------------

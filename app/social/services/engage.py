@@ -8,6 +8,7 @@ end-to-end. Best-effort throughout: one unreachable post never aborts a sync.
 
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from flask import current_app
 
 from app.extensions import db
@@ -90,13 +91,26 @@ def sync_comments(client_id=None):
             if exists:
                 exists.fetched_at = datetime.utcnow()
                 continue
-            db.session.add(SocialComment(
-                target_id=target.id, platform=target.platform,
-                external_id=ext, parent_external_id=c.get("parent_external_id"),
-                author_name=c.get("author_name"), author_id=c.get("author_id"),
-                message=c.get("message"), created_time=c.get("created_time"),
-                is_ours=False, fetched_at=datetime.utcnow()))
-            report["new"] += 1
+            # Two overlapping syncs (cron overrun, or cron + a manual trigger)
+            # can both miss the SELECT above and both insert the same
+            # (platform, external_id), whose unique constraint would then abort
+            # the WHOLE batch commit. Insert inside a SAVEPOINT and treat the
+            # collision as "already fetched" instead of failing everything.
+            try:
+                with db.session.begin_nested():
+                    db.session.add(SocialComment(
+                        target_id=target.id, platform=target.platform,
+                        external_id=ext,
+                        parent_external_id=c.get("parent_external_id"),
+                        author_name=c.get("author_name"),
+                        author_id=c.get("author_id"),
+                        message=c.get("message"),
+                        created_time=c.get("created_time"),
+                        is_ours=False, fetched_at=datetime.utcnow()))
+                    db.session.flush()
+                report["new"] += 1
+            except IntegrityError:
+                continue
 
     db.session.commit()
     return report

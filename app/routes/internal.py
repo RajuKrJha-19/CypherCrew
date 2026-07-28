@@ -92,6 +92,7 @@ def run_task_fallback():
 #   * * * * *      scheduler/run   (enqueue due scheduled posts)
 #   */30 * * * *   analytics/run   (refresh insights)
 #   0 */6 * * *    tokens/refresh  (refresh expiring platform tokens)
+#   0 2 * * *      media-gc/run    (delete orphaned direct-upload objects)
 # ----------------------------------------------------------------------
 
 @internal_bp.route("/social/worker/run", methods=["POST"])
@@ -124,6 +125,16 @@ def run_social_token_refresh():
     _social_guard()
     from app.social.tokens import refresh
     return jsonify(success=True, **refresh.refresh_expiring())
+
+
+@internal_bp.route("/social/media-gc/run", methods=["POST"])
+@csrf.exempt
+def run_social_media_gc():
+    """Delete orphaned direct-upload objects from R2 (uploads never saved, or
+    left behind by a deleted post). Safe to run daily: 0 2 * * *."""
+    _social_guard()
+    from app.social.media import gc
+    return jsonify(success=True, **gc.sweep())
 
 
 @internal_bp.route("/social/status", methods=["GET"])

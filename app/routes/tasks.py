@@ -4,7 +4,7 @@ import io
 import math
 from uuid import uuid4
 from werkzeug.utils import secure_filename
-from app.utils.timezone import ist_now
+from app.utils.timezone import ist_now, ist_date
 from datetime import datetime, timedelta
 
 from flask import (
@@ -589,11 +589,11 @@ def apply_task_filters(query, args):
     today = ist_now()
 
     if filter_by == "today":
-        query = query.filter(db.func.date(Task.created_at) == today.date())
+        query = query.filter(ist_date(Task.created_at) == today.date())
 
     elif filter_by == "yesterday":
         query = query.filter(
-            db.func.date(Task.created_at) == today.date() - timedelta(days=1)
+            ist_date(Task.created_at) == today.date() - timedelta(days=1)
         )
 
     elif filter_by == "last_7_days":
@@ -2272,15 +2272,18 @@ def edit_task(task_id):
         task.quantity = quantity
         task.estimated_time = estimated_time
 
-        # Reassignment, client/deliverable retargeting and fallback config are
-        # manager-only (the inline quick-edit already enforces this). A
-        # self-assigned owner without manage_tasks reaches this form to edit
-        # their own task's content - they must not be able to push it onto
-        # someone else or move it to another client.
+        # Reassignment is allowed for task assigners (the `assign_tasks`
+        # permission), matching what that permission promises. Client/
+        # deliverable retargeting and fallback config stay manager-only. A
+        # self-assigned owner with neither permission edits only their own
+        # task's content and must not push it onto someone else or move it to
+        # another client - can_assign_tasks is false for them (self-assign
+        # needs no permission), so the guard below still holds them out.
+        if can_assign_tasks(current_user):
+            task.assigned_to_id = assigned_to_id
         if can_manage_tasks:
             task.client_id = client_id
             task.deliverable_id = deliverable_id
-            task.assigned_to_id = assigned_to_id
             fallback_config_changed = (
                 old_backup_assignee_id != backup_assignee_id
                 or old_fallback_hours != fallback_hours
@@ -3527,8 +3530,10 @@ def quick_update_task(task_id):
 
     elif field == "assignee":
 
-        if not can_manage:
-            return jsonify({"success": False, "message": "Only managers can reassign."}), 403
+        # Reassign is allowed for task assigners (assign_tasks), matching
+        # edit_task and what that permission promises - not managers only.
+        if not can_assign_tasks(current_user):
+            return jsonify({"success": False, "message": "You don't have permission to reassign tasks."}), 403
 
         assigned_user = User.query.filter_by(id=value, status="active").first()
 
@@ -3593,7 +3598,11 @@ def bulk_update_tasks():
     effects that belong on the single-task path.
     """
 
-    if not has_permission(current_user, "manage_tasks"):
+    # Bulk reassign is open to task assigners (assign_tasks), matching the
+    # single-task edit/quick paths; bulk priority/deadline stay manager-only
+    # (field-level check below), so assigners gain nothing beyond reassign.
+    can_manage = has_permission(current_user, "manage_tasks")
+    if not (can_manage or can_assign_tasks(current_user)):
         return jsonify({"success": False, "message": "Permission denied."}), 403
 
     data = request.get_json(silent=True) or {}
@@ -3603,6 +3612,9 @@ def bulk_update_tasks():
 
     if field not in ("assignee", "priority", "deadline"):
         return jsonify({"success": False, "message": "Unsupported field."}), 400
+
+    if field in ("priority", "deadline") and not can_manage:
+        return jsonify({"success": False, "message": "Only managers can bulk-change that field."}), 403
 
     if not isinstance(raw_ids, list) or not raw_ids:
         return jsonify({"success": False, "message": "No tasks selected."}), 400
@@ -4039,9 +4051,6 @@ REJECTION_FILE_ALLOWED_EXTENSIONS = {
 @login_required
 def reject_task(task_id):
 
-    if not has_permission(current_user, "approve_tasks"):
-        return redirect(url_for("dashboard.index"))
-
     task = Task.query.get_or_404(task_id)
 
     if task.status not in ["Core Review", "Client Review"]:
@@ -4055,6 +4064,20 @@ def reject_task(task_id):
                 task_id=task.id
             )
         )
+
+    # Mirror approve_task's per-stage gates: sending a task back from Client
+    # Review overturns the client-facing sign-off, so it needs publish rights;
+    # Core Review needs approve_tasks (or publish). Previously any approve_tasks
+    # holder could reject a Client Review task they weren't allowed to act on.
+    if task.status == "Client Review":
+        allowed = can_publish(current_user)
+    else:
+        allowed = has_permission(current_user, "approve_tasks") \
+            or can_publish(current_user)
+    if not allowed:
+        flash("You don't have permission to send this task back at this "
+              "stage.", "error")
+        return redirect(url_for("tasks.task_detail", task_id=task.id))
 
     message = request.form.get(
         "message",
@@ -5507,8 +5530,14 @@ def accept_task_transfer(transfer_id):
     record_status_time(task, task.status)
 
     task.assigned_to_id = current_user.id
-    task.employee_completed = False
-    task.employee_completed_at = None
+    # Only clear the completion flags if the task is BEFORE review. A task
+    # transferred while in Core/Client Review or Scheduled is already
+    # "employee complete"; clearing the flag would silently drop it from
+    # completed-throughput metrics while its status stays in review.
+    if task.status not in task_status.REVIEW_STATUSES \
+            and task.status != task_status.SCHEDULED:
+        task.employee_completed = False
+        task.employee_completed_at = None
 
     transfer.status = TaskTransferRequest.ACCEPTED
     transfer.responded_at = datetime.utcnow()

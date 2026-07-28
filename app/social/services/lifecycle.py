@@ -45,7 +45,11 @@ def remove_target(target, actor_id=None):
         try:
             token = AccountManager.access_token(target.account)
             provider.delete_post(target.external_post_id, token)
-        except SocialError as exc:
+        except Exception as exc:  # noqa: BLE001
+            # Providers raise raw transport errors (MetaGraphError /
+            # GoogleHTTPError) that don't subclass SocialError, so catching only
+            # SocialError let a token-expired / already-gone / 5xx delete 500 the
+            # route and leave the target stuck "published". Surface it as a note.
             note = f"Platform couldn't delete it: {exc}"
     else:
         note = (f"{target.platform.capitalize()} can't delete posts via the "

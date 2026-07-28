@@ -47,9 +47,19 @@ class PublishJob(db.Model):
         onupdate=datetime.utcnow,
     )
 
+    # A target can carry more than one job over its life: a scheduled job,
+    # then a publish-now retry after a failure (each has its own unique
+    # idempotency_key). `target.job` is therefore the NEWEST job - ordered
+    # explicitly so it is deterministic, not an arbitrary row. Every delete
+    # path clears jobs by target_id (see _detach_post_history / remove_target),
+    # so the cascade here never has to resolve which of several to remove.
     target = db.relationship(
         "SocialPostTarget",
-        backref=db.backref("job", uselist=False, cascade="all, delete-orphan"),
+        backref=db.backref(
+            "job", uselist=False,
+            order_by="PublishJob.id.desc()",
+            cascade="all, delete-orphan",
+        ),
     )
 
     __table_args__ = (
