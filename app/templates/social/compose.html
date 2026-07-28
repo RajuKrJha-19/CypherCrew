@@ -160,6 +160,60 @@
                 <input type="checkbox" name="also_story" id="alsoStory">
                 <span><i class="fa-brands fa-instagram"></i> Also share to <b>Story</b> <small id="alsoStoryHint">publishes the media as an Instagram Story alongside the post</small></span>
             </label>
+
+            {# --- Story style: plain, or tappable through to a post ---
+
+               Shown whenever a Story is actually going out (as the post
+               type, or as the companion). The second option cannot be
+               fully automated - see the note it renders - so it is
+               labelled honestly rather than left to fail silently. #}
+            <div class="cmp-section cmp-story-style" id="storyStyleWrap" hidden>
+                <span class="cmp-label">Story style</span>
+                <div class="cmp-story-options">
+                    <label class="cmp-story-option">
+                        <input type="radio" name="story_style" value="plain"
+                               {{ 'checked' if story_style != 'post_link' }}>
+                        <span class="cso-body">
+                            <span class="cso-title"><i class="fa-regular fa-image"></i> Plain story</span>
+                            <span class="cso-note">Just the media. Tapping it does nothing.</span>
+                        </span>
+                    </label>
+                    <label class="cmp-story-option">
+                        <input type="radio" name="story_style" value="post_link"
+                               {{ 'checked' if story_style == 'post_link' }}>
+                        <span class="cso-body">
+                            <span class="cso-title"><i class="fa-solid fa-arrow-up-right-from-square"></i> Opens a post</span>
+                            <span class="cso-note">Tapping the story takes viewers to the post.</span>
+                        </span>
+                    </label>
+                </div>
+
+                {# Only a standalone Story needs to be told which post; the
+                   companion Story always points at the post it ships with. #}
+                <div id="storyLinkPick" hidden>
+                    <label class="cmp-label" for="storyLinkTarget">Which post should it open?</label>
+                    <select name="story_link_target_id" id="storyLinkTarget">
+                        <option value="">— choose a published post —</option>
+                        {% for t in linkable_targets %}
+                        <option value="{{ t.id }}" {{ 'selected' if story_link_target_id == t.id }}>
+                            {{ t.post.title or t.caption[:60] if t.caption else 'Untitled' }}
+                            · {{ t.platform }} · {{ t.updated_at.strftime('%d %b') }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not linkable_targets %}
+                    <p class="cmp-hint-inline">No published posts for this client yet — publish one first, then a story can point at it.</p>
+                    {% endif %}
+                </div>
+
+                <p class="cmp-story-manual" id="storyManualNote" hidden>
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Instagram's API can't attach the sticker — Meta keeps story
+                    stickers and links app-only. The story publishes on schedule and
+                    Studio will then ask someone to add the post sticker in the
+                    Instagram app, with the link ready to copy.</span>
+                </p>
+            </div>
         </div>
     </div>
 
@@ -292,8 +346,40 @@
         alsoStoryWrap.classList.toggle("disabled", !ok);
         alsoStoryWrap.classList.toggle("on", alsoStory.checked);
         $("alsoStoryHint").textContent = igSel ? "publishes the media as an Instagram Story alongside the post" : "select an Instagram channel to enable";
+        refreshStoryStyle();
     }
-    if(alsoStory) alsoStory.addEventListener("change", ()=>alsoStoryWrap.classList.toggle("on", alsoStory.checked));
+
+    // Story style is only a question when a Story is actually going out —
+    // either as the post type itself, or as the companion alongside it.
+    // The "which post?" picker is for standalone stories only: a companion
+    // story always points at the post it ships with.
+    const storyStyleWrap=$("storyStyleWrap"), storyLinkPick=$("storyLinkPick"),
+          storyManualNote=$("storyManualNote"), storyLinkTarget=$("storyLinkTarget");
+    function storyStyleValue(){
+        const on=document.querySelector('input[name="story_style"]:checked');
+        return on ? on.value : "plain";
+    }
+    function refreshStoryStyle(){
+        if(!storyStyleWrap) return;
+        const pt=postType(), igSel=selectedPlatforms().includes("instagram");
+        const storyGoingOut = igSel && (pt==="story" || (alsoStory && alsoStory.checked && !alsoStory.disabled));
+        storyStyleWrap.hidden = !storyGoingOut;
+
+        const linked = storyStyleValue()==="post_link";
+        if(storyManualNote) storyManualNote.hidden = !(storyGoingOut && linked);
+        if(storyLinkPick) storyLinkPick.hidden = !(storyGoingOut && linked && pt==="story");
+        // Never submit a stale target id for a companion story — the server
+        // ignores it, but a hidden select that still holds a value is the
+        // kind of thing that comes back as a bug later.
+        if(storyLinkTarget && storyLinkPick && storyLinkPick.hidden) storyLinkTarget.value="";
+    }
+    document.querySelectorAll('input[name="story_style"]').forEach(
+        r=>r.addEventListener("change", refreshStoryStyle));
+
+    if(alsoStory) alsoStory.addEventListener("change", ()=>{
+        alsoStoryWrap.classList.toggle("on", alsoStory.checked);
+        refreshStoryStyle();
+    });
     document.querySelectorAll('input[name="account_ids"]').forEach(c=>c.addEventListener("change", refreshAccounts));
 
     function refreshTypeWarn(){

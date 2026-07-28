@@ -161,6 +161,41 @@ def _channel_client_ok(account_client_id, post_client_id):
                 and account_client_id != post_client_id)
 
 
+def _linkable_targets(client_id, limit=40):
+    """Published posts a story can be pointed at.
+
+    Feed posts only - a story linking to a story is meaningless, and a
+    post with no permalink gives the person adding the sticker nothing to
+    open. Scoped to the client so one client's story can never advertise
+    another's post.
+    """
+    q = (
+        SocialPostTarget.query
+        .filter(SocialPostTarget.status == "published",
+                SocialPostTarget.post_type != "story",
+                SocialPostTarget.permalink.isnot(None))
+        .order_by(SocialPostTarget.updated_at.desc())
+    )
+    return _scope_targets(q, client_id).limit(limit).all()
+
+
+def _linked_target_id(raw, client_id):
+    """Validate a story's chosen link target, server-side.
+
+    The composer only offers this client's published posts, but the form
+    field is just an id - re-check it here rather than trusting it.
+    """
+    try:
+        target_id = int(raw or 0)
+    except (TypeError, ValueError):
+        return None
+    if not target_id:
+        return None
+    return target_id if any(
+        t.id == target_id for t in _linkable_targets(client_id)
+    ) else None
+
+
 @social_bp.context_processor
 def _inject_studio_context():
     """Give every Studio template the switcher list + the active client, so
@@ -1016,6 +1051,52 @@ def remove_post(post_id):
     return _back_to(post.id)
 
 
+@social_bp.route("/targets/<int:target_id>/story-link-done", methods=["POST"])
+@login_required
+def story_link_done(target_id):
+    """Tick off the one step of a linked story the API cannot do.
+
+    A story asked to open a feed post publishes as a plain story - Meta
+    exposes no sticker parameter - so someone adds the post sticker in the
+    Instagram app and confirms it here. Recorded with who and when, so
+    "did anyone actually do it?" has an answer.
+    """
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+
+    if not target.links_to_post:
+        flash("That story wasn't set to open a post.", "error")
+        return _back_to(target.social_post_id)
+
+    if target.story_link_done_at:
+        flash("Already marked done.", "info")
+        return _back_to(target.social_post_id)
+
+    target.story_link_done_at = datetime.utcnow()
+    target.story_link_done_by_id = current_user.id
+    audit.record("story_link_completed", post_id=target.social_post_id,
+                 target_id=target.id, actor_id=current_user.id,
+                 detail={"linked_target_id": target.story_link_target_id})
+    db.session.commit()
+    flash("Marked done — the story now points at the post.", "success")
+    return _back_to(target.social_post_id)
+
+
+@social_bp.route("/targets/<int:target_id>/story-link-undo", methods=["POST"])
+@login_required
+def story_link_undo(target_id):
+    """Reopen a follow-up ticked off by mistake."""
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+    target.story_link_done_at = None
+    target.story_link_done_by_id = None
+    audit.record("story_link_reopened", post_id=target.social_post_id,
+                 target_id=target.id, actor_id=current_user.id)
+    db.session.commit()
+    flash("Reopened — the sticker still needs adding.", "info")
+    return _back_to(target.social_post_id)
+
+
 @social_bp.route("/history/sync", methods=["POST"])
 @login_required
 def sync_history():
@@ -1132,6 +1213,9 @@ def compose():
         first_comment="",
         platform_captions={},
         hashtag_sets=_hashtag_sets(default_client_id),
+        story_style="plain",
+        story_link_target_id=None,
+        linkable_targets=_linkable_targets(default_client_id),
     )
 
 
@@ -1158,6 +1242,8 @@ def edit_post(post_id):
     }
     first_comment = next(
         (t.first_comment for t in post.targets if t.first_comment), "")
+    story_target = next(
+        (t for t in post.targets if t.post_type == "story"), None)
     # If this post came from a task, keep its deliverable files available.
     task, task_assets = None, []
     if post.task_id:
@@ -1199,6 +1285,15 @@ def edit_post(post_id):
         first_comment=first_comment or "",
         platform_captions=platform_captions,
         hashtag_sets=_hashtag_sets(post.client_id),
+        # The style lives on the story target - which is `first` for a
+        # standalone story, and the companion beside it otherwise. A
+        # companion's link is rebuilt on save (it points at its sibling),
+        # so only a standalone story restores a chosen target id.
+        story_style=(story_target.story_style if story_target else "plain"),
+        story_link_target_id=(
+            first.story_link_target_id
+            if first is not None and first.post_type == "story" else None),
+        linkable_targets=_linkable_targets(post.client_id),
     )
 
 
@@ -1268,12 +1363,17 @@ def _apply_composer_form(post):
                 kw["client_asset_id"] = obj.id
             db.session.add(SocialMediaAsset(**kw))
 
-    def _new_target(account, ptype, caption):
+    def _new_target(account, ptype, caption, story_style="plain",
+                    story_link_target_id=None):
         t = SocialPostTarget(
             social_post_id=post.id, social_account_id=account.id,
             platform=account.platform, post_type=ptype, caption=caption,
             first_comment=first_comment, status="draft",
-            scheduled_for=scheduled_for)
+            scheduled_for=scheduled_for,
+            story_style=story_style if ptype == "story" else "plain",
+            story_link_target_id=(
+                story_link_target_id if ptype == "story" else None),
+        )
         db.session.add(t)
         db.session.flush()
         _add_media(t.id)
@@ -1284,6 +1384,25 @@ def _apply_composer_form(post):
     # main post isn't already a story and there's media to show.
     also_story = bool(request.form.get("also_story")) \
         and post_type not in ("story", "text") and media_items
+
+    # plain | post_link. "post_link" means the story is supposed to be
+    # tappable through to a feed post - which no platform lets us do via
+    # API, so it becomes a follow-up after publishing (see
+    # SocialPostTarget.needs_story_link).
+    story_style = "post_link" \
+        if request.form.get("story_style") == "post_link" else "plain"
+
+    # A standalone story links to a post that already exists; the
+    # companion story links to the feed target created beside it, so that
+    # id only becomes known inside the loop.
+    standalone_link_id = None
+    if post_type == "story" and story_style == "post_link":
+        standalone_link_id = _linked_target_id(
+            request.form.get("story_link_target_id"), post.client_id)
+        if standalone_link_id is None:
+            story_style = "plain"
+            flash("That story had no post to link to, so it was saved as a "
+                  "plain story.", "info")
 
     skipped = []
     n_created = 0
@@ -1297,14 +1416,17 @@ def _apply_composer_form(post):
             skipped.append(account.display_name)
             continue
         override = (request.form.get(f"caption_{account.platform}") or "").strip()
-        _new_target(account, post_type, override or base_caption)
+        feed = _new_target(account, post_type, override or base_caption,
+                           story_style=story_style,
+                           story_link_target_id=standalone_link_id)
         n_created += 1
         # Optional companion Story (no caption - stories don't use one).
         if also_story:
             prov = registry.get(account.platform)
             caps = prov.capabilities if prov else None
             if caps and caps.story_support and "story" in (caps.post_types or set()):
-                _new_target(account, "story", None)
+                _new_target(account, "story", None, story_style=story_style,
+                            story_link_target_id=feed.id)
 
     if skipped:
         flash("Skipped channel(s) that belong to a different client: "

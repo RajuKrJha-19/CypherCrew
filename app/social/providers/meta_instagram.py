@@ -35,6 +35,10 @@ class MetaInstagramProvider(MetaBaseProvider):
         max_carousel=10,
         publish_rate=(100, "24h"),
         story_support=True,
+        # Meta exposes no sticker/link parameter on STORIES containers -
+        # the post sticker and link sticker are app-only. A story asked to
+        # link to a post publishes normally and leaves a follow-up.
+        story_link_support=False,
         max_caption_chars=2200,
         supports_first_comment=True,
         supports_comments=True,

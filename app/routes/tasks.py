@@ -385,12 +385,37 @@ def parse_social_media_fields():
     return True, social.format_platforms(platforms), None
 
 
+def _like_needle(term):
+    """A LIKE pattern for one word, with the wildcards escaped.
+
+    Unescaped, a search for "%" matched every task and "_" matched any
+    single character - the two characters a user is most likely to paste in
+    from a real title without meaning anything by them.
+    """
+    escaped = (
+        term.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
 def apply_task_search(query, search):
+    """Narrow `query` to the tasks matching a free-text search.
 
-    if not search:
+    The search is split into words and *every* word must match - but each
+    one is free to match a different column. A single LIKE over the whole
+    string can only ever find text that sits in one column, so "rishu 12"
+    (name on User, number on Task) and "hope regression" (client vs
+    deliverable) both came back empty even though they name one task
+    exactly. That reads as the search being fussy about how you type it.
+    Word order does not matter, and matching is case-insensitive
+    throughout.
+    """
+    terms = search.split() if search else []
+
+    if not terms:
         return query
-
-    clean_search = search.strip().replace("#", "")
 
     # outerjoin, not join: an inner join here silently dropped any task with
     # no client or deliverable from every search - even when its title or
@@ -398,7 +423,7 @@ def apply_task_search(query, search):
     # join those columns are simply NULL (so their ilike clauses don't
     # match), and the task still surfaces on a title/code/status hit. This
     # matches the outer-join behaviour the global search already uses.
-    return query.outerjoin(
+    query = query.outerjoin(
         Client,
         Task.client_id == Client.id
     ).outerjoin(
@@ -407,26 +432,40 @@ def apply_task_search(query, search):
     ).outerjoin(
         User,
         Task.assigned_to_id == User.id
-    ).filter(
-        or_(
-            Task.title.ilike(f"%{search}%"),
-            Task.description.ilike(f"%{search}%"),
-            Task.status.ilike(f"%{search}%"),
-            Task.priority.ilike(f"%{search}%"),
-
-            cast(Task.task_code, String).ilike(
-                f"%{clean_search}%"
-            ),
-
-            Client.client_name.ilike(f"%{search}%"),
-
-            ClientDeliverable.service_name.ilike(f"%{search}%"),
-            ClientDeliverable.deliverable_name.ilike(f"%{search}%"),
-
-            User.name.ilike(f"%{search}%"),
-            User.email.ilike(f"%{search}%")
-        )
     )
+
+    for term in terms:
+        needle = _like_needle(term)
+
+        clauses = [
+            Task.title.ilike(needle, escape="\\"),
+            Task.description.ilike(needle, escape="\\"),
+            Task.status.ilike(needle, escape="\\"),
+            Task.priority.ilike(needle, escape="\\"),
+
+            Client.client_name.ilike(needle, escape="\\"),
+
+            ClientDeliverable.service_name.ilike(needle, escape="\\"),
+            ClientDeliverable.deliverable_name.ilike(needle, escape="\\"),
+
+            User.name.ilike(needle, escape="\\"),
+            User.email.ilike(needle, escape="\\"),
+        ]
+
+        # "#1012" and "1012" are the same task to everyone but the database.
+        # Guarded: a bare "#" would otherwise leave an empty needle that
+        # matches every code, quietly turning that word into a wildcard.
+        code = term.replace("#", "")
+        if code:
+            clauses.append(
+                cast(Task.task_code, String).ilike(
+                    _like_needle(code), escape="\\"
+                )
+            )
+
+        query = query.filter(or_(*clauses))
+
+    return query
 
 
 def can_view_task(task):

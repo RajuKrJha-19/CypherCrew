@@ -16,6 +16,44 @@
                 </div>
             </div>
 
+            {# Searches all three columns at once, server-side: the queue is
+               the one screen where you arrive knowing the task and needing
+               to find it, and a client-side filter would only ever reach
+               the cards already on the page. Matching is the task list's
+               own - code, title, assignee, client. #}
+            <form method="GET" class="review-search" role="search">
+                <div class="review-search-field">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" name="q" value="{{ search }}"
+                           placeholder="Search this queue by task ID, title or employee…"
+                           aria-label="Search the review queue" autocomplete="off">
+                    <span class="review-search-spinner" aria-hidden="true"></span>
+                </div>
+                {# Kept, and kept working: live search is the fast path, but
+                   without JS this button is the only way to run a search. #}
+                <button type="submit" class="btn btn-secondary">Search</button>
+                <a href="{{ url_for('dashboard.my_tasks') }}" class="btn btn-ghost"
+                   data-search-clear {{ '' if search else 'hidden' }}>Clear</a>
+            </form>
+
+            {# Everything the query decides lives inside this one node, so
+               live search can swap it wholesale and leave the input - and
+               the caret in it - untouched. #}
+            <div id="reviewSearchResults">
+
+            {% if search %}
+            {% set total = core_review_tasks|length + client_review_tasks|length + published_tasks|length %}
+            <p class="review-search-summary" aria-live="polite">
+                {% if total %}
+                <strong>{{ total }}</strong> task{{ '' if total == 1 else 's' }} matching
+                “{{ search }}” in this queue.
+                {% else %}
+                Nothing in the review queue matches “{{ search }}”.
+                <a href="{{ url_for('tasks.list_tasks', q=search) }}">Search all tasks instead →</a>
+                {% endif %}
+            </p>
+            {% endif %}
+
             <div class="review-board">
 
                 <section class="review-column">
@@ -27,7 +65,7 @@
                     {% for task in core_review_tasks %}
                     {% include "dashboard/_review_task_card.html" %}
                     {% else %}
-                    <div class="empty-column">No tasks in core review.</div>
+                    <div class="empty-column">{{ "No core review tasks match your search." if search else "No tasks in core review." }}</div>
                     {% endfor %}
                 </section>
 
@@ -40,7 +78,7 @@
                     {% for task in client_review_tasks %}
                     {% include "dashboard/_review_task_card.html" %}
                     {% else %}
-                    <div class="empty-column">No tasks in client review.</div>
+                    <div class="empty-column">{{ "No client review tasks match your search." if search else "No tasks in client review." }}</div>
                     {% endfor %}
                 </section>
 
@@ -53,17 +91,155 @@
                     {% for task in published_tasks %}
                     {% include "dashboard/_review_task_card.html" %}
                     {% else %}
-                    <div class="empty-column">No published tasks.</div>
+                    <div class="empty-column">{{ "No published tasks match your search." if search else "No published tasks." }}</div>
                     {% endfor %}
                 </section>
 
             </div>
 
-        
+            </div>{# /#reviewSearchResults #}
+
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/social-publish-confirm.js') }}"></script>
+<script>
+        /*
+            Live search over the review queue.
+
+            Refetches this same page as you type and swaps only
+            #reviewSearchResults, so the input - and the caret in it - is
+            never re-rendered. The server stays the single source of truth
+            for what matches; filtering the cards already on the page would
+            only ever search the 30 published tasks that happened to be
+            rendered.
+
+            Everything inside the swapped node is driven by delegated
+            document-level listeners (the reject box, the move tracker,
+            social-publish-confirm.js), so replaced cards keep working.
+        */
+        (function () {
+            "use strict";
+
+            const DEBOUNCE_MS = 250;
+
+            function init() {
+
+                const form = document.querySelector(".review-search");
+                const results = document.getElementById("reviewSearchResults");
+                if (!form || !results) return;
+
+                // The form is re-rendered on every real navigation, so a
+                // flag on the element itself is enough to stop App.ready
+                // from binding a second set of listeners to the same one.
+                if (form.dataset.liveBound === "1") return;
+                form.dataset.liveBound = "1";
+
+                const input = form.querySelector('input[name="q"]');
+                const clear = form.querySelector("[data-search-clear]");
+                const field = form.querySelector(".review-search-field");
+                if (!input) return;
+
+                let timer = null;
+                let controller = null;
+                let applied = input.value.trim();
+                let liveOk = true;
+
+                function urlFor(query) {
+                    return window.location.pathname +
+                        (query ? "?q=" + encodeURIComponent(query) : "");
+                }
+
+                function run(query, url) {
+
+                    // Abort rather than ignore: without this a slow early
+                    // keystroke can land after a fast later one and put
+                    // stale results on screen.
+                    if (controller) controller.abort();
+                    controller = new AbortController();
+
+                    if (field) field.classList.add("is-searching");
+
+                    fetch(url, {
+                        credentials: "same-origin",
+                        headers: { "X-Requested-With": "fetch" },
+                        signal: controller.signal
+                    })
+                        .then(function (response) {
+                            if (!response.ok) throw new Error(response.status);
+                            return response.text();
+                        })
+                        .then(function (html) {
+                            const doc = new DOMParser()
+                                .parseFromString(html, "text/html");
+                            const fresh = doc.getElementById("reviewSearchResults");
+                            if (!fresh) throw new Error("no results node");
+
+                            results.innerHTML = fresh.innerHTML;
+                            if (clear) clear.hidden = !query;
+
+                            // replaceState, not pushState: typing eight
+                            // characters shouldn't cost eight presses of
+                            // the back button.
+                            window.history.replaceState({}, "", url);
+
+                            if (field) field.classList.remove("is-searching");
+                        })
+                        .catch(function (error) {
+                            if (error.name === "AbortError") return;
+                            if (field) field.classList.remove("is-searching");
+
+                            // Leave the results on screen alone - a failed
+                            // fetch is no reason to blank the queue - and
+                            // hand the next submit back to the browser so
+                            // Search still works as a plain form.
+                            liveOk = false;
+                            console.error("Review search failed:", error);
+                        });
+                }
+
+                function schedule(immediate) {
+                    window.clearTimeout(timer);
+
+                    const query = input.value.trim();
+                    if (query === applied) return;
+
+                    const go = function () {
+                        applied = query;
+                        run(query, urlFor(query));
+                    };
+
+                    if (immediate) go();
+                    else timer = window.setTimeout(go, DEBOUNCE_MS);
+                }
+
+                input.addEventListener("input", function () { schedule(false); });
+
+                // Enter, and the Search button, skip the debounce instead
+                // of reloading the whole page - unless live search has
+                // already failed once, in which case the plain GET is the
+                // more reliable answer and we stay out of its way.
+                form.addEventListener("submit", function (event) {
+                    if (!liveOk) return;
+                    event.preventDefault();
+                    schedule(true);
+                });
+
+                if (clear) {
+                    clear.addEventListener("click", function (event) {
+                        event.preventDefault();
+                        input.value = "";
+                        input.focus();
+                        schedule(true);
+                    });
+                }
+            }
+
+            if (window.App) window.App.ready(init);
+            else if (document.readyState !== "loading") init();
+            else document.addEventListener("DOMContentLoaded", init);
+        })();
+    </script>
 <script>
         function toggleReviewRejectBox(button) {
             const card = button.closest(".review-task-card");

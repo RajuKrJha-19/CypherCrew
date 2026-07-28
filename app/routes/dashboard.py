@@ -272,29 +272,41 @@ def my_tasks():
         selectinload(Task.created_by),
     )
 
-    core_review_tasks = Task.query.filter(
-        Task.status == "Core Review"
-    ).options(*_review_eager).order_by(
-        Task.employee_completed_at.desc()
-    ).all()
+    # The task list's own search, reused rather than rewritten: it already
+    # covers task code, title, assignee name and email, client and
+    # deliverable, and it carries a lesson in its outer joins (an inner
+    # join here silently hides every task with no client). Imported inside
+    # the view to keep the two blueprints from importing each other at
+    # module level.
+    from app.routes.tasks import apply_task_search
 
-    client_review_tasks = Task.query.filter(
-        Task.status == "Client Review"
-    ).options(*_review_eager).order_by(
-        Task.id.desc()
-    ).all()
+    search = request.args.get("q", "").strip()
 
-    published_tasks = Task.query.filter(
-        Task.status == "Published"
-    ).options(*_review_eager).order_by(
-        Task.completed_at.desc()
-    ).limit(30).all()
+    def review_queue(status, order, limit=None):
+        query = apply_task_search(
+            Task.query.filter(Task.status == status), search
+        ).options(*_review_eager).order_by(order)
+
+        return query.limit(limit).all() if limit else query.all()
+
+    core_review_tasks = review_queue(
+        "Core Review", Task.employee_completed_at.desc())
+
+    client_review_tasks = review_queue(
+        "Client Review", Task.id.desc())
+
+    # Published is capped because it is history, not a queue - but a
+    # search is a question about a specific task, so it reaches further
+    # back than the 30 most recent.
+    published_tasks = review_queue(
+        "Published", Task.completed_at.desc(), limit=150 if search else 30)
 
     return render_template(
         "dashboard/my_tasks.html",
         core_review_tasks=core_review_tasks,
         client_review_tasks=client_review_tasks,
         published_tasks=published_tasks,
+        search=search,
         social=social,
     )
 

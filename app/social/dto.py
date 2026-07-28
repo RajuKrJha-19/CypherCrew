@@ -42,6 +42,13 @@ class Capabilities:
     max_video_seconds: int | None = None
     publish_rate: tuple | None = None      # (count, window) e.g. (100, "24h")
     story_support: bool = False
+    # Can the API attach a tappable sticker/link to a story? Instagram
+    # cannot (media_type=STORIES accepts image_url/video_url and nothing
+    # else), so a "story that opens the post" is published as a plain
+    # story plus a follow-up someone completes in the app. Declared here
+    # rather than special-cased in the composer, so the day Meta opens it
+    # up the adapter is the only thing that changes.
+    story_link_support: bool = False
     max_caption_chars: int | None = None
     supports_first_comment: bool = False   # auto-post a first comment
     supports_delete: bool = False          # delete a published post via API

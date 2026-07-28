@@ -109,6 +109,32 @@ class SocialPostTarget(db.Model):
     permalink = db.Column(db.String(500), nullable=True)
     last_error = db.Column(db.Text, nullable=True)
 
+    # -- Story style ------------------------------------------------------
+    # plain     : just the image/video, nothing to tap.
+    # post_link : the story should carry a tappable sticker back to a feed
+    #             post.
+    #
+    # Meta's Content Publishing API cannot attach ANY sticker or link to a
+    # story - media_type=STORIES takes image_url/video_url and nothing
+    # else, and the link/post stickers are app-only by Meta's choice. So
+    # "post_link" publishes the story exactly like a plain one and records
+    # a follow-up: someone adds the sticker in the Instagram app, then
+    # marks it done here. Modelled rather than hidden, so the Studio can
+    # show what was intended and chase the bit it can't automate.
+    story_style = db.Column(
+        db.String(20), nullable=False, default="plain",
+        server_default="plain",
+    )
+    # The feed target this story should point at. Self-referential: for
+    # "Also share to Story" it is the sibling target created alongside it.
+    story_link_target_id = db.Column(
+        db.Integer, db.ForeignKey("social_post_targets.id"), nullable=True
+    )
+    story_link_done_at = db.Column(db.DateTime, nullable=True)
+    story_link_done_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True
+    )
+
     ai_generated = db.Column(db.Boolean, nullable=False, default=False)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -125,6 +151,14 @@ class SocialPostTarget(db.Model):
         lazy=True,
         order_by="SocialMediaAsset.sort_order",
     )
+    story_link_target = db.relationship(
+        "SocialPostTarget",
+        remote_side=[id],
+        foreign_keys=[story_link_target_id],
+    )
+    story_link_done_by = db.relationship(
+        "User", foreign_keys=[story_link_done_by_id]
+    )
 
     __table_args__ = (
         db.Index(
@@ -132,6 +166,28 @@ class SocialPostTarget(db.Model):
             "scheduled_for", "status",
         ),
     )
+
+    @property
+    def links_to_post(self):
+        """Was this story meant to be tappable through to a feed post?"""
+        return self.post_type == "story" and self.story_style == "post_link"
+
+    @property
+    def needs_story_link(self):
+        """Live on Instagram, but still missing the sticker only a human
+        can add. This is the whole reason story_style is persisted."""
+        return (
+            self.links_to_post
+            and self.status == "published"
+            and self.story_link_done_at is None
+        )
+
+    @property
+    def story_link_url(self):
+        """Permalink of the post this story should open - what the person
+        adding the sticker actually needs in their hand."""
+        linked = self.story_link_target
+        return linked.permalink if linked else None
 
     def __repr__(self):
         return f"<SocialPostTarget {self.id} {self.platform} {self.status}>"

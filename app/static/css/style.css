@@ -7089,6 +7089,192 @@ body.sidebar-collapsed .task-page-sticky-header{
 
 /* ADMIN MY TASKS - FINAL COMPACT UI */
 
+/* ---- Review queue search --------------------------------------------
+   Searches all three columns at once. Shaped like the task list's search
+   so the two read as the same control in two places. */
+.review-search{
+    display:flex;
+    /* Explicit row: this is a <form>, and the base form{} rule lays every
+       form out as a column. Without this the field's `flex:1 1 320px`
+       becomes 320px of HEIGHT and align-items:center stacks the button
+       far below a giant empty box. */
+    flex-direction:row;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin:0 0 14px;
+}
+
+/* .btn sets display:flex, which outranks the browser's own
+   [hidden]{display:none} - so the Clear link stayed on screen with no
+   search to clear. Scoped to this bar rather than made !important. */
+.review-search [hidden]{
+    display:none;
+}
+
+/* ==================================================================
+   Story style (composer) + the sticker follow-up (post detail)
+
+   A story asked to open a feed post can't be finished by the API, so
+   both ends of that are styled here: the choice at compose time, and
+   the outstanding manual step afterwards.
+   ================================================================== */
+.cmp-story-options{
+    display:flex;
+    flex-direction:row;
+    gap:10px;
+    flex-wrap:wrap;
+}
+.cmp-story-option{
+    flex:1 1 200px;
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    padding:11px 13px;
+    border:1px solid var(--border, #e2e5ec);
+    border-radius:10px;
+    cursor:pointer;
+    background:var(--surface, #fff);
+    transition:border-color .15s ease, background .15s ease;
+}
+.cmp-story-option:hover{ border-color:var(--primary, #4f46e5); }
+.cmp-story-option:has(input:checked){
+    border-color:var(--primary, #4f46e5);
+    background:color-mix(in srgb, var(--primary, #4f46e5) 6%, transparent);
+}
+.cmp-story-option input{ margin-top:3px; flex:none; }
+.cso-body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.cso-title{ font-weight:600; font-size:.88rem; }
+.cso-note{ font-size:.78rem; color:var(--muted, #6b7280); }
+
+#storyLinkPick{ margin-top:11px; }
+#storyLinkPick select{ width:100%; max-width:520px; }
+
+.cmp-story-manual{
+    display:flex;
+    gap:8px;
+    margin:11px 0 0;
+    padding:10px 12px;
+    border-radius:9px;
+    font-size:.79rem;
+    line-height:1.5;
+    color:var(--muted, #6b7280);
+    background:var(--surface-2, #f6f7f9);
+    border:1px solid var(--border, #e2e5ec);
+}
+.cmp-story-manual i{ margin-top:2px; flex:none; }
+
+.story-link-row{
+    display:flex;
+    flex-direction:row;
+    align-items:flex-start;
+    gap:14px;
+    padding:13px 0;
+    border-bottom:1px solid var(--border, #e2e5ec);
+    flex-wrap:wrap;
+}
+.story-link-row:last-child{ border-bottom:0; padding-bottom:0; }
+.story-link-row:first-child{ padding-top:0; }
+.slr-main{ flex:1 1 320px; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.slr-action{ flex:none; }
+.slr-title{ font-weight:600; font-size:.9rem; display:flex; align-items:center; gap:7px; }
+.story-link-row .slr-title i{ color:var(--warn, #b45309); }
+.story-link-row.is-done .slr-title{ color:var(--muted, #6b7280); font-weight:500; }
+.story-link-row.is-done .slr-title i{ color:var(--ok, #15803d); }
+.slr-note{ font-size:.79rem; color:var(--muted, #6b7280); line-height:1.5; }
+
+.slr-link{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:3px;
+}
+/* The URL is the payload here - it must be able to shrink and wrap
+   rather than push the Mark-done button off a narrow screen. */
+.slr-link code{
+    flex:1 1 220px;
+    min-width:0;
+    overflow-wrap:anywhere;
+    font-size:.76rem;
+    padding:4px 8px;
+    border-radius:6px;
+    background:var(--surface-2, #f6f7f9);
+    border:1px solid var(--border, #e2e5ec);
+}
+
+.review-search-field{
+    position:relative;
+    flex:1 1 320px;
+    display:flex;
+    align-items:center;
+    max-width:520px;
+}
+
+/* Live search: a quiet spinner inside the field, so the only thing that
+   moves while you type is the results below. Hidden until a request is
+   actually in flight - a debounced search that returns in 40ms should
+   show nothing at all. */
+.review-search-spinner{
+    position:absolute;
+    right:12px;
+    width:14px;
+    height:14px;
+    border:2px solid var(--border, #d7dbe3);
+    border-top-color:var(--primary, #4f46e5);
+    border-radius:50%;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .15s ease;
+}
+.review-search-field.is-searching .review-search-spinner{
+    opacity:1;
+    animation:review-search-spin .6s linear infinite;
+}
+.review-search-field.is-searching input[type="search"]{
+    padding-right:34px;
+}
+@keyframes review-search-spin{ to{ transform:rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+    .review-search-field.is-searching .review-search-spinner{
+        animation:none;
+    }
+}
+
+.review-search-field i{
+    position:absolute;
+    left:13px;
+    font-size:12px;
+    color:var(--color-text-subtle);
+    pointer-events:none;
+}
+
+.review-search-field input{
+    width:100%;
+    height:40px;
+    padding:0 13px 0 34px;
+    font-size:13px;
+    color:var(--color-text);
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md, 10px);
+}
+
+.review-search-field input:focus{
+    outline:none;
+    border-color:var(--color-primary);
+    box-shadow:var(--focus-ring);
+}
+
+.review-search-summary{
+    margin:0 0 14px;
+    font-size:13px;
+    color:var(--color-text-muted);
+}
+
+.review-search-summary strong{ color:var(--color-text); }
+
 .review-board{
     display:grid !important;
     grid-template-columns:repeat(3, minmax(260px, 1fr)) !important;
@@ -16796,7 +16982,8 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
     overflow:hidden; text-overflow:ellipsis; }
 .cs-caret{ font-size:10px; color:var(--color-text-subtle); transition:transform var(--dur) var(--ease); }
 .client-switcher[open] .cs-caret{ transform:rotate(180deg); }
-.cs-menu{ position:absolute; top:calc(100% + 6px); right:0; width:290px; z-index:60;
+.cs-menu{ position:absolute; top:calc(100% + 6px); left:0; right:auto; width:290px;
+    max-width:calc(100vw - 24px); z-index:60;
     background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg);
     box-shadow:var(--shadow-lg); overflow:hidden; }
 .cs-search-wrap{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--color-border);
@@ -16911,7 +17098,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 
 /* ---- Studio top bar + content ---- */
 .studio-content{ display:flex; flex-direction:column; min-width:0; }
-.studio-topbar{ position:sticky; top:0; z-index:30; height:58px; display:flex; align-items:center; gap:14px;
+.studio-topbar{ position:sticky; top:0; z-index:50; height:58px; display:flex; align-items:center; gap:14px;
     padding:0 22px; background:color-mix(in srgb, var(--color-surface) 90%, transparent);
     backdrop-filter:saturate(1.2) blur(8px); border-bottom:1px solid var(--color-border); }
 .studio-top-left{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:12px; }
@@ -16974,13 +17161,15 @@ body.studio-nav-collapsed .studio-nav-section::after{
 
 @media(max-width:900px){
     .studio-layout{ grid-template-columns:1fr; }
+    /* The drawer slides over the content, top bar included, so here it
+       takes the layer above it - the reverse of the desktop order. */
     .studio-sidebar{ position:fixed; left:0; top:0; width:230px; transform:translateX(-100%);
-        transition:transform var(--dur) var(--ease); box-shadow:var(--shadow-xl); }
+        z-index:60; transition:transform var(--dur) var(--ease); box-shadow:var(--shadow-xl); }
     body.studio-nav-open .studio-sidebar{ transform:translateX(0); }
     .studio-nav-toggle{ display:grid; place-items:center; width:38px; height:38px; flex:0 0 auto;
         border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface);
         color:var(--color-text); cursor:pointer; }
-    .studio-backdrop{ display:block; position:fixed; inset:0; background:rgba(2,6,23,.5); z-index:35;
+    .studio-backdrop{ display:block; position:fixed; inset:0; background:rgba(2,6,23,.5); z-index:55;
         opacity:0; visibility:hidden; transition:opacity var(--dur) var(--ease); }
     body.studio-nav-open .studio-backdrop{ opacity:1; visibility:visible; }
 }

@@ -315,6 +315,34 @@ def _purge_test_rows():
         UserPermission.query.filter(
             UserPermission.granted_by_id.in_(user_ids)
         ).delete(synchronize_session=False)
+        # Studio rows point at the user who made them, and those FKs block
+        # the delete below. Detach rather than delete: the social tables
+        # are wiped by their own fixture, and the audit trail is meant to
+        # outlive the row it names (the app does the same in
+        # _detach_post_history). Every nullable user FK on a social table
+        # belongs here - a missed one surfaces as a teardown-only
+        # ForeignKeyViolation, which is a confusing way to find out.
+        from app.models import (
+            Notification, SocialAccount, SocialAuditLog, SocialPost,
+            SocialPostTarget,
+        )
+        for model, columns in (
+            (SocialAuditLog, ("actor_id",)),
+            (SocialPost, ("created_by_id", "approved_by_id")),
+            (SocialPostTarget, ("story_link_done_by_id",)),
+            (SocialAccount, ("connected_by_id",)),
+            (Notification, ("actor_id",)),
+        ):
+            for column in columns:
+                model.query.filter(
+                    getattr(model, column).in_(user_ids)
+                ).update({column: None}, synchronize_session=False)
+
+        # notifications.user_id is NOT NULL - a notification only exists
+        # for its recipient, so it goes with them rather than detaching.
+        Notification.query.filter(
+            Notification.user_id.in_(user_ids)
+        ).delete(synchronize_session=False)
         User.query.filter(
             User.id.in_(user_ids)
         ).delete(synchronize_session=False)

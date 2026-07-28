@@ -164,6 +164,36 @@ def _process(job_id):
         return _handle_failure(job_id, exc)
 
 
+def _notify_story_link_pending(target):
+    """A story meant to open a post is live, but the sticker that makes it
+    tappable can only be added by hand in the Instagram app.
+
+    A story lasts 24 hours, so this cannot wait for someone to notice it on
+    a dashboard - whoever created the post is told the moment it goes out.
+    Best-effort: a notification failure must never fail a publish that has
+    already happened on the platform.
+    """
+    if not target.needs_story_link:
+        return
+    post = target.post
+    if post is None or not post.created_by_id:
+        return
+    try:
+        link = target.story_link_url
+        audit.notify(
+            post.created_by_id,
+            "Add the story sticker",
+            f"“{post.title or 'Your story'}” is live on Instagram. Meta's API "
+            "can't attach the sticker, so open the Instagram app and add the "
+            "post sticker to make it tappable"
+            + (f" — {link}" if link else "") + ".",
+            link=f"/social/posts/{post.id}", actor_id=None,
+        )
+    except Exception:  # noqa: BLE001 - never fail a completed publish
+        current_app.logger.exception(
+            "story-link notification failed for target=%s", target.id)
+
+
 def _apply_step(job, target, step, provider_state, provider=None, token=None):
     status = getattr(step, "status", None)
 
@@ -192,6 +222,7 @@ def _apply_step(job, target, step, provider_state, provider=None, token=None):
             target.id, target.platform, step.external_post_id,
         )
         _post_first_comment(target, step, provider, token)
+        _notify_story_link_pending(target)
         _maybe_finalize_post(target)
         return "published"
 

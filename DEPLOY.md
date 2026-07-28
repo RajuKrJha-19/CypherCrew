@@ -9,11 +9,16 @@ is written so that data is never touched.
 
 One thing needs action beyond pulling the code:
 
-**One database migration** — `c3f7a91b60d4`, which widens `users.role`
-and adds a unique constraint plus audit columns to `user_permissions`.
-It is required: two of the new role values are 29 characters and the old
-column held 30, so the first person given one would otherwise fail to
-save.
+**Two database migrations**, applied by the same `flask db upgrade`:
+
+- `c3f7a91b60d4` widens `users.role` and adds a unique constraint plus
+  audit columns to `user_permissions`. It is required: two of the new
+  role values are 29 characters and the old column held 30, so the first
+  person given one would otherwise fail to save.
+- `d7a24c8b91e3` adds the story-style columns to `social_post_targets`
+  (`story_style`, `story_link_target_id`, `story_link_done_at`,
+  `story_link_done_by_id`). Additive and nullable, with existing rows
+  defaulting to `plain` — see *Stories that open a post* below.
 
 No new dependencies. Everything else is templates, CSS and Python that
 ships with the pull.
@@ -146,6 +151,41 @@ delete-all-then-reinsert save could produce on a double submit. It keeps
 the earliest of each pair. No permission is lost: holding a grant twice
 and holding it once mean the same thing.
 
+`migrations/versions/d7a24c8b91e3_story_link_style.py` only adds columns,
+two foreign keys and a partial index to `social_post_targets`. Every
+column is nullable or carries a `server_default`, so existing rows become
+plain stories without a backfill. It is inspector-guarded and safe to
+re-run.
+
+---
+
+## Stories that open a post
+
+A story can now be composed in one of two styles: **plain**, or **opens a
+post** — the one that takes viewers to a feed post when they tap it.
+
+The second half cannot be fully automated, and this is a platform limit,
+not a gap in the app. Instagram's Content Publishing API accepts
+`image_url`/`video_url` on a `media_type=STORIES` container and nothing
+else: Meta exposes no parameter for the post sticker, the link sticker,
+or any other tappable element, and keeps them app-only. Every scheduling
+tool has the same hole.
+
+So Studio does the part it can and is explicit about the rest:
+
+1. The story publishes on schedule, exactly like a plain one.
+2. The post it should open is recorded against it.
+3. The moment it goes live, whoever created the post is notified, with
+   the target post's permalink in the message.
+4. The post page shows a **Story sticker** card with that link ready to
+   copy and a **Mark done** button, so it is visible whether anyone
+   actually added it. Stories last 24 hours — this is deliberately loud.
+
+Nothing to configure. If Meta ever opens sticker publishing up, the only
+change needed is `story_link_support=True` on the Instagram adapter
+(`app/social/providers/meta_instagram.py`); the composer already reads
+that capability rather than hard-coding the limitation.
+
 Everything else is additive, and `granted_at`/`granted_by_id` are
 nullable because rows that predate them have no honest value.
 
@@ -164,7 +204,7 @@ them to `employee` before shrinking the column. That is real data loss.
 ## Checks after deploying
 
 ```bash
-flask db current      # should print: c3f7a91b60d4 (head)
+flask db current      # should print: d7a24c8b91e3 (head)
 flask db heads        # should print exactly one head
 ```
 

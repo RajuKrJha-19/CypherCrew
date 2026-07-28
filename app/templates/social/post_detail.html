@@ -125,6 +125,74 @@
 </div>
 {% endif %}
 
+{# --- Story sticker follow-up ---------------------------------------
+
+   The one part of a "story that opens a post" nobody can automate:
+   Meta's API takes no sticker parameter, so the story goes out plain and
+   a person adds the sticker in the app. Surfaced here with the link
+   ready to copy, because a story is gone in 24 hours. #}
+{% set link_stories = post.targets|selectattr('links_to_post')|list %}
+{% if link_stories %}
+<div class="social-card studio-section">
+    <div class="social-card-head">
+        <h2><i class="fa-brands fa-instagram"></i> Story sticker</h2>
+        <div class="social-card-tools">
+            {% set pending = link_stories|selectattr('needs_story_link')|list %}
+            <span class="sp-pill {{ 'warn' if pending else 'ok' }}">
+                {{ (pending|length ~ ' to do') if pending else 'done' }}</span>
+        </div>
+    </div>
+    <div class="social-card-body">
+        {% for t in link_stories %}
+        <div class="story-link-row {{ 'is-done' if t.story_link_done_at }}">
+            <div class="slr-main">
+                <span class="slr-title">
+                    {% if t.story_link_done_at %}
+                    <i class="fa-solid fa-circle-check"></i> Sticker added
+                    {% elif t.status == 'published' %}
+                    <i class="fa-solid fa-triangle-exclamation"></i> Add the post sticker in the Instagram app
+                    {% else %}
+                    <i class="fa-regular fa-clock"></i> Will need a sticker once this story publishes
+                    {% endif %}
+                </span>
+                <span class="slr-note">
+                    {% if t.story_link_done_at %}
+                    Marked done by {{ t.story_link_done_by.name if t.story_link_done_by else 'someone' }}
+                    on {{ to_ist_display(t.story_link_done_at) }}.
+                    {% else %}
+                    Instagram's API can't attach story stickers — Meta keeps them
+                    app-only — so this last step is manual.
+                    {% endif %}
+                </span>
+                {% if t.story_link_url %}
+                <div class="slr-link">
+                    <code>{{ t.story_link_url }}</code>
+                    <button type="button" class="row-action" data-copy="{{ t.story_link_url }}">
+                        <i class="fa-regular fa-copy"></i> Copy</button>
+                    <a class="row-action" href="{{ t.story_link_url }}" target="_blank" rel="noopener">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a>
+                </div>
+                {% else %}
+                <p class="field-hint">The post it links to hasn’t published yet, so there’s no link to copy.</p>
+                {% endif %}
+            </div>
+            <div class="slr-action">
+                {% if t.story_link_done_at %}
+                <form method="POST" action="{{ url_for('social.story_link_undo', target_id=t.id) }}">
+                    <button type="submit" class="row-action"><i class="fa-solid fa-rotate-left"></i> Reopen</button>
+                </form>
+                {% elif t.status == 'published' %}
+                <form method="POST" action="{{ url_for('social.story_link_done', target_id=t.id) }}">
+                    <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-check"></i> Mark done</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="social-card">
     <div class="social-card-head">
         <h2><i class="fa-solid fa-share-nodes"></i> Platforms</h2>
@@ -180,4 +248,55 @@
     <div class="social-card-body"><p class="empty-text">No platforms yet. <a href="{{ url_for('social.edit_post', post_id=post.id) }}">Add some.</a></p></div>
     {% endif %}
 </div>
+
+{# Inline, not {% block scripts %}: base_studio.html overrides base.html's
+   whole `body` block, and the scripts block lives inside it - so a scripts
+   block on a Studio page is silently dropped. Same reason compose.html
+   keeps its JS here. #}
+<script>
+    /* Copy the linked post's URL. Delegated at document level so it keeps
+       working across Turbo navigations without rebinding. */
+    (function () {
+        "use strict";
+
+        function flash(button, text) {
+            const original = button.innerHTML;
+            button.innerHTML = '<i class="fa-solid fa-check"></i> ' + text;
+            window.setTimeout(function () { button.innerHTML = original; }, 1600);
+        }
+
+        document.addEventListener("click", function (event) {
+            const button = event.target.closest("[data-copy]");
+            if (!button) return;
+            event.preventDefault();
+
+            const value = button.getAttribute("data-copy") || "";
+
+            // execCommand fallback: clipboard.writeText is unavailable on a
+            // plain-HTTP LAN host, which is exactly how the Studio gets used
+            // on a phone in the office.
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(value)
+                    .then(function () { flash(button, "Copied"); })
+                    .catch(function () { flash(button, "Press Ctrl+C"); });
+                return;
+            }
+
+            const scratch = document.createElement("textarea");
+            scratch.value = value;
+            scratch.setAttribute("readonly", "");
+            scratch.style.position = "fixed";
+            scratch.style.opacity = "0";
+            document.body.appendChild(scratch);
+            scratch.select();
+            try {
+                document.execCommand("copy");
+                flash(button, "Copied");
+            } catch (error) {
+                flash(button, "Press Ctrl+C");
+            }
+            scratch.remove();
+        });
+    })();
+</script>
 {% endblock %}
