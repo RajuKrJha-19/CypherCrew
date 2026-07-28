@@ -19,7 +19,7 @@ register under the same platform keys and take over.
 
 from app.social.providers.base import SocialProvider
 from app.social.dto import (
-    AccountInfo, Capabilities, PublishStep, StepStatus, TokenBundle,
+    AccountInfo, Capabilities, MediaSpec, PublishStep, StepStatus, TokenBundle,
 )
 from app.social.errors import PermanentError, SocialError, TransientError
 
@@ -37,14 +37,30 @@ SIM_PLATFORMS = ["instagram", "facebook", "linkedin", "youtube", "x",
 # it away - so they now mirror the real platforms, which all support
 # commenting on a post except Google Business.
 #
+#: The real reel specifications, so a demo channel rejects (and accepts)
+#: exactly what production would. A simulation that is more permissive
+#: than the platform teaches the wrong lesson.
+_IG_REEL = MediaSpec(
+    aspect_min=0.01, aspect_max=10.0,
+    duration_min=3, duration_max=15 * 60,
+    width_max=1920, max_bytes=300 * 1024 * 1024,
+    aspect_label="between 0.01:1 and 10:1")
+_FB_REEL = MediaSpec(
+    aspect_min=0.5625, aspect_max=0.5625,
+    duration_min=3, duration_max=90,
+    width_min=540, height_min=960,
+    aspect_label="9:16")
+
 CAPABILITY_PROFILES = {
     "instagram": Capabilities(
         post_types={"image", "carousel", "reel", "story"},
+        media_specs={"reel": _IG_REEL},
         requires_container_poll=True, max_carousel=10,
         publish_rate=(100, "24h"), story_support=True, max_caption_chars=2200,
         supports_first_comment=True, supports_comments=True),
     "facebook": Capabilities(
         post_types={"image", "video", "reel", "text", "carousel"},
+        media_specs={"reel": _FB_REEL, "video": MediaSpec()},
         supports_native_scheduling=True, max_carousel=10,
         max_caption_chars=63206,
         supports_first_comment=True, supports_comments=True,

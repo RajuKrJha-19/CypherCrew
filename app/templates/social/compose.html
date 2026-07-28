@@ -70,6 +70,9 @@
                     {% endfor %}
                 </div>
                 <div class="cmp-warn" id="postTypeWarn"></div>
+                {# What the browser measured for each chosen file, so the
+                   server can re-check without re-measuring. #}
+                <input type="hidden" name="media_measurements" id="mediaMeasurements" value="">
             </div>
 
             {# --- Caption --- #}
@@ -117,7 +120,7 @@
                 <div class="cmp-media-grid" id="taskMediaGrid">
                     {% for a in task_assets %}
                     <label class="cmp-asset" title="{{ a.filename }}">
-                        <input type="checkbox" name="task_file_ids" value="{{ a.id }}" data-url="{{ a.url or '' }}" {{ 'checked' if a.id in selected_task_file_ids }}>
+                        <input type="checkbox" name="task_file_ids" value="{{ a.id }}" data-url="{{ a.url or '' }}" data-mime="{{ a.mime or '' }}" {{ 'checked' if a.id in selected_task_file_ids }}>
                         <span class="ord"></span>
                         <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
                         <span class="cmp-asset-name">{{ a.filename }}</span>
@@ -139,7 +142,7 @@
                 <div class="cmp-media-grid" id="uploadGrid">
                     {% for u in uploaded_media %}
                     <label class="cmp-asset selected" title="uploaded">
-                        <input type="checkbox" name="upload_media" value="{{ u.object_key }}::{{ u.mime }}" data-url="{{ u.url or '' }}" checked>
+                        <input type="checkbox" name="upload_media" value="{{ u.object_key }}::{{ u.mime }}" data-url="{{ u.url or '' }}" data-mime="{{ u.mime }}" checked>
                         <span class="ord"></span>
                         <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
                         <span class="cmp-asset-name">uploaded</span>
@@ -382,12 +385,98 @@
     });
     document.querySelectorAll('input[name="account_ids"]').forEach(c=>c.addEventListener("change", refreshAccounts));
 
+    /*
+        What this file becomes on each channel, decided the same way the
+        server decides it (app/social/media/fit.py): reel first, video as
+        the fallback. It used to just say "video isn't supported on:
+        Instagram", which was wrong - Instagram takes video as a Reel, and
+        the post was blocked over a name.
+
+        When a real limit IS missed, the numbers are quoted so the SOURCE
+        file gets fixed rather than the post being worked around.
+    */
+    function specProblems(spec, m){
+        if(!spec || !m) return [];
+        const out=[];
+        const fmt = s => s>=120 ? (s/60)+" min" : s+"s";
+        if(m.duration!=null){
+            if(spec.duration_min!=null && m.duration<spec.duration_min)
+                out.push("it is "+Math.round(m.duration)+"s and the minimum is "+fmt(spec.duration_min));
+            if(spec.duration_max!=null && m.duration>spec.duration_max)
+                out.push("it is "+Math.round(m.duration)+"s and the maximum is "+fmt(spec.duration_max));
+        }
+        if(m.width && m.height){
+            const r=m.width/m.height, tol=0.02;
+            if((spec.aspect_min!=null && r<spec.aspect_min-tol) ||
+               (spec.aspect_max!=null && r>spec.aspect_max+tol))
+                out.push("it is "+m.width+"x"+m.height+" and this needs "+(spec.aspect_label||"a different shape"));
+            if(spec.width_min!=null && m.width<spec.width_min)
+                out.push("it is "+m.width+"px wide and the minimum is "+spec.width_min+"px");
+            if(spec.width_max!=null && m.width>spec.width_max)
+                out.push("it is "+m.width+"px wide and the maximum is "+spec.width_max+"px");
+            if(spec.height_min!=null && m.height<spec.height_min)
+                out.push("it is "+m.height+"px tall and the minimum is "+spec.height_min+"px");
+        }
+        if(m.bytes && spec.max_bytes && m.bytes>spec.max_bytes)
+            out.push("it is "+Math.round(m.bytes/1048576)+"MB and the maximum is "+Math.round(spec.max_bytes/1048576)+"MB");
+        return out;
+    }
+
+    function fitFor(platform, intended, m){
+        const c=caps[platform];
+        if(!c) return {type:intended, notes:[]};
+        const specs=c.media_specs||{};
+        if(intended!=="video" && intended!=="reel"){
+            return c.post_types.includes(intended)
+                ? {type:intended, notes:[]}
+                : {type:null, notes:[intended+" is not supported here"]};
+        }
+        let reelProblems=null;
+        if(c.post_types.includes("reel")){
+            reelProblems=specProblems(specs.reel, m);
+            if(!reelProblems.length) return {type:"reel", notes:[]};
+        }
+        if(c.post_types.includes("video")){
+            const vp=specProblems(specs.video, m);
+            if(!vp.length){
+                return {type:"video",
+                        notes: reelProblems&&reelProblems.length
+                            ? ["not a reel because "+reelProblems[0]] : []};
+            }
+            return {type:null, notes:vp};
+        }
+        return {type:null, notes:(reelProblems&&reelProblems.length)?reelProblems
+                                 :[intended+" is not supported here"]};
+    }
+
     function refreshTypeWarn(){
         const pt=postType(), sel=selectedPlatforms();
         if(!sel.length){ postTypeWarn.className="cmp-warn"; return; }
-        const bad=sel.filter(p=>caps[p]&&!caps[p].post_types.includes(pt)).map(p=>PF_LABEL[p]||p);
-        if(bad.length){ postTypeWarn.className="cmp-warn warn show"; postTypeWarn.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> '+pt+' isn’t supported on: '+bad.join(", "); }
-        else { postTypeWarn.className="cmp-warn ok show"; postTypeWarn.innerHTML='<i class="fa-solid fa-circle-check"></i> Works on all selected platforms'; }
+
+        const m = currentMeasurement();
+        const lines=[], blockers=[];
+        sel.forEach(p=>{
+            const f=fitFor(p, pt, m);
+            const name=PF_LABEL[p]||p;
+            if(!f.type){
+                blockers.push(name+": "+f.notes[0]);
+                lines.push("<b>"+name+"</b> → can’t publish — "+f.notes[0]);
+            } else {
+                const label={reel:"Reel",video:"Video",image:"Image",
+                             carousel:"Carousel",story:"Story",text:"Text"}[f.type]||f.type;
+                lines.push("<b>"+name+"</b> → "+label
+                    + (f.notes.length? ' <span class="t-subtle">('+f.notes[0]+")</span>":""));
+            }
+        });
+
+        postTypeWarn.className = "cmp-warn show " + (blockers.length?"warn":"ok");
+        postTypeWarn.innerHTML =
+            '<i class="fa-solid '+(blockers.length?"fa-triangle-exclamation":"fa-circle-check")+'"></i> '
+            + lines.join(" · ");
+
+        // Block the submit rather than letting a doomed target be created.
+        document.querySelectorAll('button[name="action"], .cmp-submit button')
+            .forEach(b=>{ b.disabled = blockers.length>0; });
     }
 
     // emoji / insert
@@ -449,10 +538,75 @@
     const MEDIA_SEL = 'input[name="asset_ids"], input[name="task_file_ids"], input[name="upload_media"]';
     const MEDIA_SEL_CHECKED = 'input[name="asset_ids"]:checked, input[name="task_file_ids"]:checked, input[name="upload_media"]:checked';
     function selectedMediaInputs(){ return [...document.querySelectorAll(MEDIA_SEL_CHECKED)]; }
+
+    /*
+        Measure the chosen file so the checks above can quote real numbers.
+
+        Done in the browser deliberately: this project has no ffmpeg (see
+        the note at the top of app/services/thumbnails.py), and a <video>
+        element reads width/height/duration from the file's header alone -
+        `preload="metadata"` fetches a few KB, not the whole clip. The
+        result rides along in a hidden field and is stored against the
+        media so the server can re-check later without re-measuring.
+    */
+    const measurements = {};                       // key -> {width,height,duration}
+    const measureField = $("mediaMeasurements");
+
+    function measureKey(input){ return input.name + "|" + input.value; }
+
+    function currentMeasurement(){
+        const first = selectedMediaInputs()[0];
+        return first ? (measurements[measureKey(first)] || null) : null;
+    }
+
+    function measure(input){
+        const key = measureKey(input), url = input.dataset.url;
+        if(!url || measurements[key] !== undefined) return Promise.resolve();
+
+        const isVideo = /video/i.test(input.dataset.mime || "")
+            || /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+
+        return new Promise(resolve=>{
+            const el = document.createElement(isVideo ? "video" : "img");
+            const done = () => {
+                measurements[key] = isVideo
+                    ? {width:el.videoWidth, height:el.videoHeight, duration:el.duration}
+                    : {width:el.naturalWidth, height:el.naturalHeight};
+                syncMeasurements(); refreshTypeWarn(); resolve();
+            };
+            // A file we cannot read is recorded as unmeasured, not as bad -
+            // the platform gets to judge it.
+            const give_up = () => { measurements[key] = null; resolve(); };
+            if(isVideo){
+                el.preload = "metadata";
+                el.onloadedmetadata = done;
+            } else {
+                el.onload = done;
+            }
+            el.onerror = give_up;
+            setTimeout(()=>{ if(measurements[key]===undefined) give_up(); }, 15000);
+            el.src = url;
+        });
+    }
+
+    function syncMeasurements(){
+        if(!measureField) return;
+        const out = {};
+        selectedMediaInputs().forEach(inp=>{
+            const m = measurements[measureKey(inp)];
+            if(m) out[measureKey(inp)] = m;
+        });
+        measureField.value = JSON.stringify(out);
+    }
     function refreshMediaSelection(){
         const checked=selectedMediaInputs();
         document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
         selectedMediaUrl = checked[0]?(checked[0].dataset.url||null):null;
+        // Measure whatever is now selected, then re-run the per-channel
+        // verdict with the real numbers.
+        checked.forEach(measure);
+        syncMeasurements();
+        refreshTypeWarn();
         renderPreview();
     }
     function mediaChanged(inp){
@@ -467,7 +621,7 @@
         mediaHint.textContent="Click to attach";
         mediaGrid.innerHTML=assets.map(a=>`
             <label class="cmp-asset" title="${a.filename}">
-                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url||''}" ${preselectedAssets.includes(a.id)?"checked":""}>
+                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url||''}" data-mime="${a.mime||''}" ${preselectedAssets.includes(a.id)?"checked":""}>
                 <span class="ord"></span>
                 <span class="cmp-asset-thumb">${a.is_image&&a.url?`<img src="${a.url}" loading="lazy" alt="">`:'<i class="fa-regular fa-file"></i>'}</span>
                 <span class="cmp-asset-name">${a.filename}</span>

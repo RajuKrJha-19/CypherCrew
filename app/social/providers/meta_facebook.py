@@ -6,7 +6,9 @@ carousel to a Page, and reads Page-post insights. Scheduling is engine-owned
 immediately - native scheduled_publish_time is intentionally not used.
 """
 
-from app.social.dto import AccountInfo, Capabilities, PublishStep, StepStatus
+from app.social.dto import (
+    AccountInfo, Capabilities, MediaSpec, PublishStep, StepStatus,
+)
 from app.social.errors import PermanentError, TransientError
 from app.social.providers.meta_common import MetaBaseProvider, hosted_reel_upload
 
@@ -30,6 +32,22 @@ class MetaFacebookProvider(MetaBaseProvider):
     ]
     capabilities = Capabilities(
         post_types={"text", "image", "video", "reel", "carousel"},
+        media_specs={
+            # Facebook Reels are far stricter than Instagram's: 9:16
+            # exactly, 90 seconds, and a floor on resolution. This is why
+            # the fallback to a plain video post has to exist - a
+            # landscape or long clip is a perfectly good Facebook video
+            # and simply cannot be a Facebook Reel.
+            "reel": MediaSpec(
+                aspect_min=0.5625, aspect_max=0.5625,   # 9:16
+                duration_min=3, duration_max=90,
+                width_min=540, height_min=960,
+                aspect_label="9:16",
+            ),
+            # A Page video has no comparable published limit worth
+            # enforcing here; anything the reel spec rejects lands here.
+            "video": MediaSpec(),
+        },
         supports_native_scheduling=True,   # available, but engine owns timing
         max_carousel=10,
         max_caption_chars=63206,

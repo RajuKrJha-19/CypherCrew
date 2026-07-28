@@ -30,6 +30,31 @@ class StepStatus(str, Enum):
 
 
 @dataclass
+class MediaSpec:
+    """What one post type on one platform will actually accept.
+
+    Real numbers, from the platform's own documentation, so the app can
+    say "reels are 3-90 seconds, this is 2" instead of "not supported".
+    Every field is optional: an unset limit is not checked rather than
+    assumed, because inventing a constraint is as bad as missing one.
+
+    `aspect` is width / height, so 9:16 is 0.5625.
+    """
+
+    aspect_min: float | None = None
+    aspect_max: float | None = None
+    duration_min: float | None = None      # seconds
+    duration_max: float | None = None
+    width_min: int | None = None
+    width_max: int | None = None
+    height_min: int | None = None
+    max_bytes: int | None = None
+
+    #: Shown when explaining a mismatch, e.g. "9:16".
+    aspect_label: str | None = None
+
+
+@dataclass
 class Capabilities:
     """What a platform can do - declared once per adapter so business logic
     and the composer can validate content without any platform knowledge."""
@@ -54,8 +79,16 @@ class Capabilities:
     supports_delete: bool = False          # delete a published post via API
     supports_comments: bool = False        # read + reply to comments (Engage)
 
+    #: Per-post-type media limits, e.g. {"reel": MediaSpec(...)}. Consulted
+    #: by app/social/media/fit.py to decide what a video becomes on this
+    #: platform, and to explain the answer.
+    media_specs: dict = field(default_factory=dict)
+
     def supports(self, post_type: str) -> bool:
         return post_type in self.post_types
+
+    def spec_for(self, post_type: str):
+        return (self.media_specs or {}).get(post_type)
 
 
 @dataclass
@@ -69,6 +102,13 @@ class MediaRef:
     sort_order: int = 0
     alt_text: str | None = None
     source: str = "upload"      # task_file | client_asset | upload
+
+    #: What the file actually is - {"width", "height", "duration", "bytes"}.
+    #: Measured in the browser when the file is chosen (this project has no
+    #: ffmpeg on purpose; see app/services/thumbnails.py) and stored on
+    #: SocialMediaAsset.meta. Empty means "not measured", which is never
+    #: treated as a failure - the platform judges instead.
+    measurements: dict = field(default_factory=dict)
 
 
 @dataclass

@@ -331,14 +331,15 @@ def _purge_test_rows():
         # belongs here - a missed one surfaces as a teardown-only
         # ForeignKeyViolation, which is a confusing way to find out.
         from app.models import (
-            Notification, SocialAccount, SocialAuditLog, SocialPost,
-            SocialPostTarget,
+            ContentVersion, Notification, SocialAccount, SocialAuditLog,
+            SocialPost, SocialPostTarget,
         )
         for model, columns in (
             (SocialAuditLog, ("actor_id",)),
             (SocialPost, ("created_by_id", "approved_by_id")),
             (SocialPostTarget, ("story_link_done_by_id",)),
             (SocialAccount, ("connected_by_id",)),
+            (ContentVersion, ("edited_by_id",)),
             (Notification, ("actor_id",)),
         ):
             for column in columns:

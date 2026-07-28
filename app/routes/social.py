@@ -7,6 +7,7 @@ anyone holding the matching manage_social / connect_social_accounts
 permission.
 """
 
+import json
 from datetime import datetime, timedelta
 
 from flask import (
@@ -22,6 +23,7 @@ from app.models import (
     SocialPostTarget, Task, TaskFile,
 )
 from app.social.dto import TokenBundle
+from app.social.media import fit as media_fit
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
@@ -159,6 +161,20 @@ def _channel_client_ok(account_client_id, post_client_id):
     both the server guard and (mirrored) the composer's channel filter."""
     return not (account_client_id and post_client_id
                 and account_client_id != post_client_id)
+
+
+def _measure_key(source, obj):
+    """Match a browser measurement back to the media item it describes.
+
+    Keyed by the form field and value rather than the object key, because
+    that is all the browser has: a deliverable checkbox carries a TaskFile
+    id, not an R2 key. Both sides build the same string.
+    """
+    if source == "task_file":
+        return f"task_file_ids|{obj.id}"
+    if source == "client_asset":
+        return f"asset_ids|{obj.id}"
+    return f"upload_media|{getattr(obj, 'form_value', obj.object_key)}"
 
 
 def _linkable_targets(client_id, limit=40):
@@ -300,8 +316,14 @@ def _task_file_preview(tf):
     media dict, with a presigned thumbnail for images."""
     from app.social.media import pipeline
     is_image = (tf.mime_type or "").startswith("image")
+    is_video = (tf.mime_type or "").startswith("video")
     url = None
-    if is_image and tf.object_key:
+    # Videos get a URL too, not just images. It costs nothing extra - the
+    # composer reads a video's dimensions and duration with
+    # preload="metadata", which fetches a few KB of header, and without a
+    # URL a video deliverable could not be measured at all. That was the
+    # gap: the file people actually hit this with is a video.
+    if (is_image or is_video) and tf.object_key:
         try:
             url = pipeline.presigned_url(tf.object_key)
         except Exception:  # noqa: BLE001
@@ -412,6 +434,21 @@ def _capabilities_map():
             "max_caption_chars": caps.max_caption_chars if caps else None,
             "supports_first_comment": bool(caps and caps.supports_first_comment),
             "simulation": getattr(provider, "is_simulation", False),
+            # The real media limits, so the composer can run the same
+            # reel-first decision the server will and show the answer
+            # before anyone submits.
+            "media_specs": {
+                ptype: {
+                    "aspect_min": spec.aspect_min, "aspect_max": spec.aspect_max,
+                    "duration_min": spec.duration_min,
+                    "duration_max": spec.duration_max,
+                    "width_min": spec.width_min, "width_max": spec.width_max,
+                    "height_min": spec.height_min,
+                    "max_bytes": spec.max_bytes,
+                    "aspect_label": spec.aspect_label,
+                }
+                for ptype, spec in ((caps.media_specs or {}) if caps else {}).items()
+            },
         }
     return out
 
@@ -1423,6 +1460,26 @@ def _apply_composer_form(post):
         else _parse_schedule(request.form.get("schedule"))
     )
 
+    # What the browser measured for each chosen file, keyed by object key.
+    # Best-effort: bad JSON must not lose someone's post.
+    measurements_by_key = {}
+    try:
+        raw = request.form.get("media_measurements")
+        if raw:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                measurements_by_key = {
+                    str(k): v for k, v in parsed.items() if isinstance(v, dict)
+                }
+    except (ValueError, TypeError):
+        current_app.logger.warning("ignoring unreadable media_measurements")
+
+    # The media that was there BEFORE this save, captured before the
+    # rebuild wipes it - so a swap can be detected below.
+    previous_media = sorted({
+        m.object_key for t in post.targets for m in t.media if m.object_key
+    })
+
     # Rebuild targets from scratch (drafts only) - simplest correct model.
     for t in list(post.targets):
         db.session.delete(t)
@@ -1451,8 +1508,11 @@ def _apply_composer_form(post):
     for raw in request.form.getlist("upload_media"):
         key, _, mime = raw.partition("::")
         if key.startswith("social_uploads/"):
+            # form_value is kept so a browser measurement can be matched
+            # back to this item - see _measure_key.
             media_items.append(("upload", SimpleNamespace(
-                object_key=key, mime_type=(mime or None), id=None)))
+                object_key=key, mime_type=(mime or None), id=None,
+                form_value=raw)))
 
     def _add_media(target_id):
         for i, (source, obj) in enumerate(media_items):
@@ -1463,6 +1523,12 @@ def _apply_composer_form(post):
                 kw["task_file_id"] = obj.id
             elif source == "client_asset":
                 kw["client_asset_id"] = obj.id
+            # What the file actually is, measured in the browser. Stored so
+            # the pre-flight at schedule time can quote real numbers
+            # without re-measuring - and so it survives on the record.
+            measured = measurements_by_key.get(_measure_key(source, obj))
+            if measured:
+                kw["meta"] = {"measurements": measured}
             db.session.add(SocialMediaAsset(**kw))
 
     def _new_target(account, ptype, caption, story_style="plain",
@@ -1510,7 +1576,15 @@ def _apply_composer_form(post):
             flash("That story had no post to link to, so it was saved as a "
                   "plain story.", "info")
 
+    # Measurements of the first media item, taken in the browser when the
+    # file was chosen (see compose.html). Drives the reel-vs-video choice
+    # below; empty simply means "unmeasured", never "bad".
+    first_measurement = (
+        measurements_by_key.get(_measure_key(*media_items[0]))
+        if media_items else None) or {}
+
     skipped = []
+    remapped = []
     n_created = 0
     for account_id in account_ids:
         account = db.session.get(SocialAccount, account_id)
@@ -1522,7 +1596,25 @@ def _apply_composer_form(post):
             skipped.append(account.display_name)
             continue
         override = (request.form.get(f"caption_{account.platform}") or "").strip()
-        feed = _new_target(account, post_type, override or base_caption,
+
+        # One post, one approved file - but the platforms disagree about
+        # what to call it. Instagram has no "video" type at all (a video
+        # goes out as a Reel), and Facebook's Reels are stricter than
+        # Instagram's. media/fit.py picks reel-first, falling back to
+        # video, so the same content publishes everywhere it can as ONE
+        # post rather than forcing a second post or a dropped platform.
+        prov = registry.get(account.platform)
+        caps = prov.capabilities if prov else None
+        target_type, notes = media_fit.choose_post_type(
+            post_type, caps, first_measurement)
+        if target_type is None:
+            # Keep the target so the post page can explain and offer a way
+            # out, rather than silently publishing to fewer platforms.
+            target_type = post_type
+        if notes:
+            remapped.append(f"{platform_label(account.platform)}: {notes[0]}")
+
+        feed = _new_target(account, target_type, override or base_caption,
                            story_style=story_style,
                            story_link_target_id=standalone_link_id)
         n_created += 1
@@ -1537,6 +1629,30 @@ def _apply_composer_form(post):
     if skipped:
         flash("Skipped channel(s) that belong to a different client: "
               + ", ".join(skipped) + ".", "info")
+
+    # Say when a platform is getting something other than what was asked
+    # for - a Reel going out as a plain Facebook video is worth knowing.
+    if remapped:
+        flash(" ".join(remapped), "info")
+
+    # Media is locked once it has been submitted. Swapping the file on a
+    # post that is awaiting approval would let it be approved on the
+    # strength of content the reviewer never saw, so the post drops back to
+    # draft and has to be resubmitted. Caption and schedule edits are
+    # untouched by this - only the media matters.
+    new_media = sorted({
+        obj.object_key for _src, obj in media_items if obj.object_key
+    })
+    if (post.status == "pending_approval" and previous_media
+            and new_media != previous_media):
+        post.status = "draft"
+        audit.record("media_changed_after_submit", post_id=post.id,
+                     actor_id=current_user.id, task_id=post.task_id)
+        flash(
+            "The media changed, so this went back to draft — submit it "
+            "again so the reviewer approves what will actually publish.",
+            "info")
+
     return n_created
 
 

@@ -7,7 +7,9 @@ provider_state, and poll_publish advances it (the worker re-drives poll on
 each cycle). Supports image, carousel (2-10), reel and story.
 """
 
-from app.social.dto import AccountInfo, Capabilities, PublishStep, StepStatus
+from app.social.dto import (
+    AccountInfo, Capabilities, MediaSpec, PublishStep, StepStatus,
+)
 from app.social.errors import PermanentError, TransientError
 from app.social.providers.meta_common import MetaBaseProvider
 
@@ -39,7 +41,28 @@ class MetaInstagramProvider(MetaBaseProvider):
         "business_management",
     ]
     capabilities = Capabilities(
+        # No "video": Instagram publishes video to the feed as a REELS
+        # container or not at all. media/fit.py maps an intended video
+        # onto "reel" here, which is why a 9:16 clip publishes fine.
         post_types={"image", "carousel", "reel", "story"},
+        media_specs={
+            # Meta's published reel specification. The aspect range is
+            # genuinely this wide - 9:16 is the recommendation, not the
+            # requirement, unlike Facebook.
+            "reel": MediaSpec(
+                aspect_min=0.01, aspect_max=10.0,
+                duration_min=3, duration_max=15 * 60,
+                width_max=1920,
+                max_bytes=300 * 1024 * 1024,
+                aspect_label="between 0.01:1 and 10:1",
+            ),
+            "image": MediaSpec(
+                aspect_min=0.8, aspect_max=1.91,      # 4:5 .. 1.91:1
+                width_min=320, width_max=1440,
+                max_bytes=8 * 1024 * 1024,
+                aspect_label="between 4:5 and 1.91:1",
+            ),
+        },
         requires_container_poll=True,
         max_carousel=10,
         publish_rate=(100, "24h"),
@@ -126,6 +149,11 @@ class MetaInstagramProvider(MetaBaseProvider):
                 "media_type": "REELS",
                 "video_url": self._media_url(content.media[0]),
                 "caption": caption,
+                # Also appears in the profile feed grid, not only the Reels
+                # tab. This is Meta's default, stated explicitly so a
+                # change to that default cannot quietly move a client's
+                # posts off their grid.
+                "share_to_feed": "true",
             })["id"]
         elif content.post_type == "story":
             media = content.media[0]

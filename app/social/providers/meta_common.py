@@ -33,6 +33,11 @@ _UPLOAD_TIMEOUT = 120
 _AUTH_CODES = {190, 102, 10, 200, 210, 803}
 _RATE_CODES = {4, 17, 32, 613, 80001, 80002, 80003, 80004, 80006, 80008}
 _RATE_SUBCODES = {2446079, 2207051}
+#: The file itself is unacceptable - Meta's documented Reels rejections.
+#: 1363040 is the aspect ratio, 1363127 a resolution below the minimum.
+#: Retrying the same bytes will fail identically, so these are permanent
+#: and the message (Meta's own) tells the person what to re-export.
+_CONTENT_CODES = {1363040, 1363127}
 
 # The unified Meta connect requests the union of Facebook-Page and Instagram
 # scopes, so a SINGLE consent connects Facebook Pages AND their linked
@@ -247,6 +252,13 @@ def map_meta_error(exc):
         message = exc.error.get("message", "Meta Graph error")
         if code in _AUTH_CODES:
             return AuthError(message, code=code)
+        if code in _CONTENT_CODES:
+            # The file is wrong, not the request. Retrying an identical
+            # upload cannot help - the source file has to change - so this
+            # must not be classified as transient however Meta's HTTP
+            # status happens to come back. The message carries Meta's own
+            # wording, which names the actual problem.
+            return PermanentError(message, code=code)
         if code in _RATE_CODES or subcode in _RATE_SUBCODES:
             return RateLimitError(message, code=code)
         if exc.status_code >= 500:

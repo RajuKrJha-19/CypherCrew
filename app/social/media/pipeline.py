@@ -9,6 +9,7 @@ platform (or stream from).
 from app.extensions import db
 from app.models import TaskFile, ClientAsset
 from app.social.dto import MediaRef
+from app.social.media import fit
 from app.storage.storage_service import StorageService
 
 
@@ -39,6 +40,10 @@ def resolve_media(assets) -> list[MediaRef]:
             sort_order=asset.sort_order,
             alt_text=asset.alt_text,
             source=asset.source,
+            # Measured in the composer and stored on the asset; carried
+            # through so validation can quote real numbers rather than
+            # guessing from the post type alone.
+            measurements=(asset.meta or {}).get("measurements") or {},
         ))
     return refs
 
@@ -59,18 +64,22 @@ def validate_against(capabilities, content) -> list[str]:
     if capabilities is None:
         return problems
     if not capabilities.supports(content.post_type):
-        # Say what CAN be done, not just what can't. "video is not
-        # supported on this platform" leaves someone stuck; Instagram takes
-        # video perfectly well - as a Reel - and that is the one sentence
-        # that gets the post out today.
         alternatives = sorted(capabilities.post_types or [])
-        hint = ""
-        if content.post_type == "video" and "reel" in alternatives:
-            hint = " Post it as a Reel instead."
-        elif alternatives:
-            hint = f" This platform takes: {', '.join(alternatives)}."
+        hint = f" This platform takes: {', '.join(alternatives)}." \
+            if alternatives else ""
         problems.append(
             f"{content.post_type} is not supported on this platform.{hint}")
+    else:
+        # The type IS supported - now does the actual file meet its spec?
+        # This is what turns "video is not supported" into "reels are
+        # 3s-15min and this is 2s", which is the sentence that gets the
+        # source file fixed. Unmeasured media adds nothing here; the
+        # platform judges it and its real error is surfaced.
+        meta = content.media[0].measurements if content.media else {}
+        for reason in fit.check_spec(
+                capabilities.spec_for(content.post_type), meta):
+            problems.append(
+                f"This {content.post_type} can't publish here: {reason}.")
     if content.post_type == "carousel" and capabilities.max_carousel:
         n = len(content.media)
         if n < 2:

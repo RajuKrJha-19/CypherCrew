@@ -54,18 +54,21 @@ def _post(session, statuses, post_status="scheduled"):
 # "not supported" should point at the way through
 # --------------------------------------------------------------------------
 
-def test_a_video_on_instagram_is_told_to_use_a_reel(app):
-    """Instagram takes video perfectly well - as a Reel. Saying only
-    "video is not supported" leaves someone stuck with a post they cannot
-    ship."""
-    caps = Capabilities(post_types={"image", "carousel", "reel", "story"})
-    content = PostContent(platform="instagram", post_type="video",
-                          media=[MediaRef(object_key="k.mp4",
-                                          mime_type="video/mp4")])
-    problems = pipeline.validate_against(caps, content)
+def test_a_video_on_instagram_becomes_a_reel_rather_than_a_problem(app):
+    """Superseded, and by something better: the app no longer TELLS anyone
+    to switch to a Reel, it maps the video onto one itself. So a video
+    aimed at Instagram never reaches validation as a "video" at all.
 
-    assert problems
-    assert "Reel" in problems[0], problems
+    (This test used to assert the wording of that advice.)
+    """
+    from app.social.media import fit
+    from app.social.providers.meta_instagram import MetaInstagramProvider
+
+    post_type, _ = fit.choose_post_type(
+        "video", MetaInstagramProvider.capabilities,
+        {"width": 720, "height": 1280, "duration": 30})
+
+    assert post_type == "reel"
 
 
 def test_an_unsupported_type_lists_what_the_platform_takes(app):
