@@ -2552,7 +2552,7 @@ body{
     font-size:.8rem;
     color:var(--color-text-muted);
 }
-.login-legal a{ color:var(--color-text-secondary); }
+.login-legal a{ color:var(--color-text-muted); }
 
 /* ==================================================================
    PUBLIC LEGAL PAGES (privacy, terms, data deletion)
@@ -2598,40 +2598,51 @@ body{
 }
 .legal-nav{ display:flex; flex-direction:row; gap:16px; flex-wrap:wrap; }
 .legal-nav a{
-    color:var(--color-text-secondary);
+    color:var(--color-text-muted);
     text-decoration:none;
     font-size:.9rem;
 }
 .legal-nav a:hover{ color:var(--color-primary); }
 .legal-nav a.is-active{ color:var(--color-primary); font-weight:600; }
 
-.legal-doc{ padding:34px 0 10px; line-height:1.68; }
+.legal-doc{ padding:34px 0 10px; line-height:1.68; color:var(--color-text); }
 .legal-doc h1{ margin:0 0 6px; font-size:1.9rem; letter-spacing:-.02em; }
 .legal-doc h2{ margin:34px 0 10px; font-size:1.18rem; }
 .legal-doc h3{ margin:22px 0 8px; font-size:1rem; }
-.legal-doc p, .legal-doc li{ color:var(--color-text-secondary); }
+/* Body copy of a legal document is the point of the page - it reads at
+   full contrast. Muted is for the timestamps and captions only. Muted
+   body text on a tinted panel is what made these pages unreadable in
+   dark mode. */
+.legal-doc p, .legal-doc li{ color:var(--color-text); }
 .legal-doc ul, .legal-doc ol{ padding-left:22px; margin:10px 0; }
 .legal-doc li{ margin:6px 0; }
 .legal-doc a{ color:var(--color-primary); }
 .legal-doc code{
     padding:2px 6px;
     border-radius:5px;
-    background:var(--color-surface-2, #f6f7f9);
+    background:var(--color-surface-muted);
     border:1px solid var(--color-border);
     font-size:.84em;
     overflow-wrap:anywhere;
 }
 
-.legal-updated{ margin:0 0 18px; font-size:.85rem; color:var(--color-text-muted); }
+/* Needs the .legal-doc prefix to outrank `.legal-doc p` above, which
+   sets full-contrast body colour. This one really is a caption. */
+.legal-doc .legal-updated{
+    margin:0 0 18px; font-size:.85rem; color:var(--color-text-muted); }
 .legal-lead{ font-size:1.02rem; }
 .legal-steps li{ margin:9px 0; }
 
+/* Colour stated, not inherited. These sit on a tinted panel, and
+   inheriting the muted body colour put grey text on a grey box - legible
+   in light mode, invisible in dark. */
 .legal-callout, .legal-note{
     margin:16px 0;
     padding:13px 15px;
     border-radius:10px;
     border:1px solid var(--color-border);
-    background:var(--color-surface-2, #f6f7f9);
+    background:var(--color-surface-muted);
+    color:var(--color-text);
     font-size:.9rem;
 }
 
@@ -2650,7 +2661,9 @@ body{
     text-align:left;
     vertical-align:top;
 }
-.legal-table th{ background:var(--color-surface-2, #f6f7f9); font-weight:600; }
+.legal-table th{ background:var(--color-surface-muted); font-weight:600;
+    color:var(--color-text); }
+.legal-table td{ color:var(--color-text); }
 
 .legal-form{
     display:flex;
@@ -2672,7 +2685,7 @@ body{
     padding:16px 18px;
     border-radius:12px;
     border:1px solid var(--color-border);
-    background:var(--color-surface-2, #f6f7f9);
+    background:var(--color-surface-muted);
 }
 .legal-status-code{
     font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -2681,8 +2694,8 @@ body{
     letter-spacing:.04em;
 }
 .legal-status-label{ font-size:.92rem; }
-.legal-status-completed{ border-color:var(--ok, #15803d); }
-.legal-status-manual_review{ border-color:var(--warn, #b45309); }
+.legal-status-completed{ border-color:var(--color-success); }
+.legal-status-manual_review{ border-color:var(--color-warning); }
 
 .legal-rule{ margin:34px 0 18px; border:0; border-top:1px solid var(--color-border); }
 .legal-contact{ font-size:.9rem; }
@@ -2698,7 +2711,7 @@ body{
     font-size:.85rem;
     color:var(--color-text-muted);
 }
-.legal-foot a{ color:var(--color-text-secondary); }
+.legal-foot a{ color:var(--color-text-muted); }
 
 /* USER PERFORMANCE PAGE */
 
@@ -2727,7 +2740,7 @@ body{
 .perf-period-text p{
     margin:2px 0 0;
     font-size:var(--text-base);
-    color:var(--color-text-secondary);
+    color:var(--color-text-muted);
 }
 
 /* The task title in the tasks table opens the task. Underlined only on
@@ -4952,7 +4965,7 @@ grid-template-columns:repeat(2,1fr);
 .activity-head-text p {
     margin: 2px 0 0;
     font-size: var(--text-base);
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
 }
 
 .activity-vs {
@@ -4980,7 +4993,7 @@ grid-template-columns:repeat(2,1fr);
     font-size: var(--text-base);
     font-weight: 500;
     line-height: 1;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     text-decoration: none;
     border-radius: var(--ds-radius);
     white-space: nowrap;
@@ -5356,7 +5369,7 @@ a.activity-tile:hover {
 
 .upcoming-leave {
     background: var(--color-surface-muted);
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
 }
 
 .upcoming-body {
@@ -5388,7 +5401,7 @@ a.activity-tile:hover {
 .upcoming-date {
     font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -7328,21 +7341,21 @@ body.sidebar-collapsed .task-page-sticky-header{
     align-items:flex-start;
     gap:9px;
     padding:11px 13px;
-    border:1px solid var(--border, #e2e5ec);
+    border:1px solid var(--color-border);
     border-radius:10px;
     cursor:pointer;
-    background:var(--surface, #fff);
+    background:var(--color-surface);
     transition:border-color .15s ease, background .15s ease;
 }
-.cmp-story-option:hover{ border-color:var(--primary, #4f46e5); }
+.cmp-story-option:hover{ border-color:var(--color-primary); }
 .cmp-story-option:has(input:checked){
-    border-color:var(--primary, #4f46e5);
-    background:color-mix(in srgb, var(--primary, #4f46e5) 6%, transparent);
+    border-color:var(--color-primary);
+    background:color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 .cmp-story-option input{ margin-top:3px; flex:none; }
 .cso-body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .cso-title{ font-weight:600; font-size:.88rem; }
-.cso-note{ font-size:.78rem; color:var(--muted, #6b7280); }
+.cso-note{ font-size:.78rem; color:var(--color-text-muted); }
 
 #storyLinkPick{ margin-top:11px; }
 #storyLinkPick select{ width:100%; max-width:520px; }
@@ -7355,9 +7368,9 @@ body.sidebar-collapsed .task-page-sticky-header{
     border-radius:9px;
     font-size:.79rem;
     line-height:1.5;
-    color:var(--muted, #6b7280);
-    background:var(--surface-2, #f6f7f9);
-    border:1px solid var(--border, #e2e5ec);
+    color:var(--color-text-muted);
+    background:var(--color-surface-muted);
+    border:1px solid var(--color-border);
 }
 .cmp-story-manual i{ margin-top:2px; flex:none; }
 
@@ -7371,8 +7384,8 @@ body.sidebar-collapsed .task-page-sticky-header{
     font-size:.8rem;
     line-height:1.5;
 }
-.fc-outcome.is-ok{ color:var(--ok, #15803d); }
-.fc-outcome.is-warn{ color:var(--warn, #b45309); }
+.fc-outcome.is-ok{ color:var(--color-success); }
+.fc-outcome.is-warn{ color:var(--color-warning); }
 
 .story-link-row{
     display:flex;
@@ -7380,7 +7393,7 @@ body.sidebar-collapsed .task-page-sticky-header{
     align-items:flex-start;
     gap:14px;
     padding:13px 0;
-    border-bottom:1px solid var(--border, #e2e5ec);
+    border-bottom:1px solid var(--color-border);
     flex-wrap:wrap;
 }
 .story-link-row:last-child{ border-bottom:0; padding-bottom:0; }
@@ -7388,10 +7401,10 @@ body.sidebar-collapsed .task-page-sticky-header{
 .slr-main{ flex:1 1 320px; display:flex; flex-direction:column; gap:5px; min-width:0; }
 .slr-action{ flex:none; }
 .slr-title{ font-weight:600; font-size:.9rem; display:flex; align-items:center; gap:7px; }
-.story-link-row .slr-title i{ color:var(--warn, #b45309); }
-.story-link-row.is-done .slr-title{ color:var(--muted, #6b7280); font-weight:500; }
-.story-link-row.is-done .slr-title i{ color:var(--ok, #15803d); }
-.slr-note{ font-size:.79rem; color:var(--muted, #6b7280); line-height:1.5; }
+.story-link-row .slr-title i{ color:var(--color-warning); }
+.story-link-row.is-done .slr-title{ color:var(--color-text-muted); font-weight:500; }
+.story-link-row.is-done .slr-title i{ color:var(--color-success); }
+.slr-note{ font-size:.79rem; color:var(--color-text-muted); line-height:1.5; }
 
 .slr-link{
     display:flex;
@@ -7409,8 +7422,8 @@ body.sidebar-collapsed .task-page-sticky-header{
     font-size:.76rem;
     padding:4px 8px;
     border-radius:6px;
-    background:var(--surface-2, #f6f7f9);
-    border:1px solid var(--border, #e2e5ec);
+    background:var(--color-surface-muted);
+    border:1px solid var(--color-border);
 }
 
 .review-search-field{
@@ -7430,8 +7443,8 @@ body.sidebar-collapsed .task-page-sticky-header{
     right:12px;
     width:14px;
     height:14px;
-    border:2px solid var(--border, #d7dbe3);
-    border-top-color:var(--primary, #4f46e5);
+    border:2px solid var(--color-border);
+    border-top-color:var(--color-primary);
     border-radius:50%;
     opacity:0;
     pointer-events:none;
@@ -7840,7 +7853,7 @@ body.sidebar-collapsed .task-page-sticky-header{
     margin-bottom:6px;
     font-size:var(--text-sm);
     font-weight:600;
-    color:var(--color-text-secondary);
+    color:var(--color-text-muted);
 }
 
 .review-reject-form-new textarea{
@@ -7884,7 +7897,7 @@ body.sidebar-collapsed .task-page-sticky-header{
 }
 .review-reject-cancel{
     background:var(--color-surface);
-    color:var(--color-text-secondary);
+    color:var(--color-text-muted);
     border-color:var(--color-border-strong);
 }
 .review-reject-cancel:hover{ background:var(--color-surface-muted); }
@@ -12112,7 +12125,7 @@ body.panel-mode .task-detail-right{
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .04em;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
 }
 
 .focus-state-dot {
@@ -12544,7 +12557,7 @@ a.queue-title:hover { color: var(--color-primary); }
     font-size: 10px;
     font-weight: 600;
     white-space: nowrap;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     background: var(--color-surface-muted);
     border-radius: var(--ds-radius-full);
 }
@@ -12612,7 +12625,7 @@ a.queue-title:hover { color: var(--color-primary); }
     margin-bottom: -1px;
     font-size: var(--text-base);
     font-weight: 500;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     text-decoration: none;
     border-bottom: 2px solid transparent;
 }
@@ -15177,7 +15190,7 @@ body.ds-screen .selected-reference-file{
 .profile-role-badge.role-tier-owner{ background:var(--ds-warning-bg); color:var(--ds-warning); }
 .profile-role-badge.role-tier-management{ background:var(--color-primary-soft); color:var(--color-primary); }
 .profile-role-badge.role-tier-senior{ background:var(--ds-success-bg); color:var(--ds-success); }
-.profile-role-badge.role-tier-junior{ background:var(--color-surface-muted); color:var(--color-text-secondary); }
+.profile-role-badge.role-tier-junior{ background:var(--color-surface-muted); color:var(--color-text-muted); }
 .profile-role-badge.role-tier-general{ background:var(--color-surface-muted); color:var(--color-text-muted); }
 
 .profile-hero-meta{
@@ -16940,14 +16953,14 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
    The old bar put reschedule, reopen, a status sentence, the engine
    control and delete in one flat row, so nothing read as the main thing
    to do. Now: what's happening, then actions, then admin tooling. */
-.post-stuck{ border-color:var(--warn, #b45309); }
+.post-stuck{ border-color:var(--color-warning); }
 .post-stuck-head{
     display:flex; flex-direction:row; align-items:flex-start; gap:11px;
     margin-bottom:11px;
 }
-.post-stuck-head > i{ margin-top:2px; color:var(--warn, #b45309); }
+.post-stuck-head > i{ margin-top:2px; color:var(--color-warning); }
 .post-stuck-head strong{ display:block; font-size:14px; }
-.post-stuck-head span{ font-size:12.5px; color:var(--color-text-secondary); }
+.post-stuck-head span{ font-size:12.5px; color:var(--color-text-muted); }
 
 .post-stuck-list{ list-style:none; margin:0 0 12px; padding:0;
     display:flex; flex-direction:column; gap:8px; }
@@ -16957,7 +16970,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
     padding:9px 11px; border-radius:var(--radius-sm);
     background:var(--color-surface-muted); border:1px solid var(--color-border);
 }
-.post-stuck-why{ font-size:12.5px; color:var(--color-text-secondary); flex:1; min-width:200px; }
+.post-stuck-why{ font-size:12.5px; color:var(--color-text-muted); flex:1; min-width:200px; }
 .post-stuck-actions{ display:flex; flex-direction:row; align-items:center;
     gap:12px; flex-wrap:wrap; }
 
@@ -17089,7 +17102,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .engage-row-top strong{ font-size:13px; }
 .engage-row-when{ font-size:11px; color:var(--color-text-muted); flex:none; }
 .engage-row-msg{
-    font-size:12.5px; color:var(--color-text-secondary); line-height:1.45;
+    font-size:12.5px; color:var(--color-text-muted); line-height:1.45;
     display:-webkit-box; -webkit-line-clamp:2; line-clamp:2;
     -webkit-box-orient:vertical; overflow:hidden;
 }
@@ -17100,7 +17113,7 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .engage-row-dot{
     flex:none; width:8px; height:8px; margin-top:6px; border-radius:50%;
     background:var(--color-primary); }
-.engage-row-flag{ flex:none; margin-top:3px; font-size:11px; color:var(--ok, #15803d); }
+.engage-row-flag{ flex:none; margin-top:3px; font-size:11px; color:var(--color-success); }
 .engage-row.is-answered .engage-row-top strong{ font-weight:600; }
 
 /* ---- Right: the conversation ---- */
