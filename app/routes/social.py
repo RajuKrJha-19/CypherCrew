@@ -592,11 +592,55 @@ def discover_instagram():
 @login_required
 def analytics():
     _guard()
+    from app.social.services import analytics_report
+    from app.utils import periods
+
+    cid = _client_arg()
+    period = periods.resolve_period(request.args, allow_all=True,
+                                    default="30d")
+
     return render_template(
         "social/analytics.html",
         accounts=AccountManager.list_accounts(include_revoked=False),
         status=engine_status.engine_status(),
+        period=period,
+        report=analytics_report.build_report(period, cid),
+        METRICS=analytics_report.METRICS,
+        to_ist_display=_to_ist_display,
     )
+
+
+@social_bp.route("/analytics/sync", methods=["POST"])
+@login_required
+def analytics_sync():
+    """Pull the latest insights on demand.
+
+    The cron does this on a schedule, but a person looking at an empty
+    screen needs a way to ask now - and, more importantly, to be told when
+    the answer is "the platform refused" rather than "there is nothing".
+    """
+    _guard()
+    from app.social.services import analytics as analytics_svc
+
+    report = analytics_svc.sync_recent()
+
+    if report.get("failed"):
+        flash(
+            f"Checked {report['checked']} post(s); {report['failed']} could "
+            "not be read: " + "; ".join(report.get("errors") or []) + ".",
+            "error")
+    if report.get("synced"):
+        flash(f"Updated insights for {report['synced']} post(s).", "success")
+    elif not report.get("failed"):
+        flash(
+            "Nothing to update — insights are fetched for posts published "
+            "through the Studio." if not report.get("checked")
+            else f"Checked {report['checked']} post(s) — the platforms "
+                 "reported no figures yet. Insights can take a few hours to "
+                 "appear on a new post.",
+            "info")
+
+    return redirect(url_for("social.analytics", client=_client_arg()))
 
 
 # ----------------------------------------------------------------------
@@ -1919,9 +1963,28 @@ def engage():
 @login_required
 def engage_sync():
     _guard()
-    n = engage_svc.sync_comments(_client_arg())
-    flash(f"Fetched {n} new comment(s) from the platforms." if n
-          else "No new comments — you're all caught up.", "info")
+    report = engage_svc.sync_comments(_client_arg())
+
+    # "All caught up" is only honest when we actually managed to look.
+    # A run where every request was refused used to say exactly that.
+    if report["failed"]:
+        flash(
+            f"Checked {report['checked']} post(s), {report['failed']} could "
+            "not be read: " + "; ".join(report["errors"]) + ".",
+            "error")
+    if report["new"]:
+        flash(f"Fetched {report['new']} new comment(s) from the platforms.",
+              "success")
+    elif not report["failed"]:
+        if not report["checked"]:
+            flash(
+                "Nothing to check yet — comments are fetched for posts "
+                "published through the Studio, and there aren't any on a "
+                "channel that supports comments.", "info")
+        else:
+            flash(f"Checked {report['checked']} post(s) — no new comments.",
+                  "info")
+
     return redirect(url_for("social.engage", client=_client_arg()))
 
 

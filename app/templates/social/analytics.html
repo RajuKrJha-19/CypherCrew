@@ -1,14 +1,37 @@
 {% extends "base_studio.html" %}
 {% block title %}Analytics · Social Studio | CypherCrew{% endblock %}
 
+{#
+    Real figures, read back from the snapshots the sync writes. This page
+    used to be a mockup - a hard-coded list of metric names with "Soon"
+    pills and em-dashes - so it could never show a number however much
+    data was collected.
+
+    Two rules it now keeps:
+      * only tile a metric a platform actually reported. A zero for
+        something nobody returns claims "you got zero reach", which is a
+        very different statement from "not reported".
+      * when there is nothing, say which nothing it is - no posts, no
+        sync yet, or figures not published by the platform yet.
+#}
+
+{% set p = period %}
+{% set has_data = report.measured_count > 0 %}
+
 {% block content %}
 <div class="page-header">
     <div>
         <h1>Analytics</h1>
         <p>Reach, engagement and growth across every connected channel</p>
     </div>
+    <div class="top-actions">
+        <form method="POST" action="{{ url_for('social.analytics_sync', client=request.args.get('client')) }}">
+            <button type="submit" class="btn btn-secondary">
+                <i class="fa-solid fa-rotate"></i> Refresh insights
+            </button>
+        </form>
+    </div>
 </div>
-
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% for category, message in messages %}
@@ -16,50 +39,179 @@
 {% endfor %}
 {% endwith %}
 
-<div class="analytics-hero">
-    <div class="ic"><i class="fa-solid fa-chart-line"></i></div>
-    <div>
-        <h2>Insights are on the way</h2>
-        <p>Once posts start publishing, per-post and per-channel metrics will sync
-           here automatically from the Meta Graph API. The layout below is the shape
-           they’ll take — no numbers yet.</p>
+{% macro period_url(key) -%}
+    {{ url_for('social.analytics', period=key, client=request.args.get('client')) }}
+{%- endmacro %}
+
+<div class="perf-period-head">
+    <div class="perf-period-text">
+        <h2>Reporting period</h2>
+        <p>{{ p.label }}
+            {%- if has_data %} · {{ report.measured_count }} of
+            {{ report.post_count }} post(s) measured{% endif %}</p>
+    </div>
+
+    <div class="period-toggle" role="group" aria-label="Select time period">
+        <a href="{{ period_url('all') }}"
+           class="period-opt {% if p.key == 'all' %}is-active{% endif %}">All time</a>
+        <a href="{{ period_url('today') }}"
+           class="period-opt {% if p.key == 'today' %}is-active{% endif %}">Today</a>
+        <a href="{{ period_url('yesterday') }}"
+           class="period-opt {% if p.key == 'yesterday' %}is-active{% endif %}">Yesterday</a>
+        <a href="{{ period_url('7d') }}"
+           class="period-opt {% if p.key == '7d' %}is-active{% endif %}">7 days</a>
+        <a href="{{ period_url('30d') }}"
+           class="period-opt {% if p.key == '30d' %}is-active{% endif %}">30 days</a>
+
+        <details class="period-custom" {% if p.key == 'custom' %}open{% endif %}>
+            <summary class="period-opt {% if p.key == 'custom' %}is-active{% endif %}">
+                <i class="fa-solid fa-calendar-day"></i>
+                {% if p.key == 'custom' %}{{ p.label }}{% else %}Custom{% endif %}
+            </summary>
+            <form method="get" action="{{ url_for('social.analytics') }}" class="period-custom-pop">
+                <input type="hidden" name="period" value="custom">
+                {% if request.args.get('client') %}
+                <input type="hidden" name="client" value="{{ request.args.get('client') }}">
+                {% endif %}
+                <label><span>From</span>
+                    <input type="date" name="from" value="{{ p['from'] }}" max="{{ p.today }}" required></label>
+                <label><span>To</span>
+                    <input type="date" name="to" value="{{ p.to }}" max="{{ p.today }}" required></label>
+                <button type="submit" class="btn btn-sm">Apply</button>
+            </form>
+        </details>
     </div>
 </div>
 
-{% set metrics = [
-    ('Reach','fa-signal'),
-    ('Impressions','fa-eye'),
-    ('Engagement','fa-hand-pointer'),
-    ('Comments','fa-comment'),
-    ('Likes','fa-heart'),
-    ('Shares','fa-share'),
-    ('Followers','fa-users'),
-    ('Growth','fa-arrow-trend-up')
-] %}
+{% if has_data %}
+
 <div class="analytics-grid">
-    {% for name, icon in metrics %}
+    {% for key, label, icon in METRICS if key in report.present %}
     <div class="analytic-card">
-        <span class="analytic-soon"><span class="sp-pill">Soon</span></span>
         <div class="ac-head">
             <div class="ac-ic"><i class="fa-solid {{ icon }}"></i></div>
-            <span class="ac-name">{{ name }}</span>
+            <span class="ac-name">{{ label }}</span>
         </div>
-        <div class="ac-value">—</div>
-        <div class="ac-spark"></div>
+        <div class="ac-value">{{ "{:,}".format(report.totals[key]) }}</div>
     </div>
     {% endfor %}
 </div>
 
+{% if report.channels %}
+<div class="social-card studio-section">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-plug"></i> By channel</h2>
+        <div class="social-card-tools"><span class="sp-pill">{{ report.channels|length }}</span></div>
+    </div>
+    <div class="table-card studio-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th class="u-right">Posts</th>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <th class="u-right">{{ label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, row in report.channels %}
+                <tr>
+                    <td>
+                        <span class="pf-chip {{ row.platform }}">
+                            <i class="{{ PF_ICON.get(row.platform,'fa-solid fa-share-nodes') }}"></i>
+                            {{ PF_LABEL.get(row.platform, row.platform|capitalize) }}</span>
+                        {{ name }}
+                    </td>
+                    <td class="u-right">{{ row.posts }}</td>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <td class="u-right">{{ "{:,}".format(row.metrics[key]) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="social-card studio-section">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-ranking-star"></i> Top posts</h2>
+    </div>
+    <div class="table-card studio-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Channel</th>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <th class="u-right">{{ label }}</th>
+                    {% endfor %}
+                    <th class="u-right">Measured</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report.posts %}
+                {% set t = row.target %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}">
+                            {{ (t.post.title if t.post else none) or (t.caption or 'Untitled')[:60] }}</a>
+                        {% if t.permalink %}
+                        <a class="row-action" href="{{ t.permalink }}" target="_blank" rel="noopener"
+                           title="View live"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                        {% endif %}
+                    </td>
+                    <td class="t-muted t-sm">{{ t.account.display_name if t.account else '—' }}</td>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <td class="u-right">
+                        {% if key in row.metrics %}{{ "{:,}".format(row.metrics[key]) }}
+                        {% else %}<span class="t-subtle">—</span>{% endif %}
+                    </td>
+                    {% endfor %}
+                    <td class="u-right t-muted t-sm u-nowrap">
+                        {{ to_ist_display(row.fetched_at) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% else %}
+
+{# The honest empty states - which nothing is it? #}
+<div class="analytics-hero">
+    <div class="ic"><i class="fa-solid fa-chart-line"></i></div>
+    <div>
+        {% if report.post_count == 0 %}
+        <h2>No published posts in this period</h2>
+        <p>Insights are collected for posts published through the Studio.
+           Publish one, or widen the period above — <a href="{{ period_url('all') }}">try All time</a>.</p>
+        {% else %}
+        <h2>No figures yet for these {{ report.post_count }} post(s)</h2>
+        <p>The posts are live, but the platforms haven't reported numbers for
+           them yet — insights typically take a few hours to appear on a new
+           post. Hit <strong>Refresh insights</strong> to check now; if the
+           platform refuses, it will say so rather than leaving this blank.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endif %}
+
 {% if accounts %}
 <div class="social-card studio-section">
-    <div class="social-card-head"><h2><i class="fa-solid fa-plug"></i> Channels that will report</h2></div>
+    <div class="social-card-head"><h2><i class="fa-solid fa-plug"></i> Connected channels</h2></div>
     <div class="social-card-body">
         <div class="sp-list">
             {% for a in accounts %}
             <div class="sp-list-item is-static">
                 <span class="pf-chip {{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(a.platform, a.platform|capitalize) }}</span>
                 <div class="sp-list-body"><span class="sp-list-title">{{ a.display_name }}</span></div>
-                <span class="sp-pill">Ready</span>
+                <span class="sp-pill {{ 'ok' if a.status == 'active' else 'warn' }}">{{ a.status|replace('_',' ') }}</span>
             </div>
             {% endfor %}
         </div>

@@ -370,19 +370,23 @@ class MetaBaseProvider(SocialProvider):
     def list_comments(self, external_post_id, token, limit=50):
         """Recent comments on a published post/media, newest first, as
         normalized dicts: external_id, message, author_name, author_id,
-        parent_external_id, created_time. Best-effort - returns [] on any
-        Graph error so one unreachable post never aborts a whole sync."""
+        parent_external_id, created_time.
+
+        Graph errors are RAISED, not swallowed. This used to return [] on
+        any failure, which - combined with the caller's own bare except -
+        meant a refused request was indistinguishable from a post with no
+        comments: Engage reported "you're all caught up" while actually
+        being locked out. sync_comments catches per post, so one bad post
+        still cannot abort the run; it just gets reported now.
+        """
         if not external_post_id:
             return []
-        try:
-            resp = self.graph().get(
-                f"{external_post_id}/comments", token=token,
-                params={
-                    "fields": "id,message,from,username,created_time,parent",
-                    "limit": limit,
-                })
-        except MetaGraphError:
-            return []
+        resp = self.graph().get(
+            f"{external_post_id}/comments", token=token,
+            params={
+                "fields": "id,message,from,username,created_time,parent",
+                "limit": limit,
+            })
         out = []
         for c in (resp.get("data") or []):
             frm = c.get("from") or {}
