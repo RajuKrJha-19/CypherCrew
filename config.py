@@ -143,6 +143,13 @@ class Config:
     META_APP_ID = os.getenv("META_APP_ID")
     META_APP_SECRET = os.getenv("META_APP_SECRET")
 
+    # Server-side media measurement. Optional: with no ffprobe installed
+    # the app behaves exactly as it did before, relying on the browser's
+    # measurement alone. Installing it (apt install ffmpeg) adds the two
+    # things a browser cannot do - reading .mov/HEVC deliverables, and
+    # reporting frame rate and codec. See app/social/media/probe.py.
+    FFPROBE_PATH = os.getenv("FFPROBE_PATH", "ffprobe")
+
     # --- Google (YouTube + Business Profile) ---------------------------
     # One OAuth client covers both; each adapter registers only when its
     # own switch is on, so one can go live while the other waits for

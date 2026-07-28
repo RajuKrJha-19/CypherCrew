@@ -159,3 +159,39 @@ rest the description, hashtags appended.
 **Business Profile posts to a *location*, not an account.** Each location
 appears as its own channel. A business with three branches gets three
 channels, and posts are per-branch.
+
+
+---
+
+# Optional: ffprobe for server-side media checks
+
+The composer measures a chosen file in the browser, which covers most
+posts. Installing ffmpeg adds the two things a browser cannot do:
+
+- **Read the formats editors actually deliver.** Chrome often cannot open
+  a `.mov` or an HEVC file, so the measurement comes back empty and the
+  file goes out unchecked.
+- **Report frame rate and codec.** A `<video>` element gives neither, and
+  Facebook Reels require 24-60 fps and H.264/H.265.
+
+On the server:
+
+```bash
+sudo apt update && sudo apt install -y ffmpeg
+ffprobe -version        # confirm
+```
+
+Then restart the app. Nothing else to configure - `FFPROBE_PATH` defaults
+to `ffprobe` on the PATH.
+
+It is genuinely optional: with no ffprobe installed the app behaves
+exactly as it did before, relying on the browser alone. A probe never
+raises and never blocks a publish - a failure just means "unmeasured",
+which the pre-flight already treats as "let the platform judge".
+
+Cost is small and bounded: this reads metadata, it does not decode a
+frame. ffprobe is capped with `-probesize`/`-analyzeduration` and a hard
+timeout, so it reads the file header rather than pulling a 300 MB video.
+(That is the distinction from the reasoning against ffmpeg in
+`app/services/thumbnails.py`, which was about generating thumbnails -
+decoding a frame from every upload.)

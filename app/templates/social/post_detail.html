@@ -62,13 +62,34 @@
             </li>
             {% endfor %}
         </ul>
+        {#
+            The action that actually works, which depends on whether
+            anything is already live. "Edit post" was a dead end here: a
+            scheduled post is not editable, so the button led straight to
+            "This post can no longer be edited."
+        #}
+        {% set live = post.targets|selectattr('status', 'equalto', 'published')|list %}
         <div class="post-stuck-actions">
-            {% if post.status != 'published' %}
+            {% if post.status in ['draft','pending_approval','rejected'] %}
             <a class="btn btn-secondary" href="{{ url_for('social.edit_post', post_id=post.id) }}">
                 <i class="fa-solid fa-pen"></i> Edit post</a>
+            {% elif not live and post.status in ['approved','scheduled'] %}
+            {# Nothing has published, so it is safe to take the whole post
+               back to draft and fix it properly. #}
+            <form method="POST" action="{{ url_for('social.reopen_post', post_id=post.id) }}">
+                <button type="submit" class="btn btn-secondary">
+                    <i class="fa-solid fa-rotate-left"></i> Reopen &amp; edit</button>
+            </form>
             {% endif %}
             <span class="field-hint">
-                Per-platform actions are in the Platforms table below.</span>
+                {% if live %}
+                This post is already live on
+                {{ live|map(attribute='platform')|map('capitalize')|join(', ') }},
+                so it can't be edited as a whole — fix the platform below.
+                {% else %}
+                Per-platform actions are in the Platforms table below.
+                {% endif %}
+            </span>
         </div>
     </div>
 </div>
@@ -359,10 +380,14 @@
                                 <button type="submit" class="row-action"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
                             </form>
                             {% endif %}
-                            {% if post.status not in ['published'] %}
-                            <a class="row-action" href="{{ url_for('social.edit_post', post_id=post.id) }}">
-                                <i class="fa-solid fa-pen"></i> Edit post</a>
-                            {% endif %}
+                            {# Re-decides what this platform should publish -
+                               the one-click repair for a target still set to
+                               a type the platform has no concept of, such as
+                               "video" on Instagram. #}
+                            <form method="POST" action="{{ url_for('social.remap_target', target_id=t.id) }}">
+                                <button type="submit" class="row-action">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Fix automatically</button>
+                            </form>
                             <form method="POST" action="{{ url_for('social.drop_target', target_id=t.id) }}"
                                   onsubmit="return confirm('Remove {{ PF_LABEL.get(t.platform, t.platform) }} from this post? Nothing was published there.');">
                                 <button type="submit" class="row-action danger">

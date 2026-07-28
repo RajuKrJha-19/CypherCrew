@@ -44,11 +44,13 @@ _IG_REEL = MediaSpec(
     aspect_min=0.01, aspect_max=10.0,
     duration_min=3, duration_max=15 * 60,
     width_max=1920, max_bytes=300 * 1024 * 1024,
+    fps_min=23, fps_max=60, codecs=("h264", "hevc"),
     aspect_label="between 0.01:1 and 10:1")
 _FB_REEL = MediaSpec(
     aspect_min=0.5625, aspect_max=0.5625,
     duration_min=3, duration_max=90,
     width_min=540, height_min=960,
+    fps_min=24, fps_max=60, codecs=("h264", "hevc", "vp9", "av1"),
     aspect_label="9:16")
 
 CAPABILITY_PROFILES = {

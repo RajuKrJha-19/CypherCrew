@@ -91,6 +91,21 @@ def check_spec(spec, meta):
             f"it is {size / 1_048_576:.0f}MB and the maximum is "
             f"{spec.max_bytes / 1_048_576:.0f}MB")
 
+    # Only present when ffprobe ran - a browser cannot report either.
+    fps = meta.get("fps")
+    if fps:
+        if spec.fps_min is not None and fps < spec.fps_min:
+            problems.append(
+                f"it is {fps:g} fps and the minimum is {spec.fps_min:g}")
+        if spec.fps_max is not None and fps > spec.fps_max:
+            problems.append(
+                f"it is {fps:g} fps and the maximum is {spec.fps_max:g}")
+
+    codec = (meta.get("codec") or "").lower()
+    if codec and spec.codecs and codec not in spec.codecs:
+        problems.append(
+            f"it is {codec} and this needs {' or '.join(spec.codecs)}")
+
     return problems
 
 

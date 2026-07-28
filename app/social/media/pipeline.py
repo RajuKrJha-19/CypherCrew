@@ -64,11 +64,35 @@ def validate_against(capabilities, content) -> list[str]:
     if capabilities is None:
         return problems
     if not capabilities.supports(content.post_type):
-        alternatives = sorted(capabilities.post_types or [])
-        hint = f" This platform takes: {', '.join(alternatives)}." \
-            if alternatives else ""
-        problems.append(
-            f"{content.post_type} is not supported on this platform.{hint}")
+        # Reaching here means the target was created before the reel-first
+        # mapping existed - a new one is given a type the platform has.
+        # "This platform takes: carousel, image, reel, story" is a list, not
+        # an answer, so say what to do about it.
+        meta = content.media[0].measurements if content.media else {}
+        instead, notes = fit.choose_post_type(
+            content.post_type, capabilities, meta)
+
+        # Measured, so the notes name an actual property of the file - "it
+        # is 2s and the minimum is 3s" - which is what gets the source file
+        # re-exported. Unmeasured, they are generic and the list of what
+        # the platform DOES take is the more useful answer.
+        measured_reasons = [n for n in notes if meta] if notes else []
+
+        if instead:
+            problems.append(
+                f"This is set to publish as a {content.post_type}, which this "
+                f"platform has no such thing as — it takes this file as a "
+                f"{instead}. Use “Fix automatically” to switch it.")
+        elif measured_reasons:
+            problems.append(
+                f"This platform can't publish this file: "
+                f"{measured_reasons[0].rstrip('.')}.")
+        else:
+            alternatives = sorted(capabilities.post_types or [])
+            hint = f" It takes: {', '.join(alternatives)}." \
+                if alternatives else ""
+            problems.append(
+                f"This platform cannot publish a {content.post_type}.{hint}")
     else:
         # The type IS supported - now does the actual file meet its spec?
         # This is what turns "video is not supported" into "reels are

@@ -228,3 +228,146 @@ def test_a_live_platform_cannot_be_dropped(
     client.post(f"/social/targets/{target_id}/drop", follow_redirects=True)
 
     assert db.session.get(SocialPostTarget, target_id) is not None
+
+
+# --------------------------------------------------------------------------
+# Repairing a target that was created before the reel-first mapping
+# --------------------------------------------------------------------------
+
+def test_fix_automatically_turns_an_instagram_video_into_a_reel(
+        session, client, make_user, login):
+    """The one-click repair for the reported post. Editing it was a dead
+    end - a scheduled post is not editable - so the fix has to live on the
+    target."""
+    from app.extensions import db
+    from app.models import (SocialAccount, SocialMediaAsset, SocialPost,
+                            SocialPostTarget)
+
+    actor = make_user("admin", permissions=["manage_social"])
+    login(actor)
+
+    account = SocialAccount(platform="instagram", external_id="RM-1",
+                            display_name="ig", account_type="ig_business",
+                            status="active")
+    db.session.add(account)
+    post = SocialPost(title="remap me", status="scheduled")
+    db.session.add_all([account, post])
+    db.session.flush()
+    target = SocialPostTarget(
+        social_post_id=post.id, social_account_id=account.id,
+        platform="instagram", post_type="video", status="blocked",
+        last_error="video is not supported on this platform.")
+    db.session.add(target)
+    db.session.flush()
+    db.session.add(SocialMediaAsset(
+        target_id=target.id, source="upload", role="main", sort_order=0,
+        object_key="social_uploads/clip.mp4",
+        meta={"measurements": {"width": 720, "height": 1280,
+                               "duration": 30}}))
+    db.session.commit()
+    target_id = target.id
+
+    client.post(f"/social/targets/{target_id}/remap", follow_redirects=True)
+
+    fixed = db.session.get(SocialPostTarget, target_id)
+    assert fixed.post_type == "reel"
+    assert fixed.status == "scheduled"
+    assert fixed.last_error is None
+
+
+def test_fix_automatically_refuses_when_the_file_is_the_problem(
+        session, client, make_user, login):
+    """A 2-second clip cannot be a reel however it is labelled - and the
+    message must say the number, not offer a fix that cannot work."""
+    from app.extensions import db
+    from app.models import (SocialAccount, SocialMediaAsset, SocialPost,
+                            SocialPostTarget)
+
+    actor = make_user("admin", permissions=["manage_social"])
+    login(actor)
+
+    account = SocialAccount(platform="instagram", external_id="RM-2",
+                            display_name="ig", account_type="ig_business",
+                            status="active")
+    post = SocialPost(title="too short", status="scheduled")
+    db.session.add_all([account, post])
+    db.session.flush()
+    target = SocialPostTarget(
+        social_post_id=post.id, social_account_id=account.id,
+        platform="instagram", post_type="video", status="blocked")
+    db.session.add(target)
+    db.session.flush()
+    db.session.add(SocialMediaAsset(
+        target_id=target.id, source="upload", role="main", sort_order=0,
+        object_key="social_uploads/short.mp4",
+        meta={"measurements": {"width": 720, "height": 1280, "duration": 2}}))
+    db.session.commit()
+    target_id = target.id
+
+    resp = client.post(f"/social/targets/{target_id}/remap",
+                       follow_redirects=True)
+    body = resp.get_data(as_text=True)
+
+    assert "3s" in body, "the message must name the limit"
+    assert db.session.get(SocialPostTarget, target_id).post_type == "video"
+
+
+def test_a_published_target_cannot_be_remapped(
+        session, client, make_user, login):
+    from app.extensions import db
+    from app.models import SocialPost, SocialPostTarget
+
+    actor = make_user("admin", permissions=["manage_social"])
+    login(actor)
+
+    post = SocialPost(title="live", status="published")
+    db.session.add(post)
+    db.session.flush()
+    target = SocialPostTarget(social_post_id=post.id, platform="facebook",
+                              post_type="video", status="published",
+                              external_post_id="EXT")
+    db.session.add(target)
+    db.session.commit()
+    target_id = target.id
+
+    client.post(f"/social/targets/{target_id}/remap", follow_redirects=True)
+    assert db.session.get(SocialPostTarget, target_id).post_type == "video"
+
+
+def test_the_post_page_offers_a_working_action_not_a_dead_end(
+        session, client, make_user, login):
+    """"Edit post" on a scheduled post led straight to "This post can no
+    longer be edited" - _EDITABLE_STATUSES excludes scheduled. The panel
+    must only offer what will actually work."""
+    from app.extensions import db
+    from app.models import SocialPost
+
+    actor = make_user("admin", permissions=["manage_social"])
+    login(actor)
+
+    post = _post(session, ["published", "blocked"], post_status="scheduled")
+    db.session.commit()
+
+    body = client.get(f"/social/posts/{post.id}").get_data(as_text=True)
+
+    assert "Fix automatically" in body
+    assert f"/posts/{post.id}/edit" not in body, (
+        "editing a scheduled post is refused, so the link must not be there")
+    # And it says why the whole post cannot be edited.
+    assert "already live on" in body
+
+
+def test_a_stuck_post_with_nothing_live_can_be_reopened(
+        session, client, make_user, login):
+    """Nothing has published, so taking the whole post back to draft is
+    safe - and is the natural way to fix it."""
+    from app.extensions import db
+
+    actor = make_user("admin", permissions=["manage_social"])
+    login(actor)
+
+    post = _post(session, ["blocked", "blocked"], post_status="scheduled")
+    db.session.commit()
+
+    body = client.get(f"/social/posts/{post.id}").get_data(as_text=True)
+    assert "Reopen &amp; edit" in body or "Reopen & edit" in body

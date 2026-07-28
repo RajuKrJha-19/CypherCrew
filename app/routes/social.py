@@ -1132,6 +1132,70 @@ def remove_post(post_id):
     return _back_to(post.id)
 
 
+@social_bp.route("/targets/<int:target_id>/remap", methods=["POST"])
+@login_required
+def remap_target(target_id):
+    """Re-decide what this platform should publish, and try again.
+
+    The repair for a target created before the reel-first mapping existed:
+    an Instagram target still carrying post_type="video", which Instagram
+    has no such thing as. One click turns it into the Reel it always
+    should have been - without editing the post, which would be refused
+    anyway once it is scheduled, and without touching a sibling platform
+    that has already published.
+    """
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+
+    if target.status in ("published", "removed"):
+        flash("That platform has already published.", "error")
+        return _back_to(target.social_post_id)
+
+    provider = registry.get(target.platform)
+    caps = provider.capabilities if provider else None
+    measurements = {}
+    if target.media:
+        measurements = (target.media[0].meta or {}).get("measurements") or {}
+
+    new_type, notes = media_fit.choose_post_type(
+        target.post_type, caps, measurements)
+
+    if new_type is None:
+        flash(
+            f"{platform_label(target.platform)} still can't take this: "
+            + (notes[0] if notes else "the file doesn't meet its limits")
+            + ". The file itself has to change.", "error")
+        return _back_to(target.social_post_id)
+
+    if new_type == target.post_type:
+        flash(
+            f"{platform_label(target.platform)} is already set to publish "
+            f"this as a {new_type}. Retry it, or check the reason above.",
+            "info")
+        return _back_to(target.social_post_id)
+
+    old_type = target.post_type
+    target.post_type = new_type
+    target.last_error = None
+    # Back into the queue at the post's own pace: scheduled if the post is,
+    # draft otherwise, so this cannot publish something the post hasn't
+    # been approved for.
+    target.status = "scheduled" if target.post.status == "scheduled" \
+        else "draft"
+    if target.status == "scheduled" and not target.scheduled_for:
+        target.scheduled_for = datetime.utcnow()
+
+    audit.record("target_remapped", post_id=target.social_post_id,
+                 target_id=target.id, actor_id=current_user.id,
+                 detail={"from": old_type, "to": new_type})
+    db.session.commit()
+
+    flash(
+        f"{platform_label(target.platform)} will publish this as a "
+        f"{new_type} instead of a {old_type}.", "success")
+    return _back_to(target.social_post_id)
+
+
 @social_bp.route("/targets/<int:target_id>/drop", methods=["POST"])
 @login_required
 def drop_target(target_id):

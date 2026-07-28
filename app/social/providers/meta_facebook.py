@@ -42,6 +42,8 @@ class MetaFacebookProvider(MetaBaseProvider):
                 aspect_min=0.5625, aspect_max=0.5625,   # 9:16
                 duration_min=3, duration_max=90,
                 width_min=540, height_min=960,
+                fps_min=24, fps_max=60,
+                codecs=("h264", "hevc", "vp9", "av1"),
                 aspect_label="9:16",
             ),
             # A Page video has no comparable published limit worth

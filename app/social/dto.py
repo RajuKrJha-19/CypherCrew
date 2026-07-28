@@ -50,6 +50,11 @@ class MediaSpec:
     height_min: int | None = None
     max_bytes: int | None = None
 
+    #: Only checkable with ffprobe - a browser cannot report either.
+    fps_min: float | None = None
+    fps_max: float | None = None
+    codecs: tuple | None = None          # e.g. ("h264", "hevc")
+
     #: Shown when explaining a mismatch, e.g. "9:16".
     aspect_label: str | None = None
 

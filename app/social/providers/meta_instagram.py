@@ -54,6 +54,8 @@ class MetaInstagramProvider(MetaBaseProvider):
                 duration_min=3, duration_max=15 * 60,
                 width_max=1920,
                 max_bytes=300 * 1024 * 1024,
+                fps_min=23, fps_max=60,
+                codecs=("h264", "hevc"),
                 aspect_label="between 0.01:1 and 10:1",
             ),
             "image": MediaSpec(

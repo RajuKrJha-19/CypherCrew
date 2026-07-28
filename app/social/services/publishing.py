@@ -11,7 +11,7 @@ from app.extensions import db
 from app.models import PublishJob
 from app.social.registry import get_provider
 from app.social.services import approval, scheduling, versioning, audit
-from app.social.media import pipeline
+from app.social.media import pipeline, probe
 from app.social.dto import PostContent
 
 
@@ -38,6 +38,13 @@ def validate_target(target) -> list[str]:
         return [f"The {target.platform} publisher is not enabled yet."]
     if not target.social_account_id:
         return ["No connected account selected for this target."]
+
+    # Measure anything the browser could not - a .mov or HEVC deliverable
+    # that Chrome cannot decode, and the frame rate/codec no browser can
+    # report at all. No-ops when ffprobe is not installed, and never
+    # raises, so this can only ever add information.
+    probe.ensure_measured(target)
+
     return provider.validate(build_content(target))
 
 
