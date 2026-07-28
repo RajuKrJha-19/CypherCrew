@@ -1739,7 +1739,11 @@ input[type="file"]::file-selector-button:hover{
 }
 
 .add-task-card{
-    max-width:650px;
+    /* Centered form (Linear/Asana pattern) instead of a narrow left strip
+       against empty right-half whitespace. */
+    max-width:720px;
+    margin-left:auto;
+    margin-right:auto;
 }
 
 .status-pill{
@@ -1958,6 +1962,20 @@ input[type="file"]::file-selector-button:hover{
     gap:12px;
     margin-top:25px;
 }
+
+/* Primary review card at the top of the right column - a reviewer's first,
+   always-visible action instead of a buried footer. */
+.review-card{
+    border:1px solid var(--color-primary, #4f46e5);
+    box-shadow:0 1px 3px rgba(79,70,229,.10);
+}
+.review-card .card-title{ margin-bottom:4px; }
+.review-card-sub{
+    margin:0 0 12px; font-size:12.5px; line-height:1.45;
+    color:var(--color-text-muted);
+}
+.review-card .review-actions{ margin-top:0; flex-wrap:wrap; }
+.review-card .task-actions-box{ margin-top:0; }
 
 .review-btn{
     min-width:100px;
@@ -3708,11 +3726,29 @@ body{
 
 .board-shell{
     display:grid;
-    grid-template-columns:repeat(5,minmax(200px,1fr));
+    /* Single scrollable row for the WHOLE pipeline (count-agnostic) instead of
+       repeat(5) which wrapped Core Review -> Published onto a hidden 2nd row -
+       the review/publish end of the flow used to be off-screen entirely. */
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(220px,1fr);
     gap:16px;
     overflow-x:auto;
     align-items:start;
+    padding-bottom:8px;
+    scroll-snap-type:x proximity;
 }
+.board-shell > .board-column{ scroll-snap-align:start; }
+
+/* Social-media indicator on a kanban card - platform icons so a social task
+   is recognisable before opening it. */
+.kanban-social-chip{
+    display:inline-flex; align-items:center; gap:6px; margin:2px 0 8px;
+    padding:2px 9px; border-radius:999px; font-size:11px;
+    background:rgba(79,70,229,.08); color:var(--color-primary,#4f46e5);
+    border:1px solid rgba(79,70,229,.18); width:fit-content;
+}
+.kanban-social-chip i{ font-size:11px; }
+:root[data-theme="dark"] .kanban-social-chip{ color:#a5b4fc; }
 
 /* ANIMATION */
 
@@ -16731,6 +16767,40 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .pf-chip.linkedin{ background:var(--sp-linkedin-soft); color:var(--sp-linkedin); }
 .pf-chip.google_business{ background:var(--sp-google_business-soft); color:var(--sp-google_business); }
 .pf-chip.x{ background:var(--sp-x-soft); color:var(--sp-x); }
+
+/* ---- Published list: small clickable platform icons ---------------- */
+.history-platforms{ display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.pf-icon{ display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:8px; font-size:14px; text-decoration:none;
+    border:1px solid var(--color-border); background:var(--color-surface);
+    color:var(--color-text-muted); transition:transform .1s ease, box-shadow .1s ease; }
+a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
+.pf-icon.facebook{ color:var(--sp-facebook); background:var(--sp-facebook-soft); }
+.pf-icon.instagram{ color:var(--sp-instagram); background:var(--sp-instagram-soft); }
+.pf-icon.youtube{ color:var(--sp-youtube); background:var(--sp-youtube-soft); }
+.pf-icon.linkedin{ color:var(--sp-linkedin); background:var(--sp-linkedin-soft); }
+.pf-icon.google_business{ color:var(--sp-google_business); background:var(--sp-google_business-soft); }
+.pf-icon.x{ color:var(--sp-x); background:var(--sp-x-soft); }
+.history-task-id{ font-weight:700; font-size:12.5px; color:var(--color-primary,#4f46e5); text-decoration:none; }
+.history-task-id:hover{ text-decoration:underline; }
+.history-row-actions{ display:inline-flex; align-items:center; gap:6px; justify-content:flex-end; }
+/* Native <details> dropdown for per-platform delete - no JS needed. */
+.row-menu{ position:relative; }
+.row-menu > summary{ list-style:none; cursor:pointer; padding:4px 8px; }
+.row-menu > summary::-webkit-details-marker{ display:none; }
+.row-menu-list{ position:absolute; right:0; top:calc(100% + 4px); z-index:60;
+    min-width:210px; padding:6px; border-radius:var(--radius-md,10px);
+    background:var(--color-surface); border:1px solid var(--color-border);
+    box-shadow:var(--shadow-md,0 8px 24px rgba(0,0,0,.12)); }
+.row-menu-head{ display:block; padding:4px 8px 6px; font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.4px; color:var(--color-text-muted); }
+.row-menu-item{ display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    padding:7px 8px; border:0; border-radius:8px; background:transparent; cursor:pointer;
+    font-size:13px; color:var(--color-text); }
+.row-menu-item:hover{ background:var(--color-surface-muted); }
+.row-menu-item.danger{ color:var(--color-danger,#dc2626); }
+.row-menu-item.danger:hover{ background:rgba(220,38,38,.08); }
+.row-menu form{ margin:0; }
 
 /* ---- Upcoming / list rows ------------------------------------------ */
 .sp-list{ display:flex; flex-direction:column; }

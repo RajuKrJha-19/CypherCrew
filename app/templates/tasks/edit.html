@@ -131,9 +131,10 @@
                 <div class="social-platform-list" id="socialPlatformList" {% if not task.is_social_media %}hidden{% endif %}>
 
                     <p class="form-hint">
-                        Target platform(s). Before publishing, whoever
-                        approves this task will be asked to confirm it
-                        actually went out on each one.
+                        Target platform(s). At Client Review the approver can
+                        “Approve &amp; Send to Social Studio” to publish or
+                        schedule the post — the task then tracks its publish
+                        status automatically.
                     </p>
 
                     {% for key, plabel, picon in social_platform_options %}

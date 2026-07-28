@@ -8,6 +8,8 @@ failure the slot is released so it isn't wasted.
 
 from datetime import datetime, timedelta
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from app.extensions import db
 from app.models import PlatformRateBudget
 
@@ -23,21 +25,27 @@ def _window_delta(window):
 
 
 def _budget_row(account_id, window):
+    # Two targets for the SAME account can publish concurrently (the worker's
+    # thread pool - e.g. a feed post and its companion Story). A plain
+    # SELECT-then-INSERT let both threads see no row and both INSERT, so the
+    # second hit the unique (account, window) constraint and stranded that
+    # target ("partially published"). Upsert-then-lock is race-safe: the
+    # ON CONFLICT DO NOTHING guarantees the row exists (the loser blocks on the
+    # unique index until the winner commits, then no-ops), and the subsequent
+    # SELECT ... FOR UPDATE serialises the used_count update.
+    db.session.execute(
+        pg_insert(PlatformRateBudget.__table__)
+        .values(social_account_id=account_id, rate_window=window,
+                window_start=datetime.utcnow(), used_count=0)
+        .on_conflict_do_nothing(
+            index_elements=["social_account_id", "rate_window"])
+    )
     row = (
         PlatformRateBudget.query
         .filter_by(social_account_id=account_id, rate_window=window)
         .with_for_update()
         .first()
     )
-    if row is None:
-        row = PlatformRateBudget(
-            social_account_id=account_id,
-            rate_window=window,
-            window_start=datetime.utcnow(),
-            used_count=0,
-        )
-        db.session.add(row)
-        db.session.flush()
     # Roll the window over if it has elapsed.
     if datetime.utcnow() - row.window_start >= _window_delta(window):
         row.window_start = datetime.utcnow()

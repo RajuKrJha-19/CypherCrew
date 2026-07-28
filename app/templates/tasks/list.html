@@ -275,6 +275,14 @@
                             {{ task.title }}
                         </a>
 
+                        {% if task.is_social_media and task.social_platforms %}
+                        {% set PF_ICON = {'facebook':'fa-brands fa-facebook','instagram':'fa-brands fa-instagram','youtube':'fa-brands fa-youtube','x':'fa-brands fa-x-twitter','linkedin':'fa-brands fa-linkedin','google_business':'fa-brands fa-google'} %}
+                        <div class="kanban-social-chip" title="Social media task — {{ task.social_platforms.replace(',', ', ') }}">
+                            <i class="fa-solid fa-share-nodes"></i>
+                            {% for key in task.social_platforms.split(',') %}{% set k = key.strip() %}{% if k %}<i class="{{ PF_ICON.get(k, 'fa-solid fa-hashtag') }}"></i>{% endif %}{% endfor %}
+                        </div>
+                        {% endif %}
+
                         {% if task.description %}
                         <div class="kanban-description-box">
 

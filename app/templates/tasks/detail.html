@@ -360,8 +360,9 @@
                             <span></span>
                             <strong>
                                 <a href="{{ url_for('social.compose', task=task.id) }}" data-turbo="false"
-                                   class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:8px;">
-                                    <i class="fa-solid fa-share-nodes"></i> Publish via Social Studio
+                                   class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:8px;"
+                                   title="Open the Social Studio composer pre-filled from this task (draft it manually). The main publish flow is “Approve & Send to Social Studio” at Client Review.">
+                                    <i class="fa-solid fa-pen-to-square"></i> Open in Composer
                                 </a>
                             </strong>
                         </div>
@@ -972,7 +973,29 @@ Submission Files
                         </div>
                         {% endif %}
 
-                        {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
+                    </div>
+
+                </div>
+
+                <div class="task-detail-right">
+
+                    {# Primary review action - surfaced at the TOP of the right
+                       column so a reviewer never has to scroll the whole page to
+                       approve/reject (it used to sit buried below every card). #}
+                    {% if has_permission(current_user, "approve_tasks") and task.status in ["Core Review", "Client Review"] %}
+                    <div class="table-card review-card">
+                        <h2 class="card-title">
+                            {% if task.status == 'Client Review' %}Client review — ready to publish?{% else %}Core review — approve to send on?{% endif %}
+                        </h2>
+                        <p class="review-card-sub">
+                            {% if task.status == 'Client Review' and task.is_social_media and config.SOCIAL_ENGINE_ENABLED %}
+                            Approve the sign-off and hand this to Social Studio to publish or schedule.
+                            {% elif task.status == 'Client Review' %}
+                            Approving marks this task Published — delivered and complete.
+                            {% else %}
+                            Approving passes internal review and moves this on to Client Review.
+                            {% endif %}
+                        </p>
                         <div class="task-actions-box">
                             <div class="review-actions">
 
@@ -1030,13 +1053,8 @@ Submission Files
 
                             </div>
                         </div>
-                        {% endif %}
-
                     </div>
-
-                </div>
-
-                <div class="task-detail-right">
+                    {% endif %}
 
                     <div class="table-card">
                         <h2 class="card-title">Time Tracking</h2>

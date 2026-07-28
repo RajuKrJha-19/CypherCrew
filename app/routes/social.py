@@ -2136,29 +2136,77 @@ def calendar():
     )
 
 
+def _published_post_rows(cid, limit=150):
+    """One row per POST (not per target) for the Published list, Buffer-style:
+    the originating task id, the title, and the platform icons it went live on.
+    Posts published outside Studio are merged into the same list, flagged.
+    """
+    from app.utils import social_platforms as sp
+    # Studio posts that have gone live on at least one platform...
+    live_post_ids = {
+        t.social_post_id for t in _scope_targets(
+            SocialPostTarget.query.filter(
+                SocialPostTarget.status.in_(["published", "removed"])), cid).all()
+    }
+    # ...plus posts marked published directly on the platform (no targets).
+    live_post_ids.update(
+        p.id for p in _scope_posts(
+            SocialPost.query.filter(SocialPost.published_externally.is_(True)),
+            cid).all())
+
+    posts = (SocialPost.query
+             .filter(SocialPost.id.in_(live_post_ids or {-1}))
+             .order_by(SocialPost.updated_at.desc())
+             .limit(limit).all())
+
+    rows = []
+    for post in posts:
+        task = post.task
+        del_targets = []
+        if post.published_externally:
+            src = (task.social_platforms_published or task.social_platforms) \
+                if task else ""
+            platforms, permalinks, status = sp.parse_platforms(src), {}, "external"
+        else:
+            live = [t for t in post.targets
+                    if t.status in ("published", "removed")]
+            platforms = []
+            for t in live:
+                if t.platform not in platforms:
+                    platforms.append(t.platform)
+            permalinks = {t.platform: t.permalink for t in live if t.permalink}
+            # Still-live targets a user can take down per platform.
+            del_targets = [{"id": t.id, "platform": t.platform}
+                           for t in post.targets if t.status == "published"]
+            statuses = [t.status for t in post.targets]
+            if statuses and all(s == "removed" for s in statuses):
+                status = "removed"
+            elif any(s == "failed" for s in statuses) \
+                    and any(s == "published" for s in statuses):
+                status = "partially_published"
+            else:
+                status = "published"
+        rows.append({
+            "post": post,
+            "task_code": task.task_code if task else None,
+            "task_id": task.id if task else None,
+            "external": post.published_externally,
+            "platforms": platforms,
+            "permalinks": permalinks,
+            "del_targets": del_targets,
+            "status": status,
+            "when": post.updated_at,
+        })
+    return rows
+
+
 @social_bp.route("/history")
 @login_required
 def history():
     _guard()
     cid = _client_arg()
-    targets = (
-        _scope_targets(SocialPostTarget.query, cid)
-        .order_by(SocialPostTarget.updated_at.desc())
-        .limit(100)
-        .all()
-    )
-    # Posts published directly on the platform (outside Studio) have no targets,
-    # so surface them as their own rows to keep the Published list complete.
-    external_posts = (
-        _scope_posts(
-            SocialPost.query.filter(SocialPost.published_externally.is_(True)),
-            cid)
-        .order_by(SocialPost.updated_at.desc())
-        .limit(50)
-        .all()
-    )
-    return render_template("social/history.html", targets=targets,
-                           external_posts=external_posts)
+    rows = _published_post_rows(cid)
+    return render_template("social/history.html", rows=rows)
 
 
 # ======================================================================

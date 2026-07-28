@@ -1,13 +1,14 @@
 {% extends "base_studio.html" %}
 {% block title %}Published · Social Studio | CypherCrew{% endblock %}
 
-{% set STATUS_TONE = {'published':'success','approved':'info','scheduled':'warning','publishing':'info','failed':'danger','removed':'muted'} %}
+{% set STATUS_TONE = {'published':'success','partially_published':'warning','removed':'muted','external':'muted'} %}
+{% set STATUS_LABEL = {'published':'Published','partially_published':'Partially published','removed':'Removed','external':'Published outside Studio'} %}
 
 {% block content %}
 <div class="page-header">
     <div>
         <h1>Published</h1>
-        <p>Every publish attempt and its outcome, newest first</p>
+        <p>Every published post — newest first. Icons link straight to the live post.</p>
     </div>
     <div class="top-actions">
         <form method="POST" action="{{ url_for('social.sync_history', client=selected_client_id) }}"
@@ -23,84 +24,70 @@
 {% endfor %}
 {% endwith %}
 
-{% if external_posts %}
-<div class="social-card studio-section">
-    <div class="social-card-head">
-        <h2><i class="fa-solid fa-arrow-up-right-from-square"></i> Published outside Social Studio</h2>
-        <div class="social-card-tools"><span class="sp-pill muted">{{ external_posts|length }}</span></div>
-    </div>
-    <div class="sp-list">
-        {% for p in external_posts %}
-        <div class="sp-list-item is-static">
-            <div class="sp-list-body">
-                <span class="sp-list-title">{{ p.title or 'Untitled post' }}</span>
-                <span class="sp-list-meta">
-                    {% if p.client %}<span>{{ p.client.client_name }}</span>{% endif %}
-                    <span><i class="fa-regular fa-clock"></i> {{ p.updated_at.strftime('%d %b %Y') }}</span>
-                    {% if p.task_id %}
-                    <a href="{{ url_for('tasks.task_detail', task_id=p.task_id) }}" data-turbo="false">
-                        <i class="fa-solid fa-diagram-project"></i> Open task</a>
-                    {% endif %}
-                </span>
-            </div>
-            <span class="sp-pill muted"><i class="fa-solid fa-arrow-up-right-from-square"></i> Outside Studio</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-{% if targets %}
+{% if rows %}
 <div class="social-card studio-section">
     <div class="table-card studio-table">
         <table>
             <thead>
                 <tr>
-                    <th>Platform</th>
-                    <th>Type</th>
+                    <th style="width:90px;">Task ID</th>
+                    <th>Title</th>
+                    <th>Platforms</th>
                     <th>Status</th>
-                    <th>Last error</th>
-                    <th>Updated</th>
-                    <th class="u-right">Link</th>
+                    <th>Published</th>
+                    <th class="u-right"></th>
                 </tr>
             </thead>
             <tbody>
-                {% for t in targets %}
+                {% for r in rows %}
                 <tr>
                     <td>
-                        <span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>
-                        {% if t.post %}
-                        <a class="history-post-link" href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}">{{ t.post.title or 'Untitled post' }}</a>
+                        {% if r.task_id %}
+                        <a href="{{ url_for('tasks.task_detail', task_id=r.task_id) }}" data-turbo="false" class="history-task-id" title="Open the originating CypherCrew task">{% if r.task_code %}#{{ r.task_code }}{% else %}Task{% endif %}</a>
+                        {% else %}
+                        <span class="t-subtle" title="Composed directly in Social Studio — not from a CypherCrew task">Direct</span>
                         {% endif %}
                     </td>
-                    <td class="t-cap">{{ t.post_type }}</td>
-                    <td><span class="sp-pill {{ STATUS_TONE.get(t.status,'muted') }}">{{ t.status.replace('_',' ') }}</span></td>
-                    <td class="t-danger t-sm" title="{{ t.last_error or '' }}">{{ (t.last_error or '')[:80] }}</td>
-                    <td class="t-muted t-sm u-nowrap">{{ t.updated_at.strftime('%d %b %Y %H:%M') }}</td>
                     <td>
-                        <div class="row-actions">
-                            {% if t.permalink %}
-                            <a class="row-action" href="{{ t.permalink }}" target="_blank" rel="noopener">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i> View live</a>
+                        <a class="history-post-link" href="{{ url_for('social.post_detail', post_id=r.post.id) }}" data-turbo="false">{{ r.post.title or 'Untitled post' }}</a>
+                    </td>
+                    <td>
+                        <span class="history-platforms">
+                            {% for pf in r.platforms %}
+                            {% if r.permalinks.get(pf) %}
+                            <a class="pf-icon {{ pf }}" href="{{ r.permalinks[pf] }}" target="_blank" rel="noopener" title="View live on {{ PF_LABEL.get(pf, pf|capitalize) }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i></a>
+                            {% else %}
+                            <span class="pf-icon {{ pf }}" title="{{ PF_LABEL.get(pf, pf|capitalize) }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i></span>
                             {% endif %}
-
-                            {#
-                                Taking a post down belongs on the page that
-                                lists what is live, not only inside the post.
-                                Facebook deletes through the API; Instagram
-                                cannot, so the Studio marks it removed and
-                                says so - the confirm text has to be honest
-                                about that or people think it is done.
-                            #}
-                            {% if t.status == 'published' %}
-                            <form method="POST" action="{{ url_for('social.remove_target', target_id=t.id) }}"
-                                  onsubmit="return confirm('Delete this {{ PF_LABEL.get(t.platform, t.platform) }} post?\n\nFacebook posts are deleted through the API. Instagram cannot be deleted this way - it will be marked as removed here and you must delete it in the app.');">
-                                <input type="hidden" name="back" value="history">
-                                <button type="submit" class="row-action danger">
-                                    <i class="fa-solid fa-trash-can"></i> Delete post</button>
-                            </form>
-                            {% elif not t.permalink %}
-                            <span class="t-subtle t-sm">—</span>
+                            {% else %}
+                            <span class="t-subtle">—</span>
+                            {% endfor %}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="sp-pill {{ STATUS_TONE.get(r.status,'muted') }}">{% if r.external %}<i class="fa-solid fa-arrow-up-right-from-square"></i> {% endif %}{{ STATUS_LABEL.get(r.status, r.status) }}</span>
+                    </td>
+                    <td class="t-muted t-sm u-nowrap">{{ r.when.strftime('%d %b %Y %H:%M') }}</td>
+                    <td class="u-right">
+                        <div class="history-row-actions">
+                            <a class="row-action" href="{{ url_for('social.post_detail', post_id=r.post.id) }}" data-turbo="false" title="Open the post — per-platform status, links and actions">Open</a>
+                            {% if r.del_targets %}
+                            <details class="row-menu">
+                                <summary class="row-action row-menu-trigger" title="Take the post down on a platform"><i class="fa-solid fa-ellipsis-vertical"></i></summary>
+                                <div class="row-menu-list">
+                                    <span class="row-menu-head">Remove from platform</span>
+                                    {% for t in r.del_targets %}
+                                    <form method="POST" action="{{ url_for('social.remove_target', target_id=t.id) }}" data-turbo="false"
+                                          onsubmit="return confirm('Delete this {{ PF_LABEL.get(t.platform, t.platform|capitalize) }} post?\n\nFacebook is deleted through the API. Instagram cannot be deleted this way — it is marked removed here and you must delete it in the Instagram app.');">
+                                        <input type="hidden" name="back" value="history">
+                                        <button type="submit" class="row-menu-item danger">
+                                            <span class="pf-icon {{ t.platform }}" style="width:20px;height:20px;font-size:11px;"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i></span>
+                                            Delete on {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}
+                                        </button>
+                                    </form>
+                                    {% endfor %}
+                                </div>
+                            </details>
                             {% endif %}
                         </div>
                     </td>
@@ -110,12 +97,12 @@
         </table>
     </div>
 </div>
-{% elif not external_posts %}
+{% else %}
 <div class="social-card">
     <div class="social-empty">
         <div class="ic"><i class="fa-solid fa-clock-rotate-left"></i></div>
         <h3>Nothing published yet</h3>
-        <p>Once posts are approved and scheduled, every publish attempt and its result will appear here.</p>
+        <p>Once posts go live — from a task or composed here — they'll appear in this list with their task, platforms and links.</p>
         <div class="actions">
             <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn btn-secondary"><i class="fa-solid fa-pen"></i> Compose a post</a>
         </div>
