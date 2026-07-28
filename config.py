@@ -143,6 +143,26 @@ class Config:
     META_APP_ID = os.getenv("META_APP_ID")
     META_APP_SECRET = os.getenv("META_APP_SECRET")
 
+    # --- Google (YouTube + Business Profile) ---------------------------
+    # One OAuth client covers both; each adapter registers only when its
+    # own switch is on, so one can go live while the other waits for
+    # Google's separate API approval.
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+    YOUTUBE_ENABLED = os.getenv("YOUTUBE_ENABLED", "true").lower() == "true"
+    GOOGLE_BUSINESS_ENABLED = os.getenv(
+        "GOOGLE_BUSINESS_ENABLED", "true").lower() == "true"
+
+    # Applied to every uploaded video. 22 is "People & Blogs", the safe
+    # default; privacy is public because the engine already gates publishing
+    # behind approval, so an upload reaching YouTube is meant to be live.
+    YOUTUBE_CATEGORY_ID = os.getenv("YOUTUBE_CATEGORY_ID", "22")
+    YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "public")
+    # Google requires this declaration on every upload. Agency content is
+    # not child-directed by default; set true only if it genuinely is.
+    YOUTUBE_MADE_FOR_KIDS = os.getenv(
+        "YOUTUBE_MADE_FOR_KIDS", "false").lower() == "true"
+
     # Shown on the public legal pages (/legal/privacy, /legal/terms,
     # /legal/data-deletion), which Meta's app review reads. Configurable so
     # a deployment states its real operator and a contact that is actually

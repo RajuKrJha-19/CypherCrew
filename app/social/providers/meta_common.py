@@ -40,13 +40,30 @@ _RATE_SUBCODES = {2446079, 2207051}
 # Instagram scopes are not "required" for a Facebook connect (see each
 # provider's _required_scopes), so Facebook still connects even if the user
 # declines Instagram - we just can't discover Instagram until they grant it.
+#
+# THIS is the list that reaches the consent screen (OAuthManager.start ->
+# connect_scopes). There are three scope lists in play and they mean
+# different things:
+#
+#   META_UNIFIED_SCOPES  - what the user is ASKED for at consent time
+#   Provider.SCOPES      - what that adapter needs to do all its work
+#   _required_scopes()   - the subset without which a connect is refused
+#
+# A scope missing from THIS list is never granted, however carefully it is
+# declared elsewhere - which is how the comment and insights scopes were
+# approved-but-absent. test_meta_scopes.py pins the union so the lists
+# cannot drift apart again.
 META_UNIFIED_SCOPES = [
     "pages_show_list",
     "pages_read_engagement",
     "pages_manage_posts",
+    "pages_manage_engagement",
+    "read_insights",
     "business_management",
     "instagram_basic",
     "instagram_content_publish",
+    "instagram_manage_comments",
+    "instagram_manage_insights",
 ]
 
 

@@ -61,6 +61,24 @@ def load_providers(app=None) -> None:
         registry.register(MetaInstagramProvider())
         covered.update({"facebook", "instagram"})
 
+    # Google (YouTube + Business Profile): one OAuth client serves both,
+    # but they are separate connects - a business may have a Profile and no
+    # channel, or the reverse. Each is registered only when its own API is
+    # switched on, so a project with YouTube enabled and Business Profile
+    # still pending approval gets the real YouTube adapter and a demo
+    # Business channel rather than a broken one.
+    if config.get("GOOGLE_CLIENT_ID") and config.get("GOOGLE_CLIENT_SECRET"):
+        if config.get("YOUTUBE_ENABLED", True):
+            from app.social.providers.youtube import YouTubeProvider
+            registry.register(YouTubeProvider())
+            covered.add("youtube")
+        if config.get("GOOGLE_BUSINESS_ENABLED", True):
+            from app.social.providers.google_business import (
+                GoogleBusinessProvider,
+            )
+            registry.register(GoogleBusinessProvider())
+            covered.add("google_business")
+
     # Simulation fills every platform that has no real adapter yet, so the
     # engine stays exercisable end-to-end.
     if config.get("SOCIAL_SIMULATION_MODE", True):

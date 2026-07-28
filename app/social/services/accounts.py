@@ -4,7 +4,9 @@ The ONLY place tokens cross the vault boundary: tokens are encrypted here
 before persistence and decrypted here (never elsewhere, never logged).
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from flask import current_app
 
 from app.extensions import db
 from app.models import SocialAccount
@@ -60,9 +62,53 @@ class AccountManager:
         return acct
 
     @staticmethod
-    def access_token(account) -> str:
-        """Decrypt and return the account's access token."""
+    def access_token(account, refresh_margin_seconds=300) -> str:
+        """Decrypt the account's access token, renewing it first if it is
+        about to expire.
+
+        The scheduled sweep in tokens/refresh.py is not enough on its own
+        for Google, whose access tokens live one hour: a post scheduled for
+        three hours' time would publish with a token that died two hours
+        ago. This is the one place that knows a token is about to be USED,
+        so it is where the check belongs.
+
+        Meta is unaffected - its Page tokens carry no expiry, so the guard
+        below is skipped entirely and nothing extra is called.
+        """
+        expires_at = account.token_expires_at
+        if expires_at is not None:
+            due = datetime.utcnow() + timedelta(seconds=refresh_margin_seconds)
+            if expires_at <= due:
+                AccountManager._refresh_now(account)
+
         return get_vault().decrypt(account.token_ciphertext)
+
+    @staticmethod
+    def _refresh_now(account):
+        """Best-effort in-line refresh.
+
+        A failure here must not raise: the stored token may still have
+        minutes left on it, and letting the publish attempt proceed gives a
+        real platform error to classify rather than an opaque crash from
+        the token layer. A genuinely dead token comes back as AuthError
+        from the provider, which already flips the account to needs_reauth.
+        """
+        from app.social.registry import get_provider
+
+        provider = get_provider(account.platform)
+        if provider is None:
+            return
+        try:
+            bundle = provider.refresh_token(account)
+        except Exception:  # noqa: BLE001 - see docstring
+            current_app.logger.warning(
+                "in-line token refresh failed for account=%s platform=%s",
+                account.id, account.platform, exc_info=True)
+            return
+        if bundle is None:
+            return
+        AccountManager.store_refreshed(account, bundle)
+        db.session.commit()
 
     @staticmethod
     def refresh_token_value(account):
