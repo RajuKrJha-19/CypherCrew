@@ -11,10 +11,20 @@ import pytest
 
 from app.extensions import db
 from app.models import SocialAuditLog
-from app.social.dto import PublishStep, StepStatus
+from app.social.dto import Capabilities, PublishStep, StepStatus
 from app.social.providers.simulation import SimulationProvider
 from app.social.queue import worker
 from tests.conftest import FakeProvider
+
+
+class _NoMethodProvider:
+    """A provider that DECLARES the first-comment capability but never
+    implemented post_first_comment - the exact adapter gap the worker must
+    record rather than silently swallow. FakeProvider can't stand in here
+    because it implements the method."""
+    capabilities = Capabilities(
+        post_types={"image"}, supports_first_comment=True)
+    # deliberately no post_first_comment
 
 
 def _step(external_post_id="EXT-1"):
@@ -196,18 +206,17 @@ def test_a_missing_post_id_is_recorded(session, make_target):
 
 
 def test_an_adapter_without_the_method_is_recorded(session, make_target):
-    """FakeProvider declares the capability but has no post_first_comment -
-    the case that silently did nothing."""
+    """A provider that declares the capability but has no post_first_comment -
+    the case that silently did nothing - now leaves an audit trace."""
     _, _, target = make_target()
     target.first_comment = "hello"
     session.flush()
 
-    provider = FakeProvider()
-    provider.capabilities.supports_first_comment = True
-    if hasattr(provider, "post_first_comment"):
-        pytest.skip("FakeProvider implements post_first_comment")
+    provider = _NoMethodProvider()
+    assert not hasattr(provider, "post_first_comment")
 
     worker._post_first_comment(target, _step(), provider, "tok")
     db.session.flush()
 
     assert _actions(target.id) == ["first_comment_skipped"]
+    assert "can't post comments" in _detail(target.id)["reason"]
