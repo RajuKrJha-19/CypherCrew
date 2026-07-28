@@ -51,18 +51,32 @@ def schedule_post(post, actor_id=None):
     for target in post.targets:
         errs = validate_target(target)
         if errs:
+            # "blocked", not left at "draft". Draft means "nobody has
+            # submitted this yet"; this target HAS been submitted and
+            # cannot go out as it stands. Leaving it at draft is why a post
+            # could sit at Scheduled forever with one platform quietly dead
+            # and no way to act on it - the rollup had nothing to settle
+            # against and the UI had no state to offer a fix for.
             problems[target.id] = errs
+            target.status = "blocked"
+            target.last_error = " ".join(errs)
             continue
         # scheduled_for should already be set on the target; default now.
         scheduling.schedule_target(
             target, target.scheduled_for or datetime.utcnow(), actor_id
         )
 
-    post.status = "scheduled"
+    scheduled = len(post.targets) - len(problems)
+
+    # Only call it scheduled if something actually is. A post where every
+    # platform was blocked has nothing queued, and saying "Scheduled" would
+    # leave someone waiting for a publish that can never happen.
+    post.status = "scheduled" if scheduled else "failed"
+
     audit.record("scheduled", post_id=post.id, actor_id=actor_id,
                  task_id=post.task_id, detail={"problems": problems} or None)
     db.session.commit()
-    return {"scheduled": len(post.targets) - len(problems), "problems": problems}
+    return {"scheduled": scheduled, "problems": problems}
 
 
 def publish_target_now(target, actor_id=None):

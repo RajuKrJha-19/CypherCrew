@@ -59,7 +59,18 @@ def validate_against(capabilities, content) -> list[str]:
     if capabilities is None:
         return problems
     if not capabilities.supports(content.post_type):
-        problems.append(f"{content.post_type} is not supported on this platform.")
+        # Say what CAN be done, not just what can't. "video is not
+        # supported on this platform" leaves someone stuck; Instagram takes
+        # video perfectly well - as a Reel - and that is the one sentence
+        # that gets the post out today.
+        alternatives = sorted(capabilities.post_types or [])
+        hint = ""
+        if content.post_type == "video" and "reel" in alternatives:
+            hint = " Post it as a Reel instead."
+        elif alternatives:
+            hint = f" This platform takes: {', '.join(alternatives)}."
+        problems.append(
+            f"{content.post_type} is not supported on this platform.{hint}")
     if content.post_type == "carousel" and capabilities.max_carousel:
         n = len(content.media)
         if n < 2:

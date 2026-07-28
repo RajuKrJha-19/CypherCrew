@@ -167,6 +167,30 @@ class SocialPostTarget(db.Model):
         ),
     )
 
+    #: Post states that mean "this post has been sent on its way".
+    _POST_UNDERWAY = ("scheduled", "publishing", "published",
+                      "partially_published", "failed")
+
+    @property
+    def is_stuck(self):
+        """Will this platform never publish without someone intervening?
+
+        Covers the explicit states, and one implicit one: a target left at
+        `draft` while its post is already scheduled or published. That is
+        what a validation failure used to produce - the target was skipped
+        and silently left at draft, so the post could never settle and the
+        screen showed nothing actionable. New rows get `blocked`; this
+        keeps the ones created before that honest too.
+        """
+        if self.status in ("blocked", "failed"):
+            return True
+        post = self.post
+        return bool(
+            self.status == "draft"
+            and post is not None
+            and post.status in self._POST_UNDERWAY
+        )
+
     @property
     def links_to_post(self):
         """Was this story meant to be tappable through to a feed post?"""

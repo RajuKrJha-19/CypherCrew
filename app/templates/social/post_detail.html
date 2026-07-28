@@ -1,7 +1,7 @@
 {% extends "base_studio.html" %}
 {% block title %}{{ post.title or 'Post' }} · Social Studio | CypherCrew{% endblock %}
 
-{% set STATUS_TONE = {'published':'success','partially_published':'success','approved':'info','scheduled':'warning','pending_approval':'warning','publishing':'info','failed':'danger','rejected':'danger'} %}
+{% set STATUS_TONE = {'published':'success','partially_published':'warning','approved':'info','scheduled':'warning','pending_approval':'warning','publishing':'info','failed':'danger','blocked':'danger','rejected':'danger','removed':'muted'} %}
 
 {% block content %}
 <div class="page-header">
@@ -29,6 +29,51 @@
 {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
 {% endwith %}
 
+{#
+    Anything that will never go out, said once and up front. This is the
+    case the page used to hide: one platform published, another sitting at
+    "draft" with a note buried in a table cell, and the post stuck at
+    Scheduled with no way to resolve it.
+#}
+{% set stuck = post.targets|selectattr('is_stuck')|list %}
+{% if stuck %}
+<div class="social-card studio-section post-stuck">
+    <div class="social-card-body">
+        <div class="post-stuck-head">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+                <strong>{{ stuck|length }} platform{{ '' if stuck|length == 1 else 's' }} won't publish</strong>
+                <span>The rest of this post is unaffected. Fix the content, or
+                      take the platform off the post so it can settle.</span>
+            </div>
+        </div>
+        <ul class="post-stuck-list">
+            {% for t in stuck %}
+            {# Pre-flight problems if we have them, otherwise whatever the
+               platform said when it refused. #}
+            {% set why = problems[t.id] or ([t.last_error] if t.last_error else []) %}
+            <li>
+                <span class="pf-chip {{ t.platform }}">
+                    <i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i>
+                    {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>
+                <span class="post-stuck-why">
+                    {{ why|join(' ') or 'This platform did not publish.' }}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="post-stuck-actions">
+            {% if post.status != 'published' %}
+            <a class="btn btn-secondary" href="{{ url_for('social.edit_post', post_id=post.id) }}">
+                <i class="fa-solid fa-pen"></i> Edit post</a>
+            {% endif %}
+            <span class="field-hint">
+                Per-platform actions are in the Platforms table below.</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ---- Workflow action bar (status-driven) ---- #}
 <div class="social-card studio-section">
     <div class="social-card-body social-actionbar">
@@ -54,17 +99,44 @@
             <form method="POST" action="{{ url_for('social.reopen_post', post_id=post.id) }}"><button class="btn btn-ghost"><i class="fa-solid fa-rotate-left"></i> Reopen to draft</button></form>
             {% if sched %}<span class="field-hint">Currently set for <strong>{{ to_ist_display(sched) }} IST</strong>.</span>{% endif %}
         {% elif post.status in ['scheduled','publishing'] %}
+            {#
+                Lead with what is actually happening and when, then the
+                actions, then the engine control - which is an admin's
+                debugging tool, not a step in anyone's workflow. All five
+                controls used to sit in one undifferentiated row.
+            #}
+            {% set sched = post.targets|selectattr('scheduled_for')|map(attribute='scheduled_for')|first %}
+            <div class="actionbar-lead">
+                <i class="fa-solid fa-hourglass-half"></i>
+                <span>
+                    {% if sched %}
+                    Goes out <strong>{{ to_ist_display(sched) }} IST</strong> — automatically, no action needed.
+                    {% else %}
+                    Queued for publishing — it goes out automatically.
+                    {% endif %}
+                </span>
+            </div>
+
             {% if post.status == 'scheduled' %}
-            {% set sched = post.targets[0].scheduled_for if post.targets else none %}
-            <form method="POST" action="{{ url_for('social.reschedule_post', post_id=post.id) }}" class="schedule-form">
-                <input type="datetime-local" name="schedule" value="{{ to_ist(sched) }}" aria-label="New schedule date and time (IST)">
-                <button class="btn btn-secondary"><i class="fa-solid fa-clock"></i> Reschedule</button>
-            </form>
-            <form method="POST" action="{{ url_for('social.reopen_post', post_id=post.id) }}"><button class="btn btn-ghost"><i class="fa-solid fa-rotate-left"></i> Reopen to draft</button></form>
+            <div class="actionbar-row">
+                <form method="POST" action="{{ url_for('social.reschedule_post', post_id=post.id) }}" class="schedule-form">
+                    <input type="datetime-local" name="schedule" value="{{ to_ist(sched) }}" aria-label="New schedule date and time (IST)">
+                    <button class="btn btn-secondary"><i class="fa-solid fa-clock"></i> Reschedule</button>
+                </form>
+                <form method="POST" action="{{ url_for('social.reopen_post', post_id=post.id) }}">
+                    <button class="btn btn-ghost"><i class="fa-solid fa-rotate-left"></i> Reopen to draft</button>
+                </form>
+            </div>
             {% endif %}
-            <span class="field-hint"><i class="fa-solid fa-hourglass-half"></i> Queued for publishing{% if not can_manage_social_engine(current_user) %} — it will go out automatically at the scheduled time{% endif %}.</span>
+
             {% if can_manage_social_engine(current_user) %}
-            <form method="POST" action="{{ url_for('social.process_queue') }}"><button class="btn btn-secondary"><i class="fa-solid fa-play"></i> Process queue now</button></form>
+            <div class="actionbar-admin">
+                <form method="POST" action="{{ url_for('social.process_queue') }}">
+                    <button class="btn btn-ghost btn-sm">
+                        <i class="fa-solid fa-play"></i> Process queue now</button>
+                </form>
+                <span class="t-subtle t-sm">Admin — forces the worker to run instead of waiting for it.</span>
+            </div>
             {% endif %}
         {% elif post.status in ['published','partially_published'] %}
             {% set live_targets = post.targets|selectattr('status', 'equalto', 'published')|list %}
@@ -241,8 +313,17 @@
                     <td class="t-muted t-sm u-nowrap">{{ to_ist_display(t.scheduled_for) }}</td>
                     <td>
                         <span class="sp-pill {{ STATUS_TONE.get(t.status,'') }}">{{ t.status }}</span>
-                        {% if problems[t.id] %}
-                        <div class="field-hint warn is-stacked">{% for p in problems[t.id] %}<div>⚠ {{ p }}</div>{% endfor %}</div>
+                        {# The reason, once, and only where it still means
+                           something. A pre-flight problem on a target that
+                           already published is stale advice about content
+                           that is live - and it used to be printed twice,
+                           here and again in the Result column. #}
+                        {% set reasons = [] if t.status in ['published', 'removed']
+                           else (problems[t.id] or ([t.last_error] if t.last_error else [])) %}
+                        {% if reasons %}
+                        <div class="field-hint warn is-stacked">
+                            {% for p in reasons %}<div>⚠ {{ p }}</div>{% endfor %}
+                        </div>
                         {% endif %}
                     </td>
                     <td>
@@ -250,15 +331,42 @@
                             {% if t.permalink %}
                             <a class="row-action" href="{{ t.permalink }}" target="_blank" rel="noopener">
                                 <i class="fa-solid fa-arrow-up-right-from-square"></i> View live</a>
-                            {% elif t.last_error %}
-                            <span class="field-hint warn" title="{{ t.last_error }}">{{ t.last_error[:60] }}</span>
-                            {% elif t.status not in ['failed','published'] %}
+                            {% elif not reasons and t.status not in ['failed','published'] %}
+                            {# The failure reason lives in Status; repeating a
+                               truncated copy here just made the row noisy. #}
                             <span class="t-subtle t-sm">—</span>
                             {% endif %}
 
+                            {% if t.is_stuck %}
+                            {#
+                                The two ways out of a platform that did not
+                                go live, and they are genuinely different:
+
+                                failed  - the platform refused at publish
+                                          time. Retrying can work.
+                                blocked - the content cannot go on this
+                                          platform as it stands (a video to
+                                          Instagram). Retrying is pointless
+                                          until the post is edited, so the
+                                          first action is Edit.
+
+                                Either way "Remove platform" lets the post
+                                settle instead of hanging on a target that
+                                will never move.
+                            #}
                             {% if t.status == 'failed' %}
                             <form method="POST" action="{{ url_for('social.retry_target', target_id=t.id) }}">
                                 <button type="submit" class="row-action"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
+                            </form>
+                            {% endif %}
+                            {% if post.status not in ['published'] %}
+                            <a class="row-action" href="{{ url_for('social.edit_post', post_id=post.id) }}">
+                                <i class="fa-solid fa-pen"></i> Edit post</a>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('social.drop_target', target_id=t.id) }}"
+                                  onsubmit="return confirm('Remove {{ PF_LABEL.get(t.platform, t.platform) }} from this post? Nothing was published there.');">
+                                <button type="submit" class="row-action danger">
+                                    <i class="fa-solid fa-xmark"></i> Remove platform</button>
                             </form>
                             {% elif t.status == 'published' %}
                             <form method="POST" action="{{ url_for('social.remove_target', target_id=t.id) }}"

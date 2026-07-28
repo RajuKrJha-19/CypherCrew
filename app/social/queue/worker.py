@@ -373,6 +373,15 @@ def _maybe_finalize_post(target):
     if post is None:
         return
     statuses = [t.status for t in post.targets]
+
+    # A target that is "blocked" settles the post just like a failed one.
+    # Without this a post with one published platform and one that could
+    # never publish stayed at "scheduled" forever - the list said Scheduled
+    # while the post page showed one live and one dead, and nothing could
+    # ever resolve it because the rollup was waiting on a target that was
+    # never going to move.
+    STUCK = ("failed", "blocked")
+
     if all(s == "published" for s in statuses):
         post.status = "published"
         # Tell the creator their (often scheduled) post is now live.
@@ -383,9 +392,11 @@ def _maybe_finalize_post(target):
                 f"“{post.title or 'Your post'}” is now live on "
                 + ", ".join(plats) + ".",
                 link=f"/social/posts/{post.id}", actor_id=None)
-    elif any(s == "published" for s in statuses) and any(s == "failed" for s in statuses):
+    elif (any(s == "published" for s in statuses)
+            and any(s in STUCK for s in statuses)
+            and all(s in ("published", "removed") + STUCK for s in statuses)):
         post.status = "partially_published"
-    elif all(s == "failed" for s in statuses):
+    elif statuses and all(s in STUCK for s in statuses):
         post.status = "failed"
 
     # Reflect the post's settled state on the originating task (live / in

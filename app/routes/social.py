@@ -1095,6 +1095,55 @@ def remove_post(post_id):
     return _back_to(post.id)
 
 
+@social_bp.route("/targets/<int:target_id>/drop", methods=["POST"])
+@login_required
+def drop_target(target_id):
+    """Take one platform off a post that has not published on it.
+
+    The way out of "Facebook went live, Instagram can never accept this".
+    Without it the post is stuck forever: the blocked target keeps the post
+    from settling, and the only alternatives were deleting a post that is
+    already live on another platform, or leaving it wrong.
+
+    Only for targets that never published - a live post is removed through
+    remove_target, which also deletes it on the platform.
+    """
+    _guard()
+    target = SocialPostTarget.query.get_or_404(target_id)
+
+    if target.status in ("published", "removed"):
+        flash("That platform is already live — use Remove instead.", "error")
+        return _back_to(target.social_post_id)
+
+    post_id = target.social_post_id
+    label = platform_label(target.platform)
+
+    SocialComment.query.filter_by(target_id=target.id).delete(
+        synchronize_session=False)
+    PublishJob.query.filter_by(target_id=target.id).delete(
+        synchronize_session=False)
+    SocialAuditLog.query.filter_by(target_id=target.id).update(
+        {"target_id": None}, synchronize_session=False)
+
+    db.session.delete(target)
+    db.session.flush()
+
+    post = db.session.get(SocialPost, post_id)
+    if post is not None:
+        # Removing the blocker can settle the post - a lone published
+        # target now means published, not "partially".
+        from app.social.queue.worker import _maybe_finalize_post
+        remaining = post.targets
+        if remaining:
+            _maybe_finalize_post(remaining[0])
+
+    audit.record("target_dropped", post_id=post_id, actor_id=current_user.id,
+                 detail={"platform": target.platform})
+    db.session.commit()
+    flash(f"Removed {label} from this post.", "success")
+    return _back_to(post_id)
+
+
 @social_bp.route("/targets/<int:target_id>/story-link-done", methods=["POST"])
 @login_required
 def story_link_done(target_id):
@@ -1185,8 +1234,17 @@ def process_queue():
         if drained["claimed"] == 0:
             break
 
-    flash(f"Enqueued {enq['enqueued']} due · processed {processed} job(s).",
-          "success")
+    # Said "Enqueued 0 due · processed 0 job(s)" in green, which reads as a
+    # success while telling the reader nothing happened - and in engine
+    # vocabulary they have no reason to know.
+    if processed:
+        flash(f"Published {processed} queued item(s).", "success")
+    elif enq["enqueued"]:
+        flash(f"{enq['enqueued']} item(s) picked up — they publish in the "
+              "next moment or two.", "info")
+    else:
+        flash("Nothing was due. Anything scheduled for later goes out "
+              "automatically at its time.", "info")
     return redirect(request.referrer or url_for("social.queue"))
 
 
@@ -1719,9 +1777,19 @@ def schedule_post(post_id):
             task_link._task_of(post), actor_id=current_user.id)
         db.session.commit()
     if result["problems"]:
+        # Name the platform and the reason. "Check the validation notes"
+        # made someone hunt down a table to find out that Instagram cannot
+        # take a video - which the message may as well just say.
+        by_id = {t.id: t for t in post.targets}
+        lines = [
+            f"{platform_label(by_id[tid].platform)}: {' '.join(errs)}"
+            for tid, errs in result["problems"].items() if tid in by_id
+        ]
         flash(
-            "Some targets could not be scheduled - check the validation "
-            "notes on each platform.", "error",
+            (f"Scheduled {result['scheduled']} platform(s). "
+             if result["scheduled"] else "Nothing could be scheduled. ")
+            + "Not scheduled — " + "; ".join(lines),
+            "error" if not result["scheduled"] else "info",
         )
     else:
         flash(
