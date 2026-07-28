@@ -46,12 +46,19 @@ def sync_comments(client_id=None):
               "errors": []}
 
     def fail(target, reason):
+        # Name the channel and the post, not just the raw platform id. A
+        # bare "Object with ID '1213..._1220...' does not exist" tells the
+        # person reading it nothing they can act on; "Hope+ IVF — 'Diwali
+        # offer'" tells them exactly which connection to look at.
+        post = target.post
+        where = target.account.display_name if target.account else target.platform
+        what = (post.title if post and post.title else None) \
+            or (target.caption or "")[:40] or f"post {target.id}"
         report["failed"] += 1
-        if reason not in report["errors"]:
-            report["errors"].append(reason)
+        report["errors"].append(f"{where} — “{what}”: {reason}")
         current_app.logger.warning(
-            "engage sync failed target=%s platform=%s: %s",
-            target.id, target.platform, reason)
+            "engage sync failed target=%s platform=%s account=%s: %s",
+            target.id, target.platform, target.social_account_id, reason)
 
     for target in _published_targets(client_id):
         provider = get_provider(target.platform)

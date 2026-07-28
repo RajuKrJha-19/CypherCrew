@@ -1932,17 +1932,48 @@ def _scope_comments(query, client_id):
 @social_bp.route("/engage")
 @login_required
 def engage():
-    _guard()
+    """The comments inbox, as a two-pane inbox rather than a stack of cards.
+
+    Selecting a comment is a plain link (`?c=<id>`) and the detail pane is
+    rendered server-side, so the whole screen works without JavaScript and
+    a conversation is a shareable URL. The JS in the template is only
+    keyboard navigation on top.
+    """
+    from sqlalchemy.orm import joinedload
+
     from app.models import SocialComment
+
+    _guard()
     cid = _client_arg()
+
     status_f = request.args.get("status")
     status_f = status_f if status_f in ("open", "done") else "open"
-    q = _scope_comments(
+    platform_f = (request.args.get("platform") or "").strip()
+    search = (request.args.get("q") or "").strip()
+
+    base = _scope_comments(
         SocialComment.query.filter(SocialComment.is_ours.is_(False)), cid)
-    q = q.filter(SocialComment.status == status_f)
-    comments = q.order_by(SocialComment.created_at.desc()).limit(200).all()
-    # Our replies, grouped by the parent comment they answered, so a card can
-    # show the thread inline.
+
+    q = base.filter(SocialComment.status == status_f)
+    if platform_f:
+        q = q.filter(SocialComment.platform == platform_f)
+    if search:
+        needle = f"%{search}%"
+        q = q.filter(db.or_(SocialComment.message.ilike(needle),
+                            SocialComment.author_name.ilike(needle)))
+
+    comments = (
+        q.options(joinedload(SocialComment.target)
+                  .joinedload(SocialPostTarget.account),
+                  joinedload(SocialComment.target)
+                  .joinedload(SocialPostTarget.post))
+        .order_by(SocialComment.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    # Our replies, grouped by the comment they answered, so the detail pane
+    # can show the exchange in order.
     ext_ids = [c.external_id for c in comments]
     replies = {}
     if ext_ids:
@@ -1951,12 +1982,33 @@ def engage():
                           SocialComment.parent_external_id.in_(ext_ids))
                   .order_by(SocialComment.created_at.asc()).all()):
             replies.setdefault(r.parent_external_id, []).append(r)
-    open_total = _scope_comments(
-        SocialComment.query.filter(SocialComment.is_ours.is_(False),
-                                   SocialComment.status == "open"), cid).count()
-    return render_template("social/engage.html", comments=comments,
-                           replies=replies, status_f=status_f,
-                           open_total=open_total)
+
+    # The conversation on the right. Defaults to the first in the list so
+    # the pane is never blank while the list has something in it.
+    selected = None
+    wanted = request.args.get("c", type=int)
+    if wanted:
+        selected = next((c for c in comments if c.id == wanted), None)
+    if selected is None and comments:
+        selected = comments[0]
+
+    counts = {
+        "open": base.filter(SocialComment.status == "open").count(),
+        "done": base.filter(SocialComment.status == "done").count(),
+    }
+    # Distinct in SQL, not by loading every comment to read one column off
+    # each - this list only exists to populate a filter dropdown.
+    platforms = sorted(
+        p for (p,) in base.with_entities(SocialComment.platform).distinct()
+    )
+
+    return render_template(
+        "social/engage.html",
+        comments=comments, replies=replies, selected=selected,
+        status_f=status_f, platform_f=platform_f, search=search,
+        counts=counts, platforms=platforms,
+        open_total=counts["open"],
+    )
 
 
 @social_bp.route("/engage/sync", methods=["POST"])
@@ -1988,6 +2040,20 @@ def engage_sync():
     return redirect(url_for("social.engage", client=_client_arg()))
 
 
+def _engage_back(comment_id=None):
+    """Back to the inbox with the filters - and optionally the open
+    conversation - the person was actually looking at. Losing those on
+    every reply is what makes an inbox tiring to work through."""
+    return url_for(
+        "social.engage",
+        client=_client_arg(),
+        status=request.form.get("status") or None,
+        platform=request.form.get("platform") or None,
+        q=request.form.get("q") or None,
+        c=comment_id,
+    )
+
+
 @social_bp.route("/engage/<int:comment_id>/reply", methods=["POST"])
 @login_required
 def engage_reply(comment_id):
@@ -2002,7 +2068,7 @@ def engage_reply(comment_id):
         flash("Reply posted." if ext else
               "Couldn't post the reply — check the channel connection.",
               "success" if ext else "error")
-    return redirect(url_for("social.engage", client=_client_arg()))
+    return redirect(_engage_back(comment.id))
 
 
 @social_bp.route("/engage/<int:comment_id>/done", methods=["POST"])
@@ -2012,7 +2078,10 @@ def engage_done(comment_id):
     from app.models import SocialComment
     comment = SocialComment.query.get_or_404(comment_id)
     engage_svc.mark_done(comment, done=(comment.status != "done"))
-    return redirect(url_for("social.engage", client=_client_arg()))
+    # Not back to this comment: it has just left the list you were working
+    # through, so returning to it would show an empty pane. The next one
+    # is what you want.
+    return redirect(_engage_back())
 
 
 # ======================================================================

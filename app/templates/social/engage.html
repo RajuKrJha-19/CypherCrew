@@ -1,6 +1,31 @@
 {% extends "base_studio.html" %}
 {% block title %}Engage · Social Studio | CypherCrew{% endblock %}
 
+{#
+    A two-pane inbox: conversations on the left, the selected one on the
+    right. It was a vertical stack of cards, which is fine for three
+    comments and unworkable for thirty - you lose your place, and the post
+    a comment belongs to was a few words of grey text.
+
+    Selecting is a plain link (?c=<id>) rendered server-side, so the whole
+    screen works without JavaScript and a conversation has a shareable
+    URL. The script at the bottom only adds keyboard navigation.
+#}
+
+{#
+    Build an inbox URL, keeping whatever the person already had set.
+    `none` means "leave this as it is"; an empty string means "clear it" -
+    which is what the Clear link needs and a plain default could not
+    express.
+#}
+{% macro inbox_url(status=none, platform=none, q=none, c=none) -%}
+    {{ url_for('social.engage',
+               client=selected_client_id,
+               status=(status_f if status is none else status),
+               platform=((platform_f if platform is none else platform) or none),
+               q=((search if q is none else q) or none),
+               c=c) }}
+{%- endmacro %}
 
 {% block content %}
 <div class="page-header">
@@ -22,60 +47,251 @@
 {% endfor %}
 {% endwith %}
 
-<div class="social-filters">
-    <a href="{{ url_for('social.engage', client=selected_client_id, status='open') }}" class="draft-chip {{ 'on' if status_f == 'open' }}">Open{% if open_total %} · {{ open_total }}{% endif %}</a>
-    <a href="{{ url_for('social.engage', client=selected_client_id, status='done') }}" class="draft-chip {{ 'on' if status_f == 'done' }}">Done</a>
+<div class="engage-toolbar">
+    <div class="engage-tabs" role="group" aria-label="Filter by state">
+        <a href="{{ inbox_url(status='open', c=None) }}"
+           class="engage-tab {{ 'is-active' if status_f == 'open' }}">
+            Open {% if counts.open %}<span class="engage-count">{{ counts.open }}</span>{% endif %}
+        </a>
+        <a href="{{ inbox_url(status='done', c=None) }}"
+           class="engage-tab {{ 'is-active' if status_f == 'done' }}">
+            Done {% if counts.done %}<span class="engage-count">{{ counts.done }}</span>{% endif %}
+        </a>
+    </div>
+
+    <form method="GET" class="engage-filters" role="search">
+        <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+        <input type="hidden" name="status" value="{{ status_f }}">
+
+        {% if platforms|length > 1 %}
+        <select name="platform" aria-label="Filter by channel" onchange="this.form.requestSubmit()">
+            <option value="">All channels</option>
+            {% for p in platforms %}
+            <option value="{{ p }}" {{ 'selected' if platform_f == p }}>
+                {{ PF_LABEL.get(p, p|capitalize) }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+
+        <div class="engage-search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input type="search" name="q" value="{{ search }}" autocomplete="off"
+                   placeholder="Search comments or people…"
+                   aria-label="Search comments">
+        </div>
+
+        {% if search or platform_f %}
+        <a href="{{ inbox_url(q='', platform='', c=None) }}" class="mini-link">Clear</a>
+        {% endif %}
+        <noscript><button type="submit" class="btn btn-sm">Search</button></noscript>
+    </form>
 </div>
 
 {% if comments %}
-<div class="engage-list">
-    {% for c in comments %}
-    <div class="engage-card">
-        <div class="engage-head">
-            <span class="pf-chip {{ c.platform }}"><i class="{{ PF_ICON.get(c.platform,'fa-solid fa-share-nodes') }}"></i></span>
-            <div class="engage-who">
-                <strong>{{ c.author_name or 'Someone' }}</strong>
-                <span class="engage-meta">
-                    {% if c.target and c.target.post %}on “{{ c.target.post.title or 'a post' }}”{% endif %}
-                    {% if c.created_time %} · {{ c.created_time[:10] }}{% endif %}
-                </span>
-            </div>
-            {% if c.replied %}<span class="sp-pill success"><i class="fa-solid fa-reply"></i> Replied</span>{% endif %}
-        </div>
+<div class="engage-inbox">
 
-        <div class="engage-body">{{ c.message or '' }}</div>
-
+    {# ---------------- Left: the list ---------------- #}
+    <div class="engage-list" role="list" id="engageList">
+        {% for c in comments %}
         {% set thread = replies.get(c.external_id, []) %}
-        {% for r in thread %}
-        <div class="engage-reply">
-            <span class="engage-reply-who"><i class="fa-solid fa-share"></i> You</span>
-            <span>{{ r.message }}</span>
-        </div>
-        {% endfor %}
+        <a role="listitem"
+           href="{{ inbox_url(c=c.id) }}"
+           class="engage-row {{ 'is-selected' if selected and selected.id == c.id }} {{ 'is-answered' if thread or c.replied }}"
+           data-engage-row>
+            <span class="engage-avatar pf-{{ c.platform }}">
+                {{ (c.author_name or '?')[0]|upper }}
+                <i class="{{ PF_ICON.get(c.platform,'fa-solid fa-share-nodes') }}"></i>
+            </span>
 
-        <div class="engage-actions">
-            <form method="POST" action="{{ url_for('social.engage_reply', comment_id=c.id) }}" data-turbo="false" class="engage-reply-form">
+            <span class="engage-row-main">
+                <span class="engage-row-top">
+                    <strong>{{ c.author_name or 'Someone' }}</strong>
+                    <span class="engage-row-when">{{ c.created_time[:10] if c.created_time else '' }}</span>
+                </span>
+                <span class="engage-row-msg">{{ (c.message or '')[:90] }}</span>
+                <span class="engage-row-post">
+                    {% if c.target and c.target.account %}{{ c.target.account.display_name }}{% endif %}
+                    {%- if c.target and c.target.post and c.target.post.title %} · {{ c.target.post.title }}{% endif %}
+                </span>
+            </span>
+
+            {% if thread or c.replied %}
+            <span class="engage-row-flag" title="Replied"><i class="fa-solid fa-reply"></i></span>
+            {% else %}
+            <span class="engage-row-dot" title="Needs a reply"></span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+
+    {# ---------------- Right: the conversation ---------------- #}
+    {% if selected %}
+    {% set thread = replies.get(selected.external_id, []) %}
+    <div class="engage-detail">
+
+        {# Which post this is about - the context that was three grey
+           words before, and the first thing you need to reply well. #}
+        <div class="engage-context">
+            <div class="engage-context-main">
+                <span class="pf-chip {{ selected.platform }}">
+                    <i class="{{ PF_ICON.get(selected.platform,'fa-solid fa-share-nodes') }}"></i>
+                    {{ PF_LABEL.get(selected.platform, selected.platform|capitalize) }}</span>
+                <div>
+                    <strong>{{ (selected.target.post.title if selected.target and selected.target.post else none) or 'A post' }}</strong>
+                    <span class="engage-context-sub">
+                        {{ selected.target.account.display_name if selected.target and selected.target.account else 'Disconnected channel' }}
+                    </span>
+                </div>
+            </div>
+            <div class="engage-context-actions">
+                {% if selected.target and selected.target.permalink %}
+                <a class="row-action" href="{{ selected.target.permalink }}"
+                   target="_blank" rel="noopener">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> View live</a>
+                {% endif %}
+                {% if selected.target %}
+                <a class="row-action" href="{{ url_for('social.post_detail', post_id=selected.target.social_post_id) }}">
+                    <i class="fa-solid fa-layer-group"></i> Open post</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="engage-thread">
+            <div class="engage-msg">
+                <span class="engage-avatar pf-{{ selected.platform }} lg">
+                    {{ (selected.author_name or '?')[0]|upper }}</span>
+                <div class="engage-bubble">
+                    <span class="engage-msg-who">
+                        <strong>{{ selected.author_name or 'Someone' }}</strong>
+                        {% if selected.created_time %}
+                        <span class="t-subtle t-sm">{{ selected.created_time[:16]|replace('T', ' ') }}</span>
+                        {% endif %}
+                    </span>
+                    <p>{{ selected.message or '' }}</p>
+                </div>
+            </div>
+
+            {% for r in thread %}
+            <div class="engage-msg is-ours">
+                <span class="engage-avatar is-ours lg">
+                    <i class="fa-solid fa-reply"></i></span>
+                <div class="engage-bubble">
+                    <span class="engage-msg-who"><strong>You</strong></span>
+                    <p>{{ r.message }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="engage-composer">
+            <form method="POST" data-turbo="false"
+                  action="{{ url_for('social.engage_reply', comment_id=selected.id) }}">
                 <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
-                <input type="text" name="message" aria-label="Reply to {{ c.author_name or 'comment' }}" placeholder="Write a reply…" autocomplete="off">
-                <button type="submit" class="btn btn-sm"><i class="fa-solid fa-paper-plane"></i> Reply</button>
+                <input type="hidden" name="status" value="{{ status_f }}">
+                <input type="hidden" name="platform" value="{{ platform_f }}">
+                <input type="hidden" name="q" value="{{ search }}">
+
+                <textarea name="message" rows="3" data-emoji-field
+                          aria-label="Reply to {{ selected.author_name or 'this comment' }}"
+                          placeholder="Reply to {{ selected.author_name or 'this comment' }}…"></textarea>
+
+                <div class="engage-composer-actions">
+                    <span class="engage-hint t-subtle t-sm">
+                        <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send</span>
+                    <button type="submit" class="btn">
+                        <i class="fa-solid fa-paper-plane"></i> Reply</button>
+                </div>
             </form>
-            <form method="POST" action="{{ url_for('social.engage_done', comment_id=c.id) }}" data-turbo="false">
+
+            <form method="POST" data-turbo="false"
+                  action="{{ url_for('social.engage_done', comment_id=selected.id) }}">
                 <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
-                <button type="submit" class="row-action">
+                <input type="hidden" name="status" value="{{ status_f }}">
+                <input type="hidden" name="platform" value="{{ platform_f }}">
+                <input type="hidden" name="q" value="{{ search }}">
+                <button type="submit" class="btn btn-secondary">
                     <i class="fa-solid {{ 'fa-rotate-left' if status_f == 'done' else 'fa-check' }}"></i>
                     {{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
             </form>
         </div>
+
     </div>
-    {% endfor %}
+    {% endif %}
+
 </div>
+
 {% else %}
 <div class="social-card">
     <div class="social-empty">
         <div class="ic"><i class="fa-solid fa-comments"></i></div>
-        <h3>{{ 'No open comments' if status_f == 'open' else 'Nothing here' }}</h3>
-        <p>Comments on your published posts show up here. Hit <strong>Fetch comments</strong> to pull the latest from the platforms.</p>
+        {% if search or platform_f %}
+        <h3>Nothing matches that filter</h3>
+        <p><a href="{{ inbox_url(q='', platform='', c=None) }}">Clear the filters</a>
+           to see the whole {{ status_f }} list.</p>
+        {% elif status_f == 'done' %}
+        <h3>Nothing marked done yet</h3>
+        <p>Comments you finish with are filed here.</p>
+        {% else %}
+        <h3>No open comments</h3>
+        <p>Comments on your published posts show up here. Hit
+           <strong>Fetch comments</strong> to pull the latest — if a channel
+           can't be read, it will say which one and why.</p>
+        {% endif %}
     </div>
 </div>
 {% endif %}
+
+<script>
+    /*
+        Keyboard triage, the reason an inbox beats a stack of cards: j/k
+        (or the arrow keys) walk the list, Ctrl/Cmd+Enter sends the reply.
+        Everything here is an enhancement - each row is a real link and the
+        composer is a real form, so none of this is load-bearing.
+    */
+    (function () {
+        "use strict";
+
+        function rows() {
+            return Array.prototype.slice.call(
+                document.querySelectorAll("[data-engage-row]"));
+        }
+
+        function move(delta) {
+            const all = rows();
+            if (!all.length) return;
+            const current = all.findIndex(function (r) {
+                return r.classList.contains("is-selected");
+            });
+            const next = all[Math.min(Math.max(current + delta, 0), all.length - 1)];
+            if (next) next.click();
+        }
+
+        document.addEventListener("keydown", function (event) {
+            const composing = /^(INPUT|TEXTAREA|SELECT)$/.test(
+                (event.target.tagName || ""));
+
+            // Ctrl/Cmd+Enter sends from inside the reply box.
+            if (composing && event.key === "Enter" &&
+                (event.ctrlKey || event.metaKey)) {
+                const form = event.target.closest("form");
+                if (form) { event.preventDefault(); form.requestSubmit(); }
+                return;
+            }
+
+            if (composing || event.ctrlKey || event.metaKey || event.altKey) return;
+
+            if (event.key === "j" || event.key === "ArrowDown") {
+                event.preventDefault(); move(1);
+            } else if (event.key === "k" || event.key === "ArrowUp") {
+                event.preventDefault(); move(-1);
+            }
+        });
+
+        // Keep the selected row in view when arriving with ?c=<id>.
+        const selected = document.querySelector(".engage-row.is-selected");
+        if (selected && selected.scrollIntoView) {
+            selected.scrollIntoView({ block: "nearest" });
+        }
+    })();
+</script>
 {% endblock %}
