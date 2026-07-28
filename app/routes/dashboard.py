@@ -8,6 +8,7 @@ from app.utils.timezone import ist_now
 from app.utils.permissions import has_permission, can_view_team_performance
 from app.utils import roles
 from app.utils import task_status
+from app.utils import periods
 from app.utils import social_platforms as social
 from app.utils.cache import ttl_cache
 from app.extensions import db
@@ -838,98 +839,24 @@ PERIOD_PRESETS = ["today", "yesterday", "7d", "30d"]
 #: A custom range longer than this is clamped from the start end, so a
 #: careless "from 2015" cannot turn the per-day throughput loop into
 #: hundreds of COUNT queries. Three months of daily bars is already the
-#: point past which the chart switches to a line anyway.
-MAX_PERIOD_DAYS = 92
+#: point past which the chart switches to a line anyway. Re-exported from
+#: app.utils.periods, which does the clamping.
+MAX_PERIOD_DAYS = periods.MAX_PERIOD_DAYS
 
 
 def resolve_period(args):
-    """Turn the request's query string into a concrete date window.
+    """The dashboard's date window - see app/utils/periods.
 
-    The Performance band answers "what did the team actually produce in
-    this window" - created, completed, published - so it needs a start
-    and an end, a human label for the header, and the matching window
-    immediately before it to draw the up/down deltas against.
+    Deliberately without allow_all: the Performance band counts per day
+    across the window and draws vs-previous deltas, neither of which has
+    an answer for an unbounded range. The user performance page, whose
+    figures are plain totals, does offer All time.
 
     Everything else on the dashboard (live team state, the status
     doughnut, the In Progress / Overdue / Due Today counters) is a
     snapshot of *now* and is deliberately left untouched by this.
     """
-
-    today = ist_now().date()
-    key = (args.get("period") or "7d").lower()
-
-    if key == "today":
-        start = end = today
-        label = "Today"
-
-    elif key == "yesterday":
-        start = end = today - timedelta(days=1)
-        label = "Yesterday"
-
-    elif key == "30d":
-        start, end = today - timedelta(days=29), today
-        label = "Last 30 days"
-
-    elif key == "custom":
-        start = _parse_date(args.get("from")) or today - timedelta(days=6)
-        end = _parse_date(args.get("to")) or today
-
-        # A backwards range is a slip, not an intent - read it the way
-        # the user clearly meant it rather than showing nothing.
-        if start > end:
-            start, end = end, start
-
-        # Keep the per-day loop bounded regardless of what was typed.
-        if (end - start).days > MAX_PERIOD_DAYS - 1:
-            start = end - timedelta(days=MAX_PERIOD_DAYS - 1)
-
-        label = _format_range_label(start, end)
-        key = "custom"
-
-    else:
-        # Unknown or default: last 7 days.
-        key = "7d"
-        start, end = today - timedelta(days=6), today
-        label = "Last 7 days"
-
-    span = (end - start).days + 1
-    prev_end = start - timedelta(days=1)
-    prev_start = prev_end - timedelta(days=span - 1)
-
-    return {
-        "key": key,
-        "label": label,
-        "start": start,
-        "end": end,
-        "from": start.isoformat(),
-        "to": end.isoformat(),
-        "prev_start": prev_start,
-        "prev_end": prev_end,
-        "span_days": span,
-        "today": today.isoformat(),
-    }
-
-
-def _parse_date(value):
-
-    if not value:
-        return None
-
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
-
-
-def _format_range_label(start, end):
-
-    if start == end:
-        return start.strftime("%d %b %Y")
-
-    if start.year == end.year:
-        return f"{start.strftime('%d %b')} – {end.strftime('%d %b %Y')}"
-
-    return f"{start.strftime('%d %b %Y')} – {end.strftime('%d %b %Y')}"
+    return periods.resolve_period(args)
 
 
 def _period_delta(current, previous):

@@ -147,8 +147,14 @@ def create_app():
     from app.routes.search import search_bp
     from app.routes.profile import profile_bp
     from app.routes.internal import internal_bp
+    # Public: Meta's app review fetches these anonymously, and the data
+    # deletion callback must work for someone who has already removed the
+    # app and can no longer sign in. Registered unconditionally - the legal
+    # pages must not disappear when the social engine is switched off.
+    from app.routes.legal import legal_bp
 
 
+    app.register_blueprint(legal_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(users_bp)

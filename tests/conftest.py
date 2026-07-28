@@ -116,15 +116,23 @@ class FakeProvider(SocialProvider):
 
 
 def _social_models():
+    """Ordered child-first, so the bulk deletes below don't trip an FK.
+
+    Anything a Studio test can create belongs here - including
+    DataDeletionRequest, which the deletion-callback tests write and which
+    would otherwise pile up in the shared dev database run after run.
+    """
     from app.models import (
         PublishResult, PublishJob, SocialMediaAsset, SocialAnalyticsSnapshot,
         PlatformRateBudget, SocialAuditLog, ContentVersion, SocialPostTarget,
-        SocialPost, SocialOAuthState, SocialAccount,
+        SocialPost, SocialOAuthState, SocialAccount, SocialComment,
+        DataDeletionRequest,
     )
     return [
-        PublishResult, PublishJob, SocialMediaAsset, SocialAnalyticsSnapshot,
-        PlatformRateBudget, SocialAuditLog, ContentVersion, SocialPostTarget,
-        SocialPost, SocialOAuthState, SocialAccount,
+        PublishResult, PublishJob, SocialComment, SocialMediaAsset,
+        SocialAnalyticsSnapshot, PlatformRateBudget, SocialAuditLog,
+        ContentVersion, SocialPostTarget, SocialPost, SocialOAuthState,
+        SocialAccount, DataDeletionRequest,
     ]
 
 

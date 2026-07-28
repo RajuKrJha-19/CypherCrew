@@ -1368,7 +1368,11 @@ def _apply_composer_form(post):
         t = SocialPostTarget(
             social_post_id=post.id, social_account_id=account.id,
             platform=account.platform, post_type=ptype, caption=caption,
-            first_comment=first_comment, status="draft",
+            # Not on a story: there is nothing to comment on, so storing it
+            # there only makes the post page claim a first comment that was
+            # never going anywhere.
+            first_comment=(None if ptype == "story" else first_comment),
+            status="draft",
             scheduled_for=scheduled_for,
             story_style=story_style if ptype == "story" else "plain",
             story_link_target_id=(
@@ -1507,10 +1511,25 @@ def post_detail(post_id):
                 except Exception:  # noqa: BLE001
                     url = None
             media_previews.append({"url": url, "is_image": is_image})
+    # What actually became of the first comment. It is posted after the
+    # publish and can be skipped or refused for reasons the composer can't
+    # see (a missing Graph scope, a provider that can't comment), so the
+    # outcome is read back from the audit trail rather than assumed.
+    first_comment_events = (
+        SocialAuditLog.query
+        .filter(SocialAuditLog.post_id == post.id,
+                SocialAuditLog.action.in_(["first_comment_posted",
+                                           "first_comment_failed",
+                                           "first_comment_skipped"]))
+        .order_by(SocialAuditLog.id.desc())
+        .all()
+    ) if post.targets else []
+
     return render_template(
         "social/post_detail.html",
         post=post,
         problems=problems,
+        first_comment_events=first_comment_events,
         media_previews=media_previews,
         can_approve=can_publish(current_user),
         to_ist=_to_ist_input,

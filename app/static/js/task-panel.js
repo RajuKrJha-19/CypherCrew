@@ -337,13 +337,29 @@
         from, in the order they appear, so stepping through a board column
         or a filtered list follows the order that's actually on screen.
     */
+    /*
+        Chrome that sits on every page and has nothing to do with the list
+        you are stepping through. The notification dropdown is the reason
+        this exists: it holds task links, it lives in the topbar, and the
+        topbar comes first in the document - so opening row 6 of a table
+        reported "1 / 15" with Previous greyed out, because the sequence
+        started with whatever was in the bell.
+    */
+    const CHROME_CONTAINERS = [
+        ".task-drawer-root",
+        "#notificationPanel",
+        ".notification-panel",
+        "#app-topbar",
+        ".topbar",
+    ].join(",");
+
     function collectSiblings() {
 
         const ids = [];
 
         document.querySelectorAll("a[href]").forEach(function (link) {
 
-            if (link.closest(".task-drawer-root")) return;
+            if (link.closest(CHROME_CONTAINERS)) return;
 
             const id = taskIdFromHref(link.getAttribute("href"));
 

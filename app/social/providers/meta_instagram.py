@@ -25,6 +25,15 @@ class MetaInstagramProvider(MetaBaseProvider):
     SCOPES = [
         "instagram_basic",
         "instagram_content_publish",
+        # Writing comments - the auto first comment, and replying from
+        # Engage. Without it POST /{media-id}/comments is refused, and
+        # because a first comment is best-effort the refusal was swallowed
+        # into a log line: the feature simply did nothing, forever.
+        "instagram_manage_comments",
+        # Analytics reads /{media-id}/insights. fetch_analytics swallows
+        # errors and returns {}, so without this the Analytics screen just
+        # stays empty with nothing to explain why.
+        "instagram_manage_insights",
         "pages_show_list",
         "pages_read_engagement",
         "business_management",

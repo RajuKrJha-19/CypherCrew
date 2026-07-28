@@ -1,4 +1,3 @@
-import calendar
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
@@ -7,7 +6,7 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import User, Task
-from app.utils import roles, task_status
+from app.utils import periods, roles, task_status
 from app.utils.permissions import (
     apply_role_defaults, can_manage_users as _can_manage_users,
 )
@@ -149,18 +148,30 @@ def user_performance(user_id):
 
     now = datetime.utcnow()
 
-    selected_month = request.args.get("month", now.month, type=int)
-    selected_year = request.args.get("year", now.year, type=int)
+    # Same presets as the dashboard's Performance band, plus All time -
+    # these figures are plain totals, so an unbounded window is a
+    # perfectly good answer here (it isn't on the dashboard, which counts
+    # per day and draws vs-previous deltas). All time is the default: it
+    # is the honest "how has this person done" view, and every other
+    # preset is one click away.
+    period = periods.resolve_period(request.args, allow_all=True,
+                                    default="all")
+
     # Table-only controls: they narrow/reorder the task list below without
-    # touching the month KPIs, which stay whole-month totals.
+    # touching the KPI cards, which stay whole-period totals.
     selected_status = request.args.get("status", "").strip()
     sort = request.args.get("sort", "newest").strip()
 
-    base_query = Task.query.filter(
-        Task.assigned_to_id == user.id,
-        db.extract("month", Task.created_at) == selected_month,
-        db.extract("year", Task.created_at) == selected_year
-    )
+    base_query = Task.query.filter(Task.assigned_to_id == user.id)
+
+    if not period["is_all_time"]:
+        # Inclusive of the end date: the window is a range of days, and
+        # `created_at < end` would silently drop everything made on the
+        # last day of it.
+        base_query = base_query.filter(
+            db.func.date(Task.created_at) >= period["start"],
+            db.func.date(Task.created_at) <= period["end"],
+        )
 
     total_assigned = base_query.count()
 
@@ -195,9 +206,9 @@ def user_performance(user_id):
         1
     ) if total_assigned else 0
 
-    # The task table is a drill-down into the selected month: optionally
+    # The task table is a drill-down into the selected window: optionally
     # filtered by status and reordered, so a manager can jump straight to,
-    # say, this month's overdue work instead of scanning a fixed list.
+    # say, this week's overdue work instead of scanning a fixed list.
     table_query = base_query
 
     if selected_status:
@@ -222,22 +233,12 @@ def user_performance(user_id):
         sort_options[sort]
     ).limit(50).all()
 
-    # Dropdown data for the filter bar.
-    months = [(i, calendar.month_name[i]) for i in range(1, 13)]
-    years = list(range(now.year, now.year - 5, -1))
-    if selected_year not in years:
-        years.append(selected_year)
-        years.sort(reverse=True)
-
     return render_template(
         "users/performance.html",
         user=user,
-        selected_month=selected_month,
-        selected_year=selected_year,
+        period=period,
         selected_status=selected_status,
         sort=sort,
-        months=months,
-        years=years,
         statuses=task_status.ALL_STATUSES,
         total_assigned=total_assigned,
         completed_tasks=completed_tasks,

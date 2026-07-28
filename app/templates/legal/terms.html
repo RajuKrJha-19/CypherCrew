@@ -1,0 +1,115 @@
+{% extends "legal/_base_legal.html" %}
+
+{% block title %}Terms of Service | {{ company }}{% endblock %}
+{% block doc_title %}Terms of Service{% endblock %}
+
+{% block doc %}
+
+<p class="legal-lead">
+    These terms govern use of the {{ company }} application, including its
+    Social Studio module, which publishes content to social platforms on
+    your behalf.
+</p>
+
+<h2>1. Who may use it</h2>
+<p>
+    {{ company }} is provided to our staff and to clients we have an
+    agreement with. Accounts are issued by us; they are not open to public
+    self-registration. You must be at least 16 and authorised by your
+    organisation to use the account you are given.
+</p>
+
+<h2>2. Your account</h2>
+<ul>
+    <li>Keep your password confidential and do not share your account.</li>
+    <li>Tell us immediately if you believe your account has been misused.</li>
+    <li>You are responsible for activity carried out under your account.</li>
+</ul>
+
+<h2>3. Connecting social channels</h2>
+<p>
+    Connecting a Facebook Page or Instagram Business account grants
+    {{ company }} permission to act on that channel on your behalf. By
+    connecting a channel you confirm that:
+</p>
+<ul>
+    <li>You are authorised to manage that Page or account.</li>
+    <li>You permit us to publish content you or your team schedule, and to
+        read engagement and insights for content published through us.</li>
+    <li>You understand that permission lasts until you disconnect the
+        channel in the app or remove {{ company }} from your Facebook
+        settings.</li>
+</ul>
+<p>
+    We use these permissions only for the purposes described in the
+    <a href="{{ url_for('legal.privacy') }}">Privacy Policy</a>. We do not
+    post anything that has not been created and approved inside the app.
+</p>
+
+<h2>4. Content and conduct</h2>
+<p>You agree not to use {{ company }} to publish content that:</p>
+<ul>
+    <li>infringes anyone's intellectual property or privacy rights;</li>
+    <li>is unlawful, deceptive, harassing, hateful or violent;</li>
+    <li>is spam, or automated engagement intended to manipulate a
+        platform's systems;</li>
+    <li>breaches the terms or community standards of the platform it is
+        being published to.</li>
+</ul>
+<p>
+    You retain ownership of the content you upload. You grant us the
+    limited right to store, process and transmit it for the sole purpose of
+    publishing and reporting on it as you have instructed.
+</p>
+
+<h2>5. Platform rules come first</h2>
+<p>
+    Content published through {{ company }} is also governed by the rules
+    of the destination platform, including Meta's Platform Terms and
+    Community Standards. Where those rules and these terms conflict for
+    activity on that platform, the platform's rules prevail. A platform may
+    reject, remove or rate-limit content, or revoke our access, and we
+    cannot override that.
+</p>
+
+<h2>6. Availability</h2>
+<p>
+    We aim to keep the service available but do not guarantee uninterrupted
+    operation. Scheduled publishing depends on third-party APIs that may be
+    slow, rate-limited or unavailable. Where a publish fails, the app
+    records the failure and surfaces it — but we cannot guarantee that any
+    individual post will go out at an exact time.
+</p>
+
+<h2>7. Suspension</h2>
+<p>
+    We may suspend or terminate access where an account is used in breach
+    of these terms, where required by law, or where a platform requires it.
+    Where we can, we will tell you why.
+</p>
+
+<h2>8. Liability</h2>
+<p>
+    The service is provided on an "as is" basis. To the extent permitted by
+    law, we are not liable for indirect or consequential loss, lost profits
+    or lost goodwill arising from use of the service, from content
+    published through it, or from a third-party platform's actions. Nothing
+    here limits liability that cannot lawfully be limited.
+</p>
+
+<h2>9. Your data</h2>
+<p>
+    Our handling of personal data is described in the
+    <a href="{{ url_for('legal.privacy') }}">Privacy Policy</a>. You can
+    have data deleted at any time — see
+    <a href="{{ url_for('legal.data_deletion') }}">Data Deletion</a>.
+</p>
+
+<h2>10. Changes to these terms</h2>
+<p>
+    We may update these terms. The date at the top of this page shows when
+    they last changed; continuing to use the service after a change means
+    you accept the updated terms.
+</p>
+
+{% endblock %}

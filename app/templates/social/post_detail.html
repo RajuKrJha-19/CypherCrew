@@ -120,8 +120,37 @@
 {% set fc = (post.targets|selectattr('first_comment')|map(attribute='first_comment')|first) if post.targets else none %}
 {% if fc %}
 <div class="social-card studio-section">
-    <div class="social-card-head"><h2><i class="fa-solid fa-comment-dots"></i> First comment</h2></div>
-    <div class="social-card-body"><p class="post-copy t-muted">{{ fc }}</p></div>
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-comment-dots"></i> First comment</h2>
+        {% if first_comment_events %}
+        {% set failed = first_comment_events|rejectattr('action', 'equalto', 'first_comment_posted')|list %}
+        <div class="social-card-tools">
+            <span class="sp-pill {{ 'warn' if failed else 'ok' }}">
+                {{ 'not posted' if failed else 'posted' }}</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="social-card-body">
+        <p class="post-copy t-muted">{{ fc }}</p>
+
+        {# What became of it. Writing a comment needs a permission the
+           publish itself doesn't, so "the post went out" is no evidence
+           the comment did - and this used to fail with no trace at all. #}
+        {% for e in first_comment_events %}
+        <p class="fc-outcome {{ 'is-ok' if e.action == 'first_comment_posted' else 'is-warn' }}">
+            {% if e.action == 'first_comment_posted' %}
+            <i class="fa-solid fa-circle-check"></i> Posted.
+            {% elif e.action == 'first_comment_skipped' %}
+            <i class="fa-solid fa-circle-info"></i>
+            Not posted — {{ (e.detail or {}).get('reason', 'skipped') }}.
+            {% else %}
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Failed — {{ (e.detail or {}).get('error', 'unknown error') }}
+            {% endif %}
+            <span class="t-subtle t-sm">{{ to_ist_display(e.created_at) }}</span>
+        </p>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 

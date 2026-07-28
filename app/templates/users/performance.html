@@ -23,30 +23,77 @@
             </div>
 
             {#
-                Reporting period - drives every figure on this page. Month
-                and year are pickers rather than free-typed numbers, so an
-                out-of-range month can't be entered. The table's own status
-                and sort are carried along as hidden fields, so switching
-                month keeps the drill-down the manager set up.
+                Reporting period - drives every figure on this page, the
+                cards and the table alike. Same presets and markup as the
+                dashboard's Performance band, plus All time, so the two
+                screens behave identically.
+
+                Presets are plain links, Custom is a native <details>
+                popover: no JavaScript anywhere in here. The table's own
+                status and sort ride along on every link so changing the
+                period keeps the drill-down the manager set up.
             #}
-            <form method="GET" class="filter-bar filter-bar-flow perf-period-bar">
-                <input type="hidden" name="status" value="{{ selected_status }}">
-                <input type="hidden" name="sort" value="{{ sort }}">
+            {% set p = period %}
+            {% macro period_url(key) -%}
+                {{ url_for('users.user_performance', user_id=user.id, period=key,
+                           status=selected_status or none, sort=sort or none) }}
+            {%- endmacro %}
 
-                <select name="month" aria-label="Month" onchange="this.form.submit()">
-                    {% for num, name in months %}
-                    <option value="{{ num }}" {% if num == selected_month %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
+            <div class="perf-period-head">
+                <div class="perf-period-text">
+                    <h2>Reporting period</h2>
+                    <p>{{ p.label }}</p>
+                </div>
 
-                <select name="year" aria-label="Year" onchange="this.form.submit()">
-                    {% for y in years %}
-                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
-                    {% endfor %}
-                </select>
+                <div class="period-toggle" role="group" aria-label="Select time period">
 
-                <noscript><button type="submit">Apply</button></noscript>
-            </form>
+                    <a href="{{ period_url('all') }}"
+                       class="period-opt {% if p.key == 'all' %}is-active{% endif %}">All time</a>
+
+                    <a href="{{ period_url('today') }}"
+                       class="period-opt {% if p.key == 'today' %}is-active{% endif %}">Today</a>
+
+                    <a href="{{ period_url('yesterday') }}"
+                       class="period-opt {% if p.key == 'yesterday' %}is-active{% endif %}">Yesterday</a>
+
+                    <a href="{{ period_url('7d') }}"
+                       class="period-opt {% if p.key == '7d' %}is-active{% endif %}">7 days</a>
+
+                    <a href="{{ period_url('30d') }}"
+                       class="period-opt {% if p.key == '30d' %}is-active{% endif %}">30 days</a>
+
+                    <details class="period-custom" {% if p.key == 'custom' %}open{% endif %}>
+                        <summary class="period-opt {% if p.key == 'custom' %}is-active{% endif %}">
+                            <i class="fa-solid fa-calendar-day"></i>
+                            {% if p.key == 'custom' %}{{ p.label }}{% else %}Custom{% endif %}
+                        </summary>
+
+                        <form method="get"
+                              action="{{ url_for('users.user_performance', user_id=user.id) }}"
+                              class="period-custom-pop">
+                            <input type="hidden" name="period" value="custom">
+                            <input type="hidden" name="status" value="{{ selected_status }}">
+                            <input type="hidden" name="sort" value="{{ sort }}">
+
+                            <label>
+                                <span>From</span>
+                                {# Empty on All time, where there is no window to prefill. #}
+                                <input type="date" name="from" value="{{ p['from'] }}"
+                                       max="{{ p.today }}" required>
+                            </label>
+
+                            <label>
+                                <span>To</span>
+                                <input type="date" name="to" value="{{ p.to }}"
+                                       max="{{ p.today }}" required>
+                            </label>
+
+                            <button type="submit" class="btn btn-sm">Apply</button>
+                        </form>
+                    </details>
+
+                </div>
+            </div>
 
             <div class="performance-hero">
                 <div>
@@ -119,14 +166,17 @@
                 </div>
 
                 {#
-                    Table-scoped filter + sort. Month/year ride along as
+                    Table-scoped filter + sort. The period rides along as
                     hidden fields so narrowing the list never loses the
-                    reporting period. These narrow the table only - the KPI
-                    tiles above stay whole-month totals.
+                    reporting window. These narrow the table only - the KPI
+                    tiles above stay whole-period totals.
                 #}
                 <form method="GET" class="filter-bar filter-bar-flow perf-table-bar">
-                    <input type="hidden" name="month" value="{{ selected_month }}">
-                    <input type="hidden" name="year" value="{{ selected_year }}">
+                    <input type="hidden" name="period" value="{{ period.key }}">
+                    {% if period.key == 'custom' %}
+                    <input type="hidden" name="from" value="{{ period['from'] }}">
+                    <input type="hidden" name="to" value="{{ period.to }}">
+                    {% endif %}
 
                     <select name="status" aria-label="Filter by status" onchange="this.form.submit()">
                         <option value="">All Statuses</option>
@@ -144,7 +194,10 @@
                     </select>
 
                     {% if selected_status or sort != "newest" %}
-                    <a href="{{ url_for('users.user_performance', user_id=user.id, month=selected_month, year=selected_year) }}"
+                    <a href="{{ url_for('users.user_performance', user_id=user.id,
+                                        period=period.key,
+                                        **({'from': period['from'], 'to': period.to}
+                                           if period.key == 'custom' else {})) }}"
                        class="mini-link">Reset</a>
                     {% endif %}
                 </form>
@@ -153,6 +206,7 @@
 
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Task</th>
                             <th>Client</th>
                             <th>Status</th>
@@ -168,7 +222,23 @@
 
                         <tr>
 
-                            <td>{{ task.title }}</td>
+                            {# Both the code and the title open the task -
+                               the same pair of links the task list uses, so
+                               a row here behaves the way people already
+                               expect it to. #}
+                            <td>
+                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}"
+                                   class="task-code-badge">
+                                    #{{ task.task_code }}
+                                </a>
+                            </td>
+
+                            <td>
+                                <a href="{{ url_for('tasks.task_detail', task_id=task.id) }}"
+                                   class="perf-task-link">
+                                    {{ task.title }}
+                                </a>
+                            </td>
 
                             <td>
                                 {{ task.client.client_name if task.client else "-" }}
@@ -222,7 +292,7 @@
 
                         <tr>
 
-                            <td colspan="6">
+                            <td colspan="7">
                                 {% if selected_status %}
                                 No {{ selected_status }} tasks for this period.
                                 {% else %}

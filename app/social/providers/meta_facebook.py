@@ -17,6 +17,15 @@ class MetaFacebookProvider(MetaBaseProvider):
         "pages_show_list",
         "pages_read_engagement",
         "pages_manage_posts",
+        # Writing comments - the auto first comment, and replying from
+        # Engage. Without it POST /{post-id}/comments is refused, and
+        # because a first comment is best-effort the refusal was swallowed
+        # into a log line: the feature simply did nothing, forever.
+        "pages_manage_engagement",
+        # Analytics reads /{post-id}/insights. Same trap as the comment
+        # scope: fetch_analytics swallows errors and returns {}, so without
+        # this the Analytics screen is simply always empty.
+        "read_insights",
         "business_management",
     ]
     capabilities = Capabilities(

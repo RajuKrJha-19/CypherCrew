@@ -29,28 +29,43 @@ SIM_PLATFORMS = ["instagram", "facebook", "linkedin", "youtube", "x",
 
 # Per-platform capability profiles, mirroring the real July-2026 constraints
 # so the composer validates content the same way it will in production.
+#
+# supports_first_comment / supports_comments matter as much as post_types:
+# the composer greys the First comment box out from these flags, and the
+# worker skips posting one unless the flag is set. Left unset, a demo
+# channel accepted a first comment, published happily, and silently threw
+# it away - so they now mirror the real platforms, which all support
+# commenting on a post except Google Business.
+#
 CAPABILITY_PROFILES = {
     "instagram": Capabilities(
         post_types={"image", "carousel", "reel", "story"},
         requires_container_poll=True, max_carousel=10,
-        publish_rate=(100, "24h"), story_support=True, max_caption_chars=2200),
+        publish_rate=(100, "24h"), story_support=True, max_caption_chars=2200,
+        supports_first_comment=True, supports_comments=True),
     "facebook": Capabilities(
         post_types={"image", "video", "reel", "text", "carousel"},
         supports_native_scheduling=True, max_carousel=10,
-        max_caption_chars=63206),
+        max_caption_chars=63206,
+        supports_first_comment=True, supports_comments=True,
+        supports_delete=True),
     "linkedin": Capabilities(
         post_types={"text", "image", "video", "document", "carousel"},
-        max_carousel=20, max_caption_chars=3000),
+        max_carousel=20, max_caption_chars=3000,
+        supports_first_comment=True, supports_comments=True),
     "youtube": Capabilities(
         post_types={"video"}, supports_native_scheduling=True,
-        requires_container_poll=True, max_caption_chars=5000),
+        requires_container_poll=True, max_caption_chars=5000,
+        supports_first_comment=True, supports_comments=True),
     # X counts characters, not bytes, and 280 is the free/basic tier limit -
     # the composer should warn at the limit people actually publish under.
     "x": Capabilities(
         post_types={"text", "image", "video", "carousel"},
-        max_carousel=4, max_caption_chars=280),
+        max_carousel=4, max_caption_chars=280,
+        supports_first_comment=True, supports_comments=True),
     # Google Business Profile "posts" (What's new / offers) carry one image
     # and a 1500-character body, and cannot be threaded or carouselled.
+    # They also take no comments, so no first comment either.
     "google_business": Capabilities(
         post_types={"text", "image"}, max_caption_chars=1500),
 }
@@ -145,6 +160,24 @@ class SimulationProvider(SocialProvider):
 
     def poll_publish(self, target, provider_state, token):
         return self._done(target)
+
+    # -- First comment -----------------------------------------------------
+
+    def post_first_comment(self, external_post_id, text, token):
+        """The worker looks for this method by name, and skipped the whole
+        step when a simulated provider didn't have one - so the first
+        comment vanished without a word on every demo channel.
+
+        Steerable like publishing, so the failure path can be exercised
+        without a real platform: a caption or comment carrying #simfail
+        raises instead of succeeding.
+        """
+        text = (text or "").strip()
+        if not (external_post_id and text):
+            return None
+        if "#simfail" in text.lower():
+            raise PermanentError("Simulated first-comment failure (#simfail)")
+        return f"SIM-COMMENT-{external_post_id}"
 
     # -- Analytics (deterministic fakes) ----------------------------------
 

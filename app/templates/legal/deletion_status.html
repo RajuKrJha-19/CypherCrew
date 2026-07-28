@@ -1,0 +1,77 @@
+{% extends "legal/_base_legal.html" %}
+
+{% block title %}Deletion request {{ record.confirmation_code }} | {{ company }}{% endblock %}
+{% block doc_title %}Deletion request status{% endblock %}
+
+{% block doc %}
+
+{#
+    Meta's callback contract: the URL we hand back must show a
+    human-readable status for the request, and a refusal must carry a
+    reason. Both live here.
+#}
+
+<div class="legal-status legal-status-{{ record.status }}">
+    <span class="legal-status-code">{{ record.confirmation_code }}</span>
+    <span class="legal-status-label">
+        {% if record.status == 'completed' %}
+        Completed — the data has been deleted
+        {% elif record.status == 'nothing_to_delete' %}
+        Completed — we held no data for this account
+        {% elif record.status == 'manual_review' %}
+        Received — awaiting verification
+        {% else %}
+        Received
+        {% endif %}
+    </span>
+</div>
+
+<p>
+    Requested on <strong>{{ record.created_at.strftime('%d %B %Y') }}</strong>{%
+    if record.completed_at %}, completed on
+    <strong>{{ record.completed_at.strftime('%d %B %Y') }}</strong>{% endif %}.
+</p>
+
+{% if record.status == 'completed' %}
+<p>Everything we held for this account has been removed:</p>
+<ul>
+    {% set d = record.deleted or {} %}
+    <li><strong>{{ d.get('channels', 0) }}</strong> connected channel(s), including the stored access token</li>
+    <li><strong>{{ d.get('comments', 0) }}</strong> cached comment(s)</li>
+    <li><strong>{{ d.get('analytics', 0) }}</strong> insights snapshot(s)</li>
+    <li><strong>{{ d.get('publish_results', 0) }}</strong> publish record(s)</li>
+    <li><strong>{{ d.get('targets_detached', 0) }}</strong> post record(s) stripped of platform identifiers</li>
+</ul>
+
+{% elif record.status == 'nothing_to_delete' %}
+<p>
+    We found no connected channels for this account. That normally means it
+    was never connected to {{ company }}, or the data had already been
+    deleted. Nothing further is needed — but if you believe this is wrong,
+    email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> and
+    quote this code.
+</p>
+
+{% elif record.status == 'manual_review' %}
+<p>
+    This request came through our public form, so a person is verifying
+    that it comes from someone entitled to make it before anything is
+    deleted. Acting on an unverified request would itself put the account
+    at risk. We complete verified requests within 30 days and will confirm
+    by email where we have one.
+</p>
+{% endif %}
+
+{% if record.note %}
+<p class="legal-note">{{ record.note }}</p>
+{% endif %}
+
+<p>
+    Posts already published to your Facebook Page or Instagram account are
+    not affected — those live on the platform and remain under your
+    control. See the
+    <a href="{{ url_for('legal.data_deletion') }}">data deletion page</a>
+    for the full list of what is deleted and what is kept.
+</p>
+
+{% endblock %}

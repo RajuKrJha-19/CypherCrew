@@ -2546,7 +2546,204 @@ body{
     box-shadow:0 0 0 3px var(--color-primary-soft);
 }
 
+.login-legal{
+    margin-top:14px;
+    text-align:center;
+    font-size:.8rem;
+    color:var(--color-text-muted);
+}
+.login-legal a{ color:var(--color-text-secondary); }
+
+/* ==================================================================
+   PUBLIC LEGAL PAGES (privacy, terms, data deletion)
+
+   Rendered for people who are not logged in - including Meta's app
+   reviewer - so they carry their own header/footer chrome rather than
+   the app shell. Long-form reading: generous measure, plain type.
+   ================================================================== */
+.legal-shell{
+    max-width:820px;
+    margin:0 auto;
+    padding:0 20px 60px;
+}
+
+.legal-head{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:20px 0;
+    border-bottom:1px solid var(--color-border);
+}
+.legal-brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:700;
+    color:var(--color-text);
+    text-decoration:none;
+}
+.legal-mark{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    background:var(--color-primary);
+    color:#fff;
+    font-weight:800;
+}
+.legal-nav{ display:flex; flex-direction:row; gap:16px; flex-wrap:wrap; }
+.legal-nav a{
+    color:var(--color-text-secondary);
+    text-decoration:none;
+    font-size:.9rem;
+}
+.legal-nav a:hover{ color:var(--color-primary); }
+.legal-nav a.is-active{ color:var(--color-primary); font-weight:600; }
+
+.legal-doc{ padding:34px 0 10px; line-height:1.68; }
+.legal-doc h1{ margin:0 0 6px; font-size:1.9rem; letter-spacing:-.02em; }
+.legal-doc h2{ margin:34px 0 10px; font-size:1.18rem; }
+.legal-doc h3{ margin:22px 0 8px; font-size:1rem; }
+.legal-doc p, .legal-doc li{ color:var(--color-text-secondary); }
+.legal-doc ul, .legal-doc ol{ padding-left:22px; margin:10px 0; }
+.legal-doc li{ margin:6px 0; }
+.legal-doc a{ color:var(--color-primary); }
+.legal-doc code{
+    padding:2px 6px;
+    border-radius:5px;
+    background:var(--color-surface-2, #f6f7f9);
+    border:1px solid var(--color-border);
+    font-size:.84em;
+    overflow-wrap:anywhere;
+}
+
+.legal-updated{ margin:0 0 18px; font-size:.85rem; color:var(--color-text-muted); }
+.legal-lead{ font-size:1.02rem; }
+.legal-steps li{ margin:9px 0; }
+
+.legal-callout, .legal-note{
+    margin:16px 0;
+    padding:13px 15px;
+    border-radius:10px;
+    border:1px solid var(--color-border);
+    background:var(--color-surface-2, #f6f7f9);
+    font-size:.9rem;
+}
+
+/* Wide on desktop, scrollable rather than page-breaking on a phone. */
+.legal-table{
+    width:100%;
+    margin:14px 0;
+    border-collapse:collapse;
+    font-size:.88rem;
+    display:block;
+    overflow-x:auto;
+}
+.legal-table th, .legal-table td{
+    padding:10px 12px;
+    border:1px solid var(--color-border);
+    text-align:left;
+    vertical-align:top;
+}
+.legal-table th{ background:var(--color-surface-2, #f6f7f9); font-weight:600; }
+
+.legal-form{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    max-width:480px;
+    margin:16px 0;
+}
+.legal-form input{ width:100%; }
+.legal-form button{ align-self:flex-start; }
+
+.legal-status{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    margin:18px 0;
+    padding:16px 18px;
+    border-radius:12px;
+    border:1px solid var(--color-border);
+    background:var(--color-surface-2, #f6f7f9);
+}
+.legal-status-code{
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size:1.05rem;
+    font-weight:700;
+    letter-spacing:.04em;
+}
+.legal-status-label{ font-size:.92rem; }
+.legal-status-completed{ border-color:var(--ok, #15803d); }
+.legal-status-manual_review{ border-color:var(--warn, #b45309); }
+
+.legal-rule{ margin:34px 0 18px; border:0; border-top:1px solid var(--color-border); }
+.legal-contact{ font-size:.9rem; }
+
+.legal-foot{
+    display:flex;
+    flex-direction:row;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    padding:18px 0;
+    border-top:1px solid var(--color-border);
+    font-size:.85rem;
+    color:var(--color-text-muted);
+}
+.legal-foot a{ color:var(--color-text-secondary); }
+
 /* USER PERFORMANCE PAGE */
+
+/* Reporting-period header. Deliberately the same shape as the dashboard's
+   .activity-head, and it reuses .period-toggle / .period-opt /
+   .period-custom wholesale - the two pickers should look and behave
+   identically, so there is only one set of styles for the controls. */
+.perf-period-head{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+}
+
+.perf-period-text h2{
+    margin:0;
+    font-size:var(--text-lg);
+    font-weight:700;
+    letter-spacing:-.01em;
+    color:var(--color-text);
+}
+
+.perf-period-text p{
+    margin:2px 0 0;
+    font-size:var(--text-base);
+    color:var(--color-text-secondary);
+}
+
+/* The task title in the tasks table opens the task. Underlined only on
+   hover so fifty rows don't read as a wall of links, but it still carries
+   the text colour of a link rather than looking like plain text. */
+.perf-task-link{
+    color:var(--color-text);
+    text-decoration:none;
+    font-weight:500;
+}
+
+.perf-task-link:hover,
+.perf-task-link:focus-visible{
+    color:var(--color-primary);
+    text-decoration:underline;
+}
 
 .performance-filter{
     display:flex;
@@ -7163,6 +7360,19 @@ body.sidebar-collapsed .task-page-sticky-header{
     border:1px solid var(--border, #e2e5ec);
 }
 .cmp-story-manual i{ margin-top:2px; flex:none; }
+
+/* Outcome line under a first comment - whether it actually made it. */
+.fc-outcome{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    flex-wrap:wrap;
+    margin:8px 0 0;
+    font-size:.8rem;
+    line-height:1.5;
+}
+.fc-outcome.is-ok{ color:var(--ok, #15803d); }
+.fc-outcome.is-warn{ color:var(--warn, #b45309); }
 
 .story-link-row{
     display:flex;

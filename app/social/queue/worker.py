@@ -298,26 +298,66 @@ def _handle_failure(job_id, exc):
 
 def _post_first_comment(target, step, provider, token):
     """Best-effort: auto-post the target's first comment right after it goes
-    live. A failure here is logged but never fails the publish - the post is
-    already out."""
+    live. A failure never fails the publish - the post is already out.
+
+    Every way this can end without a comment now leaves an audit row.
+    Previously each of them was a bare `return` or a log line, so a first
+    comment that was never posted looked exactly like one that was: the
+    post published, the composer showed the text, and nothing said the
+    step had been skipped. That is how a permanently-broken first comment
+    (missing Graph scope, unsupported provider) went unnoticed.
+    """
     text = (getattr(target, "first_comment", None) or "").strip()
-    if not (text and provider and token and step.external_post_id):
+    if not text:
         return
-    if not (provider.capabilities and provider.capabilities.supports_first_comment):
-        return
+
+    def skipped(reason):
+        audit.record(
+            "first_comment_skipped", target_id=target.id,
+            post_id=target.social_post_id, task_id=_task_id(target),
+            detail={"reason": reason},
+            message=f"First comment not posted: {reason}",
+        )
+        current_app.logger.info(
+            "first comment skipped target=%s: %s", target.id, reason)
+
+    # A story has no comments to post one on - and the composer attaches
+    # the same first comment to a companion story as to its feed post.
+    if target.post_type == "story":
+        return skipped("stories don't take comments")
+
+    if not step.external_post_id:
+        return skipped("the platform returned no post id")
+
+    if not (provider and token):
+        return skipped("no provider or access token for this channel")
+
+    if not (provider.capabilities
+            and provider.capabilities.supports_first_comment):
+        return skipped(f"{target.platform} doesn't support a first comment")
+
     if not hasattr(provider, "post_first_comment"):
-        return
+        return skipped(f"the {target.platform} adapter can't post comments")
+
     try:
         comment_id = provider.post_first_comment(
             step.external_post_id, text, token)
-        audit.record(
-            "first_comment_posted", target_id=target.id,
-            post_id=target.social_post_id, task_id=_task_id(target),
-            detail={"comment_id": comment_id},
-        )
     except Exception as exc:  # noqa: BLE001 - never break a live publish
+        audit.record(
+            "first_comment_failed", target_id=target.id,
+            post_id=target.social_post_id, task_id=_task_id(target),
+            detail={"error": str(exc)},
+            message=f"First comment failed: {exc}",
+        )
         current_app.logger.warning(
             "first comment failed target=%s: %s", target.id, exc)
+        return
+
+    audit.record(
+        "first_comment_posted", target_id=target.id,
+        post_id=target.social_post_id, task_id=_task_id(target),
+        detail={"comment_id": comment_id},
+    )
 
 
 def _task_id(target):

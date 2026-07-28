@@ -196,6 +196,20 @@ def exchange_code_for_long_lived_token(code, redirect_uri):
     return token, expires_at
 
 
+def _me_user_id(user_token):
+    """App-scoped id of the person who just authorised us.
+
+    Best-effort: a connect must not fail because this lookup did. Without
+    it the only cost is that an automated deletion request for that person
+    falls back to manual handling, which the deletion page covers.
+    """
+    try:
+        return MetaGraph().get("me", token=user_token,
+                               params={"fields": "id"}).get("id")
+    except Exception:  # noqa: BLE001 - never break a working connect
+        return None
+
+
 def granted_permissions(user_token):
     """Set of permissions the user actually granted (declined ones are
     filtered out), for scope validation."""
@@ -270,7 +284,13 @@ class MetaBaseProvider(SocialProvider):
             access_token=token,
             token_expires_at=expires_at,
             scopes=",".join(self.SCOPES),
-            meta={"user_token": True},
+            # The app-scoped id of the person who granted consent. Meta's
+            # data-deletion callback identifies the request by exactly this
+            # id and nothing else, so without it a deletion request cannot
+            # be matched to anything we hold. upsert_from_oauth merges
+            # bundle.meta onto the account, so it lands automatically.
+            meta={"user_token": True,
+                  "connected_user_id": _me_user_id(token)},
         )
 
     def _required_scopes(self):

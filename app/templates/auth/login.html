@@ -46,6 +46,15 @@
             <a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
         </p>
 
+        {# Meta expects the privacy policy to be reachable from the app,
+           not only from the App Dashboard field - and this is the only
+           page a signed-out visitor ever sees. #}
+        <p class="login-legal">
+            <a href="{{ url_for('legal.privacy') }}">Privacy Policy</a> ·
+            <a href="{{ url_for('legal.terms') }}">Terms</a> ·
+            <a href="{{ url_for('legal.data_deletion') }}">Delete my data</a>
+        </p>
+
     </div>
 
 {% endblock %}

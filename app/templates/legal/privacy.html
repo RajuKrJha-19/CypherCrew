@@ -1,0 +1,155 @@
+{% extends "legal/_base_legal.html" %}
+
+{% block title %}Privacy Policy | {{ company }}{% endblock %}
+{% block doc_title %}Privacy Policy{% endblock %}
+
+{% block doc %}
+
+<p class="legal-lead">
+    {{ company }} is a work-management and social publishing tool used by a
+    marketing agency and its staff. This policy explains what we collect,
+    why, what we do with data obtained from Meta (Facebook and Instagram),
+    and how to have it deleted.
+</p>
+
+<h2>1. Who we are</h2>
+<p>
+    {{ company }} operates this application. We are the data controller for
+    the account data of our own users, and we act on behalf of our
+    clients — the businesses whose Facebook Pages and Instagram accounts
+    are connected — when we publish and read engagement on their behalf.
+</p>
+
+<h2>2. What we collect</h2>
+
+<h3>2.1 Account data of our users</h3>
+<ul>
+    <li>Name, work email address, phone number and job role.</li>
+    <li>A password, stored only as a salted hash — never in readable form.</li>
+    <li>Optional profile photo.</li>
+    <li>Work records created in the app: tasks, comments, notes, files,
+        leave and attendance entries.</li>
+</ul>
+
+<h3>2.2 Data obtained from Meta (Facebook &amp; Instagram)</h3>
+<p>
+    When someone connects a Facebook Page or Instagram Business account,
+    we receive and store only what is needed to publish and report:
+</p>
+<ul>
+    <li><strong>Access tokens</strong> — encrypted at rest and never shown
+        in the interface, exported, or sent anywhere other than Meta.</li>
+    <li><strong>Channel identity</strong> — the Page or Instagram account
+        ID, username or Page name, and account type.</li>
+    <li><strong>The app-scoped user ID</strong> of the person who granted
+        consent. This is what lets us honour a deletion request from Meta.</li>
+    <li><strong>Published content records</strong> — the post ID and
+        permalink of content we published for that channel.</li>
+    <li><strong>Engagement</strong> — comments on posts we published,
+        including the commenter's public display name and the comment text,
+        so they can be read and replied to from the app.</li>
+    <li><strong>Insights</strong> — aggregate metrics such as impressions,
+        reach, likes, comments and saves for posts we published.</li>
+</ul>
+
+<p class="legal-callout">
+    <strong>We do not</strong> collect your Facebook or Instagram password,
+    read your private messages, access your friends list, build advertising
+    profiles, or use Meta data to train machine-learning models.
+</p>
+
+<h2>3. Why we use it</h2>
+<table class="legal-table">
+    <thead><tr><th>Data</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td>Access tokens</td><td>Publish scheduled content and read engagement on the connected channel — nothing else.</td></tr>
+        <tr><td>Channel identity</td><td>Show which channel a post is going to, and stop content going to the wrong client.</td></tr>
+        <tr><td>App-scoped user ID</td><td>Match an incoming data-deletion request to the data it refers to.</td></tr>
+        <tr><td>Post IDs &amp; permalinks</td><td>Link a published post back to the work record, and allow it to be removed later.</td></tr>
+        <tr><td>Comments</td><td>Let the team read and reply to audience comments from one inbox.</td></tr>
+        <tr><td>Insights</td><td>Report performance back to the client.</td></tr>
+    </tbody>
+</table>
+
+<h2>4. Legal basis</h2>
+<p>
+    We process our users' account data to perform our contract of
+    employment or engagement with them. We process Meta data on the basis
+    of the explicit consent given during the Facebook login flow, and on
+    our clients' instructions. Consent can be withdrawn at any time by
+    disconnecting the channel in the app or removing {{ company }} from
+    your Facebook settings — see section 8.
+</p>
+
+<h2>5. Who we share it with</h2>
+<p>
+    We do not sell data and we do not share it for advertising. Data is
+    disclosed only to:
+</p>
+<ul>
+    <li><strong>Meta</strong> — when publishing content or reading
+        engagement you have asked us to.</li>
+    <li><strong>Our infrastructure providers</strong> — the application
+        host and database provider, and an object-storage provider used
+        for media files. They process data on our instructions only.</li>
+    <li><strong>Authorities</strong> — where we are legally required to.</li>
+</ul>
+
+<h2>6. Where it is stored, and how it is protected</h2>
+<ul>
+    <li>Traffic is served over HTTPS.</li>
+    <li>Platform access tokens are encrypted at rest with authenticated
+        encryption; the key lives in the environment, not in the database
+        or the codebase.</li>
+    <li>Passwords are stored only as salted hashes.</li>
+    <li>Access inside the app is permission-controlled: connecting
+        channels and publishing are restricted to specific roles.</li>
+    <li>Media files are held in private object storage and served through
+        short-lived signed links.</li>
+</ul>
+
+<h2>7. How long we keep it</h2>
+<ul>
+    <li><strong>Access tokens</strong> — until the channel is disconnected
+        or the token is revoked, whichever comes first. They are erased
+        immediately on disconnect.</li>
+    <li><strong>Channel identity, post records, comments and insights</strong>
+        — for as long as the channel is connected, and deleted when a
+        deletion request is honoured (section 8).</li>
+    <li><strong>User accounts</strong> — for the duration of the working
+        relationship, plus any period we are legally required to keep
+        records for.</li>
+    <li><strong>Deletion request records</strong> — kept after the deletion
+        as proof it was carried out. They contain only the request, its
+        confirmation code and counts of what was removed.</li>
+</ul>
+
+<h2>8. Your rights, and deleting your data</h2>
+<p>
+    You may ask us for a copy of your data, ask us to correct it, or ask us
+    to delete it. Two routes are available and both are honoured:
+</p>
+<ol>
+    <li><strong>Remove the app in Facebook</strong> — Settings &rarr;
+        Apps and Websites &rarr; {{ company }} &rarr; Remove. Facebook
+        notifies us automatically and we delete the associated data, then
+        publish a confirmation code you can check.</li>
+    <li><strong>Ask us directly</strong> — use the
+        <a href="{{ url_for('legal.data_deletion') }}">data deletion page</a>,
+        which explains exactly what is deleted and what is kept.</li>
+</ol>
+
+<h2>9. Children</h2>
+<p>
+    {{ company }} is a workplace tool and is not directed at children. We
+    do not knowingly collect data from anyone under 16.
+</p>
+
+<h2>10. Changes</h2>
+<p>
+    If this policy changes materially we will update the date at the top of
+    this page and, where the change affects connected channels, notify the
+    account holders in the app.
+</p>
+
+{% endblock %}

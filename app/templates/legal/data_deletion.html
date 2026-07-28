@@ -1,0 +1,100 @@
+{% extends "legal/_base_legal.html" %}
+
+{% block title %}Delete your data | {{ company }}{% endblock %}
+{% block doc_title %}Data Deletion Instructions{% endblock %}
+
+{% block doc %}
+
+<p class="legal-lead">
+    You can have the data {{ company }} holds about your Facebook Page or
+    Instagram account deleted at any time. There are two ways to do it —
+    the first is automatic.
+</p>
+
+<h2>Option 1 — Remove the app in Facebook (automatic)</h2>
+<ol class="legal-steps">
+    <li>Open <strong>Facebook</strong> and go to
+        <strong>Settings &amp; Privacy &rarr; Settings</strong>.</li>
+    <li>Select <strong>Apps and Websites</strong> in the left-hand menu.</li>
+    <li>Find <strong>{{ company }}</strong> in the list.</li>
+    <li>Click <strong>Remove</strong>, and confirm.</li>
+</ol>
+<p>
+    Facebook notifies us the moment you do this. We delete the associated
+    data straight away and Facebook shows you a confirmation code and a
+    link to check the status of the request. Nothing further is needed
+    from you.
+</p>
+
+<h2>Option 2 — Ask us directly</h2>
+<p>
+    Use this if the account is no longer accessible to you, or if you would
+    rather ask us. Enter the Facebook Page name, Instagram username, or the
+    email address associated with the account, and we will locate and
+    delete the data.
+</p>
+
+<form method="POST" class="legal-form">
+    <label for="identifier">Page name, Instagram username, or email</label>
+    <input type="text" id="identifier" name="identifier" required
+           maxlength="255" autocomplete="off"
+           placeholder="e.g. @yourbrand, or Your Business Page">
+    <button type="submit" class="btn">Request deletion</button>
+</form>
+
+<p class="legal-note">
+    Requests made through this form are verified by a person before
+    anything is deleted — we cannot delete an account's data on the say-so
+    of an unverified form, because doing so would itself be a security
+    hole. You will get a confirmation code immediately and we complete
+    verified requests within 30 days.
+</p>
+
+<h2>What gets deleted</h2>
+<table class="legal-table">
+    <thead><tr><th>Deleted</th><th>Kept</th></tr></thead>
+    <tbody>
+        <tr>
+            <td>The stored access token for the channel</td>
+            <td>Your posts on Facebook/Instagram themselves — these live on
+                the platform and are yours to delete there</td>
+        </tr>
+        <tr>
+            <td>The channel record: Page/Instagram ID, name, account type</td>
+            <td>The agency's own work records (the task, the draft copy,
+                the brief), with all platform identifiers stripped out</td>
+        </tr>
+        <tr>
+            <td>Cached comments we fetched, including commenter names</td>
+            <td>A record that a deletion request was made and honoured —
+                the confirmation code, the date, and counts of what was
+                removed. It holds none of the deleted content.</td>
+        </tr>
+        <tr>
+            <td>Insights and analytics snapshots for your posts</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Publish records linking our content to your account</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+
+<p class="legal-callout">
+    <strong>Note:</strong> deleting this data does not remove posts that
+    were already published to your Facebook Page or Instagram account.
+    Those are on the platform, under your control — delete them there, or
+    use <em>Delete from platforms</em> in the app before disconnecting.
+</p>
+
+<h2>Checking a request</h2>
+<p>
+    Every request gets a confirmation code. Keep it — the status page for
+    your request is at
+    <code>{{ url_for('legal.deletion_status', code='YOUR-CODE', _external=True) }}</code>.
+    If you have lost the code, email
+    <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+</p>
+
+{% endblock %}

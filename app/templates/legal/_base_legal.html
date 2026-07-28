@@ -1,0 +1,58 @@
+{#
+    Shell for the public legal documents. Extends base.html (not
+    base_app.html) because these pages must render for someone who is not
+    logged in - Meta's reviewer, and anyone who has already removed the
+    app from their account.
+#}
+{% extends "base.html" %}
+
+{% block body_class %}legal-page{% endblock %}
+
+{% block body %}
+<div class="legal-shell">
+
+    <header class="legal-head">
+        <a class="legal-brand" href="{{ url_for('auth.login') }}">
+            <span class="legal-mark">C</span>
+            <span>{{ company }}</span>
+        </a>
+        <nav class="legal-nav">
+            <a href="{{ url_for('legal.privacy') }}"
+               class="{{ 'is-active' if request.endpoint == 'legal.privacy' }}">Privacy</a>
+            <a href="{{ url_for('legal.terms') }}"
+               class="{{ 'is-active' if request.endpoint == 'legal.terms' }}">Terms</a>
+            <a href="{{ url_for('legal.data_deletion') }}"
+               class="{{ 'is-active' if request.endpoint == 'legal.data_deletion' }}">Delete my data</a>
+        </nav>
+    </header>
+
+    <main class="legal-doc">
+        <h1>{% block doc_title %}{% endblock %}</h1>
+        <p class="legal-updated">Last updated: {{ last_updated }}</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+
+        {% block doc %}{% endblock %}
+
+        <hr class="legal-rule">
+        <p class="legal-contact">
+            Questions about this document, or about the data we hold?
+            Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        </p>
+    </main>
+
+    <footer class="legal-foot">
+        <span>&copy; {{ company }}</span>
+        <span>
+            <a href="{{ url_for('legal.privacy') }}">Privacy Policy</a> ·
+            <a href="{{ url_for('legal.terms') }}">Terms of Service</a> ·
+            <a href="{{ url_for('legal.data_deletion') }}">Data Deletion</a>
+        </span>
+    </footer>
+
+</div>
+{% endblock %}

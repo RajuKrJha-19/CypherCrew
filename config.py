@@ -142,6 +142,15 @@ class Config:
     # emulator - only the base URLs differ.
     META_APP_ID = os.getenv("META_APP_ID")
     META_APP_SECRET = os.getenv("META_APP_SECRET")
+
+    # Shown on the public legal pages (/legal/privacy, /legal/terms,
+    # /legal/data-deletion), which Meta's app review reads. Configurable so
+    # a deployment states its real operator and a contact that is actually
+    # monitored - a policy naming the wrong entity is a rejection reason.
+    LEGAL_COMPANY_NAME = os.getenv("LEGAL_COMPANY_NAME", "CypherCrew")
+    LEGAL_CONTACT_EMAIL = os.getenv(
+        "LEGAL_CONTACT_EMAIL", "dev.cypherms@gmail.com")
+    LEGAL_LAST_UPDATED = os.getenv("LEGAL_LAST_UPDATED", "28 July 2026")
     META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v25.0")
     META_GRAPH_BASE_URL = os.getenv(
         "META_GRAPH_BASE_URL", "https://graph.facebook.com")
