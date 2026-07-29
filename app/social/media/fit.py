@@ -112,12 +112,15 @@ def check_spec(spec, meta):
 def downscale_target_width(spec, meta):
     """The width to shrink `meta` down to so it meets `spec`, or None.
 
-    Returns spec.width_max ONLY when width is the *sole* thing wrong - i.e. a
-    proportional downscale (which preserves the aspect ratio and reduces the
-    byte size) would make the file fully pass. If anything a resize can't fix
-    is also wrong (wrong aspect, too long, wrong codec, or the shrink would
-    now breach a minimum height/width), it returns None so a resize is never
-    used to paper over a real problem.
+    The transcode is TRIGGERED by an over-max width, and it RE-ENCODES the
+    video (to h264, at a controlled quality) rather than merely scaling - so it
+    fixes width AND the size AND the codec in one pass. This returns
+    spec.width_max when, after modelling that re-encode, the file fully passes.
+
+    It still returns None when the problem is something a re-encode can't fix -
+    a wrong aspect ratio, too long a duration, too high an fps, or a shrink
+    that would breach a minimum height/width - so a resize is never used to
+    paper over a real problem.
     """
     if spec is None or not meta:
         return None
@@ -132,12 +135,17 @@ def downscale_target_width(spec, meta):
         # -2 in the ffmpeg filter keeps the height even; mirror that here so
         # the simulated check matches what the transcode will actually make.
         scaled["height"] = max(2, (round(meta["height"] * scale) // 2) * 2)
-    if meta.get("bytes"):
-        scaled["bytes"] = max(1, round(meta["bytes"] * scale * scale))
+    # The re-encode controls the output bitrate and codec, so the result meets
+    # the size + codec limits regardless of the source. Model that rather than
+    # scaling the source bytes by area - a 447MB clip re-encoded at 1920px is
+    # comfortably under a 300MB cap, and estimating bytes by area (~353MB)
+    # wrongly rejected exactly that fixable file.
+    scaled.pop("bytes", None)
+    scaled["codec"] = "h264"
 
-    # Downscaling helps only if the shrunk file fully passes. Aspect,
-    # duration, fps and codec are unchanged by a resize, so if any of those
-    # was the problem the scaled file still fails here and we return None.
+    # What a re-encode does NOT change - aspect, duration, fps - is still
+    # checked: if any of those is the problem, the scaled file fails here and
+    # we return None.
     if check_spec(spec, scaled):
         return None
     return wmax

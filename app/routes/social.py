@@ -1397,8 +1397,12 @@ def process_queue():
 @login_required
 def drafts():
     _guard()
+    # "failed" and "partially_published" belong here too: a post whose targets
+    # all blocked settles to "failed", and it must stay on the Posts list so
+    # the team can fix/retry it - otherwise it vanishes from every list and is
+    # only reachable by its direct URL.
     allowed = ["draft", "pending_approval", "approved", "scheduled",
-               "rejected"]
+               "rejected", "failed", "partially_published"]
     status_f = request.args.get("status")
     status_f = status_f if status_f in allowed else ""
     campaign_f = (request.args.get("campaign") or "").strip()

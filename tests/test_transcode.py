@@ -24,17 +24,21 @@ def test_a_file_already_within_width_needs_no_resize():
 
 
 def test_resize_is_refused_when_something_else_is_also_wrong():
-    # Too wide AND too long: a downscale fixes the width but not the 20-minute
-    # duration, so it must not be offered as a fix.
+    # Too wide AND too long: the re-encode fixes the width but not the
+    # 20-minute duration, so it must not be offered as a fix.
     meta = {"width": 2160, "height": 3840, "duration": 20 * 60,
             "fps": 30, "codec": "h264"}
     assert fit.downscale_target_width(_REEL, meta) is None
 
 
-def test_resize_is_refused_when_the_codec_is_wrong():
-    meta = {"width": 2160, "height": 3840, "duration": 12,
-            "fps": 30, "codec": "vp9"}   # reel wants h264/hevc
-    assert fit.downscale_target_width(_REEL, meta) is None
+def test_resize_also_fixes_oversize_and_wrong_codec():
+    # The reported production file: 2160px wide, 447MB, and a codec the reel
+    # spec doesn't list. The transcode re-encodes to h264 at a controlled
+    # bitrate, so it fixes width + size + codec in one pass - it must be
+    # offered as fixable, not rejected on a naive byte estimate.
+    meta = {"width": 2160, "height": 3840, "duration": 30, "fps": 30,
+            "codec": "vp9", "bytes": 447 * 1024 * 1024}
+    assert fit.downscale_target_width(_REEL, meta) == 1920
 
 
 # -- the Instagram story spec (previously missing) -------------------------
