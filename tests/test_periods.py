@@ -175,7 +175,7 @@ def test_the_performance_page_scopes_its_figures_to_the_window(
 
     with app.app_context():
         manager = make_user("admin", permissions=["manage_users"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
 
         old = make_task(worker, title="pytest-role-ancient work")
         recent = make_task(worker, title="pytest-role-todays work")
@@ -199,7 +199,7 @@ def test_the_performance_page_defaults_to_all_time(
 
     with app.app_context():
         manager = make_user("admin", permissions=["manage_users"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         old = make_task(worker, title="pytest-role-long ago")
         old.created_at = ist_now() - timedelta(days=200)
         db.session.commit()

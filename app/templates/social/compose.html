@@ -152,11 +152,17 @@
                 </div>
             </div>
 
-            {# --- Media: brand assets --- #}
-            <div class="cmp-section">
-                <span class="cmp-label">Brand assets <small id="mediaHint">Select a client to load its brand assets</small></span>
-                <div class="cmp-media-grid" id="mediaGrid"></div>
-            </div>
+            {# Brand assets used to be offered here as a third media source.
+               Removed deliberately: a client's logo pack belongs to the
+               client record, not in the flow of composing a post, and the
+               strip sat between the uploader and the story controls
+               pushing both off screen. Brand assets are still managed
+               under Clients, and still browsable under Media library.
+
+               Posts composed before the removal keep the brand assets they
+               already carry - see _existing_client_asset_ids in
+               routes/social.py, which is what stops an edit from silently
+               dropping them now that no form field offers them. #}
 
             {# --- Also share to Story --- #}
             <label class="cmp-story-toggle" id="alsoStoryWrap">
@@ -285,13 +291,12 @@
 <script>
 (function () {
     const caps = {{ capabilities|tojson }};
-    const preselectedAssets = {{ selected_asset_ids|tojson }};
     // Piped from the server's platform catalog, not restated here - a
     // hand-copied list goes stale the day a platform is added.
     const PF_LABEL = {{ PF_LABEL|tojson }};
     const PF_ICON_JS = {{ PF_ICON|tojson }};
     const $ = id => document.getElementById(id);
-    const clientSelect = $("clientSelect"), mediaGrid = $("mediaGrid"), mediaHint = $("mediaHint");
+    const clientSelect = $("clientSelect");
     const caption = $("captionInput"), captionCount = $("captionCount");
     const postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount"), typeHintFc = $("fcHint");
     let previewPlatform = "facebook";
@@ -312,7 +317,6 @@
     });
     function applyType(){
         const pt=postType(), showMedia = pt!=="text";
-        mediaGrid.closest(".cmp-section").style.display = showMedia?"":"none";
         var tg=$("taskMediaGrid"); if(tg) tg.closest(".cmp-section").style.display = showMedia?"":"none";
         var uz=$("uploadZone"); if(uz) uz.closest(".cmp-section").style.display = showMedia?"":"none";
         if(pt!=="carousel"){ // collapse to a single selection across ALL media grids (brand, task, uploads)
@@ -539,8 +543,8 @@
     $("firstComment").addEventListener("input", renderPreview);
 
     // media assets (spans BOTH the task-deliverables grid and brand-assets grid)
-    const MEDIA_SEL = 'input[name="asset_ids"], input[name="task_file_ids"], input[name="upload_media"]';
-    const MEDIA_SEL_CHECKED = 'input[name="asset_ids"]:checked, input[name="task_file_ids"]:checked, input[name="upload_media"]:checked';
+    const MEDIA_SEL = 'input[name="task_file_ids"], input[name="upload_media"]';
+    const MEDIA_SEL_CHECKED = 'input[name="task_file_ids"]:checked, input[name="upload_media"]:checked';
     function selectedMediaInputs(){ return [...document.querySelectorAll(MEDIA_SEL_CHECKED)]; }
 
     /*
@@ -620,25 +624,6 @@
         }
         refreshMediaSelection();
     }
-    function renderAssets(assets){
-        if(!assets.length){ mediaGrid.innerHTML=""; mediaHint.textContent="This client has no brand assets yet"; return; }
-        mediaHint.textContent="Click to attach";
-        mediaGrid.innerHTML=assets.map(a=>`
-            <label class="cmp-asset" title="${a.filename}">
-                <input type="checkbox" name="asset_ids" value="${a.id}" data-url="${a.url||''}" data-mime="${a.mime||''}" ${preselectedAssets.includes(a.id)?"checked":""}>
-                <span class="ord"></span>
-                <span class="cmp-asset-thumb">${a.is_image&&a.url?`<img src="${a.url}" loading="lazy" alt="">`:'<i class="fa-regular fa-file"></i>'}</span>
-                <span class="cmp-asset-name">${a.filename}</span>
-                <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
-            </label>`).join("");
-        mediaGrid.querySelectorAll('input[name="asset_ids"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
-        applyType();
-    }
-    function loadAssets(clientId){
-        if(!clientId){ mediaGrid.innerHTML=""; mediaHint.textContent="Select a client to load its brand assets"; selectedMediaUrl=null; renderPreview(); return; }
-        mediaHint.textContent="Loading…";
-        fetch(`/social/api/clients/${clientId}/assets`).then(r=>r.json()).then(d=>renderAssets(d.assets||[])).catch(()=>{ mediaHint.textContent="Could not load assets"; });
-    }
     // Client safety: only show channels bound to the selected client (or
     // agency-wide, unbound). Mismatched channels are hidden + unchecked so
     // you can't publish one client's post to another client's page.
@@ -655,7 +640,7 @@
         if(hint){ if(hidden && cid){ hint.hidden=false; hint.textContent = hidden + ' channel(s) hidden — they belong to other clients.'; } else hint.hidden=true; }
         refreshAccounts();
     }
-    clientSelect.addEventListener("change", ()=>{ loadAssets(clientSelect.value); filterAccountsByClient(); });
+    clientSelect.addEventListener("change", ()=>{ filterAccountsByClient(); });
 
     // ---- @mention live autocomplete ----
     const mentionMenu = document.createElement("div");
@@ -755,7 +740,6 @@
     // init
     filterAccountsByClient();
     refreshAccounts(); applyType();
-    if(clientSelect.value) loadAssets(clientSelect.value);
     renderPreview();
 })();
 </script>

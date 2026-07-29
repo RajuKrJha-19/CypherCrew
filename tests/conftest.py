@@ -34,6 +34,10 @@ os.environ.setdefault("SOCIAL_INPROCESS_WORKER", "false")
 os.environ["META_EMULATOR"] = "false"
 os.environ.pop("META_APP_ID", None)
 os.environ.setdefault("SOCIAL_SIMULATION_MODE", "true")
+# Cypher-Teams. On for the suite so its blueprint is registered and the
+# routes are reachable; set (like the Meta vars above) BEFORE the app is
+# imported, because config reads the environment at import time.
+os.environ.setdefault("TEAMS_ENABLED", "true")
 
 import pytest  # noqa: E402
 
@@ -136,8 +140,28 @@ def _social_models():
     ]
 
 
+def _teams_models():
+    """Ordered child-first, same contract as _social_models.
+
+    Cypher-Teams owns its own teams_* tables, so a test can wipe all of
+    them without touching a single business-domain row. `meetings` is
+    deliberately NOT here - it predates Teams and holds real data; the
+    meeting tests fence themselves by title instead.
+    """
+    from app.models import (
+        TeamReaction, TeamAttachment, TeamMessage, TeamTyping,
+        TeamPresence, TeamChannelMember, TeamChannel,
+    )
+    return [
+        TeamReaction, TeamAttachment, TeamMessage, TeamTyping,
+        TeamPresence, TeamChannelMember, TeamChannel,
+    ]
+
+
 def _clean():
     for model in _social_models():
+        _db.session.query(model).delete()
+    for model in _teams_models():
         _db.session.query(model).delete()
     _db.session.commit()
 
@@ -272,6 +296,24 @@ def _purge_test_rows():
         User, UserPermission,
     )
 
+    # Meetings, fenced by title. The table predates Teams and holds real
+    # rows, so unlike teams_* it is never truncated - only the ones a test
+    # made are removed, the same way test tasks and clients are.
+    from app.models import Meeting
+    from app.models.meeting import meeting_participants
+    meeting_ids = [
+        row.id for row in _db.session.query(Meeting.id)
+        .filter(Meeting.title.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
+    ]
+    if meeting_ids:
+        _db.session.execute(
+            meeting_participants.delete().where(
+                meeting_participants.c.meeting_id.in_(meeting_ids))
+        )
+        Meeting.query.filter(
+            Meeting.id.in_(meeting_ids)
+        ).delete(synchronize_session=False)
+
     task_ids = [
         row.id for row in _db.session.query(Task.id)
         .filter(Task.title.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
@@ -338,8 +380,9 @@ def _purge_test_rows():
         # belongs here - a missed one surfaces as a teardown-only
         # ForeignKeyViolation, which is a confusing way to find out.
         from app.models import (
-            ContentVersion, Notification, SocialAccount, SocialAuditLog,
-            SocialPost, SocialPostTarget,
+            ContentVersion, Meeting, Notification, SocialAccount,
+            SocialAuditLog, SocialPost, SocialPostTarget, TeamChannel,
+            TeamMessage,
         )
         for model, columns in (
             (SocialAuditLog, ("actor_id",)),
@@ -348,6 +391,13 @@ def _purge_test_rows():
             (SocialAccount, ("connected_by_id",)),
             (ContentVersion, ("edited_by_id",)),
             (Notification, ("actor_id",)),
+            # Teams: created_by_id on both of these is a plain FK with no
+            # ON DELETE, so it blocks the user delete below. teams_messages
+            # already has ON DELETE SET NULL, but it is detached here too
+            # so the teardown does not depend on which layer runs first.
+            (TeamChannel, ("created_by_id",)),
+            (TeamMessage, ("user_id",)),
+            (Meeting, ("created_by_id",)),
         ):
             for column in columns:
                 model.query.filter(

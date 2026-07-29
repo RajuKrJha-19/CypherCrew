@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{#
+    Cypher-Teams shell — its own sidebar and top bar, like Social Studio, so
+    the module reads as a product rather than an ERP tab. "Back to
+    CypherCrew" in the sidebar returns to the ERP. Every Teams page extends
+    this instead of base_app.html.
+#}
+
+{% block body_class %}teams-shell{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% if config.get('TURBO_ENABLED', True) %}
+<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.13/dist/turbo.es2017-umd.min.js"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/turbo-app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/command-palette.js') }}" defer></script>
+{# Auto-binds to the composer's data-emoji-field textarea. #}
+<script src="{{ asset_url('js/emoji-picker.js') }}" defer></script>
+<script src="{{ asset_url('js/teams-realtime.js') }}" defer></script>
+<script src="{{ asset_url('js/teams-chat.js') }}" defer></script>
+
+{# MANDATORY, not inherited politeness: Turbo would otherwise paint its
+   cached snapshot of a channel before the fetch lands, showing a stale
+   conversation for a beat. Anywhere else that is a flicker; in a chat
+   window it looks like messages vanishing. #}
+<meta name="turbo-cache-control" content="no-cache">
+
+{# The poll cadence is server-owned so it can be retuned in production
+   without a deploy. teams-realtime.js reads these and obeys next_poll_ms
+   from the payload thereafter. #}
+<meta name="teams-poll-active" content="{{ config.TEAMS_POLL_ACTIVE_MS }}">
+<meta name="teams-poll-hidden" content="{{ config.TEAMS_POLL_HIDDEN_MS }}">
+<meta name="teams-poll-idle" content="{{ config.TEAMS_POLL_IDLE_MS }}">
+{% endblock %}
+
+{% block body %}
+<div class="teams-layout">
+
+    {% include "partials/teams_sidebar.html" %}
+    <div class="teams-backdrop" id="teamsBackdrop" aria-hidden="true"></div>
+
+    <div class="teams-content">
+        <header class="teams-topbar">
+            <button type="button" class="teams-nav-toggle" id="teamsNavToggle"
+                    aria-label="Open Teams navigation"><i class="fa-solid fa-bars"></i></button>
+
+            <div class="teams-top-left">
+                {% block topbar %}{% endblock %}
+            </div>
+
+            {# Identical on every page -> permanent, so theme, notifications
+               and the account menu bind once instead of stacking a listener
+               per Turbo visit. #}
+            <div class="teams-top-right" data-turbo-permanent id="teams-topbar-right">
+                {% include "partials/theme_toggle.html" %}
+                {% include "partials/notification_widget.html" %}
+                {% include "partials/account_menu.html" %}
+            </div>
+        </header>
+
+        <main class="teams-main">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{% include "partials/command_palette.html" %}
+
+<script>
+(function () {
+    var toggle = document.getElementById("teamsNavToggle");
+    var backdrop = document.getElementById("teamsBackdrop");
+    function close() { document.body.classList.remove("teams-nav-open"); }
+    if (toggle) toggle.addEventListener("click", function () {
+        document.body.classList.toggle("teams-nav-open");
+    });
+    if (backdrop) backdrop.addEventListener("click", close);
+    // Bound ONCE - the shell re-renders on every Turbo visit, and a
+    // listener attached per visit would toggle twice on the second click.
+    if (!window.__teamsNavBound) {
+        window.__teamsNavBound = true;
+        document.addEventListener("turbo:before-render", function () {
+            document.body.classList.remove("teams-nav-open");
+        });
+    }
+})();
+</script>
+{% endblock %}

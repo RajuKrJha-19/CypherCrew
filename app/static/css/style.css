@@ -3130,15 +3130,33 @@ body{
     transition:background .2s ease;
 }
 
-.notification-dot-marker{
+/* The unread dot on the bell and the @ button.
+
+   This rule used to be called .notification-dot-marker while the markup
+   asked for .notification-dot, so the two halves never met: the span was
+   in the DOM, notifications.js correctly removed its `hidden` attribute,
+   and it rendered 0x0 and transparent. The bell simply never lit up.
+
+   Positioned against .notification-btn, which is already position:relative
+   (see above). The ring in the surface colour is what stops it reading as
+   part of the icon when it sits over the bell's edge. */
+.notification-dot{
     position:absolute;
-    top:18px;
-    right:16px;
-    width:8px;
-    height:8px;
+    top:5px;
+    right:5px;
+    width:9px;
+    height:9px;
     border-radius:50%;
-    background:var(--color-primary);
+    background:var(--color-danger);
+    border:2px solid var(--color-surface);
+    box-sizing:content-box;
+    pointer-events:none;
 }
+
+/* An explicit position/size beats the user-agent's [hidden]{display:none},
+   so the hidden state has to opt back out by hand - otherwise the dot the
+   client hides stays lit. */
+.notification-dot[hidden]{ display:none; }
 
 .notification-item:hover{
     background:#f3f6fb !important;
@@ -15231,13 +15249,20 @@ body.ds-screen .selected-reference-file{
     color:var(--color-primary);
 }
 
-/* Coloured by TIER, not by role value. Fifteen roles would otherwise mean
-   fifteen rules, and the sixteenth would render unstyled until somebody
-   remembered this file. See roles.badge_class. */
+/* Coloured by TIER, not by role value. Twenty-odd roles would otherwise
+   mean twenty-odd rules, and the next one would render unstyled until
+   somebody remembered this file. See roles.badge_class.
+
+   The ramp is deliberate: warm for the owner, brand colour for system
+   administrators, then the craft ladder cools as it descends - lead and
+   senior carry colour, the working grades are quiet. An intern reads as
+   an intern without anyone having to squint at the words. */
 .profile-role-badge.role-tier-owner{ background:var(--ds-warning-bg); color:var(--ds-warning); }
 .profile-role-badge.role-tier-management{ background:var(--color-primary-soft); color:var(--color-primary); }
+.profile-role-badge.role-tier-lead{ background:var(--ds-accent-soft); color:var(--ds-accent-text); }
 .profile-role-badge.role-tier-senior{ background:var(--ds-success-bg); color:var(--ds-success); }
 .profile-role-badge.role-tier-junior{ background:var(--color-surface-muted); color:var(--color-text-muted); }
+.profile-role-badge.role-tier-intern{ background:var(--color-surface-sunken); color:var(--color-text-subtle); }
 .profile-role-badge.role-tier-general{ background:var(--color-surface-muted); color:var(--color-text-muted); }
 
 .profile-hero-meta{
@@ -18230,4 +18255,765 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     .social-ask{ flex-direction:column; gap:12px; }
     .social-ask-q{ min-width:0; }
     .social-ask .social-platform-list{ flex:1 1 auto; width:100%; }
+}
+
+/* =====================================================================
+   CYPHER-TEAMS — chat + meetings. A dedicated shell like Social Studio,
+   so the module reads as its own product rather than an ERP tab.
+
+   Geometry for the message bubbles is COPIED from the Engage inbox
+   (.engage-msg, ~line 17190) rather than shared with it. Sharing would
+   mean a tweak to Teams' bubbles silently reflowing the Studio's reply
+   inbox, and in an 18k-line stylesheet there is no way to see who else
+   depends on a class. Tokens ARE shared, so light/dark come free.
+   ===================================================================== */
+.teams-layout{
+    display:grid; grid-template-columns:250px minmax(0,1fr);
+    min-height:100vh; background:var(--color-bg);
+}
+
+/* ---- Sidebar ---- */
+.teams-sidebar{
+    position:sticky; top:0; height:100vh; display:flex; flex-direction:column;
+    background:var(--color-surface); border-right:1px solid var(--color-border);
+    z-index:40;
+}
+.teams-brand{ display:flex; align-items:center; gap:10px; padding:16px 14px 12px; }
+.teams-brand .logo{
+    width:34px; height:34px; border-radius:10px; flex:0 0 auto;
+    display:grid; place-items:center; color:#fff; font-size:15px;
+    background:linear-gradient(135deg,var(--color-primary),#0ea5e9);
+}
+.teams-brand .txt{ display:flex; flex-direction:column; line-height:1.15; min-width:0; }
+.teams-brand .txt b{
+    font-size:13.5px; font-weight:650; color:var(--color-text); letter-spacing:-.01em;
+}
+.teams-brand .txt span{ font-size:10.5px; color:var(--color-text-subtle); }
+
+.teams-collapse-btn{
+    margin-left:auto; flex:0 0 auto; width:28px; height:28px; padding:0;
+    display:grid; place-items:center; cursor:pointer;
+    border:1px solid transparent; border-radius:var(--radius-sm);
+    background:transparent; color:var(--color-text-subtle); font-size:11px;
+    transition:color .12s, background .12s, border-color .12s;
+}
+.teams-collapse-btn:hover{
+    color:var(--color-text); background:var(--color-surface-muted);
+    border-color:var(--color-border);
+}
+
+.teams-exit{
+    display:flex; align-items:center; gap:9px; margin:0 12px 8px; padding:8px 11px;
+    border:1px solid var(--color-border); border-radius:var(--radius-md);
+    background:var(--color-surface-muted); color:var(--color-text-muted);
+    font-size:12px; font-weight:500; text-decoration:none;
+    transition:all var(--dur) var(--ease);
+}
+.teams-exit:hover{
+    color:var(--color-text); border-color:var(--color-border-strong);
+    background:var(--color-surface-sunken); text-decoration:none;
+}
+
+.teams-nav{
+    flex:1 1 auto; overflow-y:auto; padding:6px 8px 16px;
+    display:flex; flex-direction:column; gap:1px;
+}
+.teams-nav-section{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--color-text-subtle); opacity:.75; padding:14px 12px 5px;
+}
+.teams-nav-add{
+    color:var(--color-text-subtle); font-size:10px; text-decoration:none;
+    width:18px; height:18px; display:grid; place-items:center;
+    border-radius:var(--radius-sm);
+}
+.teams-nav-add:hover{
+    color:var(--color-text); background:var(--color-surface-muted); text-decoration:none;
+}
+.teams-nav-empty{
+    padding:2px 12px 6px; margin:0;
+    font-size:11.5px; color:var(--color-text-subtle);
+}
+
+.teams-nav a{
+    position:relative; display:flex; align-items:center; gap:10px; padding:7px 12px;
+    border-radius:var(--radius-md); color:var(--color-text-muted);
+    font-size:13px; font-weight:500; text-decoration:none;
+    transition:background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.teams-nav a > i{
+    width:16px; text-align:center; font-size:12px; opacity:.65; flex:0 0 auto;
+}
+.teams-nav a:hover{
+    background:var(--color-surface-muted); color:var(--color-text); text-decoration:none;
+}
+.teams-nav a.active{
+    background:var(--color-primary-soft); color:var(--color-primary); font-weight:650;
+}
+.teams-nav a.active > i{ opacity:1; }
+/* Unread is carried by WEIGHT, not colour: a conversation with something
+   new should stand out from the ones that do not, without competing with
+   the active item for attention. */
+.teams-nav a.has-unread{ color:var(--color-text); font-weight:650; }
+.teams-nav a > span{
+    min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.teams-unread-dot{
+    margin-left:auto; flex:0 0 auto;
+    width:7px; height:7px; border-radius:50%; background:var(--color-primary);
+}
+.teams-nav a .nav-count{
+    margin-left:auto; min-width:18px; height:18px; padding:0 5px;
+    border-radius:var(--radius-full); font-size:10.5px; font-weight:750;
+    color:#fff; background:var(--color-danger); display:grid; place-items:center;
+}
+/* An explicit `display` beats the user-agent's [hidden]{display:none}, so
+   these two have to opt back out by hand - otherwise the badge the client
+   hides still paints, as an empty red circle. */
+.teams-nav a .nav-count[hidden],
+.teams-unread-dot[hidden]{ display:none; }
+
+.teams-avatar{
+    position:relative; flex:none;
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:50%;
+    background:var(--color-surface-muted); color:var(--color-text);
+    font-size:13px; font-weight:700;
+}
+.teams-avatar.sm{ width:20px; height:20px; font-size:9.5px; }
+/* The picture is clipped to the circle here rather than by overflow on
+   the container: the presence dot sits on the container's corner, outside
+   the circle, and an overflow:hidden parent would slice it in half. */
+.teams-avatar img{
+    width:100%; height:100%; object-fit:cover; border-radius:50%;
+}
+
+/* ---- Shell ---- */
+.teams-content{ display:flex; flex-direction:column; min-width:0; min-height:100vh; }
+.teams-topbar{
+    display:flex; align-items:center; gap:14px; padding:10px 20px;
+    background:var(--color-surface); border-bottom:1px solid var(--color-border);
+    position:sticky; top:0; z-index:30;
+}
+.teams-top-left{ flex:1 1 auto; min-width:0; }
+.teams-top-right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.teams-nav-toggle{
+    display:none; width:32px; height:32px; padding:0; place-items:center;
+    background:transparent; border:1px solid var(--color-border);
+    border-radius:var(--radius-sm); color:var(--color-text-muted); cursor:pointer;
+}
+/* The chat view owns the viewport below the topbar: the message list
+   scrolls, the composer stays put. So the shell itself must NOT scroll. */
+.teams-main{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.teams-page{ padding:22px 20px 40px; display:flex; flex-direction:column; gap:18px; }
+.teams-page.narrow{ max-width:620px; }
+
+.teams-channel-title{ display:flex; align-items:center; gap:10px; min-width:0; }
+.teams-channel-title > i{ color:var(--color-text-subtle); font-size:14px; }
+.teams-channel-title .txt{ display:flex; flex-direction:column; min-width:0; line-height:1.2; }
+.teams-channel-title .txt b{ font-size:14px; font-weight:650; color:var(--color-text); }
+.teams-channel-title .txt span{
+    font-size:11.5px; color:var(--color-text-subtle);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.teams-member-count{
+    margin-left:8px; font-size:11.5px; color:var(--color-text-subtle);
+    display:inline-flex; align-items:center; gap:5px;
+}
+
+/* ---- Chat ---- */
+/* position:relative is the positioning context for .tm-dropzone, which is
+   absolutely positioned over the whole conversation. */
+.tm-chat{ position:relative; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.tm-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:18px 20px 8px; }
+.tm-list{ display:flex; flex-direction:column; gap:2px; }
+
+.tm-msg{
+    position:relative; display:flex; flex-direction:row; align-items:flex-start;
+    gap:11px; padding:5px 46px 5px 4px; border-radius:var(--radius-md);
+}
+.tm-msg:hover{ background:var(--color-surface-muted); }
+.tm-avatar{
+    flex:none; width:34px; height:34px; border-radius:50%; overflow:hidden;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--color-surface-muted); color:var(--color-text);
+    font-size:13px; font-weight:700;
+}
+.tm-avatar img{ width:100%; height:100%; object-fit:cover; }
+.tm-body{ min-width:0; flex:1 1 auto; }
+.tm-head{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.tm-head strong{ font-size:13px; font-weight:650; color:var(--color-text); }
+.tm-head time{ font-size:10.5px; color:var(--color-text-subtle); }
+.tm-edited{ font-size:10px; color:var(--color-text-subtle); font-style:italic; }
+.tm-text{
+    margin:1px 0 0; font-size:13.5px; line-height:1.55; color:var(--color-text);
+    white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.tm-gone{ color:var(--color-text-subtle); font-style:italic; }
+.tm-gone i{ font-size:11px; margin-right:5px; }
+/* The optimistic bubble: on screen the instant you hit Enter, dimmed
+   until the server confirms it, red-flagged if the send failed. */
+.tm-pending{ opacity:.55; }
+.tm-failed{ opacity:1; border-left:2px solid var(--color-danger); }
+
+.tm-reactions{ display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+/* height:auto because the global `button` rule (style.css ~line 1360) sets
+   a 40px height for form buttons - without overriding it these chips are
+   40px tall circles. Same reason .tm-thread-link states it. */
+.tm-reaction{
+    display:inline-flex; align-items:center; gap:4px; padding:2px 8px;
+    height:auto;
+    border:1px solid var(--color-border); border-radius:var(--radius-full);
+    background:var(--color-surface); font-size:12px; cursor:pointer;
+    transition:border-color .12s, background .12s;
+}
+.tm-reaction:hover{ border-color:var(--color-border-strong); }
+.tm-reaction.mine{
+    border-color:var(--color-primary); background:var(--color-primary-soft);
+    color:var(--color-primary);
+}
+.tm-reaction span{ font-size:10.5px; font-weight:700; }
+
+.tm-thread-link{
+    margin-top:5px; padding:0; height:auto; background:none; border:0; cursor:pointer;
+    font-size:11.5px; font-weight:600; color:var(--color-primary);
+    display:inline-flex; align-items:center; gap:6px;
+}
+
+/* Hover actions, absolutely positioned so they never reflow the message
+   and never take part in the text line box. */
+.tm-actions{
+    position:absolute; top:2px; right:6px; display:none; gap:2px;
+    background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-sm); padding:2px;
+}
+.tm-msg:hover .tm-actions{ display:flex; }
+.tm-action{
+    width:24px; height:24px; display:grid; place-items:center; padding:0;
+    background:transparent; border:0; border-radius:var(--radius-sm);
+    color:var(--color-text-subtle); font-size:11px; cursor:pointer;
+}
+.tm-action:hover{ background:var(--color-surface-muted); color:var(--color-text); }
+.tm-action.danger:hover{ color:var(--color-danger); }
+
+.tm-edit-box{
+    width:100%; margin-top:2px; padding:7px 9px; resize:vertical;
+    border:1px solid var(--color-primary); border-radius:var(--radius-md);
+    background:var(--color-surface); color:var(--color-text);
+    font:inherit; font-size:13.5px; line-height:1.55;
+}
+
+.tm-empty{ padding:40px 20px; }
+.tm-typing{
+    padding:2px 20px 6px; font-size:11.5px; font-style:italic;
+    color:var(--color-text-subtle); min-height:18px;
+}
+
+/* flex-direction is stated explicitly on both of these because there is a
+   global `form{ display:flex; flex-direction:column }` rule (style.css
+   ~line 800). Without it the composer stacks its textarea, emoji button
+   and send button vertically and stands 150px tall. */
+.tm-composer{
+    display:flex; flex-direction:row; align-items:flex-end; gap:9px;
+    margin:0 20px 4px; padding:9px 10px; background:var(--color-surface);
+    border:1px solid var(--color-border); border-radius:var(--radius-lg);
+}
+.tm-composer:focus-within{
+    border-color:var(--color-primary); box-shadow:var(--focus-ring);
+}
+.tm-composer textarea{
+    flex:1 1 auto; min-height:24px; max-height:180px; resize:none;
+    border:0; background:transparent; color:var(--color-text);
+    font:inherit; font-size:13.5px; line-height:1.55; outline:none;
+}
+.tm-composer .btn{ flex:0 0 auto; padding:7px 12px; }
+.tm-hint{
+    margin:0 20px 14px; font-size:10.5px; color:var(--color-text-subtle);
+}
+.tm-hint kbd{
+    padding:1px 4px; border:1px solid var(--color-border);
+    border-radius:3px; font-size:10px; background:var(--color-surface-muted);
+}
+.tm-locked{
+    display:flex; flex-direction:row; align-items:center; gap:12px; margin:0 20px 18px;
+    padding:12px 14px; border:1px dashed var(--color-border);
+    border-radius:var(--radius-lg); background:var(--color-surface-muted);
+    font-size:12.5px; color:var(--color-text-muted);
+}
+.tm-locked .btn{ margin-left:auto; }
+
+/* ---- Browse ---- */
+.teams-browse-list, .teams-people-list{ list-style:none; margin:0; padding:0; }
+.teams-browse-list > li{
+    display:flex; align-items:center; gap:12px; padding:11px 16px;
+    border-bottom:1px solid var(--color-border);
+}
+.teams-browse-list > li:last-child{ border-bottom:0; }
+.teams-browse-main{
+    flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:9px;
+    text-decoration:none; color:inherit;
+}
+.teams-browse-main > i{ color:var(--color-text-subtle); font-size:12px; }
+.teams-browse-main .name{ font-size:13.5px; font-weight:600; color:var(--color-text); }
+.teams-browse-main .desc{
+    font-size:12px; color:var(--color-text-subtle);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.teams-people-list > li{ border-bottom:1px solid var(--color-border); }
+.teams-people-list > li:last-child{ border-bottom:0; }
+.teams-people-list a{
+    display:flex; align-items:center; gap:12px; padding:10px 16px;
+    text-decoration:none; color:inherit;
+}
+.teams-people-list a:hover{ background:var(--color-surface-muted); text-decoration:none; }
+.teams-people-list .txt{ display:flex; flex-direction:column; line-height:1.25; min-width:0; }
+.teams-people-list .txt b{ font-size:13px; font-weight:600; color:var(--color-text); }
+.teams-people-list .txt span{ font-size:11.5px; color:var(--color-text-subtle); }
+.teams-people-list a > i{ margin-left:auto; color:var(--color-text-subtle); font-size:12px; }
+
+/* ---- Collapsed rail ---- */
+.teams-nav-collapsed .teams-layout{ grid-template-columns:68px minmax(0,1fr); }
+.teams-nav-collapsed .teams-brand .txt,
+.teams-nav-collapsed .teams-exit span,
+.teams-nav-collapsed .teams-nav a > span,
+.teams-nav-collapsed .teams-nav-section,
+.teams-nav-collapsed .teams-nav-empty{ display:none; }
+.teams-nav-collapsed .teams-brand{ justify-content:center; padding:16px 8px 12px; }
+.teams-nav-collapsed .teams-collapse-btn{ margin-left:0; }
+.teams-nav-collapsed .teams-exit,
+.teams-nav-collapsed .teams-nav a{ justify-content:center; padding-left:0; padding-right:0; }
+/* In the rail there is no room for a badge beside the label, so the
+   unread marker rides the corner of the icon instead of vanishing. */
+.teams-nav-collapsed .teams-unread-dot,
+.teams-nav-collapsed .teams-nav a .nav-count{
+    position:absolute; top:4px; right:12px; margin-left:0;
+}
+.teams-nav-collapsed .teams-nav a .nav-count{ min-width:15px; height:15px; font-size:9px; }
+
+.teams-backdrop{ display:none; }
+
+@media (max-width:900px){
+    .teams-layout{ grid-template-columns:minmax(0,1fr); }
+    .teams-nav-toggle{ display:grid; }
+    .teams-sidebar{
+        position:fixed; inset:0 auto 0 0; width:265px;
+        transform:translateX(-100%); transition:transform .18s var(--ease);
+        z-index:60;
+    }
+    .teams-nav-open .teams-sidebar{ transform:translateX(0); }
+    .teams-nav-open .teams-backdrop{
+        display:block; position:fixed; inset:0; z-index:50;
+        background:rgba(15,23,42,.45);
+    }
+    .tm-scroll{ padding:14px 12px 6px; }
+    .tm-composer, .tm-hint, .tm-locked{ margin-left:12px; margin-right:12px; }
+    .tm-msg{ padding-right:8px; }
+    /* No hover on touch, so the actions have to be permanently visible. */
+    .tm-actions{ display:flex; }
+}
+
+/* ---- Cypher-Teams: threads, reactions, presence ---- */
+
+/* The chat and its thread pane share the row; the pane is a grid column
+   that collapses to zero when closed, so opening it never reflows the
+   message list's scroll position the way display:none -> block would. */
+.tm-shell{
+    flex:1 1 auto; min-height:0;
+    display:grid; grid-template-columns:minmax(0,1fr) 0;
+    transition:grid-template-columns .16s var(--ease);
+}
+.tm-thread-open .tm-shell{ grid-template-columns:minmax(0,1fr) 380px; }
+
+.tm-thread{
+    min-width:0; min-height:0; display:flex; flex-direction:column;
+    background:var(--color-surface); border-left:1px solid var(--color-border);
+    overflow:hidden;
+}
+.tm-thread[hidden]{ display:none; }
+.tm-thread-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 14px; border-bottom:1px solid var(--color-border);
+}
+.tm-thread-head b{ font-size:13px; font-weight:650; color:var(--color-text); }
+.tm-thread-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 12px 8px; }
+.tm-thread-root{ padding-bottom:10px; }
+.tm-thread-divider{
+    margin:0 0 8px; padding-top:8px; border-top:1px solid var(--color-border);
+    font-size:11px; font-weight:600; color:var(--color-text-subtle);
+}
+.tm-thread-divider:empty{ border-top:0; padding:0; margin:0; }
+.tm-thread .tm-composer{ margin:0 12px 12px; }
+
+/* Quick reactions. Lives on <body> rather than inside the message, because
+   the message list clips its overflow and a popover anchored inside it
+   would be cut off on the first and last rows. */
+.tm-react-picker{
+    position:fixed; z-index:600; display:flex; gap:2px; padding:4px;
+    background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-full); box-shadow:var(--shadow-lg);
+}
+.tm-react-picker button{
+    width:30px; height:30px; padding:0; display:grid; place-items:center;
+    background:transparent; border:0; border-radius:var(--radius-full);
+    font-size:16px; line-height:1; cursor:pointer;
+    transition:background .1s, transform .1s;
+}
+.tm-react-picker button:hover{
+    background:var(--color-surface-muted); transform:scale(1.15);
+}
+
+/* Presence. Sits on the corner of an avatar, with a ring in the surface
+   colour so it reads as a badge rather than as part of the picture. */
+.tm-presence{
+    position:absolute; right:-1px; bottom:-1px;
+    width:9px; height:9px; border-radius:50%;
+    border:2px solid var(--color-surface); background:var(--color-text-subtle);
+}
+.teams-avatar.sm .tm-presence{ width:7px; height:7px; border-width:1.5px; }
+.tm-presence.is-online{ background:var(--color-success); }
+.tm-presence.is-away{ background:var(--color-warning); }
+.tm-presence.is-busy{ background:var(--color-danger); }
+/* Offline is a hollow ring, not a grey dot: an absent teammate should
+   recede rather than sit there as another coloured marker. */
+.tm-presence.is-offline{
+    background:var(--color-surface); box-shadow:inset 0 0 0 1.5px var(--color-border-strong);
+}
+
+@media (max-width:900px){
+    /* No room for two columns: the thread takes the screen. */
+    .tm-thread-open .tm-shell{ grid-template-columns:0 minmax(0,1fr); }
+    .tm-thread-open .tm-chat{ display:none; }
+    .tm-thread{ border-left:0; }
+}
+
+/* ---- Cypher-Teams: attachments ---- */
+
+/* Sent files, in the bubble. Images render inline because a design is
+   worth seeing without a click; everything else is a chip, because a
+   200-page PDF is not. */
+.tm-files{ display:flex; flex-wrap:wrap; gap:8px; margin-top:7px; }
+
+.tm-file-image{
+    display:block; max-width:min(320px, 100%); border-radius:var(--radius-md);
+    overflow:hidden; border:1px solid var(--color-border); line-height:0;
+}
+.tm-file-image img{
+    display:block; width:100%; height:auto; max-height:320px; object-fit:cover;
+}
+.tm-file-image:hover{ border-color:var(--color-border-strong); }
+
+.tm-file-chip{
+    display:inline-flex; align-items:center; gap:8px; max-width:100%;
+    padding:7px 11px; border:1px solid var(--color-border);
+    border-radius:var(--radius-md); background:var(--color-surface);
+    color:var(--color-text); font-size:12.5px; text-decoration:none;
+    transition:border-color .12s, background .12s;
+}
+.tm-file-chip:hover{
+    border-color:var(--color-primary); background:var(--color-primary-soft);
+    text-decoration:none;
+}
+.tm-file-chip > i{ color:var(--color-text-subtle); font-size:12px; flex:0 0 auto; }
+.tm-file-name{
+    min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-weight:600;
+}
+.tm-file-size{ color:var(--color-text-subtle); font-size:11px; flex:0 0 auto; }
+
+/* Attach button. height:auto for the same reason the reaction chips need
+   it - the global `button` rule sets 40px. */
+.tm-attach{
+    flex:0 0 auto; width:32px; height:32px; padding:0; display:grid;
+    place-items:center; cursor:pointer;
+    background:transparent; border:0; border-radius:var(--radius-sm);
+    color:var(--color-text-subtle); font-size:14px;
+    transition:color .12s, background .12s;
+}
+.tm-attach:hover{ color:var(--color-text); background:var(--color-surface-muted); }
+
+/* Chosen but not yet sent. Under the composer, not inside it, so a long
+   list never squeezes the text box down to one line. */
+.tm-pending-files{
+    display:flex; flex-wrap:wrap; gap:6px; margin:0 20px 6px;
+}
+.tm-pending-files[hidden]{ display:none; }
+.tm-pending-file{
+    display:inline-flex; align-items:center; gap:7px; max-width:260px;
+    padding:4px 6px 4px 10px; border:1px solid var(--color-border);
+    border-radius:var(--radius-full); background:var(--color-surface-muted);
+    font-size:11.5px; color:var(--color-text);
+}
+.tm-pending-file > i{ color:var(--color-text-subtle); font-size:10px; }
+.tm-pending-file > span{
+    min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tm-pending-file button{
+    width:18px; height:18px; padding:0; display:grid; place-items:center;
+    background:transparent; border:0; border-radius:var(--radius-full);
+    color:var(--color-text-subtle); font-size:14px; line-height:1; cursor:pointer;
+}
+.tm-pending-file button:hover{ background:var(--color-border); color:var(--color-text); }
+
+/* Drop target. Covers the whole conversation so a dragged file can be
+   let go anywhere over it rather than aimed at the composer. */
+.tm-dropzone{
+    position:absolute; inset:0; z-index:20; display:grid; place-items:center;
+    background:color-mix(in srgb, var(--color-primary) 8%, var(--color-bg));
+    border:2px dashed var(--color-primary); border-radius:var(--radius-lg);
+    pointer-events:none;
+}
+.tm-dropzone[hidden]{ display:none; }
+.tm-dropzone > div{
+    display:flex; align-items:center; gap:10px;
+    font-size:13.5px; font-weight:600; color:var(--color-primary);
+}
+.tm-dropzone i{ font-size:18px; }
+
+@media (max-width:900px){
+    .tm-pending-files{ margin-left:12px; margin-right:12px; }
+    .tm-file-image{ max-width:100%; }
+}
+
+/* ---- Cypher-Teams: meetings ---- */
+
+/* Button row at the foot of a form. NOT .form-row - that is a two-column
+   grid for pairing two fields (style.css ~3337), so a lone Save button in
+   one becomes a half-width slab. */
+.tm-form-actions{
+    display:flex; flex-direction:row; align-items:center; gap:10px;
+    flex-wrap:wrap;
+}
+
+/* Inline "optional" / "IST" hint. NOT .form-note - that class is a full
+   bordered callout box (style.css ~10825), so using it inline drops a
+   padded panel into the middle of a sentence. */
+.tm-note{
+    font-size:11px; font-weight:500; color:var(--color-text-subtle);
+    text-transform:none; letter-spacing:normal;
+}
+
+.tm-live-dot{
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:var(--color-danger); margin-right:6px; flex:0 0 auto;
+    animation:tm-pulse 1.8s ease-in-out infinite;
+}
+@keyframes tm-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+/* Someone who has asked for less motion does not need a blinking dot to
+   understand the word "Live" next to it. */
+@media (prefers-reduced-motion:reduce){ .tm-live-dot{ animation:none; } }
+
+.tm-live-badge{
+    display:inline-flex; align-items:center; padding:2px 9px;
+    border-radius:var(--radius-full); font-size:11px; font-weight:700;
+    background:var(--ds-danger-bg); color:var(--color-danger);
+}
+
+.tm-call-start{ margin-left:auto; flex:0 0 auto; }
+
+/* ---- List ---- */
+.tm-meeting-list{ list-style:none; margin:0; padding:0; }
+.tm-meeting{
+    display:flex; align-items:center; gap:12px; padding:11px 16px;
+    border-bottom:1px solid var(--color-border);
+}
+.tm-meeting:last-child{ border-bottom:0; }
+.tm-meeting.is-live{ background:var(--color-primary-soft); }
+.tm-meeting-main{
+    flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:14px;
+    text-decoration:none; color:inherit;
+}
+.tm-meeting-main:hover{ text-decoration:none; }
+.tm-meeting-when{
+    flex:0 0 auto; width:56px; display:flex; flex-direction:column;
+    align-items:center; line-height:1.25; padding:5px 0;
+    border-right:1px solid var(--color-border);
+}
+.tm-meeting-when b{ font-size:12.5px; font-weight:700; color:var(--color-text); }
+.tm-meeting-when span{ font-size:10.5px; color:var(--color-text-subtle); }
+.tm-meeting-body{ display:flex; flex-direction:column; min-width:0; gap:2px; }
+.tm-meeting-title{
+    font-size:13.5px; font-weight:600; color:var(--color-text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tm-meeting-meta{
+    display:flex; align-items:center; font-size:11.5px;
+    color:var(--color-text-subtle);
+}
+.tm-meeting-list.is-past .tm-meeting-title{ color:var(--color-text-muted); }
+
+/* ---- Detail ---- */
+.tm-meeting-hero{
+    display:flex; align-items:center; justify-content:space-between; gap:20px;
+    flex-wrap:wrap; padding:20px 16px; border-bottom:1px solid var(--color-border);
+}
+.tm-meeting-hero h2{ font-size:18px; font-weight:650; color:var(--color-text); margin:0 0 6px; }
+.tm-meeting-hero p{ margin:0; font-size:13px; color:var(--color-text-muted); line-height:1.6; }
+.btn.btn-lg{ padding:11px 20px; font-size:14px; height:auto; }
+.tm-meeting-closed{ font-size:12.5px; color:var(--color-text-subtle); }
+
+.tm-meeting-facts{
+    display:grid; grid-template-columns:auto 1fr; gap:8px 20px;
+    margin:0; padding:16px; border-bottom:1px solid var(--color-border);
+    font-size:12.5px;
+}
+.tm-meeting-facts dt{ color:var(--color-text-subtle); font-weight:600; }
+.tm-meeting-facts dd{ margin:0; color:var(--color-text); }
+
+.tm-meeting-agenda{ padding:16px; border-bottom:1px solid var(--color-border); }
+.tm-meeting-agenda h3{
+    margin:0 0 8px; font-size:11px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--color-text-subtle);
+}
+.tm-meeting-agenda p{
+    margin:0; font-size:13px; line-height:1.6; color:var(--color-text);
+    white-space:pre-wrap;
+}
+.tm-meeting-people{ display:flex; flex-wrap:wrap; gap:8px; }
+.tm-invitee{
+    display:inline-flex; align-items:center; gap:7px; padding:4px 11px 4px 4px;
+    border:1px solid var(--color-border); border-radius:var(--radius-full);
+    font-size:12px; color:var(--color-text);
+}
+.tm-meeting-actions{
+    display:flex; flex-direction:row; align-items:center; gap:12px; padding:16px;
+}
+
+/* ---- Meeting card in a conversation ---- */
+.tm-meeting-card{
+    display:flex; align-items:center; gap:12px; margin-top:4px; padding:10px 12px;
+    max-width:420px; border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); background:var(--color-surface);
+    text-decoration:none; color:inherit;
+    transition:border-color .12s, background .12s;
+}
+.tm-meeting-card:hover{
+    border-color:var(--color-primary); background:var(--color-primary-soft);
+    text-decoration:none;
+}
+.tm-meeting-card-icon{
+    flex:0 0 auto; width:34px; height:34px; border-radius:var(--radius-md);
+    display:grid; place-items:center; color:#fff; font-size:13px;
+    background:linear-gradient(135deg,var(--color-primary),#0ea5e9);
+}
+.tm-meeting-card-body{ display:flex; flex-direction:column; min-width:0; line-height:1.35; }
+.tm-meeting-card-body b{ font-size:13px; font-weight:650; color:var(--color-text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tm-meeting-card-body span{ font-size:11.5px; color:var(--color-text-subtle); }
+.tm-meeting-card-go{
+    margin-left:auto; flex:0 0 auto; font-size:11.5px; font-weight:650;
+    color:var(--color-primary);
+}
+
+/* ---- The call itself ---- */
+/* Fills everything under the topbar: a video call in a letterboxed card is
+   a video call nobody can see faces in. */
+.tm-call{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+    background:#0b0d11; }
+.tm-call-stage{ flex:1 1 auto; min-height:0; }
+.tm-call-stage iframe{ display:block; width:100%; height:100%; border:0; }
+
+.tm-call-fallback{
+    flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:12px; padding:40px 20px; text-align:center;
+    color:var(--color-text);
+}
+.tm-call-fallback[hidden]{ display:none; }
+.tm-call-fallback > i{ font-size:28px; color:var(--color-warning); }
+.tm-call-fallback h3{ margin:0; font-size:16px; font-weight:650; }
+.tm-call-fallback p{ margin:0; max-width:440px; font-size:13px;
+    line-height:1.6; color:var(--color-text-muted); }
+
+@media (max-width:900px){
+    .tm-meeting{ flex-wrap:wrap; }
+    .tm-meeting-hero{ flex-direction:column; align-items:flex-start; }
+    .tm-meeting-facts{ grid-template-columns:1fr; gap:2px 0; }
+    .tm-meeting-facts dd{ margin-bottom:8px; }
+    .tm-call-start{ margin-left:0; }
+}
+
+/* ---- Cypher-Teams: settings, search, mute ---- */
+
+/* A muted channel recedes rather than disappears - it is still yours, it
+   is just not asking for anything. */
+.teams-nav a.is-muted{ opacity:.55; }
+.teams-nav a.is-muted:hover{ opacity:1; }
+
+.tm-channel-actions{
+    display:flex; flex-direction:row; align-items:center; gap:6px;
+    margin-left:auto; flex:0 0 auto;
+}
+.tm-channel-actions .tm-action{ width:30px; height:30px; font-size:12.5px; }
+.tm-channel-actions form{ display:flex; flex-direction:row; }
+
+/* ---- Settings ---- */
+.tm-settings-row{
+    display:flex; align-items:center; justify-content:space-between; gap:20px;
+    padding:14px 16px; border-bottom:1px solid var(--color-border);
+}
+.tm-settings-row:last-child{ border-bottom:0; }
+.tm-settings-row > div{ min-width:0; }
+.tm-settings-row b{ font-size:13px; font-weight:650; color:var(--color-text); }
+.tm-settings-row .tm-note{ display:block; margin-top:3px; line-height:1.5; }
+.tm-settings-row form{ flex:0 0 auto; }
+
+.tm-member-row{ display:flex; align-items:center; gap:12px; padding:9px 16px; }
+.tm-member-row .txt{
+    display:flex; flex-direction:column; line-height:1.25; min-width:0; flex:1 1 auto;
+}
+.tm-member-row .txt b{ font-size:13px; font-weight:600; color:var(--color-text); }
+.tm-member-row .txt span{ font-size:11.5px; color:var(--color-text-subtle); }
+.tm-member-row form{ display:flex; flex-direction:row; flex:0 0 auto; }
+
+.tm-add-member{
+    display:flex; flex-direction:row; align-items:center; gap:9px;
+    padding:12px 16px; border-top:1px solid var(--color-border);
+}
+.tm-add-member select{ flex:1 1 auto; min-width:0; }
+.tm-add-hint{ margin:0 16px 14px; }
+
+/* ---- Search ---- */
+.tm-search-bar{
+    display:flex; flex-direction:row; align-items:center; gap:10px;
+    width:100%; min-width:0; padding:7px 12px;
+    background:var(--color-surface-muted); border:1px solid var(--color-border);
+    border-radius:var(--radius-full);
+}
+.tm-search-bar:focus-within{
+    border-color:var(--color-primary); box-shadow:var(--focus-ring);
+}
+.tm-search-bar > i{ color:var(--color-text-subtle); font-size:12px; flex:0 0 auto; }
+.tm-search-bar input{
+    flex:1 1 auto; min-width:0; height:auto; padding:0;
+    border:0; background:transparent; color:var(--color-text);
+    font:inherit; font-size:13px; outline:none;
+}
+.tm-search-bar a{ flex:0 0 auto; text-decoration:none; }
+.tm-search-bar a:hover{ text-decoration:underline; }
+
+.tm-search-results{ list-style:none; margin:0; padding:0; }
+.tm-search-results > li{ border-bottom:1px solid var(--color-border); }
+.tm-search-results > li:last-child{ border-bottom:0; }
+.tm-search-results a{
+    display:flex; flex-direction:column; gap:3px; padding:12px 16px;
+    text-decoration:none; color:inherit;
+}
+.tm-search-results a:hover{ background:var(--color-surface-muted); text-decoration:none; }
+.tm-search-where{
+    display:flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:650; color:var(--color-primary);
+}
+.tm-search-where i{ font-size:10px; }
+.tm-search-body{
+    font-size:13.5px; line-height:1.5; color:var(--color-text);
+    /* Two lines is enough to recognise the message; the rest is on the
+       page the result links to. */
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+.tm-search-meta{ font-size:11px; color:var(--color-text-subtle); }
+
+@media (max-width:900px){
+    .tm-settings-row{ flex-direction:column; align-items:flex-start; gap:10px; }
+    .tm-channel-actions{ margin-left:0; }
 }

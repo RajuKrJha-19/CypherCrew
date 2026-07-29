@@ -30,7 +30,7 @@ def test_the_queue_can_be_searched_by_task_title(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
 
         wanted = make_task(worker, title="pytest-role-needle task")
         other = make_task(worker, title="pytest-role-haystack task")
@@ -48,7 +48,7 @@ def test_the_queue_can_be_searched_by_task_id(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
 
         wanted = make_task(worker, title="pytest-role-by-code")
         other = make_task(worker, title="pytest-role-not-this-one")
@@ -68,8 +68,8 @@ def test_the_queue_can_be_searched_by_employee(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        mine = make_user("junior_video_editor", name="Zainab Testperson")
-        theirs = make_user("junior_graphic_designer", name="Other Person")
+        mine = make_user("video_editor", name="Zainab Testperson")
+        theirs = make_user("graphic_designer", name="Other Person")
 
         wanted = make_task(mine, title="pytest-role-zainabs work")
         other = make_task(theirs, title="pytest-role-someone elses work")
@@ -87,7 +87,7 @@ def test_search_reaches_every_column(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
 
         core = make_task(worker, title="pytest-role-shared core")
         clientr = make_task(worker, title="pytest-role-shared client")
@@ -108,7 +108,7 @@ def test_a_search_with_no_hits_says_so(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         task = make_task(worker, title="pytest-role-present")
         _stage(task, "Core Review")
 
@@ -123,7 +123,7 @@ def test_an_empty_search_shows_the_whole_queue(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         a = make_task(worker, title="pytest-role-first")
         b = make_task(worker, title="pytest-role-second")
         _stage(a, "Core Review")
@@ -144,7 +144,7 @@ def test_a_task_with_no_assignee_still_matches(
     title matches."""
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
 
         orphan = make_task(worker, title="pytest-role-unassigned task")
         orphan.assigned_to_id = None
@@ -158,7 +158,7 @@ def test_search_is_case_insensitive(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor", name="Kabir Testperson")
+        worker = make_user("video_editor", name="Kabir Testperson")
         task = make_task(worker, title="pytest-role-MixedCase Needle")
         _stage(task, "Core Review")
 
@@ -180,8 +180,8 @@ def test_every_word_may_match_a_different_column(
     """
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        kavya = make_user("junior_video_editor", name="Kavya Testperson")
-        other = make_user("junior_graphic_designer", name="Rohit Testperson")
+        kavya = make_user("video_editor", name="Kavya Testperson")
+        other = make_user("graphic_designer", name="Rohit Testperson")
 
         wanted = make_task(kavya, title="pytest-role-cross column hit")
         wanted.task_code = 424242
@@ -201,7 +201,7 @@ def test_word_order_does_not_matter(
         app, client, make_user, make_task, login):
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         task = make_task(worker, title="pytest-role-alpha beta gamma")
         _stage(task, "Core Review")
 
@@ -219,7 +219,7 @@ def test_all_words_must_match_not_just_one(
     more of what you remember would only ever make the list longer."""
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         task = make_task(worker, title="pytest-role-narrowing target")
         _stage(task, "Core Review")
 
@@ -239,9 +239,9 @@ def test_like_wildcards_are_searched_for_literally(
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
         # Named explicitly: the fixture's default name is built from the
-        # role, and "junior_video_editor" would put a literal underscore
+        # role, and "video_editor" would put a literal underscore
         # in a searched column and match the "_" probe honestly.
-        worker = make_user("junior_video_editor", name="Plain Testperson")
+        worker = make_user("video_editor", name="Plain Testperson")
         plain = make_task(worker, title="pytest-role-plain title")
         percent = make_task(worker, title="pytest-role-50% off campaign")
         _stage(plain, "Core Review")
@@ -262,7 +262,7 @@ def test_a_bare_hash_does_not_become_a_wildcard(
     needle matching every task code when the word was only "#"."""
     with app.app_context():
         reviewer = make_user("admin", permissions=["approve_tasks"])
-        worker = make_user("junior_video_editor")
+        worker = make_user("video_editor")
         task = make_task(worker, title="pytest-role-hash guard")
         task.task_code = 707070
         _stage(task, "Core Review")

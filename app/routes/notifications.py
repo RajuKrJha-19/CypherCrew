@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_login import login_required, current_user
 
 from app.extensions import db
@@ -24,6 +24,22 @@ def _category_filter():
     never silently turn into "show nothing"."""
     category = request.args.get("category", "").strip()
     return category if category in VALID_CATEGORIES else None
+
+
+def _teams_unread():
+    """Number of Teams conversations with something new, or 0.
+
+    Guarded twice over: returns 0 when the module is switched off (its
+    tables may not even exist), and swallows any error rather than letting
+    a Teams problem break the notification bell on every page in the app.
+    """
+    if not current_app.config.get("TEAMS_ENABLED"):
+        return 0
+    try:
+        from app.teams.services.unread import total_unread
+        return total_unread(current_user)
+    except Exception:
+        return 0
 
 
 @notifications_bp.route("/api")
@@ -64,6 +80,12 @@ def api_notifications():
 
     return jsonify({
         "unread_count": unread_count,
+        # Cypher-Teams unread, piggybacked onto the poll the topbar already
+        # makes on every page. Teams needs its badge to update outside the
+        # module, and a second app-wide poller for one integer would double
+        # the background request rate of the whole ERP. One extra indexed
+        # count on a request that was happening anyway is the cheap version.
+        "teams_unread": _teams_unread(),
         "notifications": [
             {
                 "id": item.id,

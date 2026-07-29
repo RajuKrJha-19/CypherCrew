@@ -172,6 +172,24 @@
     </a>
     {% endif %}
 
+    {# Cypher-Teams — gated on the feature flag ONLY. Unlike Studio there
+       is no permission check: talking to your colleagues is not a
+       capability that needs granting, and a chat tool half the team
+       cannot see is worse than no chat tool. Access is controlled per
+       conversation by channel membership instead.
+
+       The unread badge is painted by notifications.js from the count it
+       already polls for, so this stays a plain link — a Jinja global that
+       queried the database here would cost every ERP page a query. #}
+    {% if config.TEAMS_ENABLED %}
+    <a href="{{ url_for('teams.index') }}"
+       class="{% if endpoint.startswith('teams.') %}active{% endif %}">
+        <i class="fa-solid fa-comments"></i>
+        <span>Teams</span>
+        <span class="nav-count" id="teamsNavCount" hidden></span>
+    </a>
+    {% endif %}
+
     </nav>
 
     {#

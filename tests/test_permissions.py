@@ -31,7 +31,7 @@ def test_owner_holds_everything_without_any_rows(app, make_user):
 
 def test_granted_and_missing_permissions(app, make_user):
     with app.app_context():
-        user = make_user("junior_video_editor", permissions=["approve_tasks"])
+        user = make_user("video_editor", permissions=["approve_tasks"])
 
         assert perms.has_permission(user, "approve_tasks")
         assert not perms.has_permission(user, "manage_tasks")
@@ -48,7 +48,7 @@ def test_duplicate_grants_are_refused_by_the_database(app, make_user):
     from app.models import Permission, UserPermission
 
     with app.app_context():
-        user = make_user("junior_content_writer", permissions=["view_reports"])
+        user = make_user("content_writer", permissions=["view_reports"])
         permission = Permission.query.filter_by(code="view_reports").first()
 
         db.session.add(UserPermission(
@@ -81,7 +81,7 @@ def test_apply_role_defaults_grants_exactly_the_defaults(
 
 def test_apply_role_defaults_is_idempotent(app, make_user):
     with app.app_context():
-        user = make_user("senior_social_media_manager")
+        user = make_user("social_media_manager")
 
         perms.apply_role_defaults(user, commit=True)
         first = perms.granted_codes(user)
@@ -94,7 +94,7 @@ def test_apply_role_defaults_is_idempotent(app, make_user):
 
 def test_apply_role_defaults_replaces_rather_than_merges(app, make_user):
     with app.app_context():
-        user = make_user("junior_video_editor", permissions=["manage_tasks"])
+        user = make_user("video_editor", permissions=["manage_tasks"])
 
         perms.apply_role_defaults(user, commit=True)
 
@@ -105,7 +105,7 @@ def test_apply_role_defaults_replaces_rather_than_merges(app, make_user):
 def test_setting_permissions_records_who_granted_them(app, make_user):
     with app.app_context():
         actor = make_user("admin")
-        user = make_user("junior_graphic_designer")
+        user = make_user("graphic_designer")
 
         perms.set_permissions(
             user, ["view_all_tasks"], granted_by=actor, commit=True,
@@ -118,7 +118,7 @@ def test_setting_permissions_records_who_granted_them(app, make_user):
 
 def test_setting_permissions_ignores_unknown_codes(app, make_user):
     with app.app_context():
-        user = make_user("junior_content_writer")
+        user = make_user("content_writer")
 
         perms.set_permissions(
             user, ["view_reports", "make_me_an_owner"], commit=True,
@@ -133,7 +133,7 @@ def test_setting_permissions_ignores_unknown_codes(app, make_user):
 
 def test_senior_craft_reviews_but_does_not_publish(app, make_user):
     with app.app_context():
-        senior = make_user("senior_video_editor")
+        senior = make_user("video_editor_senior")
         perms.apply_role_defaults(senior, commit=True)
 
         assert perms.has_permission(senior, "approve_tasks")
@@ -144,7 +144,7 @@ def test_senior_craft_reviews_but_does_not_publish(app, make_user):
 
 def test_manager_publishes(app, make_user):
     with app.app_context():
-        manager = make_user("senior_social_media_manager")
+        manager = make_user("social_media_manager")
         perms.apply_role_defaults(manager, commit=True)
 
         assert perms.can_publish(manager)
@@ -154,7 +154,7 @@ def test_manager_publishes(app, make_user):
 
 def test_junior_holds_nothing(app, make_user):
     with app.app_context():
-        junior = make_user("junior_social_media_executive")
+        junior = make_user("social_media_executive")
         perms.apply_role_defaults(junior, commit=True)
 
         # Studio only - the one thing this role exists to do.
@@ -185,7 +185,7 @@ def test_manage_tasks_still_carries_its_old_reach(app, make_user):
 
 def test_engine_operation_can_now_be_delegated(app, make_user):
     with app.app_context():
-        ops = make_user("junior_software_developer",
+        ops = make_user("software_developer",
                         permissions=["manage_social_engine"])
 
         # Previously role-only, so it could not be handed to whoever

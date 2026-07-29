@@ -1,0 +1,66 @@
+{% extends "base_teams.html" %}
+
+{% block title %}Search · Teams{% endblock %}
+
+{% block topbar %}
+<form class="tm-search-bar" method="GET" action="{{ url_for('teams.search') }}">
+  {% if scope %}<input type="hidden" name="channel" value="{{ scope.id }}">{% endif %}
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" name="q" value="{{ query }}" autofocus
+         placeholder="{% if scope %}Search in {{ scope.display_name(current_user) }}{% else %}Search your conversations{% endif %}"
+         aria-label="Search messages">
+  {% if scope %}
+    <a href="{{ url_for('teams.search', q=query) }}" class="tm-note">Search everywhere</a>
+  {% endif %}
+</form>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page">
+  {% if not query %}
+    <div class="empty-state">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <h3>Search your conversations</h3>
+      <p>Only the channels and DMs you are in are searched.</p>
+    </div>
+
+  {% elif not results %}
+    <div class="empty-state">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <h3>Nothing found for “{{ query }}”</h3>
+      <p>Try fewer words — whole words match, partial ones do not.</p>
+    </div>
+
+  {% else %}
+    <section class="table-card">
+      <div class="card-header">
+        <h2 class="card-title">
+          {{ results|length }} result{{ '' if results|length == 1 else 's' }}
+          {%- if scope %} in {{ scope.display_name(current_user) }}{% endif %}
+        </h2>
+      </div>
+
+      <ul class="tm-search-results">
+        {% for message in results %}
+          {# Deep-links to the message, which the channel page anchors by
+             id - so a result opens the conversation at the right place
+             rather than at the bottom. #}
+          <li>
+            <a href="{{ url_for('teams.channel', channel_id=message.channel_id) }}#tm-{{ message.id }}">
+              <span class="tm-search-where">
+                <i class="fa-solid {{ 'fa-user' if message.channel.is_dm else 'fa-hashtag' }}"></i>
+                {{ message.channel.display_name(current_user) }}
+              </span>
+              <span class="tm-search-body">{{ message.body }}</span>
+              <span class="tm-search-meta">
+                {{ message.user.name if message.user else 'Former teammate' }}
+                · {{ message.created_at|ist }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

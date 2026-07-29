@@ -64,7 +64,7 @@ def test_management_dashboards_are_guarded(
     people away, so typing the URL was enough to read company-wide
     delivery figures, workload and per-person performance."""
     with app.app_context():
-        junior = make_user("junior_video_editor")
+        junior = make_user("video_editor")
         perms.apply_role_defaults(junior, commit=True)
         login(junior)
 
@@ -87,7 +87,7 @@ def test_management_dashboards_open_for_an_admin(
 def test_api_overview_is_refused_for_a_junior(
         app, client, make_user, login):
     with app.app_context():
-        junior = make_user("junior_content_writer")
+        junior = make_user("content_writer")
         login(junior)
 
         assert client.get("/api/overview").status_code == 403
@@ -96,11 +96,11 @@ def test_api_overview_is_refused_for_a_junior(
 def test_review_queue_needs_a_review_permission(
         app, client, make_user, login):
     with app.app_context():
-        junior = make_user("junior_graphic_designer")
+        junior = make_user("graphic_designer")
         login(junior)
         assert client.get("/my-tasks", follow_redirects=False).status_code == 302
 
-        senior = make_user("senior_graphic_designer")
+        senior = make_user("graphic_designer_senior")
         perms.apply_role_defaults(senior, commit=True)
         login(senior)
         assert client.get("/my-tasks").status_code == 200
@@ -109,13 +109,13 @@ def test_review_queue_needs_a_review_permission(
 def test_user_administration_needs_manage_users(
         app, client, make_user, login):
     with app.app_context():
-        junior = make_user("junior_software_developer")
+        junior = make_user("software_developer")
         login(junior)
         assert client.get("/users/", follow_redirects=False).status_code == 302
 
         # The permission used to gate only the sidebar link, so granting it
         # produced a link that bounced you back to the dashboard.
-        granted = make_user("senior_software_developer",
+        granted = make_user("software_developer_senior",
                             permissions=["manage_users"])
         login(granted)
         assert client.get("/users/").status_code == 200
@@ -124,12 +124,12 @@ def test_user_administration_needs_manage_users(
 def test_permissions_screen_needs_manage_permissions(
         app, client, make_user, login):
     with app.app_context():
-        senior = make_user("senior_content_writer")
+        senior = make_user("content_writer_senior")
         login(senior)
         assert client.get("/permissions/",
                           follow_redirects=False).status_code == 302
 
-        granted = make_user("senior_content_writer",
+        granted = make_user("content_writer_senior",
                             permissions=["manage_permissions"])
         login(granted)
         assert client.get("/permissions/").status_code == 200
@@ -140,7 +140,7 @@ def test_permission_holder_cannot_edit_their_own_access(
     """Delegating manage_permissions must not be the same as handing over
     the company."""
     with app.app_context():
-        granted = make_user("senior_video_editor",
+        granted = make_user("video_editor_senior",
                             permissions=["manage_permissions"])
         login(granted)
 
@@ -154,7 +154,7 @@ def test_permission_holder_cannot_edit_an_administrator(
         app, client, make_user, login):
     with app.app_context():
         admin = make_user("admin")
-        granted = make_user("senior_video_editor",
+        granted = make_user("video_editor_senior",
                             permissions=["manage_permissions"])
         login(granted)
 
@@ -167,9 +167,9 @@ def test_permission_holder_cannot_edit_an_administrator(
 def test_permission_holder_cannot_hand_out_the_meta_permissions(
         app, client, make_user, login):
     with app.app_context():
-        granted = make_user("senior_video_editor",
+        granted = make_user("video_editor_senior",
                             permissions=["manage_permissions"])
-        target = make_user("junior_video_editor")
+        target = make_user("video_editor")
         login(granted)
 
         client.post(
@@ -189,7 +189,7 @@ def test_owner_can_hand_out_the_meta_permissions(
         app, client, make_user, login):
     with app.app_context():
         owner = make_user("super_admin")
-        target = make_user("senior_social_media_manager")
+        target = make_user("social_media_manager")
         login(owner)
 
         client.post(
@@ -205,7 +205,7 @@ def test_apply_role_defaults_route_is_post_only(
         app, client, make_user, login):
     with app.app_context():
         owner = make_user("super_admin")
-        target = make_user("senior_content_writer")
+        target = make_user("content_writer_senior")
         login(owner)
 
         assert client.get(
@@ -218,7 +218,7 @@ def test_apply_role_defaults_route_is_post_only(
         )
 
         assert perms.granted_codes(target) == roles.defaults_for(
-            "senior_content_writer")
+            "content_writer_senior")
 
 
 # ----------------------------------------------------------------------
@@ -277,7 +277,7 @@ def test_a_new_account_starts_with_its_role_defaults(
             "name": "New Senior",
             "email": "pytest-role-new@example.invalid",
             "password": "hunter2hunter2",
-            "role": "senior_graphic_designer",
+            "role": "graphic_designer_senior",
             "status": "active",
         }, follow_redirects=True)
 
@@ -286,7 +286,7 @@ def test_a_new_account_starts_with_its_role_defaults(
 
         assert created is not None
         assert perms.granted_codes(created) == roles.defaults_for(
-            "senior_graphic_designer")
+            "graphic_designer_senior")
 
 
 def test_nobody_changes_their_own_role(app, client, make_user, login):
@@ -296,7 +296,7 @@ def test_nobody_changes_their_own_role(app, client, make_user, login):
 
         client.post(f"/users/edit/{owner.id}", data={
             "name": owner.name,
-            "role": "junior_video_editor",
+            "role": "video_editor",
             "status": "active",
         }, follow_redirects=True)
 
@@ -313,8 +313,8 @@ def test_calendar_is_scoped_to_visible_tasks(
     the title, client, assignee and deadline of every task in the
     company."""
     with app.app_context():
-        outsider = make_user("junior_content_writer")
-        other = make_user("junior_video_editor")
+        outsider = make_user("content_writer")
+        other = make_user("video_editor")
         make_task(other, title="pytest-role-secret-task")
 
         login(outsider)
@@ -331,10 +331,10 @@ def test_a_senior_sees_the_whole_calendar(
     from app.utils import permissions as perms
 
     with app.app_context():
-        other = make_user("junior_video_editor")
+        other = make_user("video_editor")
         make_task(other, title="pytest-role-visible-task")
 
-        senior = make_user("senior_video_editor")
+        senior = make_user("video_editor_senior")
         perms.apply_role_defaults(senior, commit=True)
 
         login(senior)
@@ -351,8 +351,8 @@ def test_commenting_needs_access_to_the_task(
     from app.models import TaskComment
 
     with app.app_context():
-        outsider = make_user("junior_content_writer")
-        owner = make_user("junior_video_editor")
+        outsider = make_user("content_writer")
+        owner = make_user("video_editor")
         task = make_task(owner)
 
         login(outsider)

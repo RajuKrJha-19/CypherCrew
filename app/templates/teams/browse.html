@@ -1,0 +1,95 @@
+{% extends "base_teams.html" %}
+
+{% block title %}Browse · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid fa-compass"></i>
+  <div class="txt"><b>Browse</b><span>Channels and people</span></div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page">
+
+  <section class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Channels you can join</h2>
+      <a href="{{ url_for('teams.channel_new') }}" class="btn">
+        <i class="fa-solid fa-plus"></i> New channel</a>
+    </div>
+
+    {% if available %}
+      <ul class="teams-browse-list">
+        {% for channel in available %}
+          <li>
+            <a class="teams-browse-main"
+               href="{{ url_for('teams.channel', channel_id=channel.id) }}">
+              <i class="fa-solid fa-hashtag"></i>
+              <span class="name">{{ channel.name or channel.key }}</span>
+              {% if channel.description %}
+                <span class="desc">{{ channel.description }}</span>
+              {% elif channel.client %}
+                <span class="desc">{{ channel.client.client_name }}</span>
+              {% endif %}
+            </a>
+            <form method="POST"
+                  action="{{ url_for('teams.join_channel', channel_id=channel.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-secondary btn-sm">Join</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <i class="fa-solid fa-hashtag"></i>
+        <h3>Nothing left to join</h3>
+        <p>You are already in every public channel.
+           <a href="{{ url_for('teams.channel_new') }}">Create a new one</a>.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="table-card" id="people">
+    <div class="card-header">
+      <h2 class="card-title">People</h2>
+    </div>
+
+    {% if people %}
+      <ul class="teams-people-list">
+        {% for person in people %}
+          <li>
+            {# A DM link is safe to render anywhere: the route derives the
+               channel key from the pair of ids, so following it twice
+               opens the same conversation rather than making a second. #}
+            <a href="{{ url_for('teams.dm', user_id=person.id) }}">
+              <span class="teams-avatar">
+                {% set src = avatar_url(person) %}
+                {% if src %}<img src="{{ src }}" alt="">
+                {% else %}{{ person.initials }}{% endif %}
+                {# Rendered server-side here: this page has no open channel,
+                   so the sync tick carries no presence to paint from. #}
+                <span class="tm-presence is-{{ presence.get(person.id, 'offline') }}"
+                      data-presence-user="{{ person.id }}"
+                      title="{{ presence.get(person.id, 'offline')|capitalize }}"></span>
+              </span>
+              <span class="txt">
+                <b>{{ person.name }}</b>
+                <span>{{ person.designation or role_label(person.role) }}</span>
+              </span>
+              <i class="fa-solid fa-comment"></i>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <i class="fa-solid fa-users"></i>
+        <h3>No one else yet</h3>
+        <p>Colleagues appear here once their accounts are active.</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

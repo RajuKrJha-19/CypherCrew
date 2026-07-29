@@ -29,6 +29,14 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "280")),
+        # Sized against gunicorn's threads (see gunicorn.conf.py). With
+        # threaded workers several requests share one process's pool, so
+        # leaving this at SQLAlchemy's default of 5 would have threads
+        # queueing for a connection under exactly the load the threads were
+        # added to absorb. pool_size x workers is the connection count the
+        # database sees, so it is deliberately modest rather than generous.
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "6")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "6")),
         "connect_args": {
             "options": (
                 "-c statement_timeout="
@@ -229,3 +237,50 @@ class Config:
     )
     # Seconds between background worker ticks.
     SOCIAL_WORKER_INTERVAL = int(os.getenv("SOCIAL_WORKER_INTERVAL", "20"))
+
+    # ------------------------------------------------------------------
+    # Cypher-Teams (chat + meetings)
+    # ------------------------------------------------------------------
+    # Master feature flag, same contract as SOCIAL_ENGINE_ENABLED: OFF by
+    # default, and with it off the blueprint is never registered, so /teams
+    # 404s and the app behaves exactly as it did before the module existed.
+    TEAMS_ENABLED = (
+        os.getenv("TEAMS_ENABLED", "False").lower() == "true"
+    )
+
+    # Adaptive polling cadence (milliseconds) handed to the client. There is
+    # no websocket/SSE layer - a chat view polls one endpoint and slows itself
+    # down as attention drifts, so an idle tab costs almost nothing. Tunable
+    # per environment without a code change if the worker pool gets tight.
+    TEAMS_POLL_ACTIVE_MS = int(os.getenv("TEAMS_POLL_ACTIVE_MS", "2000"))
+    TEAMS_POLL_HIDDEN_MS = int(os.getenv("TEAMS_POLL_HIDDEN_MS", "15000"))
+    TEAMS_POLL_IDLE_MS = int(os.getenv("TEAMS_POLL_IDLE_MS", "30000"))
+
+    # Seconds of silence after which a member is shown as away / offline.
+    TEAMS_PRESENCE_ONLINE_SECONDS = int(
+        os.getenv("TEAMS_PRESENCE_ONLINE_SECONDS", "60"))
+    TEAMS_PRESENCE_AWAY_SECONDS = int(
+        os.getenv("TEAMS_PRESENCE_AWAY_SECONDS", "300"))
+
+    # Chat attachments are bounded FAR below MAX_CONTENT_LENGTH (2 GB, sized
+    # for reference-file uploads). Without its own cap, one dragged file
+    # could push a multi-gigabyte body through a gunicorn worker.
+    TEAMS_ATTACHMENT_MAX_MB = int(os.getenv("TEAMS_ATTACHMENT_MAX_MB", "25"))
+
+    # ---- Meetings ----
+    # Which meeting provider adapter serves new rooms. "jitsi" is the only
+    # one shipped; the registry exists so LiveKit/Daily is one new file.
+    TEAMS_MEETING_PROVIDER = os.getenv("TEAMS_MEETING_PROVIDER", "jitsi")
+
+    # Jitsi. The public meet.jit.si needs no account and no credentials, so
+    # meetings work out of the box. Point this at a self-hosted deployment
+    # (and set the JWT pair) to get server-side authorisation - on the public
+    # instance, anyone who learns a room name can join it.
+    TEAMS_JITSI_DOMAIN = os.getenv("TEAMS_JITSI_DOMAIN", "meet.jit.si")
+    TEAMS_JITSI_APP_ID = os.getenv("TEAMS_JITSI_APP_ID")
+    TEAMS_JITSI_JWT_SECRET = os.getenv("TEAMS_JITSI_JWT_SECRET")
+    # Hold joiners in a lobby until someone admits them. Cheap mitigation for
+    # the public-instance room-name problem above; on by default.
+    TEAMS_JITSI_LOBBY = (
+        os.getenv("TEAMS_JITSI_LOBBY", "True").lower() == "true"
+    )

@@ -1,0 +1,171 @@
+{% extends "base_teams.html" %}
+
+{% block title %}#{{ channel.key }} settings · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid fa-gear"></i>
+  <div class="txt">
+    <b>#{{ channel.key }}</b><span>Channel settings</span>
+  </div>
+  {% if channel.is_archived %}<span class="badge inactive">Archived</span>{% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page narrow">
+
+  {# Mute is per person, so it sits above the owner-only sections and is
+     available to every member. #}
+  <section class="table-card">
+    <div class="tm-settings-row">
+      <div>
+        <b>Notifications</b>
+        <p class="tm-note">
+          {% if muted %}
+            Muted — this channel does not raise an unread badge.
+            You are still notified when someone @mentions you.
+          {% else %}
+            You see an unread badge for new messages here.
+          {% endif %}
+        </p>
+      </div>
+      <form method="POST" action="{{ url_for('teams.channel_mute', channel_id=channel.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="muted" value="{{ '0' if muted else '1' }}">
+        <button type="submit" class="btn btn-secondary btn-sm">
+          <i class="fa-solid {{ 'fa-bell' if muted else 'fa-bell-slash' }}"></i>
+          {{ 'Unmute' if muted else 'Mute' }}
+        </button>
+      </form>
+    </div>
+  </section>
+
+  {% if can_administer %}
+    <section class="form-card">
+      <form method="POST" action="{{ url_for('teams.channel_settings', channel_id=channel.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="details">
+
+        <div class="form-group">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" maxlength="60" required
+                 value="{{ channel.name or channel.key }}">
+          <p class="form-hint">
+            The handle <code>#{{ channel.key }}</code> does not change —
+            it is in every link anyone has already shared.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description <span class="tm-note">optional</span></label>
+          <input type="text" id="description" name="description" maxlength="255"
+                 value="{{ channel.description or '' }}">
+        </div>
+
+        <div class="tm-form-actions">
+          <button type="submit" class="btn">Save</button>
+        </div>
+      </form>
+    </section>
+  {% endif %}
+
+  <section class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Members ({{ members|length }})</h2>
+    </div>
+
+    <ul class="teams-people-list">
+      {% for member in members %}
+        <li>
+          <div class="tm-member-row">
+            <span class="teams-avatar">
+              {% set src = avatar_url(member.user) %}
+              {% if src %}<img src="{{ src }}" alt="">
+              {% else %}{{ member.user.initials }}{% endif %}
+            </span>
+            <span class="txt">
+              <b>{{ member.user.name }}</b>
+              <span>{{ member.user.designation or role_label(member.user.role) }}</span>
+            </span>
+            {% if member.role == 'owner' %}<span class="badge">Owner</span>{% endif %}
+
+            {% if can_administer and member.user_id != current_user.id %}
+              <form method="POST"
+                    action="{{ url_for('teams.channel_settings', channel_id=channel.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove_member">
+                <input type="hidden" name="user_id" value="{{ member.user_id }}">
+                <button type="submit" class="row-action">Remove</button>
+              </form>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if can_administer and addable %}
+      <form class="tm-add-member" method="POST"
+            action="{{ url_for('teams.channel_settings', channel_id=channel.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_member">
+        <select name="user_id" required aria-label="Add someone">
+          <option value="">Add someone…</option>
+          {% for person in addable %}
+            <option value="{{ person.id }}">{{ person.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm">Add</button>
+      </form>
+      {% if channel.visibility == 'private' %}
+        <p class="form-hint tm-add-hint">
+          This channel is private — adding someone here is the only way in.
+        </p>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="table-card">
+    <div class="card-header"><h2 class="card-title">Danger zone</h2></div>
+    <div class="tm-settings-row">
+      <div>
+        <b>Leave channel</b>
+        <p class="tm-note">
+          You stop seeing it. {% if channel.visibility == 'private' %}
+          It is private, so you would need an owner to add you back.
+          {% else %}You can rejoin from Browse.{% endif %}
+        </p>
+      </div>
+      <form method="POST" action="{{ url_for('teams.leave_channel', channel_id=channel.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger btn-sm">Leave</button>
+      </form>
+    </div>
+
+    {% if can_administer %}
+      <div class="tm-settings-row">
+        <div>
+          <b>{{ 'Restore channel' if channel.is_archived else 'Archive channel' }}</b>
+          <p class="tm-note">
+            {% if channel.is_archived %}
+              Makes it writable again and returns it to everyone's sidebar.
+            {% else %}
+              Keeps the history and makes it read-only. Nothing is deleted —
+              the history is usually why anyone wants the channel back.
+            {% endif %}
+          </p>
+        </div>
+        <form method="POST"
+              action="{{ url_for('teams.channel_settings', channel_id=channel.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action"
+                 value="{{ 'unarchive' if channel.is_archived else 'archive' }}">
+          <button type="submit" class="btn btn-secondary btn-sm">
+            {{ 'Restore' if channel.is_archived else 'Archive' }}
+          </button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

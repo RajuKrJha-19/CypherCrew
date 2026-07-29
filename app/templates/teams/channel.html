@@ -1,0 +1,187 @@
+{% extends "base_teams.html" %}
+
+{% block title %}{{ channel.display_name(current_user) }} · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid {% if channel.is_dm %}fa-user{% elif channel.visibility == 'private' %}fa-lock{% else %}fa-hashtag{% endif %}"></i>
+  <div class="txt">
+    <b>{{ channel.display_name(current_user) }}</b>
+    {% if channel.description %}<span>{{ channel.description }}</span>
+    {% elif channel.client %}<span>{{ channel.client.client_name }}</span>{% endif %}
+  </div>
+  {% if not channel.is_dm %}
+    <span class="teams-member-count" title="Members">
+      <i class="fa-solid fa-user-group"></i> {{ members|length }}</span>
+  {% endif %}
+  {% if channel.is_archived %}
+    <span class="badge inactive">Archived</span>
+  {% endif %}
+
+  <div class="tm-channel-actions">
+    <a class="tm-action" title="Search this conversation" aria-label="Search"
+       href="{{ url_for('teams.search', channel=channel.id) }}">
+      <i class="fa-solid fa-magnifying-glass"></i></a>
+
+    {% if not channel.is_dm and member %}
+      <a class="tm-action" title="Channel settings" aria-label="Settings"
+         href="{{ url_for('teams.channel_settings', channel_id=channel.id) }}">
+        <i class="fa-solid fa-gear"></i></a>
+    {% endif %}
+
+    {% if can_post %}
+      {# Everyone in the channel is invited, so a huddle needs no invite
+         list - which is the whole difference between this and scheduling. #}
+      <form method="POST"
+            action="{{ url_for('teams.channel_call', channel_id=channel.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary btn-sm"
+                title="Start a call with this channel">
+          <i class="fa-solid fa-video"></i> Start a call
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# Names the @-mention picker offers. Same list the server matches against
+   (routes/teams.py passes active_user_names), so it can never suggest
+   someone find_mentioned_users would then fail to resolve. #}
+<script>
+window.MENTION_USERS = {{ (mention_users or [])|tojson }};
+// Same cap the server enforces. Checked here too so an oversized file is
+// refused instantly instead of after uploading it.
+window.TEAMS_MAX_UPLOAD_MB = {{ config.TEAMS_ATTACHMENT_MAX_MB }};
+</script>
+
+<div class="tm-shell">
+{# The whole chat view is one component as far as the client is concerned.
+   data-channel and data-cursor are the poller's starting state; everything
+   after the first paint arrives through /teams/api/sync.
+
+   NOT data-turbo-permanent: this is page content, and making it permanent
+   would leave channel A's messages on screen inside channel B. #}
+<section class="tm-chat"
+         data-teams-chat
+         data-channel="{{ channel.id }}"
+         data-cursor="{{ cursor }}"
+         data-can-post="{{ '1' if can_post else '0' }}">
+
+  <div class="tm-scroll" data-tm-scroll>
+    {% if messages %}
+      <div class="tm-list" data-tm-list>
+        {% for message in messages %}
+          {% include "teams/_message.html" with context %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="tm-list" data-tm-list></div>
+      <div class="empty-state tm-empty" data-tm-empty>
+        <i class="fa-solid fa-comments"></i>
+        <h3>{{ 'Say hello' if channel.is_dm else 'This channel is empty' }}</h3>
+        <p>
+          {% if channel.is_dm %}
+            This is the start of your conversation with
+            {{ channel.display_name(current_user) }}.
+          {% else %}
+            Be the first to post in <strong>#{{ channel.key }}</strong>
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="tm-typing" data-tm-typing hidden></div>
+
+  {% if can_post %}
+    <form class="tm-composer" data-tm-composer
+          action="{{ url_for('teams.api_post_message', channel_id=channel.id) }}"
+          method="POST">
+      {# The form posts through fetch; csrf.js attaches X-CSRFToken. The
+         hidden field is the no-JS fallback path. #}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {# data-emoji-field and data-mention-field are the opt-ins for the two
+         shared pickers the ERP already ships; neither needs any wiring. #}
+      <textarea name="body" rows="1" data-emoji-field data-mention-field
+                data-tm-input
+                placeholder="Message {{ '' if channel.is_dm else '#' }}{{ channel.display_name(current_user) }}"
+                aria-label="Write a message"></textarea>
+
+      <input type="file" multiple hidden data-tm-file
+             aria-hidden="true" tabindex="-1">
+      <button type="button" class="tm-attach" data-tm-attach
+              title="Attach files" aria-label="Attach files">
+        <i class="fa-solid fa-paperclip"></i>
+      </button>
+
+      <button type="submit" class="btn" data-tm-send aria-label="Send">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </form>
+
+    {# Chosen files, before they are sent. Shown under the composer rather
+       than inside it so a long list never squeezes the text box. #}
+    <div class="tm-pending-files" data-tm-pending hidden></div>
+
+    {# Drop target covers the whole message area, so you can drag a file
+       anywhere over the conversation rather than aiming at the composer. #}
+    <div class="tm-dropzone" data-tm-dropzone hidden>
+      <div><i class="fa-solid fa-cloud-arrow-up"></i>
+        Drop to attach — up to {{ config.TEAMS_ATTACHMENT_MAX_MB }} MB each</div>
+    </div>
+    <p class="tm-hint">
+      <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+    </p>
+  {% elif channel.is_archived %}
+    <div class="tm-locked">
+      <i class="fa-solid fa-box-archive"></i>
+      This channel is archived and is read-only.
+    </div>
+  {% else %}
+    <form class="tm-locked" method="POST"
+          action="{{ url_for('teams.join_channel', channel_id=channel.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <span>You are viewing <strong>#{{ channel.key }}</strong> but have not joined it.</span>
+      <button type="submit" class="btn">Join channel</button>
+    </form>
+  {% endif %}
+</section>
+
+{# Thread pane. Hidden until a reply is opened, and populated from the SAME
+   sync tick as the channel (?thread=&tafter=), so a thread stays live
+   without a second poller. The root message is cloned from the list rather
+   than re-fetched - it is already on screen and already rendered by
+   teams/_message.html. #}
+<aside class="tm-thread" data-tm-thread hidden aria-label="Thread">
+  <header class="tm-thread-head">
+    <b>Thread</b>
+    <button type="button" class="tm-action" data-tm-thread-close
+            title="Close thread" aria-label="Close thread">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </header>
+
+  <div class="tm-thread-scroll" data-tm-thread-scroll>
+    <div class="tm-thread-root" data-tm-thread-root></div>
+    <div class="tm-thread-divider" data-tm-thread-count></div>
+    <div class="tm-list" data-tm-thread-list></div>
+  </div>
+
+  {% if can_post %}
+    <form class="tm-composer" data-tm-thread-composer
+          action="{{ url_for('teams.api_post_message', channel_id=channel.id) }}"
+          method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="body" rows="1" data-emoji-field data-mention-field
+                data-tm-thread-input placeholder="Reply in thread"
+                aria-label="Reply in thread"></textarea>
+      <button type="submit" class="btn" aria-label="Send reply">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </form>
+  {% endif %}
+</aside>
+</div>
+{% endblock %}

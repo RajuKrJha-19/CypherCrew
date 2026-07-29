@@ -1,5 +1,22 @@
 bind = "0.0.0.0:8000"
 workers = 2
+
+# Threaded workers, not sync.
+#
+# With the default sync worker each process serves exactly one request at a
+# time, so two workers means two concurrent requests for the whole app. That
+# was survivable when every request was a page render. It stopped being so
+# once Teams arrived: a chat tab polls /teams/api/sync every couple of
+# seconds, and a chat attachment streams up to TEAMS_ATTACHMENT_MAX_MB
+# through a worker - one 25 MB upload on a slow line would hold half the
+# server for its entire duration, and every poll behind it would queue.
+#
+# Threads are the right lever here rather than gevent: this workload is
+# I/O-bound on Postgres and R2, and gthread needs no monkey-patching and no
+# audit of blocking calls. 2 x 4 = 8 concurrent requests.
+worker_class = "gthread"
+threads = 4
+
 timeout = 120
 
 

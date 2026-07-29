@@ -1,0 +1,162 @@
+{# Cypher-Teams' own left sidebar — the module's primary navigation, so
+   Teams reads as a standalone product. "Back to CypherCrew" returns to the
+   ERP. Unlike the Studio sidebar this one is largely data-driven: the nav
+   IS the conversation list, supplied by teams_bp's context processor.
+
+   Every label is wrapped in a <span> so the collapsed rail can hide the
+   words and leave the icons, matching both other sidebars. #}
+{% set ep = request.endpoint or '' %}
+{% set active_id = teams_active_channel_id %}
+
+<aside class="teams-sidebar" id="teamsSidebar">
+  <div class="teams-brand">
+    <div class="logo"><i class="fa-solid fa-comments"></i></div>
+    <div class="txt"><b>Teams</b><span>by CypherCrew</span></div>
+    <button type="button" class="teams-collapse-btn" id="teamsCollapseBtn"
+            aria-label="Collapse sidebar" title="Collapse sidebar">
+      <i class="fa-solid fa-angles-left"></i>
+    </button>
+  </div>
+
+  <a class="teams-exit" href="{{ url_for('dashboard.index') }}" data-turbo="false"
+     title="Back to CypherCrew">
+    <i class="fa-solid fa-arrow-left-long"></i> <span>Back to CypherCrew</span>
+  </a>
+
+  <nav class="teams-nav" aria-label="Teams navigation">
+
+    <a href="{{ url_for('teams.search') }}" title="Search messages"
+       class="{{ 'active' if ep == 'teams.search' }}">
+      <i class="fa-solid fa-magnifying-glass"></i> <span>Search</span></a>
+
+    <a href="{{ url_for('teams.browse') }}" title="Browse channels and people"
+       class="{{ 'active' if ep == 'teams.browse' }}">
+      <i class="fa-solid fa-compass"></i> <span>Browse</span></a>
+
+    <a href="{{ url_for('teams.meetings') }}" title="Meetings"
+       class="{{ 'active' if ep.startswith('teams.meeting') }}">
+      <i class="fa-solid fa-video"></i> <span>Meetings</span></a>
+
+    <div class="teams-nav-section">
+      Channels
+      <a class="teams-nav-add" href="{{ url_for('teams.channel_new') }}"
+         title="Create a channel" aria-label="Create a channel">
+        <i class="fa-solid fa-plus"></i></a>
+    </div>
+
+    {% for row in teams_channels %}
+      {% set c = row.channel %}
+      <a href="{{ url_for('teams.channel', channel_id=c.id) }}"
+         title="#{{ c.key }}{{ ' (muted)' if row.muted }}"
+         data-teams-channel="{{ c.id }}"
+         class="{{ 'active' if active_id == c.id }}{{ ' has-unread' if row.unread and active_id != c.id }}{{ ' is-muted' if row.muted }}">
+        <i class="fa-solid {{ 'fa-lock' if c.visibility == 'private' else 'fa-hashtag' }}"></i>
+        <span>{{ c.name or c.key }}</span>
+        {# Channels get a dot, not a number: an exact count means scanning
+           teams_messages, and on a busy channel nobody reads the digit
+           anyway. DMs below get the number, where it actually helps. #}
+        <span class="teams-unread-dot" data-teams-unread="{{ c.id }}"
+              {% if not row.unread or active_id == c.id %}hidden{% endif %}></span>
+      </a>
+    {% else %}
+      <p class="teams-nav-empty">
+        <a href="{{ url_for('teams.channel_new') }}">Create a channel</a>
+      </p>
+    {% endfor %}
+
+    <div class="teams-nav-section">
+      Direct messages
+      <a class="teams-nav-add" href="{{ url_for('teams.browse') }}#people"
+         title="Start a conversation" aria-label="Start a conversation">
+        <i class="fa-solid fa-plus"></i></a>
+    </div>
+
+    {% for row in teams_dms %}
+      {% set c = row.channel %}
+      {% set other = c.other_member(current_user) %}
+      <a href="{{ url_for('teams.channel', channel_id=c.id) }}"
+         title="{{ c.display_name(current_user) }}"
+         data-teams-channel="{{ c.id }}"
+         class="teams-dm-link {{ 'active' if active_id == c.id }}{{ ' has-unread' if row.unread and active_id != c.id }}">
+        {% if other %}
+          <span class="teams-avatar sm">
+            {% set src = avatar_url(other) %}
+            {% if src %}<img src="{{ src }}" alt="">
+            {% else %}{{ other.initials }}{% endif %}
+            {# Painted live by teams-chat.js from the presence already in
+               every sync tick. Starts offline so a stale dot is never
+               shown as online before the first tick lands. #}
+            <span class="tm-presence is-offline"
+                  data-presence-user="{{ other.id }}"></span>
+          </span>
+        {% else %}
+          <i class="fa-solid fa-user"></i>
+        {% endif %}
+        <span>{{ c.display_name(current_user) }}</span>
+        <span class="nav-count" data-teams-count="{{ c.id }}"
+              {% if not row.unread or active_id == c.id %}hidden{% endif %}></span>
+      </a>
+    {% else %}
+      <p class="teams-nav-empty">
+        <a href="{{ url_for('teams.browse') }}#people">Message a colleague</a>
+      </p>
+    {% endfor %}
+  </nav>
+</aside>
+
+<script>
+(function () {
+    // Collapse to a rail, remembered across visits. Bound once and by
+    // delegation: the Teams shell is re-rendered by Turbo on every
+    // navigation, so a listener attached to the button itself would stack
+    // and the second click would toggle twice.
+    if (window.__teamsCollapseBound) return;
+    window.__teamsCollapseBound = true;
+
+    var KEY = "teams_nav_collapsed";
+
+    function stored() {
+        try { return localStorage.getItem(KEY) === "yes"; } catch (e) { return false; }
+    }
+
+    function setButton(collapsed) {
+        var btn = document.getElementById("teamsCollapseBtn");
+        if (!btn) return;
+        var icon = btn.querySelector("i");
+        var label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        if (icon) {
+            icon.classList.toggle("fa-angles-left", !collapsed);
+            icon.classList.toggle("fa-angles-right", collapsed);
+        }
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
+    }
+
+    function apply(collapsed) {
+        document.body.classList.toggle("teams-nav-collapsed", collapsed);
+        setButton(collapsed);
+    }
+
+    document.addEventListener("click", function (event) {
+        var btn = event.target.closest
+            ? event.target.closest("#teamsCollapseBtn") : null;
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        var collapsed = !document.body.classList.contains("teams-nav-collapsed");
+        try { localStorage.setItem(KEY, collapsed ? "yes" : "no"); } catch (e) {}
+        apply(collapsed);
+    });
+
+    apply(stored());
+
+    // Turbo renders a fresh <body> without the class; put it back before
+    // the new page is shown, or the rail flashes open on every navigation.
+    document.addEventListener("turbo:before-render", function (event) {
+        if (stored() && event.detail && event.detail.newBody) {
+            event.detail.newBody.classList.add("teams-nav-collapsed");
+        }
+    });
+    document.addEventListener("turbo:load", function () { setButton(stored()); });
+})();
+</script>

@@ -11,8 +11,15 @@ out on sign-in, because `dashboard.index`'s if-chain fell through to logout.
 
 Everything downstream is derived from ROLE_LIST below: the dropdowns, the
 badge colours, the "who counts as management" checks, the "every real user"
-queries and the dashboard each role lands on. Adding a sixteenth role is one
-entry here plus, if it needs different powers, one `defaults` set.
+queries and the dashboard each role lands on. Adding another role is one
+entry here plus, if it needs different powers, one `defaults` set. Nothing
+outside this module names a role value - verified by grep, and worth
+keeping true.
+
+The catalog is a four-rung ladder per discipline (Intern, the craft grade,
+the senior craft grade, Manager). Values are stored strings and never
+change once shipped; the ladder that preceded this one used senior_* and
+junior_* prefixes, and migration a7c4e2f81d36 rewrites those in place.
 
 Two things deliberately NOT here:
 
@@ -30,16 +37,23 @@ from dataclasses import dataclass, field
 
 #: Tiers, coarsest to finest. Used for badge colour, for "may this person
 #: administer that person" and for which dashboard someone lands on.
+#:
+#: OWNER and MANAGEMENT administer the *system*. LEAD downwards is the
+#: craft ladder - a Social Media Manager runs a pod, not the software, so
+#: they are deliberately not MANAGEMENT and land on the individual
+#: dashboard like everyone else who delivers work.
 TIER_OWNER = "owner"
 TIER_MANAGEMENT = "management"
+TIER_LEAD = "lead"
 TIER_SENIOR = "senior"
 TIER_JUNIOR = "junior"
+TIER_INTERN = "intern"
 TIER_GENERAL = "general"
 
 #: Highest first. `assignable_by` uses this ordering to enforce that you may
 #: only create or edit people below your own tier.
-TIER_ORDER = (TIER_OWNER, TIER_MANAGEMENT, TIER_SENIOR, TIER_JUNIOR,
-              TIER_GENERAL)
+TIER_ORDER = (TIER_OWNER, TIER_MANAGEMENT, TIER_LEAD, TIER_SENIOR,
+              TIER_JUNIOR, TIER_INTERN, TIER_GENERAL)
 
 
 @dataclass(frozen=True)
@@ -79,15 +93,44 @@ GROUP_GENERAL = "General"
 
 
 #: Permission bundles, named so the table below reads as intent rather than
-#: as a wall of strings. A senior of any craft gets the same core deal:
-#: see the whole board, hand work to a junior, and gate quality at Core
-#: Review. What separates the disciplines is what they get *on top*.
+#: as a wall of strings.
+#:
+#: The ladder is four rungs per discipline - Intern, the craft grade, the
+#: senior craft grade, and Manager - and each rung is a real step in what
+#: someone may do, not just a nicer word on a profile:
+#:
+#:   Intern            works only their own queue.
+#:   Craft grade       same, plus the Studio where the craft needs it.
+#:   Senior craft      sees the whole board, hands out work, and gates
+#:                     quality at Core Review.
+#:   Manager           all of that, plus the people-and-planning side:
+#:                     restructuring work, leave, meetings, team numbers.
+#:
+#: Titles follow the craft rather than a single word. Agencies say "Senior
+#: Video Editor", not "Senior Video Executive" - "Executive" is a social
+#: media and account-management term, and using it everywhere would read
+#: as invented.
+
+#: Nothing granted. A junior's rights over their own queue are implicit
+#: (the assignee branches in tasks.py and task_status.can_move), not
+#: granted - so an empty set here is the correct, deliberate value.
+_INTERN = frozenset()
+
+_CRAFT = frozenset()
+
 _SENIOR_CRAFT = frozenset({
     "view_all_tasks",
     "assign_tasks",
     "approve_tasks",
     "view_client_stats",
     "view_reports",
+})
+
+_CRAFT_MANAGER = _SENIOR_CRAFT | frozenset({
+    "manage_tasks",
+    "view_team_performance",
+    "manage_leaves",
+    "manage_meetings",
 })
 
 _ADMIN_ALL = frozenset({
@@ -132,110 +175,164 @@ ROLE_LIST = (
     ),
 
     # -- Social media --------------------------------------------------
+    # The one discipline that keeps "Executive": in agencies that word
+    # belongs to social and account work, and it is what the job is called.
     Role(
-        value="senior_social_media_manager",
-        label="Senior Social Media Manager",
-        tier=TIER_SENIOR,
-        discipline="social_media_manager",
-        # Owns clients end to end: plans the work, hands it out, signs it
-        # off to the client, and runs the channels it goes out on.
-        defaults=frozenset({
-            "view_all_tasks", "assign_tasks", "manage_tasks",
-            "approve_tasks", "publish_tasks",
-            "manage_social", "connect_social_accounts",
-            "manage_clients", "edit_monthly_targets", "view_client_stats",
-            "view_reports", "view_team_performance",
-            "manage_leaves", "manage_meetings",
-        }),
+        value="social_media_intern",
+        label="Social Media Intern",
+        tier=TIER_INTERN,
+        discipline="social_media",
+        defaults=_INTERN,
     ),
     Role(
-        value="junior_social_media_manager",
-        label="Junior Social Media Manager",
+        value="social_media_executive",
+        label="Social Media Executive",
         tier=TIER_JUNIOR,
-        discipline="social_media_manager",
-        # Runs the day-to-day of a pod - schedules, chases, reviews the
-        # craft - but the client-facing sign-off is not theirs yet.
-        defaults=frozenset({
-            "view_all_tasks", "assign_tasks", "approve_tasks",
-            "manage_social", "view_client_stats", "view_reports",
-            "manage_meetings",
-        }),
+        discipline="social_media",
+        # Composes, schedules, engages. Approval belongs to the manager,
+        # which is the whole point of the executive/manager split.
+        defaults=frozenset({"manage_social"}),
     ),
     Role(
-        value="senior_social_media_executive",
+        value="social_media_senior_executive",
         label="Senior Social Media Executive",
         tier=TIER_SENIOR,
-        discipline="social_media_executive",
-        # Executes: composes, schedules, engages. Approval belongs to the
-        # manager, which is the whole point of the executive/manager split.
+        discipline="social_media",
         defaults=frozenset({
             "view_all_tasks", "manage_social", "view_client_stats",
         }),
     ),
     Role(
-        value="junior_social_media_executive",
-        label="Junior Social Media Executive",
-        tier=TIER_JUNIOR,
-        discipline="social_media_executive",
-        defaults=frozenset({"manage_social"}),
+        value="social_media_manager",
+        label="Social Media Manager",
+        tier=TIER_LEAD,
+        discipline="social_media",
+        # Owns clients end to end: plans the work, hands it out, signs it
+        # off to the client, and runs the channels it goes out on.
+        defaults=_CRAFT_MANAGER | frozenset({
+            "publish_tasks",
+            "manage_social", "connect_social_accounts",
+            "manage_clients", "edit_monthly_targets",
+        }),
     ),
 
     # -- Creative ------------------------------------------------------
     Role(
-        value="senior_video_editor",
+        value="video_editor_intern",
+        label="Video Editing Intern",
+        tier=TIER_INTERN,
+        discipline="video_editor",
+        defaults=_INTERN,
+    ),
+    Role(
+        value="video_editor",
+        label="Video Editor",
+        tier=TIER_JUNIOR,
+        discipline="video_editor",
+        defaults=_CRAFT,
+    ),
+    Role(
+        value="video_editor_senior",
         label="Senior Video Editor",
         tier=TIER_SENIOR,
         discipline="video_editor",
         defaults=_SENIOR_CRAFT,
     ),
     Role(
-        value="junior_video_editor",
-        label="Junior Video Editor",
-        tier=TIER_JUNIOR,
+        value="video_editor_manager",
+        label="Video Editing Manager",
+        tier=TIER_LEAD,
         discipline="video_editor",
+        defaults=_CRAFT_MANAGER,
+    ),
+
+    Role(
+        value="graphic_designer_intern",
+        label="Graphic Design Intern",
+        tier=TIER_INTERN,
+        discipline="graphic_designer",
+        defaults=_INTERN,
     ),
     Role(
-        value="senior_graphic_designer",
+        value="graphic_designer",
+        label="Graphic Designer",
+        tier=TIER_JUNIOR,
+        discipline="graphic_designer",
+        defaults=_CRAFT,
+    ),
+    Role(
+        value="graphic_designer_senior",
         label="Senior Graphic Designer",
         tier=TIER_SENIOR,
         discipline="graphic_designer",
         defaults=_SENIOR_CRAFT,
     ),
     Role(
-        value="junior_graphic_designer",
-        label="Junior Graphic Designer",
-        tier=TIER_JUNIOR,
+        value="graphic_designer_manager",
+        label="Design Manager",
+        tier=TIER_LEAD,
         discipline="graphic_designer",
+        defaults=_CRAFT_MANAGER,
     ),
 
     # -- Content -------------------------------------------------------
     Role(
-        value="senior_content_writer",
+        value="content_writer_intern",
+        label="Content Intern",
+        tier=TIER_INTERN,
+        discipline="content_writer",
+        defaults=_INTERN,
+    ),
+    Role(
+        value="content_writer",
+        label="Content Writer",
+        tier=TIER_JUNIOR,
+        discipline="content_writer",
+        defaults=_CRAFT,
+    ),
+    Role(
+        value="content_writer_senior",
         label="Senior Content Writer",
         tier=TIER_SENIOR,
         discipline="content_writer",
         defaults=_SENIOR_CRAFT,
     ),
     Role(
-        value="junior_content_writer",
-        label="Junior Content Writer",
-        tier=TIER_JUNIOR,
+        value="content_writer_manager",
+        label="Content Manager",
+        tier=TIER_LEAD,
         discipline="content_writer",
+        defaults=_CRAFT_MANAGER,
     ),
 
     # -- Engineering ---------------------------------------------------
     Role(
-        value="senior_software_developer",
+        value="software_developer_intern",
+        label="Software Development Intern",
+        tier=TIER_INTERN,
+        discipline="software_developer",
+        defaults=_INTERN,
+    ),
+    Role(
+        value="software_developer",
+        label="Software Developer",
+        tier=TIER_JUNIOR,
+        discipline="software_developer",
+        defaults=_CRAFT,
+    ),
+    Role(
+        value="software_developer_senior",
         label="Senior Software Developer",
         tier=TIER_SENIOR,
         discipline="software_developer",
         defaults=_SENIOR_CRAFT,
     ),
     Role(
-        value="junior_software_developer",
-        label="Junior Software Developer",
-        tier=TIER_JUNIOR,
+        value="engineering_manager",
+        label="Engineering Manager",
+        tier=TIER_LEAD,
         discipline="software_developer",
+        defaults=_CRAFT_MANAGER,
     ),
 
     # -- General -------------------------------------------------------
@@ -355,18 +452,22 @@ def defaults_for(value):
     return set(role.defaults) if role is not None else set()
 
 
+#: Discipline -> dropdown group. A dict rather than an if-chain so adding a
+#: discipline is one entry, and a discipline nobody mapped falls to General
+#: instead of silently disappearing from the picker.
+_DISCIPLINE_GROUP = {
+    "social_media": GROUP_SOCIAL,
+    "video_editor": GROUP_CREATIVE,
+    "graphic_designer": GROUP_CREATIVE,
+    "content_writer": GROUP_CONTENT,
+    "software_developer": GROUP_ENGINEERING,
+}
+
+
 def _group_of(role):
     if role.tier in (TIER_OWNER, TIER_MANAGEMENT):
         return GROUP_LEADERSHIP
-    if role.discipline in ("social_media_manager", "social_media_executive"):
-        return GROUP_SOCIAL
-    if role.discipline in ("video_editor", "graphic_designer"):
-        return GROUP_CREATIVE
-    if role.discipline == "content_writer":
-        return GROUP_CONTENT
-    if role.discipline == "software_developer":
-        return GROUP_ENGINEERING
-    return GROUP_GENERAL
+    return _DISCIPLINE_GROUP.get(role.discipline, GROUP_GENERAL)
 
 
 GROUP_ORDER = (GROUP_LEADERSHIP, GROUP_SOCIAL, GROUP_CREATIVE, GROUP_CONTENT,

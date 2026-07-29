@@ -39,6 +39,18 @@
 
     const widgets = [];
 
+    // Present only when Cypher-Teams is switched on (see partials/sidebar.html).
+    // Looked up per call rather than cached: Turbo swaps the <body>, and a
+    // reference captured at load would point at a detached node after the
+    // first navigation - the badge would then silently stop updating.
+    function paintTeamsBadge(value) {
+        const el = document.getElementById("teamsNavCount");
+        if (!el) return;
+        const count = Number(value) || 0;
+        el.hidden = count === 0;
+        el.textContent = count > 99 ? "99+" : String(count);
+    }
+
     function createWidget(config) {
 
         const btn = document.getElementById(config.btnId);
@@ -135,6 +147,13 @@
                 );
 
                 const data = await response.json();
+
+                // The Teams sidebar badge rides this poll rather than
+                // running one of its own - see _teams_unread() in
+                // routes/notifications.py. Both widgets receive it and
+                // both paint the same element; it is idempotent, and
+                // that beats singling one of them out as the owner.
+                paintTeamsBadge(data.teams_unread);
 
                 const count = data.unread_count || 0;
 

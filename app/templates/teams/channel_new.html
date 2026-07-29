@@ -1,0 +1,68 @@
+{% extends "base_teams.html" %}
+
+{% block title %}New channel · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid fa-plus"></i>
+  <div class="txt"><b>New channel</b><span>Start a conversation</span></div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page narrow">
+  <section class="form-card">
+    <form method="POST" action="{{ url_for('teams.channel_new') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" maxlength="60" required
+               autocomplete="off" placeholder="Design team">
+        <p class="form-hint">
+          Becomes a handle like <code>#design-team</code>.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description <span class="tm-note">optional</span></label>
+        <input type="text" id="description" name="description" maxlength="255"
+               placeholder="What is this channel for?">
+      </div>
+
+      <div class="form-group">
+        <label for="client_id">Client <span class="tm-note">optional</span></label>
+        <select id="client_id" name="client_id">
+          <option value="">Internal — not tied to a client</option>
+          {% for client in clients %}
+            <option value="{{ client.id }}">{{ client.client_name }}</option>
+          {% endfor %}
+        </select>
+        <p class="form-hint">
+          Links the channel to a client so it sits alongside their tasks.
+        </p>
+      </div>
+
+      <fieldset class="form-group">
+        <legend>Visibility</legend>
+        <label class="studio-check">
+          <input type="radio" name="visibility" value="public" checked>
+          <span><b>Public</b> — anyone on the team can find and join it.</span>
+        </label>
+        <label class="studio-check">
+          <input type="radio" name="visibility" value="private">
+          {# Private is genuinely invisible, not just unjoinable: a
+             non-member gets a 404 rather than a 403, so probing ids
+             cannot confirm the channel exists. #}
+          <span><b>Private</b> — invite only. Non-members cannot see it exists.</span>
+        </label>
+      </fieldset>
+
+      <div class="tm-form-actions">
+        <button type="submit" class="btn">Create channel</button>
+        <a href="{{ url_for('teams.browse') }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

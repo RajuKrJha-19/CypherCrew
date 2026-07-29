@@ -59,3 +59,12 @@ from app.models.social_analytics import SocialAnalyticsSnapshot
 from app.models.social_audit import SocialAuditLog, ContentVersion
 from app.models.platform_rate_budget import PlatformRateBudget
 from app.models.data_deletion import DataDeletionRequest
+
+# --- Cypher-Teams ---
+from app.models.team_channel import TeamChannel, TeamChannelMember
+from app.models.team_message import (
+    TeamMessage,
+    TeamAttachment,
+    TeamReaction,
+)
+from app.models.team_presence import TeamPresence, TeamTyping

@@ -219,6 +219,16 @@ def create_app():
             from app.social.queue.autoworker import start_background_worker
             start_background_worker(app)
 
+    # Cypher-Teams. Same contract as the social engine: registered ONLY
+    # behind its flag, so with it off /teams 404s and nothing about chat or
+    # meetings is wired into request handling.
+    if app.config.get("TEAMS_ENABLED"):
+        from app.teams.providers.registry import load_meeting_providers
+        load_meeting_providers(app)
+
+        from app.routes.teams import teams_bp
+        app.register_blueprint(teams_bp)
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()
@@ -344,6 +354,54 @@ def create_app():
 
     from app.utils.mentions import highlight_mentions
     app.jinja_env.filters["mentions"] = highlight_mentions
+
+    # UTC-stored timestamp -> the team's clock. Templates have been doing
+    # `(x + timedelta(hours=5, minutes=30)).strftime(...)` inline, which
+    # means every one of them has to be handed `timedelta` in its context.
+    from app.utils.timezone import IST_OFFSET as _IST_OFFSET
+
+    def _ist(value, fmt="%d %b %Y • %I:%M %p"):
+        return (value + _IST_OFFSET).strftime(fmt) if value else ""
+
+    app.jinja_env.filters["ist"] = _ist
+
+    def _filesize(value):
+        """1536 -> '1.5 KB'. Decimal units, because that is what the
+        operating systems people compare against are showing them."""
+        try:
+            size = float(value or 0)
+        except (TypeError, ValueError):
+            return ""
+        if size <= 0:
+            return ""
+        for unit in ("B", "KB", "MB", "GB"):
+            if size < 1024 or unit == "GB":
+                return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+            size /= 1024
+        return ""
+
+    app.jinja_env.filters["filesize"] = _filesize
+
+    def _teams_file_url(attachment):
+        """Presigned preview URL for a chat attachment, memoised per request.
+
+        Every signature is a boto3 call, and a message list re-renders on
+        every poll - without the cache an open channel would mint the same
+        handful of URLs every two seconds for as long as it stayed open.
+        """
+        from flask import g
+
+        cache = getattr(g, "_teams_file_urls", None)
+        if cache is None:
+            cache = g._teams_file_urls = {}
+
+        key = attachment.object_key
+        if key not in cache:
+            from app.teams.services.attachments import preview_url
+            cache[key] = preview_url(attachment)
+        return cache[key]
+
+    app.jinja_env.globals["teams_file_url"] = _teams_file_url
 
     # Cache-bust static assets: append each file's mtime as ?v= so a
     # shipped CSS/JS change is fetched fresh instead of served from a

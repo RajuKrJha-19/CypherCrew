@@ -1,0 +1,145 @@
+{# ONE message.
+
+   This partial is the only thing that renders a message anywhere: the
+   first paint of a channel includes it in a loop, and /teams/api/sync
+   returns its output as the `html` of each delta entry. That is deliberate
+   — a second renderer in JavaScript would agree with this one on the day
+   it was written and drift ever after, and it would need its own escaping
+   rules for `|linkify|mentions` to boot.
+
+   `data-id` is what the client keys on when replacing a changed message,
+   and `data-cid` is what it uses to reconcile an optimistic bubble with
+   the real one that comes back. #}
+
+{# `viewer` is supplied by services/sync.py when a message arrives through a
+   poll, and is absent when channel.html includes this in its first-paint
+   loop. Defaulting here rather than at each call site is what guarantees
+   the two paths render identically - the first version of this partial
+   silently dropped the edit and delete controls on page load and grew them
+   back on the next tick. #}
+{% set viewer = viewer if viewer is defined and viewer else current_user %}
+{% set is_own = viewer and message.user_id == viewer.id %}
+
+<div class="tm-msg{{ ' is-own' if is_own }}{{ ' is-deleted' if message.is_deleted }}"
+     id="tm-{{ message.id }}"
+     data-id="{{ message.id }}"
+     {% if message.client_msg_id %}data-cid="{{ message.client_msg_id }}"{% endif %}>
+
+  <div class="tm-avatar">
+    {% if message.user %}
+      {% set src = avatar_url(message.user) %}
+      {% if src %}<img src="{{ src }}" alt="{{ message.user.name }}">
+      {% else %}{{ message.user.initials }}{% endif %}
+    {% else %}
+      <i class="fa-solid fa-user-slash"></i>
+    {% endif %}
+  </div>
+
+  <div class="tm-body">
+    <div class="tm-head">
+      {# user_id is SET NULL on delete so history survives a removed
+         account — render that state rather than crashing on .name. #}
+      <strong>{{ message.user.name if message.user else "Former teammate" }}</strong>
+      <time datetime="{{ message.created_at.isoformat() }}Z">
+        {{ message.created_at|ist }}
+      </time>
+      {% if message.edited_at and not message.is_deleted %}
+        <span class="tm-edited" title="Edited {{ message.edited_at|ist }}">edited</span>
+      {% endif %}
+    </div>
+
+    {% if message.is_deleted %}
+      <p class="tm-text tm-gone"><i class="fa-solid fa-ban"></i> Message deleted</p>
+    {% else %}
+      {# A meeting posts a card into its channel instead of a sentence.
+         It is a system message, so it carries no body - everything it
+         needs is in meta, which is why meta is JSONB and not columns. #}
+      {% if message.kind == 'meeting' and message.meta %}
+        <a class="tm-meeting-card"
+           href="{{ url_for('teams.meeting_detail', meeting_id=message.meta.get('meeting_id', 0)) }}">
+          <span class="tm-meeting-card-icon"><i class="fa-solid fa-video"></i></span>
+          <span class="tm-meeting-card-body">
+            <b>{{ message.meta.get('title') or 'Meeting' }}</b>
+            <span>{{ 'started a call' if message.meta.get('event') == 'started'
+                     else 'scheduled a meeting' }}</span>
+          </span>
+          <span class="tm-meeting-card-go">Open</span>
+        </a>
+      {% endif %}
+
+      {# A file dropped in with no caption is a real message, so the text
+         is only rendered when there is text. #}
+      {% if message.body %}
+        <p class="tm-text">{{ message.body|linkify|mentions }}</p>
+      {% endif %}
+
+      {% if message.attachments %}
+        <div class="tm-files">
+          {% for file in message.attachments %}
+            {% set url = teams_file_url(file) %}
+            {% if file.is_image and url %}
+              {# Opens in a new tab rather than a lightbox: the presigned
+                 URL is short-lived, and the browser's own image viewer
+                 handles zoom and save better than anything worth writing. #}
+              <a class="tm-file-image" href="{{ url }}" target="_blank"
+                 rel="noopener" title="{{ file.filename }}">
+                <img src="{{ url }}" alt="{{ file.filename }}" loading="lazy">
+              </a>
+            {% else %}
+              <a class="tm-file-chip" {% if url %}href="{{ url }}" target="_blank" rel="noopener"{% endif %}
+                 title="{{ file.filename }}">
+                <i class="fa-solid fa-paperclip"></i>
+                <span class="tm-file-name">{{ file.filename }}</span>
+                {% if file.size_bytes %}
+                  <span class="tm-file-size">{{ file.size_bytes|filesize }}</span>
+                {% endif %}
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% if message.reactions and not message.is_deleted %}
+      {# Grouped in the template rather than the service: it is presentation,
+         and the rows are already loaded eagerly on the message. #}
+      {% set grouped = {} %}
+      {% for r in message.reactions %}
+        {% set _ = grouped.update({r.emoji: grouped.get(r.emoji, []) + [r.user_id]}) %}
+      {% endfor %}
+      <div class="tm-reactions">
+        {% for emoji, user_ids in grouped.items() %}
+          <button type="button"
+                  class="tm-reaction{{ ' mine' if viewer and viewer.id in user_ids }}"
+                  data-react="{{ message.id }}" data-emoji="{{ emoji }}">
+            {{ emoji }} <span>{{ user_ids|length }}</span>
+          </button>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if message.reply_count and not message.is_deleted %}
+      <button type="button" class="tm-thread-link" data-thread="{{ message.id }}">
+        <i class="fa-solid fa-comment-dots"></i>
+        {{ message.reply_count }} {{ 'reply' if message.reply_count == 1 else 'replies' }}
+      </button>
+    {% endif %}
+  </div>
+
+  {% if not message.is_deleted %}
+  <div class="tm-actions">
+    <button type="button" class="tm-action" data-react-open="{{ message.id }}"
+            title="Add reaction" aria-label="Add reaction">
+      <i class="fa-regular fa-face-smile"></i></button>
+    <button type="button" class="tm-action" data-reply="{{ message.id }}"
+            title="Reply in thread" aria-label="Reply in thread">
+      <i class="fa-solid fa-reply"></i></button>
+    {% if is_own %}
+      <button type="button" class="tm-action" data-edit="{{ message.id }}"
+              title="Edit" aria-label="Edit"><i class="fa-solid fa-pen"></i></button>
+      <button type="button" class="tm-action danger" data-delete="{{ message.id }}"
+              title="Delete" aria-label="Delete"><i class="fa-solid fa-trash"></i></button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

@@ -279,7 +279,7 @@ def _to_ist_display(dt):
 
 
 def _asset_preview(a):
-    """A ClientAsset -> the dict the composer/library render: filename,
+    """A ClientAsset -> the dict the media library renders: filename,
     category, and a short-lived presigned thumbnail URL for images. Best-
     effort: a single unsignable object never breaks the list."""
     from app.social.media import pipeline
@@ -1434,7 +1434,6 @@ def compose():
             Client.client_name).all(),
         capabilities=_capabilities_map(),
         selected_account_ids=selected_account_ids,
-        selected_asset_ids=[],
         post_type="image",
         schedule_value=schedule_value,
         default_client_id=default_client_id,
@@ -1458,9 +1457,8 @@ def edit_post(post_id):
     # Reconstruct the shared form state from the post's targets.
     account_ids = [t.social_account_id for t in post.targets if t.social_account_id]
     first = post.targets[0] if post.targets else None
-    asset_ids, task_file_ids = [], []
+    task_file_ids = []
     if first:
-        asset_ids = [m.client_asset_id for m in first.media if m.client_asset_id]
         task_file_ids = [m.task_file_id for m in first.media if m.task_file_id]
     # Per-platform caption overrides (any target whose caption differs from the
     # shared base) + the first comment (shared across targets).
@@ -1507,7 +1505,6 @@ def edit_post(post_id):
             Client.client_name).all(),
         capabilities=_capabilities_map(),
         selected_account_ids=account_ids,
-        selected_asset_ids=asset_ids,
         post_type=(first.post_type if first else "image"),
         schedule_value=_to_ist_input(first.scheduled_for if first else None),
         first_comment=first_comment or "",
@@ -1523,6 +1520,32 @@ def edit_post(post_id):
             if first is not None and first.post_type == "story" else None),
         linkable_targets=_linkable_targets(post.client_id),
     )
+
+
+def _existing_client_asset_ids(post):
+    """Brand-asset media already attached to `post`, in order.
+
+    The composer stopped offering brand assets, so this is the only source
+    of them left. Read from the FIRST target, which is where the composer
+    has always mirrored the shared selection from, and read before the
+    rebuild below deletes the targets these rows hang off.
+
+    Empty for a post being created, which is exactly why a post composed
+    today never acquires one.
+    """
+    if post is None or post.id is None:
+        return []
+
+    targets = list(post.targets)
+    if not targets:
+        return []
+
+    seen, out = set(), []
+    for media in sorted(targets[0].media, key=lambda m: m.sort_order):
+        if media.client_asset_id and media.client_asset_id not in seen:
+            seen.add(media.client_asset_id)
+            out.append(media.client_asset_id)
+    return out
 
 
 def _apply_composer_form(post):
@@ -1541,7 +1564,13 @@ def _apply_composer_form(post):
     post_type = (request.form.get("post_type") or "image").strip()
     account_ids = request.form.getlist("account_ids", type=int)
     # ids arrive in the chosen order (carousel ordering) - preserved below.
-    asset_ids = request.form.getlist("asset_ids", type=int)
+    #
+    # Brand assets are NOT read from the form: the composer no longer offers
+    # them (a client's logo pack belongs to the client record, not to the
+    # flow of writing a post). They are carried forward from whatever the
+    # post already has instead - without that, opening an older post to fix
+    # a typo would silently strip its media, and nothing would say so.
+    asset_ids = _existing_client_asset_ids(post)
     task_file_ids = request.form.getlist("task_file_ids", type=int)
     publish_now = request.form.get("publish_mode") == "now"
     scheduled_for = (
@@ -2019,19 +2048,6 @@ def schedule_post(post_id):
             "success",
         )
     return redirect(url_for("social.post_detail", post_id=post.id))
-
-
-@social_bp.route("/api/clients/<int:client_id>/assets")
-@login_required
-def client_assets_api(client_id):
-    _guard()
-    assets = (
-        ClientAsset.query
-        .filter_by(client_id=client_id)
-        .order_by(ClientAsset.category, ClientAsset.created_at.desc())
-        .all()
-    )
-    return jsonify(assets=[_asset_preview(a) for a in assets])
 
 
 @social_bp.route("/api/upload", methods=["POST"])

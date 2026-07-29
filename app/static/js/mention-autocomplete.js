@@ -109,12 +109,19 @@
     // "message" covers comments/replies; "description" covers the task
     // description on the add/edit forms - both are plain textareas, so
     // the same picker and highlighting work for either untouched.
+    //
+    // data-mention-field is the explicit opt-in, mirroring how
+    // emoji-picker.js uses data-emoji-field. Matching on name alone means
+    // any new textarea has to be called "message" to get mentions, which
+    // is a coincidence to depend on rather than a decision.
     document.addEventListener("input", function (e) {
         var t = e.target;
         if (
             t &&
             t.tagName === "TEXTAREA" &&
-            (t.name === "message" || t.name === "description")
+            (t.name === "message" ||
+                t.name === "description" ||
+                t.hasAttribute("data-mention-field"))
         ) render(t);
     });
 
