@@ -244,3 +244,29 @@ def test_new_comments_are_stored_once(session, monkeypatch):
     # Re-syncing must not duplicate - it only refreshes fetched_at.
     assert second["new"] == 0
     assert SocialComment.query.filter_by(external_id="C1").count() == 1
+
+
+# --------------------------------------------------------------------------
+# Campaign rollup
+# --------------------------------------------------------------------------
+
+def test_campaign_rollup_sums_across_a_campaign(session):
+    """A campaign groups posts across platforms; its metrics are the sum of
+    its posts, and filtering scopes the whole report to it."""
+    t1 = _publish(session, metrics={"reach": 100})
+    t1.post.campaign = "Diwali"
+    t2 = _publish(session, metrics={"reach": 250})
+    t2.post.campaign = "Diwali"
+    t3 = _publish(session, metrics={"reach": 500})
+    t3.post.campaign = "NewYear"
+    session.flush()
+
+    report = analytics_report.build_report(_period())
+    camps = dict(report["campaigns"])
+    assert camps["Diwali"]["metrics"]["reach"] == 350
+    assert camps["Diwali"]["posts"] == 2
+    assert camps["NewYear"]["metrics"]["reach"] == 500
+
+    scoped = analytics_report.build_report(_period(), campaign="Diwali")
+    assert scoped["totals"]["reach"] == 350
+    assert scoped["post_count"] == 2

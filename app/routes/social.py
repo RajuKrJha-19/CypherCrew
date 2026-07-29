@@ -646,13 +646,17 @@ def analytics():
     cid = _client_arg()
     period = periods.resolve_period(request.args, allow_all=True,
                                     default="30d")
+    campaign_f = (request.args.get("campaign") or "").strip()
 
     return render_template(
         "social/analytics.html",
         accounts=AccountManager.list_accounts(include_revoked=False),
         status=engine_status.engine_status(),
         period=period,
-        report=analytics_report.build_report(period, cid),
+        report=analytics_report.build_report(period, cid,
+                                             campaign=campaign_f or None),
+        campaign_f=campaign_f,
+        campaigns=_campaigns(cid),
         METRICS=analytics_report.METRICS,
         to_ist_display=_to_ist_display,
     )

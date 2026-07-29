@@ -43,16 +43,19 @@ def _latest_snapshot_ids():
     )
 
 
-def _published_targets(period, client_id=None):
+def _published_targets(period, client_id=None, campaign=None):
     q = (
         SocialPostTarget.query
         .filter(SocialPostTarget.status.in_(["published", "removed"]),
                 SocialPostTarget.external_post_id.isnot(None))
     )
-    if client_id:
-        q = (q.join(SocialPost,
-                    SocialPost.id == SocialPostTarget.social_post_id)
-              .filter(SocialPost.client_id == client_id))
+    if client_id or campaign:
+        q = q.join(SocialPost,
+                   SocialPost.id == SocialPostTarget.social_post_id)
+        if client_id:
+            q = q.filter(SocialPost.client_id == client_id)
+        if campaign:
+            q = q.filter(SocialPost.campaign == campaign)
     if period and not period.get("is_all_time"):
         q = q.filter(
             func.date(SocialPostTarget.updated_at) >= period["start"],
@@ -61,13 +64,14 @@ def _published_targets(period, client_id=None):
     return q
 
 
-def build_report(period, client_id=None):
-    """Totals, per-channel rows and per-post rows for one window.
+def build_report(period, client_id=None, campaign=None):
+    """Totals, per-channel rows, per-campaign rows and per-post rows for one
+    window.
 
     Returns zeroed totals and empty lists when there is nothing yet - the
     screen says so plainly rather than showing invented placeholders.
     """
-    targets = _published_targets(period, client_id).all()
+    targets = _published_targets(period, client_id, campaign).all()
     if not targets:
         return _empty()
 
@@ -83,6 +87,7 @@ def build_report(period, client_id=None):
     totals = {key: 0 for key, _, _ in METRICS}
     present = set()
     channels = {}
+    campaigns = {}
     posts = []
 
     for snapshot in snapshots:
@@ -117,9 +122,29 @@ def build_report(period, client_id=None):
         for key, value in row["metrics"].items():
             bucket["metrics"][key] += value
 
+        # Per-campaign rollup: a post's campaign label groups its targets
+        # across every platform, so a client sees the whole campaign's reach.
+        post = target.post
+        camp = post.campaign if post else None
+        if camp:
+            cb = campaigns.setdefault(camp, {
+                "posts": set(),
+                "metrics": {key: 0 for key, _, _ in METRICS},
+            })
+            cb["posts"].add(target.social_post_id)
+            for key, value in row["metrics"].items():
+                cb["metrics"][key] += value
+
     posts.sort(key=lambda r: r["metrics"].get("impressions",
                                               r["metrics"].get("reach", 0)),
                reverse=True)
+
+    campaign_rows = sorted(
+        ((name, {"posts": len(b["posts"]), "metrics": b["metrics"]})
+         for name, b in campaigns.items()),
+        key=lambda kv: kv[1]["metrics"].get(
+            "impressions", kv[1]["metrics"].get("reach", 0)),
+        reverse=True)
 
     return {
         "totals": totals,
@@ -129,6 +154,7 @@ def build_report(period, client_id=None):
         "present": present,
         "channels": sorted(channels.items(),
                            key=lambda kv: kv[1]["posts"], reverse=True),
+        "campaigns": campaign_rows,
         "posts": posts[:50],
         "post_count": len(targets),
         "measured_count": len(posts),
@@ -140,6 +166,7 @@ def _empty():
         "totals": {key: 0 for key, _, _ in METRICS},
         "present": set(),
         "channels": [],
+        "campaigns": [],
         "posts": [],
         "post_count": 0,
         "measured_count": 0,

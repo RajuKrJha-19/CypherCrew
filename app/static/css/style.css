@@ -17776,6 +17776,7 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-checkline input{ width:auto; margin:0; }
 .cmp-checkline small{ color:var(--color-text-subtle); font-weight:400; }
 .draft-campaign-filter{ margin-left:auto; padding:5px 8px; }
+.analytics-campaign-filter{ margin:14px 0; align-items:center; gap:10px; }
 
 /* Per-media alt text: this input lives inside .cmp-asset, whose generic
    `input{ opacity:0 }` rule hides the media checkbox - so it must be

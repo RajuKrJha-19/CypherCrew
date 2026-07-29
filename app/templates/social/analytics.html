@@ -83,6 +83,18 @@
     </div>
 </div>
 
+{% if campaigns %}
+<div class="social-filters analytics-campaign-filter">
+    <span class="t-muted t-sm"><i class="fa-solid fa-bullhorn"></i> Campaign:</span>
+    <select aria-label="Filter by campaign" onchange="location.href=this.value">
+        <option value="{{ url_for('social.analytics', period=p.key, client=request.args.get('client')) }}">All campaigns</option>
+        {% for c in campaigns %}
+        <option value="{{ url_for('social.analytics', period=p.key, client=request.args.get('client'), campaign=c) }}" {{ 'selected' if campaign_f == c }}>{{ c }}</option>
+        {% endfor %}
+    </select>
+</div>
+{% endif %}
+
 {% if has_data %}
 
 <div class="analytics-grid">
@@ -123,6 +135,39 @@
                             {{ PF_LABEL.get(row.platform, row.platform|capitalize) }}</span>
                         {{ name }}
                     </td>
+                    <td class="u-right">{{ row.posts }}</td>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <td class="u-right">{{ "{:,}".format(row.metrics[key]) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if report.campaigns %}
+<div class="social-card studio-section">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-bullhorn"></i> By campaign</h2>
+        <div class="social-card-tools"><span class="sp-pill">{{ report.campaigns|length }}</span></div>
+    </div>
+    <div class="table-card studio-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Campaign</th>
+                    <th class="u-right">Posts</th>
+                    {% for key, label, icon in METRICS if key in report.present %}
+                    <th class="u-right">{{ label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, row in report.campaigns %}
+                <tr>
+                    <td><a href="{{ url_for('social.analytics', period=p.key, client=request.args.get('client'), campaign=name) }}"><strong>{{ name }}</strong></a></td>
                     <td class="u-right">{{ row.posts }}</td>
                     {% for key, label, icon in METRICS if key in report.present %}
                     <td class="u-right">{{ "{:,}".format(row.metrics[key]) }}</td>
