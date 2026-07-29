@@ -1,7 +1,7 @@
 {% extends "base_studio.html" %}
 {% block title %}{{ 'Edit post' if post else 'New post' }} · Social Studio | CypherCrew{% endblock %}
 
-{% set TYPES = [('image','fa-image','Image'),('carousel','fa-images','Carousel'),('reel','fa-film','Reel'),('story','fa-circle-plus','Story'),('video','fa-video','Video'),('text','fa-font','Text')] %}
+{% set TYPES = [('image','fa-image','Image'),('carousel','fa-images','Carousel'),('reel','fa-film','Reel'),('story','fa-mobile-screen','Story'),('video','fa-video','Video'),('text','fa-font','Text')] %}
 {% set platforms_present = accounts|map(attribute='platform')|unique|list %}
 
 {% block content %}
@@ -73,6 +73,9 @@
                 {# What the browser measured for each chosen file, so the
                    server can re-check without re-measuring. #}
                 <input type="hidden" name="media_measurements" id="mediaMeasurements" value="">
+                {# Per-media alt text (accessibility), keyed the same way as
+                   measurements so the server matches it back to each item. #}
+                <input type="hidden" name="media_alt" id="mediaAlt" value="">
             </div>
 
             {# --- Caption --- #}
@@ -92,14 +95,15 @@
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
                 </div>
 
-                {# per-platform overrides #}
+                {# per-platform overrides — caption + first comment #}
                 {% if platforms_present %}
-                <details class="cmp-overrides" id="overrides" {{ 'open' if platform_captions }}>
-                    <summary><i class="fa-solid fa-sliders"></i> Customise caption per platform</summary>
+                <details class="cmp-overrides" id="overrides" {{ 'open' if platform_captions or platform_first_comments }}>
+                    <summary><i class="fa-solid fa-sliders"></i> Customise caption &amp; first comment per platform</summary>
                     {% for pf in platforms_present %}
                     <div class="cmp-override" data-platform="{{ pf }}">
-                        <div class="cmp-override-head"><span class="pf-chip {{ pf }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i> {{ pf|capitalize }}</span></div>
-                        <textarea name="caption_{{ pf }}" aria-label="{{ pf|capitalize }} caption" placeholder="Leave empty to use the shared caption above">{{ platform_captions.get(pf, '') }}</textarea>
+                        <div class="cmp-override-head"><span class="pf-chip {{ pf }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(pf, pf|capitalize) }}</span><span class="cmp-count" data-count-for="{{ pf }}"></span></div>
+                        <textarea name="caption_{{ pf }}" aria-label="{{ PF_LABEL.get(pf, pf|capitalize) }} caption" placeholder="Leave empty to use the shared caption above">{{ platform_captions.get(pf, '') }}</textarea>
+                        <textarea class="cmp-override-fc" name="first_comment_{{ pf }}" rows="2" aria-label="{{ PF_LABEL.get(pf, pf|capitalize) }} first comment" placeholder="First comment — leave empty to use the shared one above">{{ platform_first_comments.get(pf, '') }}</textarea>
                     </div>
                     {% endfor %}
                 </details>
@@ -125,6 +129,7 @@
                         <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
                         <span class="cmp-asset-name">{{ a.filename }}</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                        <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text for {{ a.filename }}" data-altkey="task_file_ids|{{ a.id }}">
                     </label>
                     {% endfor %}
                 </div>
@@ -147,6 +152,7 @@
                         <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
                         <span class="cmp-asset-name">uploaded</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                        <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|{{ u.object_key }}::{{ u.mime }}">
                     </label>
                     {% endfor %}
                 </div>
@@ -167,7 +173,7 @@
             {# --- Also share to Story --- #}
             <label class="cmp-story-toggle" id="alsoStoryWrap">
                 <input type="checkbox" name="also_story" id="alsoStory">
-                <span><i class="fa-brands fa-instagram"></i> Also share to <b>Story</b> <small id="alsoStoryHint">publishes the media as an Instagram Story alongside the post</small></span>
+                <span><i class="fa-solid fa-mobile-screen"></i> Also share to <b>Story</b> <small id="alsoStoryHint">publishes the media as a Story alongside the post</small></span>
             </label>
 
             {# --- Story style: plain, or tappable through to a post ---
@@ -242,6 +248,7 @@
                     <div class="pp-media" id="ppMedia"><i class="fa-regular fa-image"></i></div>
                     <div class="pp-actions" id="ppActions"><i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i></div>
                     <div class="pp-caption" id="ppCaption"><span class="ph">Your caption preview…</span></div>
+                    <div class="pp-count" id="ppCount"></div>
                     <div class="pp-first-comment" id="ppFirstComment" hidden>
                         <span class="av"></span><span class="bd"><b id="ppFcName">Your Page</b><span id="ppFcText"></span></span>
                     </div>
@@ -295,6 +302,7 @@
     // hand-copied list goes stale the day a platform is added.
     const PF_LABEL = {{ PF_LABEL|tojson }};
     const PF_ICON_JS = {{ PF_ICON|tojson }};
+    const altText = {{ media_alt|tojson }};   // measureKey -> alt text (edit restore)
     const $ = id => document.getElementById(id);
     const clientSelect = $("clientSelect");
     const caption = $("captionInput"), captionCount = $("captionCount");
@@ -306,8 +314,25 @@
     function accountsChecked(){ return [...document.querySelectorAll('input[name="account_ids"]:checked')]; }
     function selectedPlatforms(){ return [...new Set(accountsChecked().map(c=>c.dataset.platform))]; }
 
-    function maxChars(){ let m=Infinity; accountsChecked().forEach(c=>{var cap=caps[c.dataset.platform]; if(cap&&cap.max_caption_chars)m=Math.min(m,cap.max_caption_chars);}); return m===Infinity?null:m; }
-    function updateCaption(){ const len=caption.value.length, m=maxChars(); captionCount.textContent=m?`${len} / ${m}`:`${len}`; captionCount.classList.toggle("over",m&&len>m); renderPreview(); }
+    // The effective caption for a platform = its override if non-empty, else
+    // the shared caption (mirrors the server at _apply_composer_form).
+    function overrideCaption(pf){ const el=document.querySelector('textarea[name="caption_'+pf+'"]'); return el && el.value.trim() ? el.value : caption.value; }
+    // Per-PLATFORM character counter, not a single min-based one: each channel
+    // has its own limit (X 280, IG 2200, FB 63206…), so each selected channel
+    // gets its own count chip and the preview shows the previewed channel's.
+    function updateCaption(){
+        selectedPlatforms().forEach(pf=>{
+            const chip=document.querySelector('.cmp-count[data-count-for="'+pf+'"]');
+            if(!chip) return;
+            const cap=caps[pf], max=cap&&cap.max_caption_chars, len=overrideCaption(pf).length;
+            chip.textContent = max ? `${len} / ${max}` : `${len}`;
+            chip.classList.toggle("over", max && len>max);
+        });
+        // Shared-caption chip shows raw length; per-channel limits live in the
+        // override chips and the preview counter.
+        captionCount.textContent = `${caption.value.length}`;
+        renderPreview();
+    }
     caption.addEventListener("input", updateCaption);
 
     // post type
@@ -332,8 +357,13 @@
         document.querySelectorAll('.cmp-account').forEach(l=>l.classList.toggle("on", l.querySelector("input").checked));
         const sel=selectedPlatforms();
         accountCount.textContent = accountsChecked().length ? `${accountsChecked().length} selected` : "none selected";
-        // per-platform override visibility
-        document.querySelectorAll('.cmp-override').forEach(o=>{ o.style.display = sel.includes(o.dataset.platform)?"":"none"; });
+        // per-platform override visibility; hide the first-comment sub-field
+        // for any channel that can't post one (e.g. Google Business).
+        document.querySelectorAll('.cmp-override').forEach(o=>{
+            o.style.display = sel.includes(o.dataset.platform)?"":"none";
+            const fc=o.querySelector('.cmp-override-fc'), cap=caps[o.dataset.platform];
+            if(fc) fc.style.display = (cap&&cap.supports_first_comment)?"":"none";
+        });
         // first-comment hint
         const fc = sel.filter(p=>caps[p]&&caps[p].supports_first_comment).map(p=>PF_LABEL[p]||p);
         typeHintFc.textContent = fc.length ? "Posted on: "+fc.join(", ") : "Not supported on the selected platforms";
@@ -342,17 +372,22 @@
         refreshTypeWarn(); updateCaption();
     }
 
-    // "Also share to Story" — applies to Instagram, for non-text/non-story posts.
+    // "Also share to Story" — applies to any selected channel whose
+    // capabilities declare story_support (Instagram, Facebook, …), for
+    // non-text/non-story posts. Driven by caps, not a hard-coded platform.
     const alsoStory=$("alsoStory"), alsoStoryWrap=$("alsoStoryWrap");
+    function storyPlatforms(){ return selectedPlatforms().filter(p=>caps[p]&&caps[p].story_support); }
     function refreshStory(){
         if(!alsoStory) return;
-        const pt=postType(), igSel=selectedPlatforms().includes("instagram");
-        const ok = igSel && pt!=="text" && pt!=="story";
+        const pt=postType(), sp=storyPlatforms();
+        const ok = sp.length && pt!=="text" && pt!=="story";
         alsoStory.disabled = !ok;
         if(!ok) alsoStory.checked=false;
         alsoStoryWrap.classList.toggle("disabled", !ok);
         alsoStoryWrap.classList.toggle("on", alsoStory.checked);
-        $("alsoStoryHint").textContent = igSel ? "publishes the media as an Instagram Story alongside the post" : "select an Instagram channel to enable";
+        $("alsoStoryHint").textContent = sp.length
+            ? ("publishes the media as a Story on "+sp.map(p=>PF_LABEL[p]||p).join(" & ")+" alongside the post")
+            : "select a channel that supports Stories (e.g. Instagram, Facebook)";
         refreshStoryStyle();
     }
 
@@ -368,8 +403,8 @@
     }
     function refreshStoryStyle(){
         if(!storyStyleWrap) return;
-        const pt=postType(), igSel=selectedPlatforms().includes("instagram");
-        const storyGoingOut = igSel && (pt==="story" || (alsoStory && alsoStory.checked && !alsoStory.disabled));
+        const pt=postType(), sp=storyPlatforms();
+        const storyGoingOut = sp.length && (pt==="story" || (alsoStory && alsoStory.checked && !alsoStory.disabled));
         storyStyleWrap.hidden = !storyGoingOut;
 
         const linked = storyStyleValue()==="post_link";
@@ -505,14 +540,15 @@
 
     // preview — tabs adapt to the selected platforms (FB/IG/YouTube/LinkedIn/X)
     const previewSwitch = $("previewSwitch");
-    const PP_NAME = {facebook:"Your Page", instagram:"your_handle", youtube:"Your Channel", linkedin:"Your Company", x:"yourhandle"};
-    const PP_SUB = {facebook:"Just now · 🌐", instagram:"Original audio", youtube:"Just now", linkedin:"Just now · 🌐", x:"now"};
+    const PP_NAME = {facebook:"Your Page", instagram:"your_handle", youtube:"Your Channel", linkedin:"Your Company", x:"yourhandle", google_business:"Your Business"};
+    const PP_SUB = {facebook:"Just now · 🌐", instagram:"Original audio", youtube:"Just now", linkedin:"Just now · 🌐", x:"now", google_business:"Just now · 📍"};
     const PP_ACTIONS = {
         facebook:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-share"></i>',
         instagram:'<i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><span class="pp-save"><i class="fa-regular fa-bookmark"></i></span>',
         youtube:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-thumbs-down"></i><i class="fa-solid fa-share"></i>',
         linkedin:'<i class="fa-regular fa-thumbs-up"></i><i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-paper-plane"></i>',
-        x:'<i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-heart"></i><i class="fa-solid fa-arrow-up-from-bracket"></i>'
+        x:'<i class="fa-regular fa-comment"></i><i class="fa-solid fa-retweet"></i><i class="fa-regular fa-heart"></i><i class="fa-solid fa-arrow-up-from-bracket"></i>',
+        google_business:'<i class="fa-regular fa-star"></i><i class="fa-solid fa-location-dot"></i><i class="fa-solid fa-share"></i>'
     };
     function refreshPreviewTabs(){
         const sel = selectedPlatforms(); const tabs = sel.length ? sel : ["facebook"];
@@ -526,8 +562,10 @@
         const ava=$("ppAva"); ava.className="pp-ava "+pf; ava.innerHTML='<i class="'+(PF_ICON_JS[pf]||"fa-solid fa-share-nodes")+'"></i>';
         $("ppName").textContent = acct?acct.dataset.name:(PP_NAME[pf]||"Your account");
         $("ppSub").textContent = PP_SUB[pf]||"Just now";
-        const text=caption.value.trim(); const cap=$("ppCaption");
+        const text=overrideCaption(pf).trim(); const cap=$("ppCaption");
         if(text)cap.textContent=text; else cap.innerHTML='<span class="ph">Your caption preview…</span>';
+        const ppCount=$("ppCount");
+        if(ppCount){ const c=caps[pf], max=c&&c.max_caption_chars; ppCount.textContent = max?`${text.length} / ${max}`:""; ppCount.classList.toggle("over", max&&text.length>max); }
         const media=$("ppMedia"); let cls="pp-media";
         if(pt==="reel"||pt==="story")cls+=" "+pt; else if(pf==="youtube")cls+=" yt";
         media.className=cls;
@@ -536,11 +574,18 @@
         if(pt==="carousel"){ const n=Math.max(2, selectedMediaInputs().length||3); inner += '<span class="pp-dots">'+Array.from({length:Math.min(n,5)},(_,i)=>'<span class="'+(i===0?"on":"")+'"></span>').join("")+'</span>'; }
         media.innerHTML=inner;
         $("ppActions").innerHTML = PP_ACTIONS[pf] || PP_ACTIONS.facebook;
-        const fc=$("firstComment").value.trim(); const box=$("ppFirstComment");
-        if(fc){ box.hidden=false; $("ppFcName").textContent=acct?acct.dataset.name:(PP_NAME[pf]||"Your account"); $("ppFcText").textContent=fc; }
+        // First comment preview: per-platform override if present, else the
+        // shared one — and only where the channel can actually post one.
+        const fcEl=document.querySelector('textarea[name="first_comment_'+pf+'"]');
+        const fc=((fcEl&&fcEl.value.trim())?fcEl.value:$("firstComment").value).trim();
+        const supportsFc = caps[pf] && caps[pf].supports_first_comment;
+        const box=$("ppFirstComment");
+        if(fc && supportsFc){ box.hidden=false; $("ppFcName").textContent=acct?acct.dataset.name:(PP_NAME[pf]||"Your account"); $("ppFcText").textContent=fc; }
         else box.hidden=true;
     }
     $("firstComment").addEventListener("input", renderPreview);
+    // Per-channel caption/first-comment overrides feed the counters + preview.
+    document.querySelectorAll('.cmp-override textarea').forEach(t=>t.addEventListener("input", updateCaption));
 
     // media assets (spans BOTH the task-deliverables grid and brand-assets grid)
     const MEDIA_SEL = 'input[name="task_file_ids"], input[name="upload_media"]';
@@ -606,6 +651,24 @@
         });
         measureField.value = JSON.stringify(out);
     }
+
+    // ---- Per-media alt text (accessibility) ----
+    // Keyed by the same measureKey the server uses (_measure_key), so an alt
+    // entry rides along in a hidden field and lands on the right media row.
+    const altField = $("mediaAlt");
+    function syncAlt(){ if(altField) altField.value = JSON.stringify(altText); }
+    function wireAlt(input){
+        if(!input) return;
+        const key = input.dataset.altkey; if(!key) return;
+        if(altText[key] != null) input.value = altText[key];
+        input.addEventListener("input", ()=>{
+            const v = input.value.trim();
+            if(v) altText[key] = input.value; else delete altText[key];
+            syncAlt();
+        });
+    }
+    document.querySelectorAll('.cmp-alt').forEach(wireAlt);
+    syncAlt();
     function refreshMediaSelection(){
         const checked=selectedMediaInputs();
         document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
@@ -672,9 +735,14 @@
         const match = before.match(/(?:^|\s)@([\w.]{0,30})$/);
         if(!match){ closeMention(); return; }
         const q = match[1], start = pos - q.length - 1;
+        // Prefer handles for the platform of the field being edited (a
+        // per-channel override carries data-platform); the shared caption has
+        // no single platform, so it falls back to the previewed one.
+        const ov = ta.closest('.cmp-override');
+        const pf = (ov && ov.dataset.platform) || previewPlatform;
         clearTimeout(mentionTimer);
         mentionTimer = setTimeout(()=>{
-            fetch(`/social/api/mentions?q=${encodeURIComponent(q)}&platform=${previewPlatform}`)
+            fetch(`/social/api/mentions?q=${encodeURIComponent(q)}&platform=${pf}`)
               .then(r=>r.json()).then(d=>{ const items = d.suggestions||[];
                   mentionState = {textarea: ta, start, items}; renderMention(items); positionMenu(ta); mentionMenu.classList.add("show");
               }).catch(closeMention);
@@ -712,10 +780,13 @@
         lab.innerHTML='<input type="checkbox" name="upload_media" value="'+d.object_key+'::'+d.mime+'" data-url="'+(d.url||"")+'" checked>'
             +'<span class="ord"></span><span class="cmp-asset-thumb">'
             +((d.is_image&&d.url)?'<img src="'+d.url+'" alt="">':'<i class="fa-regular fa-file-video"></i>')
-            +'</span><span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>';
+            +'</span><span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
+            +'<input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|'+d.object_key+'::'+d.mime+'">';
         uploadGrid.appendChild(lab);
-        lab.querySelector("input").addEventListener("change", function(){ mediaChanged(this); });
-        mediaChanged(lab.querySelector("input"));
+        const cb=lab.querySelector('input[type="checkbox"]');
+        cb.addEventListener("change", function(){ mediaChanged(this); });
+        wireAlt(lab.querySelector(".cmp-alt"));
+        mediaChanged(cb);
     }
     function uploadFiles(files){
         [...files].forEach(function(file){

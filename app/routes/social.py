@@ -1439,6 +1439,8 @@ def compose():
         default_client_id=default_client_id,
         first_comment="",
         platform_captions={},
+        platform_first_comments={},
+        media_alt={},
         hashtag_sets=_hashtag_sets(default_client_id),
         story_style="plain",
         story_link_target_id=None,
@@ -1468,6 +1470,12 @@ def edit_post(post_id):
     }
     first_comment = next(
         (t.first_comment for t in post.targets if t.first_comment), "")
+    # Per-platform first-comment overrides = any target whose first comment
+    # differs from the shared base (mirrors platform_captions).
+    platform_first_comments = {
+        t.platform: t.first_comment for t in post.targets
+        if t.first_comment and t.first_comment != first_comment
+    }
     story_target = next(
         (t for t in post.targets if t.post_type == "story"), None)
     # If this post came from a task, keep its deliverable files available.
@@ -1493,6 +1501,18 @@ def edit_post(post_id):
                 uploaded_media.append({
                     "object_key": m.object_key, "mime": m.mime_type or "",
                     "is_image": is_img, "url": u})
+    # Per-media alt text (edit restore), keyed the same way the browser and
+    # _measure_key build it, so each value lands back on its own input.
+    media_alt = {}
+    if first:
+        for m in first.media:
+            if not m.alt_text:
+                continue
+            if m.task_file_id:
+                media_alt[f"task_file_ids|{m.task_file_id}"] = m.alt_text
+            elif m.source == "upload" and m.object_key:
+                media_alt[f"upload_media|{m.object_key}::{m.mime_type or ''}"] \
+                    = m.alt_text
     return render_template(
         "social/compose.html",
         post=post,
@@ -1509,6 +1529,8 @@ def edit_post(post_id):
         schedule_value=_to_ist_input(first.scheduled_for if first else None),
         first_comment=first_comment or "",
         platform_captions=platform_captions,
+        platform_first_comments=platform_first_comments,
+        media_alt=media_alt,
         hashtag_sets=_hashtag_sets(post.client_id),
         # The style lives on the story target - which is `first` for a
         # standalone story, and the companion beside it otherwise. A
@@ -1592,6 +1614,20 @@ def _apply_composer_form(post):
     except (ValueError, TypeError):
         current_app.logger.warning("ignoring unreadable media_measurements")
 
+    # Per-media alt text (accessibility), keyed the same way as measurements.
+    alt_by_key = {}
+    try:
+        raw = request.form.get("media_alt")
+        if raw:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                alt_by_key = {
+                    str(k): str(v).strip() for k, v in parsed.items()
+                    if str(v).strip()
+                }
+    except (ValueError, TypeError):
+        current_app.logger.warning("ignoring unreadable media_alt")
+
     # The media that was there BEFORE this save, captured before the
     # rebuild wipes it - so a swap can be detected below.
     previous_media = sorted({
@@ -1655,16 +1691,20 @@ def _apply_composer_form(post):
             measured = measurements_by_key.get(_measure_key(source, obj))
             if measured:
                 kw["meta"] = {"measurements": measured}
+            alt = alt_by_key.get(_measure_key(source, obj))
+            if alt:
+                kw["alt_text"] = alt
             db.session.add(SocialMediaAsset(**kw))
 
-    def _new_target(account, ptype, caption, story_style="plain",
-                    story_link_target_id=None):
+    def _new_target(account, ptype, caption, first_comment=None,
+                    story_style="plain", story_link_target_id=None):
         t = SocialPostTarget(
             social_post_id=post.id, social_account_id=account.id,
             platform=account.platform, post_type=ptype, caption=caption,
             # Not on a story: there is nothing to comment on, so storing it
             # there only makes the post page claim a first comment that was
-            # never going anywhere.
+            # never going anywhere. (The caller also gates this on the
+            # channel's supports_first_comment.)
             first_comment=(None if ptype == "story" else first_comment),
             status="draft",
             scheduled_for=scheduled_for,
@@ -1740,7 +1780,16 @@ def _apply_composer_form(post):
         if notes:
             remapped.append(f"{platform_label(account.platform)}: {notes[0]}")
 
+        # Per-channel first comment: this platform's override if given, else
+        # the shared one - but only where the channel can actually post a
+        # comment (e.g. never on Google Business).
+        fc_override = (
+            request.form.get(f"first_comment_{account.platform}") or "").strip()
+        target_fc = (fc_override or first_comment) \
+            if (caps and caps.supports_first_comment) else None
+
         feed = _new_target(account, target_type, override or base_caption,
+                           first_comment=target_fc,
                            story_style=story_style,
                            story_link_target_id=standalone_link_id)
         n_created += 1

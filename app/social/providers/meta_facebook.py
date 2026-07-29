@@ -31,7 +31,7 @@ class MetaFacebookProvider(MetaBaseProvider):
         "business_management",
     ]
     capabilities = Capabilities(
-        post_types={"text", "image", "video", "reel", "carousel"},
+        post_types={"text", "image", "video", "reel", "carousel", "story"},
         media_specs={
             # Facebook Reels are far stricter than Instagram's: 9:16
             # exactly, 90 seconds, and a floor on resolution. This is why
@@ -49,10 +49,26 @@ class MetaFacebookProvider(MetaBaseProvider):
             # A Page video has no comparable published limit worth
             # enforcing here; anything the reel spec rejects lands here.
             "video": MediaSpec(),
+            # A story is photo or video; Facebook (like Instagram) caps the
+            # width at 1920px. Kept deliberately loose - only the genuinely
+            # oversized file is caught, and the on-publish downscaler then
+            # fixes it (see media/transcode.py) - so a normal 1080x1920
+            # story is never blocked and a photo story is left to Meta.
+            "story": MediaSpec(
+                aspect_min=0.01, aspect_max=10.0,
+                width_max=1920,
+                max_bytes=300 * 1024 * 1024,
+                aspect_label="between 0.01:1 and 10:1",
+            ),
         },
         supports_native_scheduling=True,   # available, but engine owns timing
         max_carousel=10,
         max_caption_chars=63206,
+        story_support=True,
+        # FB, like IG, exposes no sticker/link parameter on a story via the
+        # API, so a "story that links to a post" leaves the same in-app
+        # follow-up (needs_story_link) rather than attaching a live sticker.
+        story_link_support=False,
         supports_first_comment=True,
         supports_delete=True,
         supports_comments=True,
@@ -94,7 +110,8 @@ class MetaFacebookProvider(MetaBaseProvider):
     def validate(self, content):
         from app.social.media import pipeline
         problems = pipeline.validate_against(self.capabilities, content)
-        if content.post_type in ("image", "video", "reel") and not content.media:
+        if content.post_type in ("image", "video", "reel", "story") \
+                and not content.media:
             problems.append(f"A {content.post_type} post needs a media file.")
         if content.post_type == "text" and not (content.caption or "").strip():
             problems.append("A text post needs a caption.")
@@ -142,8 +159,51 @@ class MetaFacebookProvider(MetaBaseProvider):
             return PublishStep(status=StepStatus.PENDING.value,
                               provider_state={"video_id": video_id, "kind": "video"})
 
+        if content.post_type == "story":
+            return self._publish_story(graph, page_id, token, content)
+
         raise PermanentError(
             f"Unsupported post type for Facebook: {content.post_type}")
+
+    def _publish_story(self, graph, page_id, token, content):
+        """A Facebook Page Story. Photo stories publish synchronously; video
+        stories use the same 3-phase upload as Reels. A story carries no
+        caption (the Graph story endpoints take none)."""
+        media = content.media[0]
+        if (media.mime_type or "").startswith("video"):
+            video_id = self._start_video_story(graph, page_id, token, content)
+            return PublishStep(status=StepStatus.PENDING.value,
+                              provider_state={"video_id": video_id,
+                                              "kind": "story"})
+        # Photo story: upload the photo unpublished, then post it as a story.
+        up = graph.post(f"{page_id}/photos", token=token, data={
+            "url": self._media_url(media),
+            "published": "false",
+        })
+        photo_id = up.get("id")
+        if not photo_id:
+            raise PermanentError("Facebook did not accept the story photo.")
+        resp = graph.post(f"{page_id}/photo_stories", token=token,
+                         data={"photo_id": photo_id})
+        return self._done(resp.get("post_id") or resp.get("id"))
+
+    def _start_video_story(self, graph, page_id, token, content):
+        """3-phase video-story upload, mirroring _start_reel but with no
+        caption. poll_publish then advances it exactly like a Reel/video."""
+        start = graph.post(f"{page_id}/video_stories", token=token,
+                          data={"upload_phase": "start"})
+        video_id = start.get("video_id")
+        upload_url = start.get("upload_url")
+        if not (video_id and upload_url):
+            raise PermanentError("Facebook did not start the story upload.")
+
+        hosted_reel_upload(upload_url, token, self._media_url(content.media[0]))
+
+        graph.post(f"{page_id}/video_stories", token=token, data={
+            "upload_phase": "finish",
+            "video_id": video_id,
+        })
+        return video_id
 
     def _done(self, post_id):
         if not post_id:

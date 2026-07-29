@@ -17748,7 +17748,24 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-override{ padding:10px 12px; border-top:1px solid var(--color-border); }
 .cmp-override:first-of-type{ border-top:0; }
 .cmp-override-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; font-weight:650; }
+.cmp-override-head .cmp-count{ margin-left:auto; }
 .cmp-override textarea{ width:100%; min-height:60px; }
+.cmp-override-fc{ margin-top:6px; min-height:46px; }
+
+/* Per-media alt text: this input lives inside .cmp-asset, whose generic
+   `input{ opacity:0 }` rule hides the media checkbox - so it must be
+   re-shown explicitly here. */
+.cmp-asset input.cmp-alt{ position:static; opacity:1; pointer-events:auto;
+    width:100%; border:0; border-top:1px solid var(--color-border);
+    padding:5px 6px; font-size:10px; color:var(--color-text);
+    background:var(--color-surface); }
+.cmp-asset input.cmp-alt::placeholder{ color:var(--color-text-subtle); }
+.cmp-asset input.cmp-alt:focus{ outline:none; background:var(--color-surface-sunken); }
+
+/* Live-preview per-platform character counter */
+.pp-count{ padding:0 13px 10px; font-size:11px; font-weight:600;
+    color:var(--color-text-subtle); text-align:right; }
+.pp-count.over{ color:var(--color-danger); }
 
 .cmp-first-comment textarea{ width:100%; min-height:56px; }
 .cmp-hint-inline{ font-size:11px; color:var(--color-text-subtle); }

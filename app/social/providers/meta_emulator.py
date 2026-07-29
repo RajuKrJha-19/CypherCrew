@@ -80,6 +80,14 @@ def node_edge(ver, node, edge):
             base = request.host_url.rstrip("/")
             return jsonify(video_id=vid, upload_url=f"{base}/mock/graph/rupload/{vid}")
         return jsonify(success=True)  # finish
+    if edge == "video_stories":                    # FB video story (3-phase)
+        if request.form.get("upload_phase") == "start":
+            vid = f"STORY_{n}"
+            base = request.host_url.rstrip("/")
+            return jsonify(video_id=vid, upload_url=f"{base}/mock/graph/rupload/{vid}")
+        return jsonify(success=True, post_id=f"{node}_{n}")  # finish
+    if edge == "photo_stories":                    # FB photo story
+        return jsonify(post_id=f"{node}_{n}", id=f"{node}_{n}")
     if edge == "media":
         return jsonify(id=f"CONTAINER_{n}")
     if edge == "media_publish":

@@ -61,10 +61,10 @@ CAPABILITY_PROFILES = {
         publish_rate=(100, "24h"), story_support=True, max_caption_chars=2200,
         supports_first_comment=True, supports_comments=True),
     "facebook": Capabilities(
-        post_types={"image", "video", "reel", "text", "carousel"},
+        post_types={"image", "video", "reel", "text", "carousel", "story"},
         media_specs={"reel": _FB_REEL, "video": MediaSpec()},
         supports_native_scheduling=True, max_carousel=10,
-        max_caption_chars=63206,
+        max_caption_chars=63206, story_support=True,
         supports_first_comment=True, supports_comments=True,
         supports_delete=True),
     "linkedin": Capabilities(
