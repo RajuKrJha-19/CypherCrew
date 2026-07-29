@@ -42,9 +42,30 @@ _ANALYZE_US = 10 * 1_000_000        # microseconds
 _TIMEOUT_S = 25
 
 
+_FALLBACK_PATHS = ("/usr/bin/ffprobe", "/usr/local/bin/ffprobe",
+                   "/snap/bin/ffprobe", "/opt/homebrew/bin/ffprobe")
+
+
 def available():
     """Is ffprobe usable on this host?"""
-    return bool(shutil.which(_binary()))
+    return _resolve() is not None
+
+
+def _resolve():
+    """Absolute path to a usable ffprobe, or None. Tries the configured
+    binary / PATH first, then the usual install locations (a hardened systemd
+    unit can run with a minimal PATH that omits /usr/bin)."""
+    import os
+    cand = _binary()
+    found = shutil.which(cand)
+    if found:
+        return found
+    if os.path.isabs(cand) and os.path.exists(cand):
+        return cand
+    for path in _FALLBACK_PATHS:
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def _binary():
@@ -63,7 +84,7 @@ def probe_url(url):
         return {}
 
     command = [
-        _binary(), "-v", "error",
+        _resolve() or _binary(), "-v", "error",
         "-probesize", str(_PROBE_SIZE),
         "-analyzeduration", str(_ANALYZE_US),
         "-show_streams", "-show_format",

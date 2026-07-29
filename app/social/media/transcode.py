@@ -33,9 +33,32 @@ _DERIVED_PREFIX = "social_uploads/derived/"
 _TIMEOUT_S = 15 * 60
 
 
+#: Where ffmpeg lands on the common Linux installs, tried when it is not on
+#: PATH - a hardened systemd unit often runs gunicorn with a minimal PATH that
+#: omits /usr/bin, so `which ffmpeg` fails even though `apt install ffmpeg`
+#: put it there.
+_FALLBACK_PATHS = ("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg",
+                   "/snap/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg")
+
+
 def available():
     """Is ffmpeg usable on this host?"""
-    return bool(shutil.which(_binary()))
+    return _resolve() is not None
+
+
+def _resolve():
+    """Absolute path to a usable ffmpeg, or None. Tries the configured
+    binary / PATH first, then the usual install locations."""
+    cand = _binary()
+    found = shutil.which(cand)
+    if found:
+        return found
+    if os.path.isabs(cand) and os.path.exists(cand):
+        return cand
+    for path in _FALLBACK_PATHS:
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def _binary():
@@ -83,7 +106,7 @@ def _downscale(object_key, max_width, source_meas):
     tmp_dir = tempfile.mkdtemp(prefix="scale_")
     out_path = os.path.join(tmp_dir, "out.mp4")
     command = [
-        _binary(), "-y",
+        _resolve() or _binary(), "-y",
         "-i", src_url,
         # min() never upscales; -2 keeps the height even, which h264 requires.
         "-vf", f"scale='min({max_width},iw)':-2",
