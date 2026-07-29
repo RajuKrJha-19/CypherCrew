@@ -1,15 +1,29 @@
 {# Publish sub-state badge for a task's linked Social Studio post(s).
    Driven by the social_publish_badge() global (engine-gated, returns None for
    non-social tasks). Shared by task detail, the task list and the kanban card
-   so all three read identically. show_retry adds an inline retry on failure. #}
+   so all three read identically. show_retry adds an inline retry on failure.
+
+   IMPORT THIS `with context`.
+
+   Jinja gives an imported macro the environment's GLOBALS but not the
+   template CONTEXT. social_publish_badge, has_permission and url_for are
+   globals, so they resolve either way - but `current_user` is not: Flask-
+   Login supplies it through a context processor. Imported without context
+   it is Undefined, and the retry branch below then took down the whole
+   task list with a 500. It only reached that line once a task actually had
+   a failed, retryable publish, which is why it sat unnoticed for months.
+
+   The viewer is also defaulted defensively, so a future template that
+   forgets `with context` loses the retry button rather than the page. #}
 {% macro publish_badge(task, show_retry=True) %}
+{% set viewer = current_user if current_user is defined else None %}
 {% set b = social_publish_badge(task) %}
 {% if b %}
 <span class="pub-badge {{ b.tone }}" title="Social Studio · {{ b.label }}">
     <i class="fa-solid {{ b.icon }}"></i> {{ b.label }}
     {% if b.permalinks %}{% for l in b.permalinks %}<a href="{{ l }}" target="_blank" rel="noopener" class="pub-badge-link" title="Open live post"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>{% endfor %}{% endif %}
 </span>
-{% if show_retry and b.retry and has_permission(current_user, 'approve_tasks') %}
+{% if show_retry and b.retry and has_permission(viewer, 'approve_tasks') %}
 <form method="POST" action="{{ url_for('tasks.retry_task_publish', task_id=task.id) }}" data-turbo="false" style="display:inline;margin-left:6px;">
     <button type="submit" class="pub-retry-btn"><i class="fa-solid fa-rotate-right"></i> Retry</button>
 </form>
