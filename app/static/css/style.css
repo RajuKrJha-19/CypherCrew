@@ -12053,6 +12053,17 @@ body.sidebar-collapsed .sidebar-logout{
         padding-right:4px;
     }
 
+    /* The column is a flex column with a capped height, so its cards
+       were flex items with the default flex-shrink:1 - they SHRANK to
+       fit instead of letting the column scroll. Each one then grew its
+       own inner scrollbar, and the review card was squeezed to 71px for
+       213px of content: the approve buttons were invisible, and the
+       heading was cut off mid-sentence. The column owns the scrolling;
+       the cards keep their height. */
+    .task-detail-right > *{
+        flex-shrink:0;
+    }
+
     /* The activity card had its own max-height and scroller.
        Inside a scrolling column that nests two scrollbars, and
        the inner one traps the wheel. Let the column own it. */
@@ -17828,3 +17839,395 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     aspect-ratio:1/1; border:1px solid var(--color-border); border-radius:var(--radius-md);
     background:var(--color-surface-sunken); color:var(--color-text-subtle); font-size:11px; }
 .cmp-uploading .cmp-asset-thumb{ background:transparent; font-size:18px; }
+
+/* ===================================================================
+   Upload popup (app/static/js/upload-popup.js)
+
+   One row per file, each with its own bar and its own x. Used by task
+   submissions and by reference files on the create form.
+   =================================================================== */
+
+/*
+    Whatever plain control the popup replaced. This needs saying
+    explicitly: `form{display:flex}` above is an AUTHOR rule, and author
+    rules beat the user agent's `[hidden]{display:none}` no matter the
+    specificity - so `el.hidden = true` on a form (or a styled button)
+    does nothing on its own.
+*/
+.uploader-replaced{ display:none !important; }
+
+.uploader-overlay{
+    position:fixed;
+    inset:0;
+    z-index:5200;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    background:rgba(15,23,42,.45);
+    backdrop-filter:blur(2px);
+}
+
+.uploader-overlay.show{ display:flex; }
+
+.uploader-box{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    width:min(560px, 100%);
+    max-height:min(680px, 90vh);
+    background:var(--color-surface);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-lg, 14px);
+    box-shadow:0 24px 64px rgba(15,23,42,.32);
+    overflow:hidden;
+}
+
+.uploader-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:16px 18px;
+    border-bottom:1px solid var(--color-border);
+}
+
+.uploader-head h3{
+    margin:0;
+    font-size:var(--text-lg, 16px);
+    color:var(--color-text);
+}
+
+.uploader-x{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:30px;
+    height:30px;
+    border:0;
+    border-radius:8px;
+    background:transparent;
+    color:var(--color-text-muted);
+    cursor:pointer;
+}
+
+.uploader-x:hover{
+    background:var(--color-surface-sunken);
+    color:var(--color-text);
+}
+
+/* ---- the drop zone ---- */
+
+.uploader-drop{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    margin:18px;
+    padding:26px 18px;
+    border:2px dashed var(--color-border-strong);
+    border-radius:var(--radius-md, 10px);
+    background:var(--color-surface-muted);
+    color:var(--color-text-muted);
+    text-align:center;
+    transition:border-color .15s, background .15s;
+}
+
+.uploader-drop:focus-visible{
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
+
+.uploader-drop.is-over{
+    border-color:var(--color-primary);
+    background:var(--color-primary-soft);
+}
+
+.uploader-drop > i{
+    font-size:26px;
+    color:var(--color-text-subtle);
+}
+
+.uploader-drop.is-over > i{ color:var(--color-primary); }
+
+.uploader-drop p{ margin:0; }
+.uploader-drop strong{ color:var(--color-text); }
+
+.uploader-drop-sub{
+    font-size:var(--text-sm, 12px);
+    color:var(--color-text-subtle);
+}
+
+/* Once files are queued the drop zone collapses to a single line - the
+   rows are what you are looking at by then, not the invitation to add
+   more. It stays a drop target, it just stops shouting about it. */
+.uploader-overlay.has-rows .uploader-drop{
+    flex-direction:row;
+    gap:10px;
+    padding:10px 14px;
+    margin:14px 18px 0;
+}
+
+.uploader-overlay.has-rows .uploader-drop > i{ font-size:16px; }
+.uploader-overlay.has-rows .uploader-drop p{ display:none; }
+
+/* ---- the rows ---- */
+
+.uploader-rows{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:14px 18px;
+    overflow-y:auto;
+}
+
+.uploader-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 12px;
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-md, 10px);
+    background:var(--color-surface-muted);
+}
+
+.uploader-row.is-done{
+    border-color:var(--color-success-border);
+    background:var(--color-success-soft);
+}
+
+.uploader-row.is-error{
+    border-color:var(--color-danger-border);
+    background:var(--color-danger-soft);
+}
+
+.uploader-row-main{
+    flex:1;
+    min-width:0;          /* lets the long filename ellipsis instead of
+                             pushing the x off the row */
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+}
+
+.uploader-row-name{
+    font-weight:600;
+    font-size:var(--text-base, 13px);
+    color:var(--color-text);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.uploader-row-meta{
+    font-size:var(--text-sm, 12px);
+    color:var(--color-text-muted);
+}
+
+.uploader-row.is-error .uploader-row-meta{ color:var(--color-danger); }
+.uploader-row.is-done .uploader-row-meta{ color:var(--color-success); }
+
+.uploader-bar{
+    height:5px;
+    border-radius:999px;
+    background:var(--color-surface-sunken);
+    overflow:hidden;
+}
+
+.uploader-bar span{
+    display:block;
+    width:0;
+    height:100%;
+    border-radius:999px;
+    background:var(--color-primary);
+    transition:width .18s linear;
+}
+
+.uploader-row.is-done .uploader-bar span{ background:var(--color-success); }
+.uploader-row.is-error .uploader-bar{ background:var(--color-danger-soft); }
+
+.uploader-row-x{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:28px;
+    height:28px;
+    border:1px solid var(--color-border);
+    border-radius:8px;
+    background:var(--color-surface);
+    color:var(--color-text-muted);
+    cursor:pointer;
+}
+
+.uploader-row-x:hover{
+    border-color:var(--color-danger-border);
+    background:var(--color-danger-soft);
+    color:var(--color-danger);
+}
+
+/* ---- the footer ---- */
+
+.uploader-foot{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 18px;
+    border-top:1px solid var(--color-border);
+    background:var(--color-surface-muted);
+}
+
+.uploader-status{
+    font-size:var(--text-sm, 12px);
+    color:var(--color-text-muted);
+}
+
+.uploader-foot-actions{
+    display:flex;
+    gap:8px;
+}
+
+/* The close guard. Everything queued is thrown away, so it says how
+   much before it does it. */
+.uploader-confirm{
+    position:absolute;
+    inset:auto 0 0;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    padding:12px 18px;
+    background:var(--color-danger-soft);
+    border-top:1px solid var(--color-danger-border);
+}
+
+.uploader-confirm span{
+    margin-right:auto;
+    font-size:var(--text-sm, 12px);
+    font-weight:600;
+    color:var(--color-danger);
+}
+
+/* ---- staged reference chips on the create form ---- */
+
+.uploader-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+
+.uploader-chips:empty{ display:none; }
+
+.uploader-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    max-width:100%;
+    padding:4px 10px;
+    border:1px solid var(--color-success-border);
+    border-radius:999px;
+    background:var(--color-success-soft);
+    color:var(--color-success);
+    font-size:var(--text-sm, 12px);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+@media (max-width:520px){
+    .uploader-foot{ flex-direction:column; align-items:stretch; }
+    .uploader-foot-actions{ justify-content:stretch; }
+    .uploader-foot-actions .btn{ flex:1; justify-content:center; }
+}
+
+/* ===================================================================
+   "Is this a social media post?" - tasks/add.html, tasks/edit.html
+
+   A question with an explicit No, rather than a checkbox you can skip
+   past, because the answer changes the rest of the task's life. Yes puts
+   the platform list beside the answer.
+   =================================================================== */
+
+.social-ask{
+    display:flex;
+    flex-direction:row;      /* the global form{flex-direction:column}
+                                applies to descendants of a form, so row
+                                has to be said out loud here */
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:16px;
+}
+
+.social-ask-q{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    flex:0 0 auto;
+    min-width:200px;
+    padding-top:2px;
+}
+
+.social-ask-label{
+    font-size:var(--text-base);
+    font-weight:600;
+    color:var(--color-text);
+}
+
+.social-ask-choices{
+    display:flex;
+    flex-direction:row;
+    gap:8px;
+}
+
+.social-ask-choice{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:7px;
+    padding:7px 14px;
+    border:1px solid var(--color-border);
+    border-radius:999px;
+    background:var(--color-surface);
+    font-size:13.5px;
+    font-weight:500;
+    cursor:pointer;
+    transition:border-color .12s, background .12s, color .12s;
+}
+
+.social-ask-choice:hover{ border-color:var(--color-border-strong); }
+
+.social-ask-choice input{
+    width:15px;
+    height:15px;
+    margin:0;
+    cursor:pointer;
+}
+
+/* :has is what lets the pill itself show the answer. Where it is not
+   supported the radio is still visibly selected, so nothing is lost. */
+.social-ask-choice:has(input:checked){
+    border-color:var(--color-primary-border);
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+}
+
+.social-ask-choice:has(input:focus-visible){
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
+
+/* The list sits alongside the answer and takes the leftover width. */
+.social-ask .social-platform-list{
+    flex:1 1 260px;
+    margin-bottom:0;
+}
+
+.social-ask .social-platform-list[hidden]{ display:none; }
+
+@media (max-width:640px){
+    .social-ask{ flex-direction:column; gap:12px; }
+    .social-ask-q{ min-width:0; }
+    .social-ask .social-platform-list{ flex:1 1 auto; width:100%; }
+}

@@ -368,7 +368,13 @@ def parse_social_media_fields():
     explains what to fix and the other two values are None.
     """
 
-    is_social_media = bool(request.form.get("is_social_media"))
+    # The VALUE decides, not merely whether the field was sent. The form
+    # asks "Is this a social media post?" as Yes/No, and No posts "0" -
+    # which a plain bool() would read as true, quietly marking every task
+    # social. Kept tolerant of the checkbox spelling ("1"/absent) so any
+    # older form or no-JS path still behaves.
+    raw = (request.form.get("is_social_media") or "").strip().lower()
+    is_social_media = raw in {"1", "true", "yes", "on"}
 
     if not is_social_media:
         return False, "", None
@@ -378,8 +384,8 @@ def parse_social_media_fields():
 
     if not platforms:
         return None, None, (
-            "Select at least one platform, or uncheck "
-            '"This task is for social media."'
+            "Select at least one platform, or answer No to "
+            '"Is this a social media post?"'
         )
 
     return True, social.format_platforms(platforms), None
@@ -1636,6 +1642,11 @@ def add_task():
                         object_key
                     )
 
+            # Files the upload popup already streamed to the staging
+            # prefix while this form was being filled in. The plain
+            # <input> above still works for anyone without JavaScript.
+            _attach_staged_reference_files(task, uploaded_object_keys)
+
             created_message = f"Created by {current_user.name}"
 
             if task.backup_assignee_id and task.fallback_hours:
@@ -1922,6 +1933,8 @@ def self_assign_task():
 
                 if object_key:
                     uploaded_object_keys.append(object_key)
+
+            _attach_staged_reference_files(task, uploaded_object_keys)
 
             add_activity(
                 task,
@@ -4905,6 +4918,140 @@ def upload_submission(task_id):
     )
 
 
+#: Where a reference file lives between being chosen and the task
+#: existing. Reference files are picked on the CREATE form, and
+#: StorageService.upload_task_file refuses without a saved task - so they
+#: are staged here first and attached once the task has an id. Anything
+#: left unattached is swept by the media GC.
+REFERENCE_STAGING_PREFIX = "task_staging/"
+
+
+@tasks_bp.route("/reference/stage", methods=["POST"])
+@login_required
+def stage_reference_file():
+    """Hold one reference file until the task it belongs to exists.
+
+    No task to authorise against yet, so this is login-only. The key is a
+    uuid the caller never chooses, and every other route that touches
+    these objects checks the prefix - so holding one grants nothing
+    beyond the file you just uploaded.
+    """
+    import os
+    import re as _re
+    from uuid import uuid4
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify(success=False, message="No file provided."), 400
+
+    safe = _re.sub(
+        r"[^A-Za-z0-9._-]", "_", os.path.basename(uploaded.filename)
+    )[:80] or "file"
+    object_key = f"{REFERENCE_STAGING_PREFIX}{uuid4().hex}_{safe}"
+
+    try:
+        # Streamed, not read into memory: reference files can be video,
+        # and a few concurrent uploads would otherwise sit in the worker.
+        result = StorageService().upload(
+            file_obj=uploaded.stream,
+            object_key=object_key,
+            content_type=uploaded.mimetype,
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Reference staging failed.")
+        return jsonify(
+            success=False,
+            message="Upload failed — please try again.",
+        ), 500
+
+    return jsonify(
+        success=True,
+        object_key=object_key,
+        original_filename=uploaded.filename,
+        mime_type=result.get("content_type") or uploaded.mimetype,
+        file_size=result.get("content_length") or 0,
+        bucket_name=result.get("bucket_name"),
+    )
+
+
+@tasks_bp.route("/reference/discard", methods=["POST"])
+@login_required
+def discard_reference_file():
+    """Drop a staged reference file - the × , or closing the popup."""
+    data = request.get_json(silent=True) or {}
+    object_key = (data.get("object_key") or "").strip()
+
+    # Prefix check is the whole guard: it confines this to the staging
+    # area, so a tampered key cannot point at a task's real files.
+    if not object_key.startswith(REFERENCE_STAGING_PREFIX):
+        return jsonify(success=False, message="Not a staged file."), 400
+
+    try:
+        StorageService().delete(object_key=object_key)
+    except Exception:  # noqa: BLE001 - the GC sweep is the backstop
+        current_app.logger.warning(
+            "Could not discard staged reference %s", object_key)
+
+    return jsonify(success=True)
+
+
+def _attach_staged_reference_files(task, uploaded_object_keys=None):
+    """Turn the staged objects the form carried into TaskFile rows.
+
+    No copy and no re-upload: TaskFile stores object_key, so attaching is
+    just a row pointing at the object already in storage. The thumbnail
+    session-event picks the new rows up exactly as it does for a direct
+    upload.
+    """
+    import json as _json
+
+    raw = request.form.get("staged_reference_files")
+    if not raw:
+        return 0
+
+    try:
+        staged = _json.loads(raw)
+    except (ValueError, TypeError):
+        current_app.logger.warning("Ignoring unreadable staged reference list")
+        return 0
+
+    if not isinstance(staged, list):
+        return 0
+
+    # NOT NULL, and the value in the payload came from the browser - so a
+    # truncated or hand-edited list must not be able to fail the INSERT and
+    # take the whole task creation down with it.
+    default_bucket = current_app.config.get("R2_BUCKET_NAME")
+
+    attached = 0
+    for item in staged:
+        if not isinstance(item, dict):
+            continue
+        object_key = (item.get("object_key") or "").strip()
+        if not object_key.startswith(REFERENCE_STAGING_PREFIX):
+            continue
+
+        db.session.add(TaskFile(
+            task_id=task.id,
+            bucket_name=item.get("bucket_name") or default_bucket,
+            storage_provider="r2",
+            object_key=object_key,
+            original_filename=(item.get("original_filename") or "file")[:255],
+            stored_filename=object_key.rsplit("/", 1)[-1],
+            mime_type=item.get("mime_type"),
+            file_size=item.get("file_size") or 0,
+            folder_type="reference",
+            version=1,
+            is_final=False,
+            uploaded_by_id=current_user.id,
+        ))
+        attached += 1
+        if uploaded_object_keys is not None:
+            uploaded_object_keys.append(object_key)
+
+    return attached
+
+
 def _require_submission_uploader(task):
 
     if task.assigned_to_id != current_user.id:
@@ -4914,6 +5061,148 @@ def _require_submission_uploader(task):
         ), 403
 
     return None
+
+
+@tasks_bp.route(
+    "/<int:task_id>/submission/discard/<int:file_id>",
+    methods=["POST"],
+)
+@login_required
+def discard_submission_file(task_id, file_id):
+    """Undo one upload that already finished.
+
+    The × on a completed row, and every row when the popup is closed.
+    "Cancel" has to mean cancel: an aborted transfer leaves nothing
+    behind, so a finished one must not either.
+
+    Narrow on purpose - a submission file, on this task, uploaded by the
+    caller, and not yet announced. Deleting someone else's work, or a file
+    the reviewer has already been told about, goes through the ordinary
+    delete route with its own permissions and activity trail.
+    """
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+    if permission_error:
+        return permission_error
+
+    task_file = TaskFile.query.filter_by(
+        id=file_id,
+        task_id=task.id,
+        folder_type="submission",
+        uploaded_by_id=current_user.id,
+    ).first()
+
+    if task_file is None:
+        return jsonify(
+            success=False,
+            message="That file is not one of yours to discard.",
+        ), 404
+
+    object_key = task_file.object_key
+    thumbnail_key = task_file.thumbnail_key
+
+    try:
+        db.session.delete(task_file)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Unable to discard submission file %s.", file_id)
+        return jsonify(
+            success=False,
+            message="Could not discard the file.",
+        ), 500
+
+    # Storage after the row: an orphan object costs pennies and is swept
+    # up later, whereas a row pointing at a deleted object is a broken
+    # file in the UI.
+    storage = StorageService()
+    for key in (object_key, thumbnail_key):
+        if not key:
+            continue
+        try:
+            storage.delete(object_key=key)
+        except Exception:  # noqa: BLE001 - the row is already gone
+            current_app.logger.warning(
+                "Discarded file %s but could not remove %s", file_id, key)
+
+    return jsonify(success=True)
+
+
+@tasks_bp.route(
+    "/<int:task_id>/submission/commit",
+    methods=["POST"],
+)
+@login_required
+def commit_submission_upload(task_id):
+    """Announce a finished batch: one activity entry, one notification.
+
+    The uploads themselves are silent (see
+    complete_submission_multipart_upload), so this is the moment the work
+    becomes visible to anyone else - which is exactly why it is a
+    deliberate press of Done rather than a side effect of the last file
+    landing.
+    """
+    task = Task.query.get_or_404(task_id)
+
+    permission_error = _require_submission_uploader(task)
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+    file_ids = [i for i in (data.get("file_ids") or []) if isinstance(i, int)]
+
+    files = TaskFile.query.filter(
+        TaskFile.id.in_(file_ids or [-1]),
+        TaskFile.task_id == task.id,
+        TaskFile.folder_type == "submission",
+        TaskFile.uploaded_by_id == current_user.id,
+    ).all() if file_ids else []
+
+    if not files:
+        return jsonify(
+            success=False,
+            message="Nothing to submit.",
+        ), 400
+
+    count = len(files)
+
+    try:
+        add_activity(
+            task,
+            action="submission_uploaded",
+            message=(
+                f"{current_user.name} uploaded "
+                f"{count} submission file(s)."
+            ),
+        )
+
+        if task.created_by_id != current_user.id:
+            create_notification(
+                user_id=task.created_by_id,
+                title="Task submission uploaded",
+                message=(
+                    f"{current_user.name} uploaded files for "
+                    f"'{task.title}'."
+                ),
+                link=url_for("tasks.task_detail", task_id=task.id),
+                actor_id=current_user.id,
+                task_id=task.id,
+            )
+
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Unable to commit submission upload for task %s.", task.id)
+        return jsonify(
+            success=False,
+            message="The files uploaded, but recording them failed.",
+        ), 500
+
+    return jsonify(success=True, count=count)
 
 
 @tasks_bp.route(
@@ -5041,32 +5330,12 @@ def complete_submission_multipart_upload(task_id):
 
         task_file = complete_result["task_file"]
 
-        add_activity(
-            task,
-            action="submission_uploaded",
-            message=(
-                f"{current_user.name} uploaded "
-                f"submission file: {task_file.original_filename}"
-            ),
-        )
-
-        if task.created_by_id != current_user.id:
-
-            create_notification(
-                user_id=task.created_by_id,
-                title="Task submission uploaded",
-                message=(
-                    f"{current_user.name} uploaded files for "
-                    f"'{task.title}'."
-                ),
-                link=url_for(
-                    "tasks.task_detail",
-                    task_id=task.id,
-                ),
-                actor_id=current_user.id,
-                task_id=task.id,
-            )
-
+        # Deliberately silent: no activity entry, no notification. One
+        # upload is one file, and a person sending five files should not
+        # fire five notifications at whoever set the task. The batch is
+        # announced once by commit_submission_upload, after they press
+        # Done - which is also what makes cancelling the whole popup
+        # possible without having already told anyone.
         db.session.commit()
 
     except StorageServiceError as error:
@@ -5084,6 +5353,9 @@ def complete_submission_multipart_upload(task_id):
 
     return jsonify(
         success=True,
+        # Flat too: the popup keeps this to name the file in its commit
+        # and discard calls, and reads better than digging into `file`.
+        file_id=task_file.id,
         file={
             "id": task_file.id,
             "filename": task_file.original_filename,

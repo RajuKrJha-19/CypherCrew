@@ -86,15 +86,42 @@
                         id="assetUploadForm"
                     >
                         <div class="inline-upload-row">
-                            <select name="category" required aria-label="Asset type">
+                            <select name="category" id="assetCategory" required aria-label="Asset type">
                                 {% for key, label, icon in asset_categories %}
                                 <option value="{{ key }}">{{ label }}</option>
                                 {% endfor %}
                             </select>
 
-                            <input type="file" name="asset_files" multiple required aria-label="File(s)">
+                            {#
+                                The plain input + submit are the no-JS path
+                                and still post the whole batch in one go.
+                                upload-popup.js hides them and swaps in the
+                                trigger, which sends ONE file per request -
+                                the only way a set of thirty or forty
+                                assets finishes, since a single batched
+                                request spends about a second per file and
+                                is killed by the proxy long before it ends.
+                            #}
+                            <input type="file" name="asset_files" id="assetFiles" multiple required aria-label="File(s)">
 
-                            <button type="submit">Upload</button>
+                            <button type="submit" id="assetUploadSubmit">Upload</button>
+
+                            <button type="button" class="btn"
+                                data-upload-popup
+                                data-upload-mode="direct"
+                                data-upload-commit="server"
+                                data-upload-title="Add brand assets"
+                                data-upload-reload="true"
+                                data-upload-replaces="#assetFiles, #assetUploadSubmit"
+                                data-upload-fields='{{ {"category": "#assetCategory"}|tojson }}'
+                                data-upload-endpoints='{{ {
+                                    "stage": url_for("clients.upload_one_client_asset", client_id=client.id),
+                                    "commit": url_for("clients.commit_client_assets", client_id=client.id),
+                                    "discard": url_for("clients.discard_client_asset", client_id=client.id, asset_id=987654321)|replace("987654321", "__ID__"),
+                                }|tojson }}'>
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                Upload
+                            </button>
                         </div>
 
                         <p class="form-hint">
@@ -410,6 +437,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/upload-popup.js') }}"></script>
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
 <script>

@@ -795,6 +795,15 @@ Submission Files
                             {% if task.assigned_to_id == current_user.id
                             and task.status in ["Assigned", "In Progress", "Paused"] %}
 
+                            {#
+                                Two controls for one job. The form is the
+                                real, no-JavaScript one and it still works
+                                on its own; upload-popup.js hides it (via
+                                data-upload-replaces) and puts the popup
+                                trigger in its place. So a page whose
+                                scripts failed to load degrades to the old
+                                behaviour rather than to no upload at all.
+                            #}
                             <form id="submissionUploadForm" method="POST"
                                 action="{{ url_for('tasks.upload_submission', task_id=task.id) }}"
                                 enctype="multipart/form-data" class="submission-upload-form">
@@ -806,6 +815,28 @@ Submission Files
                                 </button>
 
                             </form>
+
+                            {# The discard URL carries a sentinel file id that the popup
+                               swaps for the real one. Built through url_for rather than
+                               string-joined, so the route stays the one source of truth
+                               for the path. #}
+                            <button type="button" class="btn submission-upload-trigger"
+                                data-upload-popup
+                                data-upload-mode="multipart"
+                                data-upload-title="Upload submission"
+                                data-upload-reload="true"
+                                data-upload-replaces="#submissionUploadForm"
+                                data-upload-endpoints='{{ {
+                                    "initiate": url_for("tasks.initiate_submission_multipart_upload", task_id=task.id),
+                                    "partUrl": url_for("tasks.get_submission_multipart_part_url", task_id=task.id),
+                                    "complete": url_for("tasks.complete_submission_multipart_upload", task_id=task.id),
+                                    "abort": url_for("tasks.abort_submission_multipart_upload", task_id=task.id),
+                                    "commit": url_for("tasks.commit_submission_upload", task_id=task.id),
+                                    "discard": url_for("tasks.discard_submission_file", task_id=task.id, file_id=987654321)|replace("987654321", "__ID__"),
+                                }|tojson }}'>
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                Upload Submission
+                            </button>
 
                             {% endif %}
 
@@ -1619,36 +1650,8 @@ Submission Files
     })();
 </script>
 
-<div id="uploadPopup" class="upload-popup">
-
-        <div class="upload-box">
-
-            <div class="upload-title">
-                Uploading Files...
-            </div>
-
-            <div class="upload-progress">
-
-                <div id="uploadProgressBar" class="upload-progress-fill">
-                </div>
-
-            </div>
-
-            <div id="uploadPercent" class="upload-percent">
-                0%
-            </div>
-
-            <div id="uploadRemaining" class="upload-remaining">
-                Calculating...
-            </div>
-
-            <button id="uploadCancelBtn" type="button" class="upload-cancel-btn">
-                Cancel Upload
-            </button>
-
-        </div>
-
-    </div>
+{# The single overall progress bar that used to live here is gone: the
+   popup in upload-popup.js builds its own markup, one row per file. #}
 
     <script>
         const rejectToggleBtn = document.querySelector(".reject-toggle-btn");
@@ -2270,336 +2273,14 @@ Submission Files
         });
         }
     </script>
-    <script>
-
-        const uploadForm = document.getElementById("submissionUploadForm");
-
-        if (uploadForm) {
-
-            const PART_SIZE = 8 * 1024 * 1024;
-
-            const MULTIPART_ENDPOINTS = {
-                initiate: "{{ url_for('tasks.initiate_submission_multipart_upload', task_id=task.id) }}",
-                partUrl: "{{ url_for('tasks.get_submission_multipart_part_url', task_id=task.id) }}",
-                complete: "{{ url_for('tasks.complete_submission_multipart_upload', task_id=task.id) }}",
-                abort: "{{ url_for('tasks.abort_submission_multipart_upload', task_id=task.id) }}",
-            };
-
-            let currentController = null;
-
-            async function postJSON(url, payload, signal) {
-
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload || {}),
-                    signal: signal,
-                });
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.message || "Request failed.");
-                }
-
-                return data;
-            }
-
-            function putPart(url, blob, onProgress, signal) {
-
-                return new Promise(function (resolve, reject) {
-
-                    function cancelledError() {
-                        return Object.assign(new Error("Upload cancelled."), { name: "AbortError" });
-                    }
-
-                    if (signal && signal.aborted) {
-                        reject(cancelledError());
-                        return;
-                    }
-
-                    const xhr = new XMLHttpRequest();
-
-                    xhr.open("PUT", url, true);
-
-                    function handleAbort() {
-                        xhr.abort();
-                    }
-
-                    if (signal) {
-                        signal.addEventListener("abort", handleAbort);
-                    }
-
-                    xhr.upload.addEventListener("progress", function (event) {
-
-                        if (event.lengthComputable) {
-                            onProgress(event.loaded);
-                        }
-
-                    });
-
-                    xhr.onreadystatechange = function () {
-
-                        if (xhr.readyState !== 4) {
-                            return;
-                        }
-
-                        if (signal) {
-                            signal.removeEventListener("abort", handleAbort);
-                        }
-
-                        if (signal && signal.aborted) {
-                            reject(cancelledError());
-                            return;
-                        }
-
-                        /*
-                            Every failure here used to collapse into
-                            "Part upload failed." and then into a toast
-                            saying to check your connection, which is
-                            wrong for the two ways this actually breaks
-                            and left nothing to diagnose from.
-                        */
-                        if (xhr.status >= 200 && xhr.status < 300) {
-
-                            const etag = xhr.getResponseHeader("ETag");
-
-                            /*
-                                The part uploaded, but the browser cannot
-                                read the ETag unless the bucket's CORS
-                                policy lists it in ExposeHeaders. Without
-                                it the completion call sends null ETags
-                                and storage rejects the whole upload -
-                                which looked like a random failure at the
-                                very end of a long upload.
-                            */
-                            if (!etag) {
-                                reject(new Error(
-                                    "Storage accepted the file but did not expose an ETag. " +
-                                    "The bucket's CORS policy needs \"ExposeHeaders\": [\"ETag\"]."
-                                ));
-                                return;
-                            }
-
-                            resolve(etag);
-
-                        } else if (xhr.status === 0) {
-
-                            // Status 0 is the browser refusing to hand the
-                            // response over - almost always CORS, not the
-                            // network.
-                            reject(new Error(
-                                "The browser could not reach storage. This is usually the " +
-                                "bucket's CORS policy not allowing PUT from this site."
-                            ));
-
-                        } else {
-                            reject(new Error(
-                                "Storage rejected the upload (HTTP " + xhr.status + ")."
-                            ));
-                        }
-
-                    };
-
-                    xhr.send(blob);
-
-                });
-            }
-
-            async function uploadSubmissionFile(file, uploadedBytesBefore, onProgress, signal) {
-
-                const initiateData = await postJSON(MULTIPART_ENDPOINTS.initiate, {
-                    filename: file.name,
-                    content_type: file.type,
-                }, signal);
-
-                const uploadId = initiateData.upload_id;
-                const objectKey = initiateData.object_key;
-
-                const parts = [];
-
-                let partNumber = 1;
-                let offset = 0;
-                let uploadedInFile = 0;
-
-                try {
-
-                    while (offset < file.size) {
-
-                        const end = Math.min(offset + PART_SIZE, file.size);
-                        const blob = file.slice(offset, end);
-
-                        const partUrlData = await postJSON(MULTIPART_ENDPOINTS.partUrl, {
-                            object_key: objectKey,
-                            upload_id: uploadId,
-                            part_number: partNumber,
-                        }, signal);
-
-                        const etag = await putPart(partUrlData.url, blob, function (loaded) {
-                            onProgress(uploadedBytesBefore + uploadedInFile + loaded);
-                        }, signal);
-
-                        parts.push({
-                            ETag: etag,
-                            PartNumber: partNumber,
-                        });
-
-                        uploadedInFile += blob.size;
-                        offset = end;
-                        partNumber += 1;
-                    }
-
-                    await postJSON(MULTIPART_ENDPOINTS.complete, {
-                        object_key: objectKey,
-                        upload_id: uploadId,
-                        parts: parts,
-                        original_filename: initiateData.original_filename,
-                        stored_filename: initiateData.stored_filename,
-                    }, signal);
-
-                } catch (error) {
-
-                    if (uploadId && objectKey) {
-
-                        try {
-                            await postJSON(MULTIPART_ENDPOINTS.abort, {
-                                object_key: objectKey,
-                                upload_id: uploadId,
-                            });
-                        } catch (abortError) {
-                            console.log(abortError);
-                        }
-
-                    }
-
-                    throw error;
-                }
-            }
-
-            const cancelBtn = document.getElementById("uploadCancelBtn");
-
-            if (cancelBtn) {
-
-                cancelBtn.addEventListener("click", function () {
-
-                    if (currentController) {
-                        currentController.abort();
-                    }
-
-                });
-
-            }
-
-            uploadForm.addEventListener("submit", async function (e) {
-
-                e.preventDefault();
-
-                const fileInput = document.getElementById("submissionFiles");
-                const files = Array.from(fileInput.files);
-
-                if (!files.length) {
-                    return;
-                }
-
-                const popup = document.getElementById("uploadPopup");
-                const progressBar = document.getElementById("uploadProgressBar");
-                const percent = document.getElementById("uploadPercent");
-                const remaining = document.getElementById("uploadRemaining");
-                const uploadBtn = document.getElementById("uploadBtn");
-
-                progressBar.style.width = "0%";
-                percent.innerHTML = "0.0%";
-                remaining.innerHTML = "Calculating...";
-
-                popup.classList.add("show");
-
-                uploadBtn.disabled = true;
-
-                currentController = new AbortController();
-
-                const totalBytes = files.reduce(function (sum, file) {
-                    return sum + file.size;
-                }, 0);
-
-                const startTime = Date.now();
-
-                function updateProgress(uploadedBytes) {
-
-                    const rawProgress = totalBytes
-                        ? (uploadedBytes / totalBytes) * 100
-                        : 100;
-
-                    const progress = Math.min(100, Math.max(0, rawProgress));
-
-                    progressBar.style.width = progress + "%";
-
-                    percent.innerHTML = progress.toFixed(1) + "%";
-
-                    const elapsed = (Date.now() - startTime) / 1000;
-                    const speed = uploadedBytes / elapsed;
-                    const remainingBytes = totalBytes - uploadedBytes;
-
-                    if (speed > 0) {
-
-                        const seconds = Math.ceil(remainingBytes / speed);
-
-                        remaining.innerHTML = "Remaining : " + seconds + " sec";
-
-                    }
-
-                }
-
-                try {
-
-                    let uploadedBeforeCurrentFile = 0;
-
-                    for (const file of files) {
-
-                        await uploadSubmissionFile(
-                            file,
-                            uploadedBeforeCurrentFile,
-                            updateProgress,
-                            currentController.signal
-                        );
-
-                        uploadedBeforeCurrentFile += file.size;
-                    }
-
-                    currentController = null;
-
-                    location.reload();
-
-                } catch (error) {
-
-                    console.error("Submission upload failed:", error);
-
-                    popup.classList.remove("show");
-                    uploadBtn.disabled = false;
-
-                    const wasCancelled = currentController && currentController.signal.aborted;
-
-                    currentController = null;
-
-                    if (!wasCancelled) {
-                        // Show what actually went wrong. The blanket
-                        // "check your connection" was misleading for
-                        // every cause except an actual dropped network.
-                        showToast(
-                            error && error.message
-                                ? error.message
-                                : "Upload failed. Please try again.",
-                            "error"
-                        );
-                    }
-
-                }
-
-            });
-
-        }
-        </script>
+    {#
+        The submission uploader now lives in
+        app/static/js/upload-popup.js, shared with the reference-file
+        uploader on the create form. The multipart transport is the same
+        code that used to be inline here; what it gained is a row per
+        file, a cancel per file, and drag & drop.
+    #}
+    <script src="{{ asset_url('js/upload-popup.js') }}"></script>
         <script src="{{ asset_url('js/status-change.js') }}"></script>
         <script>
 

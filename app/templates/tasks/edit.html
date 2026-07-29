@@ -116,17 +116,37 @@
                 >
             </div>
 
-            <div class="form-group">
-                <label class="social-media-toggle">
-                    <input
-                        type="checkbox"
-                        name="is_social_media"
-                        value="1"
-                        id="isSocialMedia"
-                        {% if task.is_social_media %}checked{% endif %}
-                    >
-                    This task is for social media
-                </label>
+            {# Same question, same shape as the create form - see
+               tasks/add.html for why it is a Yes/No rather than a
+               checkbox. #}
+            <div class="form-group social-ask {% if task.is_social_media %}is-social{% endif %}" id="socialAsk">
+                <div class="social-ask-q">
+                    <span class="social-ask-label">Is this a social media post?</span>
+
+                    <div class="social-ask-choices" role="radiogroup"
+                         aria-label="Is this a social media post?">
+                        <label class="social-ask-choice">
+                            <input
+                                type="radio"
+                                name="is_social_media"
+                                value="1"
+                                id="isSocialMedia"
+                                {% if task.is_social_media %}checked{% endif %}
+                            >
+                            Yes
+                        </label>
+                        <label class="social-ask-choice">
+                            <input
+                                type="radio"
+                                name="is_social_media"
+                                value="0"
+                                id="isNotSocialMedia"
+                                {% if not task.is_social_media %}checked{% endif %}
+                            >
+                            No
+                        </label>
+                    </div>
+                </div>
 
                 <div class="social-platform-list" id="socialPlatformList" {% if not task.is_social_media %}hidden{% endif %}>
 
@@ -276,13 +296,20 @@
 <script>window.MENTION_USERS = {{ (mention_users or [])|tojson }};</script>
 <script src="{{ url_for('static', filename='js/mention-autocomplete.js') }}" defer></script>
 <script>
+// Both radios, not just Yes - answering No has to close the list again,
+// and that event fires on the No radio.
+const socialAsk = document.getElementById("socialAsk");
 const isSocialMedia = document.getElementById("isSocialMedia");
 const socialPlatformList = document.getElementById("socialPlatformList");
 
-if (isSocialMedia && socialPlatformList) {
-    isSocialMedia.addEventListener("change", function () {
-        socialPlatformList.hidden = !isSocialMedia.checked;
-    });
+if (socialAsk && isSocialMedia && socialPlatformList) {
+    socialAsk.querySelectorAll('input[name="is_social_media"]')
+        .forEach(function (radio) {
+            radio.addEventListener("change", function () {
+                socialPlatformList.hidden = !isSocialMedia.checked;
+                socialAsk.classList.toggle("is-social", isSocialMedia.checked);
+            });
+        });
 }
 
 const clientSelect = document.getElementById("clientSelect");

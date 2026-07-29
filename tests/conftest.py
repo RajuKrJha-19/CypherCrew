@@ -306,6 +306,13 @@ def _purge_test_rows():
                 ClientMonthlyTarget.id.in_(target_ids)
             ).delete(synchronize_session=False)
 
+        # Brand assets hold a plain FK to clients with no cascade, so a
+        # test that uploads one leaves the client undeletable here.
+        from app.models import ClientAsset
+        ClientAsset.query.filter(
+            ClientAsset.client_id.in_(client_ids)
+        ).delete(synchronize_session=False)
+
         Client.query.filter(
             Client.id.in_(client_ids)
         ).delete(synchronize_session=False)

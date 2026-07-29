@@ -52,11 +52,21 @@
                         placeholder="What needs to be done? Add any specifics the assignee should know."
                     ></textarea>
 
-                    <div class="form-group task-reference-upload">
+                    <div class="form-group task-reference-upload"
+                         id="referenceStaging">
                         <label for="referenceFiles">
                             Reference Files
                         </label>
 
+                        {#
+                            The plain input is the no-JavaScript path and
+                            still posts with the form. upload-popup.js
+                            hides it and swaps in the trigger below, which
+                            streams each file to the staging prefix as you
+                            pick it - so a 400 MB reference video is
+                            already uploaded by the time you press Create,
+                            instead of being posted with the form.
+                        #}
                         <input
                             type="file"
                             id="referenceFiles"
@@ -64,11 +74,27 @@
                             multiple
                         >
 
+                        <button type="button" class="btn btn-secondary"
+                            data-upload-popup
+                            data-upload-mode="direct"
+                            data-upload-title="Add reference files"
+                            data-upload-target="#referenceStaging"
+                            data-upload-replaces="#referenceFiles"
+                            data-upload-endpoints='{{ {
+                                "stage": url_for("tasks.stage_reference_file"),
+                                "discard": url_for("tasks.discard_reference_file"),
+                            }|tojson }}'>
+                            <i class="fa-solid fa-paperclip"></i>
+                            Add reference files
+                        </button>
+
                         <small class="form-help-text">
                             You can select multiple images, videos,
                             PDFs, documents, ZIP, PSD or other
                             reference files.
                         </small>
+
+                        <div class="uploader-chips" data-staged-list></div>
 
                         <div
                             class="selected-reference-files"
@@ -160,16 +186,46 @@
                         >
                     </div>
 
-                    <div class="form-group">
-                        <label class="social-media-toggle">
-                            <input
-                                type="checkbox"
-                                name="is_social_media"
-                                value="1"
-                                id="isSocialMedia"
-                            >
-                            This task is for social media
-                        </label>
+                    {#
+                        Asked as a question with an explicit No rather than
+                        a checkbox you can skip past, because the answer
+                        changes the rest of the task's life - a social task
+                        gets "Approve & Send to Social Studio" at Client
+                        Review and tracks its publish status afterwards.
+                        Answering Yes opens the platform list beside it.
+
+                        Note the No radio posts "0", which the old
+                        bool(request.form.get(...)) in
+                        parse_social_media_fields would have read as true;
+                        it now reads the value.
+                    #}
+                    <div class="form-group social-ask" id="socialAsk">
+                        <div class="social-ask-q">
+                            <span class="social-ask-label">Is this a social media post?</span>
+
+                            <div class="social-ask-choices" role="radiogroup"
+                                 aria-label="Is this a social media post?">
+                                <label class="social-ask-choice">
+                                    <input
+                                        type="radio"
+                                        name="is_social_media"
+                                        value="1"
+                                        id="isSocialMedia"
+                                    >
+                                    Yes
+                                </label>
+                                <label class="social-ask-choice">
+                                    <input
+                                        type="radio"
+                                        name="is_social_media"
+                                        value="0"
+                                        id="isNotSocialMedia"
+                                        checked
+                                    >
+                                    No
+                                </label>
+                            </div>
+                        </div>
 
                         <div class="social-platform-list" id="socialPlatformList" hidden>
 
@@ -314,18 +370,30 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/upload-popup.js') }}"></script>
 {# @-mention autocomplete for the description field - same picker and
    highlighting as task comments. #}
 <script>window.MENTION_USERS = {{ (mention_users or [])|tojson }};</script>
 <script src="{{ url_for('static', filename='js/mention-autocomplete.js') }}" defer></script>
 <script>
+        /*
+            The platform list follows the Yes/No answer. Both radios are
+            listened to, not just Yes: with a checkbox the only event was
+            its own change, but answering No has to close the list again,
+            and that event fires on the No radio.
+        */
+        const socialAsk = document.getElementById("socialAsk");
         const isSocialMedia = document.getElementById("isSocialMedia");
         const socialPlatformList = document.getElementById("socialPlatformList");
 
-        if (isSocialMedia && socialPlatformList) {
-            isSocialMedia.addEventListener("change", function () {
-                socialPlatformList.hidden = !isSocialMedia.checked;
-            });
+        if (socialAsk && isSocialMedia && socialPlatformList) {
+            socialAsk.querySelectorAll('input[name="is_social_media"]')
+                .forEach(function (radio) {
+                    radio.addEventListener("change", function () {
+                        socialPlatformList.hidden = !isSocialMedia.checked;
+                        socialAsk.classList.toggle("is-social", isSocialMedia.checked);
+                    });
+                });
         }
 
         const clientSelect = document.getElementById(

@@ -118,12 +118,34 @@
                     value="{{ deadline_default }}"
                 >
 
-                <label>Reference Files</label>
-                <input
-                    type="file"
-                    name="reference_files"
-                    multiple
-                >
+                <div class="task-reference-upload" id="referenceStaging">
+                    <label for="referenceFiles">Reference Files</label>
+
+                    {# Plain input = the no-JavaScript path; the trigger
+                       below replaces it and uploads as you pick. #}
+                    <input
+                        type="file"
+                        id="referenceFiles"
+                        name="reference_files"
+                        multiple
+                    >
+
+                    <button type="button" class="btn btn-secondary"
+                        data-upload-popup
+                        data-upload-mode="direct"
+                        data-upload-title="Add reference files"
+                        data-upload-target="#referenceStaging"
+                        data-upload-replaces="#referenceFiles"
+                        data-upload-endpoints='{{ {
+                            "stage": url_for("tasks.stage_reference_file"),
+                            "discard": url_for("tasks.discard_reference_file"),
+                        }|tojson }}'>
+                        <i class="fa-solid fa-paperclip"></i>
+                        Add reference files
+                    </button>
+
+                    <div class="uploader-chips" data-staged-list></div>
+                </div>
 
                 <button type="submit">
                     Create My Task
@@ -137,6 +159,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/upload-popup.js') }}"></script>
 <script>
 const clientSelect = document.getElementById("clientSelect");
 const deliverableSelect = document.getElementById("deliverableSelect");

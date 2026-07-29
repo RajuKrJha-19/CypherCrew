@@ -4,6 +4,7 @@ from calendar import month_name
 from flask import (
     Blueprint,
     current_app,
+    jsonify,
     render_template,
     request,
     redirect,
@@ -575,6 +576,165 @@ def add_client_asset(client_id):
     return redirect(
         url_for("clients.client_detail", client_id=client.id)
     )
+
+
+#: One file per request, for the upload popup.
+#:
+#: add_client_asset above posts the whole batch in a single request, and
+#: every file in it costs a round trip to storage - roughly a second even
+#: for a 50 KB logo. Thirty or forty assets is therefore a 45-second-plus
+#: request, which the proxy in front of the app kills long before it
+#: finishes; and because the whole batch shares one transaction, a failure
+#: near the end rolls back every row while leaving the objects already
+#: pushed to storage behind as orphans.
+#:
+#: These three routes split that up. Nothing here handles more than one
+#: file, so no single request can time out, hit the body-size cap, or take
+#: the rest of the batch down with it. The old route stays as the no-JS
+#: path.
+
+
+def _asset_upload_guard(client_id):
+    """Shared gate: the same permission add_client_asset uses, as JSON."""
+    if not can_manage_clients(current_user):
+        return None, (jsonify(
+            success=False,
+            message="You are not allowed to upload assets for this client.",
+        ), 403)
+    return Client.query.get_or_404(client_id), None
+
+
+@clients_bp.route("/<int:client_id>/assets/upload-one", methods=["POST"])
+@login_required
+def upload_one_client_asset(client_id):
+    """Store exactly one asset. Deliberately quiet - no flash, because the
+    batch is summed up once by commit_client_assets."""
+    client, error = _asset_upload_guard(client_id)
+    if error:
+        return error
+
+    category = (request.form.get("category") or "").strip()
+    if not client_asset_catalog.is_valid(category):
+        return jsonify(success=False, message="Select a valid asset type."), 400
+
+    uploaded = request.files.get("file")
+    if not uploaded or not (uploaded.filename or "").strip():
+        return jsonify(success=False, message="No file provided."), 400
+
+    try:
+        result = StorageService().upload_client_asset(
+            client=client,
+            file_storage=uploaded,
+            uploaded_by_id=current_user.id,
+            category=category,
+        )
+        db.session.commit()
+
+    except StorageServiceError as error:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Unable to upload brand asset for client %s.", client.id)
+        # The real reason, not "please try again" - an invalid category or
+        # an unnamed file is something the person can actually act on.
+        return jsonify(success=False, message=str(error)), 400
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Unable to upload brand asset for client %s.", client.id)
+        return jsonify(
+            success=False,
+            message="Upload failed — please try again.",
+        ), 500
+
+    return jsonify(success=True, file_id=result["asset"].id)
+
+
+@clients_bp.route("/<int:client_id>/assets/discard/<int:asset_id>",
+                  methods=["POST"])
+@login_required
+def discard_client_asset(client_id, asset_id):
+    """Undo one upload from the popup - the x, or closing it.
+
+    Narrower than delete_client_asset: this is only for an asset this
+    person just uploaded and has not committed, so it skips the flashes
+    and the redirect. The Social Studio check still applies, because an
+    asset can in principle be picked up between upload and cancel.
+    """
+    client, error = _asset_upload_guard(client_id)
+    if error:
+        return error
+
+    asset = ClientAsset.query.filter_by(
+        id=asset_id,
+        client_id=client.id,
+        uploaded_by_id=current_user.id,
+    ).first()
+
+    if asset is None:
+        return jsonify(
+            success=False,
+            message="That asset is not one of yours to discard.",
+        ), 404
+
+    if current_app.config.get("SOCIAL_ENGINE_ENABLED"):
+        from app.models import SocialMediaAsset
+        if SocialMediaAsset.query.filter_by(client_asset_id=asset.id).first():
+            return jsonify(
+                success=False,
+                message="This asset is already used in a Social Studio post.",
+            ), 409
+
+    object_key = asset.object_key
+
+    try:
+        db.session.delete(asset)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Unable to discard client asset %s.", asset_id)
+        return jsonify(
+            success=False,
+            message="Could not discard the asset.",
+        ), 500
+
+    # Row first, object second: an orphaned object is swept up later,
+    # whereas a row pointing at a deleted object is a broken tile.
+    try:
+        StorageService().delete(object_key=object_key)
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning(
+            "Discarded asset %s but could not delete %s", asset_id, object_key)
+
+    return jsonify(success=True)
+
+
+@clients_bp.route("/<int:client_id>/assets/commit", methods=["POST"])
+@login_required
+def commit_client_assets(client_id):
+    """Done. The uploads are already stored and committed one by one, so
+    all this does is say how many landed - the message the old single-post
+    route flashed at the end."""
+    client, error = _asset_upload_guard(client_id)
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    file_ids = [i for i in (data.get("file_ids") or []) if isinstance(i, int)]
+
+    # Counted from the database rather than trusted from the browser, so
+    # the message cannot claim more than actually exists.
+    count = ClientAsset.query.filter(
+        ClientAsset.id.in_(file_ids or [-1]),
+        ClientAsset.client_id == client.id,
+    ).count() if file_ids else 0
+
+    if not count:
+        return jsonify(success=False, message="Nothing to add."), 400
+
+    flash(f"{count} asset(s) added.", "success")
+    return jsonify(success=True)
 
 
 def _asset_readable(asset):
