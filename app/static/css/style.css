@@ -18775,7 +18775,7 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     .tm-file-image{ max-width:100%; }
 }
 
-/* ---- Cypher-Teams: meetings ---- */
+/* ---- Cypher-Teams: shared form bits ---- */
 
 /* Button row at the foot of a form. NOT .form-row - that is a two-column
    grid for pairing two fields (style.css ~3337), so a lone Save button in
@@ -18785,151 +18785,12 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     flex-wrap:wrap;
 }
 
-/* Inline "optional" / "IST" hint. NOT .form-note - that class is a full
-   bordered callout box (style.css ~10825), so using it inline drops a
-   padded panel into the middle of a sentence. */
+/* Inline "optional"-style hint next to a label. NOT .form-note - that
+   class is a full bordered callout box (style.css ~10825), so using it
+   inline drops a padded panel into the middle of a sentence. */
 .tm-note{
     font-size:11px; font-weight:500; color:var(--color-text-subtle);
     text-transform:none; letter-spacing:normal;
-}
-
-.tm-live-dot{
-    display:inline-block; width:8px; height:8px; border-radius:50%;
-    background:var(--color-danger); margin-right:6px; flex:0 0 auto;
-    animation:tm-pulse 1.8s ease-in-out infinite;
-}
-@keyframes tm-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
-/* Someone who has asked for less motion does not need a blinking dot to
-   understand the word "Live" next to it. */
-@media (prefers-reduced-motion:reduce){ .tm-live-dot{ animation:none; } }
-
-.tm-live-badge{
-    display:inline-flex; align-items:center; padding:2px 9px;
-    border-radius:var(--radius-full); font-size:11px; font-weight:700;
-    background:var(--ds-danger-bg); color:var(--color-danger);
-}
-
-.tm-call-start{ margin-left:auto; flex:0 0 auto; }
-
-/* ---- List ---- */
-.tm-meeting-list{ list-style:none; margin:0; padding:0; }
-.tm-meeting{
-    display:flex; align-items:center; gap:12px; padding:11px 16px;
-    border-bottom:1px solid var(--color-border);
-}
-.tm-meeting:last-child{ border-bottom:0; }
-.tm-meeting.is-live{ background:var(--color-primary-soft); }
-.tm-meeting-main{
-    flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:14px;
-    text-decoration:none; color:inherit;
-}
-.tm-meeting-main:hover{ text-decoration:none; }
-.tm-meeting-when{
-    flex:0 0 auto; width:56px; display:flex; flex-direction:column;
-    align-items:center; line-height:1.25; padding:5px 0;
-    border-right:1px solid var(--color-border);
-}
-.tm-meeting-when b{ font-size:12.5px; font-weight:700; color:var(--color-text); }
-.tm-meeting-when span{ font-size:10.5px; color:var(--color-text-subtle); }
-.tm-meeting-body{ display:flex; flex-direction:column; min-width:0; gap:2px; }
-.tm-meeting-title{
-    font-size:13.5px; font-weight:600; color:var(--color-text);
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.tm-meeting-meta{
-    display:flex; align-items:center; font-size:11.5px;
-    color:var(--color-text-subtle);
-}
-.tm-meeting-list.is-past .tm-meeting-title{ color:var(--color-text-muted); }
-
-/* ---- Detail ---- */
-.tm-meeting-hero{
-    display:flex; align-items:center; justify-content:space-between; gap:20px;
-    flex-wrap:wrap; padding:20px 16px; border-bottom:1px solid var(--color-border);
-}
-.tm-meeting-hero h2{ font-size:18px; font-weight:650; color:var(--color-text); margin:0 0 6px; }
-.tm-meeting-hero p{ margin:0; font-size:13px; color:var(--color-text-muted); line-height:1.6; }
-.btn.btn-lg{ padding:11px 20px; font-size:14px; height:auto; }
-.tm-meeting-closed{ font-size:12.5px; color:var(--color-text-subtle); }
-
-.tm-meeting-facts{
-    display:grid; grid-template-columns:auto 1fr; gap:8px 20px;
-    margin:0; padding:16px; border-bottom:1px solid var(--color-border);
-    font-size:12.5px;
-}
-.tm-meeting-facts dt{ color:var(--color-text-subtle); font-weight:600; }
-.tm-meeting-facts dd{ margin:0; color:var(--color-text); }
-
-.tm-meeting-agenda{ padding:16px; border-bottom:1px solid var(--color-border); }
-.tm-meeting-agenda h3{
-    margin:0 0 8px; font-size:11px; font-weight:600; text-transform:uppercase;
-    letter-spacing:.06em; color:var(--color-text-subtle);
-}
-.tm-meeting-agenda p{
-    margin:0; font-size:13px; line-height:1.6; color:var(--color-text);
-    white-space:pre-wrap;
-}
-.tm-meeting-people{ display:flex; flex-wrap:wrap; gap:8px; }
-.tm-invitee{
-    display:inline-flex; align-items:center; gap:7px; padding:4px 11px 4px 4px;
-    border:1px solid var(--color-border); border-radius:var(--radius-full);
-    font-size:12px; color:var(--color-text);
-}
-.tm-meeting-actions{
-    display:flex; flex-direction:row; align-items:center; gap:12px; padding:16px;
-}
-
-/* ---- Meeting card in a conversation ---- */
-.tm-meeting-card{
-    display:flex; align-items:center; gap:12px; margin-top:4px; padding:10px 12px;
-    max-width:420px; border:1px solid var(--color-border);
-    border-radius:var(--radius-lg); background:var(--color-surface);
-    text-decoration:none; color:inherit;
-    transition:border-color .12s, background .12s;
-}
-.tm-meeting-card:hover{
-    border-color:var(--color-primary); background:var(--color-primary-soft);
-    text-decoration:none;
-}
-.tm-meeting-card-icon{
-    flex:0 0 auto; width:34px; height:34px; border-radius:var(--radius-md);
-    display:grid; place-items:center; color:#fff; font-size:13px;
-    background:linear-gradient(135deg,var(--color-primary),#0ea5e9);
-}
-.tm-meeting-card-body{ display:flex; flex-direction:column; min-width:0; line-height:1.35; }
-.tm-meeting-card-body b{ font-size:13px; font-weight:650; color:var(--color-text);
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tm-meeting-card-body span{ font-size:11.5px; color:var(--color-text-subtle); }
-.tm-meeting-card-go{
-    margin-left:auto; flex:0 0 auto; font-size:11.5px; font-weight:650;
-    color:var(--color-primary);
-}
-
-/* ---- The call itself ---- */
-/* Fills everything under the topbar: a video call in a letterboxed card is
-   a video call nobody can see faces in. */
-.tm-call{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
-    background:#0b0d11; }
-.tm-call-stage{ flex:1 1 auto; min-height:0; }
-.tm-call-stage iframe{ display:block; width:100%; height:100%; border:0; }
-
-.tm-call-fallback{
-    flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; gap:12px; padding:40px 20px; text-align:center;
-    color:var(--color-text);
-}
-.tm-call-fallback[hidden]{ display:none; }
-.tm-call-fallback > i{ font-size:28px; color:var(--color-warning); }
-.tm-call-fallback h3{ margin:0; font-size:16px; font-weight:650; }
-.tm-call-fallback p{ margin:0; max-width:440px; font-size:13px;
-    line-height:1.6; color:var(--color-text-muted); }
-
-@media (max-width:900px){
-    .tm-meeting{ flex-wrap:wrap; }
-    .tm-meeting-hero{ flex-direction:column; align-items:flex-start; }
-    .tm-meeting-facts{ grid-template-columns:1fr; gap:2px 0; }
-    .tm-meeting-facts dd{ margin-bottom:8px; }
-    .tm-call-start{ margin-left:0; }
 }
 
 /* ---- Cypher-Teams: settings, search, mute ---- */
@@ -19008,8 +18869,8 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     font-size:13.5px; line-height:1.5; color:var(--color-text);
     /* Two lines is enough to recognise the message; the rest is on the
        page the result links to. */
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-    overflow:hidden;
+    display:-webkit-box; -webkit-line-clamp:2; line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden;
 }
 .tm-search-meta{ font-size:11px; color:var(--color-text-subtle); }
 
@@ -19017,3 +18878,126 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     .tm-settings-row{ flex-direction:column; align-items:flex-start; gap:10px; }
     .tm-channel-actions{ margin-left:0; }
 }
+
+/* ---- Cypher-Teams: grouping and date dividers ---- */
+
+/* A grouped message drops its avatar and header but keeps the gutter, so
+   every line in a block shares one left edge. Losing that indent is what
+   makes grouped chat look broken rather than tidy. */
+.tm-msg.is-continuation{ padding-top:1px; padding-bottom:1px; }
+/* Keep the gutter's WIDTH so the text stays on one left edge, but drop
+   its height. .tm-avatar is a 34px square, and leaving that on a grouped
+   row forces every line in a block to be 34px tall - which spreads a
+   three-line burst over the space of a paragraph and undoes the grouping
+   visually even though the markup is right. */
+.tm-msg.is-continuation .tm-avatar{
+    height:auto; min-height:0; background:transparent;
+    align-items:flex-start; padding-top:2px;
+}
+.tm-msg.is-continuation .tm-text{ margin-top:0; }
+
+/* The time lives in the gutter and appears on hover - the same trick
+   Slack uses to keep a timestamp reachable without printing it 40 times
+   down the page. */
+.tm-hover-time{
+    font-size:10px; font-weight:500; color:var(--color-text-subtle);
+    opacity:0; transition:opacity .1s;
+    font-variant-numeric:tabular-nums;
+}
+.tm-msg.is-continuation:hover .tm-hover-time{ opacity:1; }
+
+.tm-day{
+    display:flex; align-items:center; gap:12px;
+    margin:14px 0 8px; padding:0 4px;
+    /* The rule is drawn with borders on the flex children rather than a
+       background line behind the text, so it never shows through the
+       label on a translucent surface. */
+}
+.tm-day::before, .tm-day::after{
+    content:""; flex:1 1 auto; height:1px; background:var(--color-border);
+}
+.tm-day span{
+    flex:0 0 auto; padding:3px 12px;
+    border:1px solid var(--color-border); border-radius:var(--radius-full);
+    background:var(--color-surface);
+    font-size:11px; font-weight:650; color:var(--color-text-muted);
+}
+/* Sticky, so you always know which day you are reading while scrolling
+   through a long backlog. */
+.tm-day{ position:sticky; top:0; z-index:5; }
+.tm-day span{ box-shadow:0 1px 3px rgba(0,0,0,.08); }
+
+/* ---- Cypher-Teams: collapsible sidebar sections ---- */
+
+/* The heading is a button now, so it has to be stripped back to looking
+   like the label it replaced - the global `button` rule gives it a height,
+   a background and a border-radius otherwise. */
+.teams-nav-toggle-section{
+    flex:1 1 auto; min-width:0; height:auto; padding:0;
+    display:flex; align-items:center; gap:6px;
+    background:transparent; border:0; border-radius:0; cursor:pointer;
+    font-size:10px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--color-text-subtle);
+    text-align:left;
+}
+.teams-nav-toggle-section:hover{ color:var(--color-text); }
+.teams-nav-toggle-section > i{
+    font-size:8px; width:8px; flex:0 0 auto;
+    transition:transform .14s var(--ease);
+}
+/* Chevron points right when the section is shut. */
+.teams-nav-toggle-section.is-collapsed > i{ transform:rotate(-90deg); }
+
+.teams-nav-group{ display:flex; flex-direction:column; gap:1px; }
+.teams-nav-group[hidden]{ display:none; }
+
+/* In the collapsed rail there is no label to click, so the whole idea
+   goes away - the icons stay visible. */
+.teams-nav-collapsed .teams-nav-group[hidden]{ display:flex; }
+
+/* ---- Cypher-Teams: unread line and jump to present ---- */
+
+/* Where you stopped reading. Red because it is the one line on the page
+   that is about YOU rather than about the conversation. */
+.tm-unread-line{
+    display:flex; align-items:center; gap:10px;
+    margin:10px 0 6px; padding:0 4px;
+}
+.tm-unread-line::before, .tm-unread-line::after{
+    content:""; flex:1 1 auto; height:1px; background:var(--color-danger);
+    opacity:.55;
+}
+.tm-unread-line span{
+    flex:0 0 auto; font-size:10.5px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em;
+    color:var(--color-danger);
+}
+
+.tm-jump{
+    position:absolute; left:50%; bottom:96px; transform:translateX(-50%);
+    z-index:15; height:auto;
+    display:flex; align-items:center; gap:8px; padding:7px 16px;
+    border:1px solid var(--color-border); border-radius:var(--radius-full);
+    background:var(--color-surface); color:var(--color-text);
+    font-size:12px; font-weight:600; cursor:pointer;
+    box-shadow:var(--shadow-lg);
+}
+.tm-jump[hidden]{ display:none; }
+.tm-jump:hover{ border-color:var(--color-primary); color:var(--color-primary); }
+.tm-jump i{ font-size:10px; }
+
+@media (max-width:900px){
+    .tm-jump{ bottom:88px; }
+}
+
+/* ---- Cypher-Teams: pinned and saved ---- */
+
+.tm-pinned-flag{
+    display:inline-flex; align-items:center; gap:5px; margin-bottom:2px;
+    font-size:10.5px; font-weight:600; color:var(--color-warning);
+}
+.tm-pinned-flag i{ font-size:9px; }
+
+/* An action that is currently ON - pinned, or saved by you. */
+.tm-action.on{ color:var(--color-primary); }
+.tm-action.on:hover{ color:var(--color-primary); }

@@ -13,12 +13,9 @@ app/teams/services/sync.py for why, and for the seam that lets a push
 transport replace it without touching the client.
 """
 
-from datetime import datetime
-
 from flask import (
     Blueprint,
     abort,
-    current_app,
     flash,
     jsonify,
     redirect,
@@ -29,10 +26,9 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import Client, Meeting, TeamChannel, TeamMessage, User
+from app.models import Client, TeamChannel, TeamMessage, User
 from app.teams.services import attachments as attachments_service
 from app.teams.services import channels as channels_service
-from app.teams.services import meetings as meetings_service
 from app.teams.services import messages as messages_service
 from app.teams.services import notify as notify_service
 from app.teams.services import presence as presence_service
@@ -40,7 +36,6 @@ from app.teams.services import sync as sync_service
 from app.teams.services import unread as unread_service
 from app.teams.services.attachments import AttachmentError
 from app.teams.services.channels import ChannelError
-from app.teams.services.meetings import MeetingError
 from app.teams.services.messages import MessageError
 
 teams_bp = Blueprint("teams", __name__, url_prefix="/teams")
@@ -145,6 +140,13 @@ def channel(channel_id):
     channel = _readable_or_404(channel_id)
 
     member = channels_service.membership(channel.id, current_user.id)
+
+    # Captured BEFORE mark_read, which is the only moment it still says
+    # where you stopped reading. It is what the "New messages" line is
+    # drawn against; read it afterwards and it always equals the newest
+    # message, so the line would never appear.
+    last_read = member.last_read_message_id if member is not None else None
+
     history = messages_service.latest_page(channel.id)
 
     if member is not None and history:
@@ -163,6 +165,7 @@ def channel(channel_id):
         member=member,
         messages=history,
         cursor=history[-1].id if history else 0,
+        last_read=last_read,
         can_post=channels_service.can_post(channel, current_user),
         can_administer=channels_service.can_administer(channel, current_user),
         presence=presence_service.statuses_for(member_ids),
@@ -245,187 +248,6 @@ def dm(user_id):
 
     conversation = channels_service.get_or_create_dm(current_user, other)
     return redirect(url_for("teams.channel", channel_id=conversation.id))
-
-
-# ======================================================================
-# Meetings
-# ======================================================================
-
-def _meeting_or_404(meeting_id):
-    meeting = db.session.get(Meeting, meeting_id)
-    if meeting is None:
-        abort(404)
-    if not meetings_service.can_join(meeting, current_user):
-        abort(404)
-    return meeting
-
-
-@teams_bp.route("/meetings")
-@login_required
-def meetings():
-    return render_template(
-        "teams/meetings.html",
-        live=meetings_service.live_for(current_user),
-        upcoming=meetings_service.upcoming_for(current_user),
-        past=meetings_service.past_for(current_user),
-    )
-
-
-@teams_bp.route("/meetings/new", methods=["GET", "POST"])
-@login_required
-def meeting_new():
-    if request.method == "POST":
-        try:
-            meeting = meetings_service.schedule(
-                title=request.form.get("title"),
-                # The form is a datetime-local, which the browser gives us
-                # in the user's own clock - IST for this team, and exactly
-                # what meeting_date stores. See services/meetings.py.
-                starts_at=_parse_local(request.form.get("meeting_date")),
-                organiser=current_user,
-                participants=_users(request.form.getlist("participant_ids")),
-                agenda=request.form.get("agenda"),
-                duration_minutes=request.form.get("duration_minutes", type=int),
-                client_id=request.form.get("client_id", type=int),
-                channel=meetings_service.channel_for(
-                    request.form.get("channel_id", type=int)),
-            )
-        except MeetingError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("teams.meeting_new"))
-
-        _announce_meeting(meeting, "scheduled")
-        flash(f"“{meeting.title}” scheduled.", "success")
-        return redirect(url_for("teams.meeting_detail", meeting_id=meeting.id))
-
-    return render_template(
-        "teams/meeting_new.html",
-        people=meetings_service.invitable_users(exclude_id=current_user.id),
-        clients=Client.query.filter_by(status="active")
-        .order_by(Client.client_name.asc()).all(),
-        channels=[r["channel"] for r in unread_service.channel_state(current_user)
-                  if not r["channel"].is_dm],
-    )
-
-
-@teams_bp.route("/meetings/<int:meeting_id>")
-@login_required
-def meeting_detail(meeting_id):
-    meeting = _meeting_or_404(meeting_id)
-    return render_template(
-        "teams/meeting_detail.html",
-        meeting=meeting,
-        joinable=meetings_service.is_joinable(meeting),
-        live=meetings_service.is_live(meeting),
-        ends_at=meetings_service.ends_at(meeting),
-        is_organiser=meeting.created_by_id == current_user.id,
-    )
-
-
-@teams_bp.route("/meetings/<int:meeting_id>/join")
-@login_required
-def meeting_join(meeting_id):
-    meeting = _meeting_or_404(meeting_id)
-
-    if not meetings_service.is_joinable(meeting):
-        flash("That meeting is not open.", "error")
-        return redirect(url_for("teams.meeting_detail", meeting_id=meeting.id))
-
-    context = meetings_service.join_context(meeting, current_user)
-    if context is None:
-        flash("No meeting provider is configured on this server.", "error")
-        return redirect(url_for("teams.meeting_detail", meeting_id=meeting.id))
-
-    was_live = meetings_service.is_live(meeting)
-    meetings_service.mark_started(meeting)
-    if not was_live:
-        _announce_meeting(meeting, "started")
-
-    return render_template(
-        "teams/meeting_room.html",
-        meeting=meeting,
-        embed=context["embed"],
-        fallback_url=context["fallback_url"],
-    )
-
-
-@teams_bp.route("/meetings/<int:meeting_id>/end", methods=["POST"])
-@login_required
-def meeting_end(meeting_id):
-    meeting = _meeting_or_404(meeting_id)
-    # Only the organiser closes a meeting for everyone. Anyone else leaving
-    # is just them closing a tab.
-    if meeting.created_by_id != current_user.id:
-        abort(403)
-
-    meetings_service.end(meeting)
-    flash("Meeting ended.", "success")
-    return redirect(url_for("teams.meeting_detail", meeting_id=meeting.id))
-
-
-@teams_bp.route("/c/<int:channel_id>/call", methods=["POST"])
-@login_required
-def channel_call(channel_id):
-    """Start a call from a conversation, inviting everyone in it."""
-    channel = _postable_or_403(channel_id)
-
-    meeting = meetings_service.start_now(
-        title=request.form.get("title") or f"Call in {channel.display_name(current_user)}",
-        organiser=current_user,
-        channel=channel,
-    )
-    _announce_meeting(meeting, "started")
-
-    return redirect(url_for("teams.meeting_join", meeting_id=meeting.id))
-
-
-def _announce_meeting(meeting, event):
-    """Drop a meeting card into the channel the meeting belongs to.
-
-    A system message rather than a table of its own: it is a thing that
-    happened in the conversation, it should sit in the history where it
-    happened, and it costs no schema.
-    """
-    if not meeting.channel_id:
-        return
-    channel = db.session.get(TeamChannel, meeting.channel_id)
-    if channel is None:
-        return
-    try:
-        messages_service.post_message(
-            channel=channel,
-            author=current_user,
-            body=None,
-            kind="meeting",
-            meta={"meeting_id": meeting.id, "event": event,
-                  "title": meeting.title},
-            has_attachments=True,      # "this message needs no body"
-        )
-    except Exception:                                        # noqa: BLE001
-        current_app.logger.exception("[teams-meeting] announce failed")
-
-
-def _users(ids):
-    wanted = [i for i in (_as_int(v) for v in ids) if i]
-    if not wanted:
-        return []
-    return User.query.filter(User.id.in_(wanted), User.status == "active").all()
-
-
-def _parse_local(value):
-    """A browser datetime-local string -> naive datetime in the same clock.
-
-    Deliberately NOT converted to UTC: meeting_date is IST-naive, and the
-    calendar and dashboard both read it that way.
-    """
-    if not value:
-        return None
-    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(value, fmt)
-        except ValueError:
-            continue
-    return None
 
 
 # ======================================================================
@@ -613,7 +435,7 @@ def api_post_message(channel_id):
 
     return jsonify({
         "ok": True,
-        "message": sync_service.render_message(message, current_user),
+        "message": _rendered(message),
     })
 
 
@@ -681,7 +503,7 @@ def api_upload(channel_id):
 
     return jsonify({
         "ok": True,
-        "message": sync_service.render_message(message, current_user),
+        "message": _rendered(message),
     })
 
 
@@ -705,7 +527,7 @@ def api_edit_message(message_id):
 
     return jsonify({
         "ok": True,
-        "message": sync_service.render_message(message, current_user),
+        "message": _rendered(message),
     })
 
 
@@ -727,8 +549,58 @@ def api_react(message_id):
     return jsonify({
         "ok": True,
         "added": added,
-        "message": sync_service.render_message(message, current_user),
+        "message": _rendered(message),
     })
+
+
+@teams_bp.route("/api/messages/<int:message_id>/pin", methods=["POST"])
+@login_required
+def api_pin(message_id):
+    """Pinning is the channel's, so it needs the right to post in it."""
+    message = db.session.get(TeamMessage, message_id)
+    if message is None:
+        abort(404)
+    _postable_or_403(message.channel_id)
+
+    try:
+        pinned = messages_service.toggle_pin(message, current_user)
+    except MessageError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"ok": True, "pinned": pinned, "message": _rendered(message)})
+
+
+@teams_bp.route("/api/messages/<int:message_id>/save", methods=["POST"])
+@login_required
+def api_save(message_id):
+    """Saving is private, so reading the channel is enough."""
+    message = db.session.get(TeamMessage, message_id)
+    if message is None:
+        abort(404)
+    _readable_or_404(message.channel_id)
+
+    saved = messages_service.toggle_save(message, current_user)
+    return jsonify({"ok": True, "saved": saved})
+
+
+@teams_bp.route("/saved")
+@login_required
+def saved():
+    return render_template(
+        "teams/saved.html",
+        results=messages_service.saved_for(current_user),
+    )
+
+
+@teams_bp.route("/c/<int:channel_id>/pins")
+@login_required
+def channel_pins(channel_id):
+    channel = _readable_or_404(channel_id)
+    return render_template(
+        "teams/pins.html",
+        channel=channel,
+        results=messages_service.pinned_in(channel.id),
+    )
 
 
 @teams_bp.route("/api/channels/<int:channel_id>/read", methods=["POST"])
@@ -744,6 +616,21 @@ def api_mark_read(channel_id):
         "ok": True,
         "last_read_message_id": member.last_read_message_id if member else None,
     })
+
+
+def _rendered(message):
+    """A message for a JSON response, grouped the same way the poll would.
+
+    render_message needs the row above it to decide whether this one is a
+    continuation. Skipping that here would make an optimistic bubble - or a
+    just-edited message - sprout an avatar the instant it is replaced, and
+    then lose it again on the next poll.
+    """
+    return sync_service.render_message(
+        message, current_user,
+        previous=messages_service.previous_message(
+            message.channel_id, message.id),
+    )
 
 
 def _as_int(value):

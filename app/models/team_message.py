@@ -105,7 +105,20 @@ class TeamMessage(db.Model):
     #: cleared at the same time so the text is genuinely gone.
     deleted_at = db.Column(db.DateTime, nullable=True)
 
-    user = db.relationship("User")
+    #: Pinned to its channel. Columns rather than a table because a message
+    #: belongs to exactly one channel, so it can be pinned in exactly one
+    #: place - a join table would model a relationship that cannot exist.
+    #: (Saving is the opposite: per person, so it gets its own table.)
+    pinned_at = db.Column(db.DateTime, nullable=True)
+    pinned_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    #: foreign_keys is required now that this table points at users twice -
+    #: once for the author, once for whoever pinned it.
+    user = db.relationship("User", foreign_keys=[user_id])
 
     #: Deliberately lazy. Search needs it to say which conversation a hit
     #: came from, but the delta query runs every couple of seconds on every
@@ -135,11 +148,18 @@ class TeamMessage(db.Model):
         lazy="joined",
     )
 
+    pinned_by = db.relationship("User", foreign_keys=[pinned_by_id])
+
     __table_args__ = (
         # The index the whole module rests on. It serves the delta query
         # (channel_id = ? AND id > ?), the unread count, and the initial
         # backwards page - all three are the same access pattern.
         db.Index("ix_teams_messages_channel_id", "channel_id", "id"),
+        # PARTIAL. A channel has a handful of pins among tens of thousands
+        # of messages, so indexing only the pinned rows keeps this a few
+        # pages instead of a copy of the table.
+        db.Index("ix_teams_messages_pinned", "channel_id",
+                 postgresql_where=db.text("pinned_at IS NOT NULL")),
         # The change sweep: channel_id = ? AND updated_at > ?.
         db.Index("ix_teams_messages_channel_updated",
                  "channel_id", "updated_at"),

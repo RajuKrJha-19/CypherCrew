@@ -239,7 +239,7 @@ class Config:
     SOCIAL_WORKER_INTERVAL = int(os.getenv("SOCIAL_WORKER_INTERVAL", "20"))
 
     # ------------------------------------------------------------------
-    # Cypher-Teams (chat + meetings)
+    # Cypher-Teams (chat)
     # ------------------------------------------------------------------
     # Master feature flag, same contract as SOCIAL_ENGINE_ENABLED: OFF by
     # default, and with it off the blueprint is never registered, so /teams
@@ -266,21 +266,3 @@ class Config:
     # for reference-file uploads). Without its own cap, one dragged file
     # could push a multi-gigabyte body through a gunicorn worker.
     TEAMS_ATTACHMENT_MAX_MB = int(os.getenv("TEAMS_ATTACHMENT_MAX_MB", "25"))
-
-    # ---- Meetings ----
-    # Which meeting provider adapter serves new rooms. "jitsi" is the only
-    # one shipped; the registry exists so LiveKit/Daily is one new file.
-    TEAMS_MEETING_PROVIDER = os.getenv("TEAMS_MEETING_PROVIDER", "jitsi")
-
-    # Jitsi. The public meet.jit.si needs no account and no credentials, so
-    # meetings work out of the box. Point this at a self-hosted deployment
-    # (and set the JWT pair) to get server-side authorisation - on the public
-    # instance, anyone who learns a room name can join it.
-    TEAMS_JITSI_DOMAIN = os.getenv("TEAMS_JITSI_DOMAIN", "meet.jit.si")
-    TEAMS_JITSI_APP_ID = os.getenv("TEAMS_JITSI_APP_ID")
-    TEAMS_JITSI_JWT_SECRET = os.getenv("TEAMS_JITSI_JWT_SECRET")
-    # Hold joiners in a lobby until someone admits them. Cheap mitigation for
-    # the public-instance room-name problem above; on by default.
-    TEAMS_JITSI_LOBBY = (
-        os.getenv("TEAMS_JITSI_LOBBY", "True").lower() == "true"
-    )

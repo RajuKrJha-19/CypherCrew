@@ -94,7 +94,22 @@ def build_sync_payload(user, channel=None, after_id=0, since=None,
 
     new_messages, has_more = messages_service.messages_after(
         channel.id, after_id)
-    payload["messages"] = [render_message(m, user) for m in new_messages]
+
+    # Grouping needs the message BEFORE each one. Inside the batch that is
+    # simply the previous item; for the first, it is the row the client
+    # already holds, which the delta by definition does not contain - so it
+    # is fetched once. Without that seed, every poll would restart the
+    # block and a run of messages would sprout a fresh avatar every tick.
+    previous = (
+        messages_service.previous_message(channel.id, new_messages[0].id)
+        if new_messages else None
+    )
+    rendered = []
+    for message in new_messages:
+        rendered.append(render_message(message, user, previous=previous))
+        previous = message
+
+    payload["messages"] = rendered
     payload["more"] = has_more
 
     # Everything the client already holds that has since been edited,
@@ -125,9 +140,22 @@ def build_sync_payload(user, channel=None, after_id=0, since=None,
     return payload
 
 
-def render_message(message, viewer):
+def render_message(message, viewer, previous=None):
     """One message, as both the metadata the client indexes on and the
-    HTML it paints - rendered by the same partial that drew the page."""
+    HTML it paints - rendered by the same partial that drew the page.
+
+    `divider` is kept OUT of `html` on purpose. The client replaces a
+    changed message with `node.outerHTML = html`, which requires html to be
+    exactly one element; folding a date divider into it would either break
+    that contract or duplicate the divider on every edit.
+    """
+    divider = None
+    if messages_service.day_changed(message, previous):
+        divider = render_template(
+            "teams/_day_divider.html",
+            label=messages_service.day_label(message.created_at),
+        )
+
     return {
         "id": message.id,
         "ch": message.channel_id,
@@ -137,8 +165,10 @@ def render_message(message, viewer):
         "root": message.thread_root_id,
         "deleted": message.is_deleted,
         "edited": _iso(message.edited_at),
+        "divider": divider,
         "html": render_template(
-            "teams/_message.html", message=message, viewer=viewer
+            "teams/_message.html", message=message, viewer=viewer,
+            continuation=messages_service.is_continuation(message, previous),
         ),
     }
 

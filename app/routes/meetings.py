@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
-    current_app,
     render_template,
     request,
     redirect,
@@ -40,24 +39,9 @@ def can_manage_meetings():
     return _can_manage_meetings(current_user)
 
 
-def _teams_owns_meetings():
-    """Whether Cypher-Teams has taken this module over.
-
-    When it has, these routes become redirects rather than being deleted.
-    The endpoint NAMES have to survive: calendar/index.html builds four
-    links with url_for('meetings.meeting_detail'), and removing the
-    endpoint would break the calendar for a cosmetic tidy-up. With the flag
-    off the pages render exactly as they always did.
-    """
-    return bool(current_app.config.get("TEAMS_ENABLED"))
-
-
 @meetings_bp.route("/", methods=["GET", "POST"])
 @login_required
 def list_meetings():
-
-    if _teams_owns_meetings() and request.method == "GET":
-        return redirect(url_for("teams.meetings"))
 
     if request.method == "POST":
 
@@ -196,11 +180,6 @@ def list_meetings():
 def meeting_detail(meeting_id):
 
     meeting = Meeting.query.get_or_404(meeting_id)
-
-    if _teams_owns_meetings():
-        # Teams' own detail page can actually join the call; this one only
-        # ever described it.
-        return redirect(url_for("teams.meeting_detail", meeting_id=meeting.id))
 
     return render_template(
         "meetings/detail.html",

@@ -1,0 +1,41 @@
+{% extends "base_teams.html" %}
+
+{% block title %}Pinned in {{ channel.display_name(current_user) }} · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid fa-thumbtack"></i>
+  <div class="txt">
+    <b>Pinned</b>
+    <span>{{ '' if channel.is_dm else '#' }}{{ channel.display_name(current_user) }}</span>
+  </div>
+  <a class="tm-action" href="{{ url_for('teams.channel', channel_id=channel.id) }}"
+     title="Back to the conversation" aria-label="Back to the conversation">
+    <i class="fa-solid fa-arrow-left-long"></i></a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page">
+  <section class="table-card">
+    {% if results %}
+      <div class="card-header">
+        <h2 class="card-title">
+          {{ results|length }} pinned message{{ '' if results|length == 1 else 's' }}
+        </h2>
+      </div>
+      {% include "teams/_message_list.html" %}
+    {% else %}
+      <div class="empty-state">
+        <i class="fa-solid fa-thumbtack"></i>
+        <h3>Nothing pinned here</h3>
+        <p>
+          Hover a message and hit the pin to keep it at hand — a brief, a
+          deadline, the thing everyone keeps scrolling back for.
+          Pins are shared with the whole channel.
+        </p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

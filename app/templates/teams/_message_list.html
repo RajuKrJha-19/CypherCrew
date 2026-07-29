@@ -1,0 +1,27 @@
+{# A flat list of messages linking back to where they were said.
+
+   Shared by Search, Saved and Pins - three pages asking the same question
+   ("show me these messages, elsewhere") and one answer. The deep link is
+   the point of all three: a result you cannot open in context is trivia. #}
+<ul class="tm-search-results">
+  {% for message in results %}
+    <li>
+      <a href="{{ url_for('teams.channel', channel_id=message.channel_id) }}#tm-{{ message.id }}">
+        <span class="tm-search-where">
+          <i class="fa-solid {{ 'fa-user' if message.channel.is_dm else 'fa-hashtag' }}"></i>
+          {{ message.channel.display_name(current_user) }}
+        </span>
+        <span class="tm-search-body">
+          {{ message.body or "(attachment)" }}
+        </span>
+        <span class="tm-search-meta">
+          {{ message.user.name if message.user else 'Former teammate' }}
+          · {{ message.created_at|ist }}
+          {%- if message.pinned_at and message.pinned_by %}
+            · pinned by {{ message.pinned_by.name }}
+          {%- endif %}
+        </span>
+      </a>
+    </li>
+  {% endfor %}
+</ul>

@@ -1,0 +1,4 @@
+{# A date divider. Its own partial because both the first paint and
+   sync.render_message emit it, and a rule drawn two different ways is a
+   rule drawn wrong once. #}
+<div class="tm-day" role="separator"><span>{{ label }}</span></div>

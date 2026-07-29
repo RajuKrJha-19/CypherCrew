@@ -1,0 +1,34 @@
+{% extends "base_teams.html" %}
+
+{% block title %}Saved · Teams{% endblock %}
+
+{% block topbar %}
+<div class="teams-channel-title">
+  <i class="fa-solid fa-bookmark"></i>
+  <div class="txt"><b>Saved</b><span>Only you can see these</span></div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="teams-page">
+  <section class="table-card">
+    {% if results %}
+      <div class="card-header">
+        <h2 class="card-title">
+          {{ results|length }} saved message{{ '' if results|length == 1 else 's' }}
+        </h2>
+      </div>
+      {% include "teams/_message_list.html" %}
+    {% else %}
+      <div class="empty-state">
+        <i class="fa-regular fa-bookmark"></i>
+        <h3>Nothing saved yet</h3>
+        <p>
+          Hover a message and hit the bookmark to keep it here.
+          Saving is private — nobody else can see what you have kept.
+        </p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

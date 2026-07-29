@@ -16,12 +16,6 @@ from app.teams.services import notify as notify_service
 from app.teams.services import unread as unread_service
 from app.teams.services.channels import ChannelError
 from app.teams.services.messages import MessageError
-from tests.conftest import PYTEST_EMAIL_PREFIX
-
-#: `meetings` holds real rows and is deliberately never truncated, so test
-#: meetings fence themselves by title exactly the way test tasks and
-#: clients do. _purge_test_rows deletes on this prefix.
-PYTEST_MEETING_PREFIX = PYTEST_EMAIL_PREFIX
 
 
 @pytest.fixture()
@@ -983,211 +977,301 @@ def test_you_cannot_remove_yourself_from_the_members_list(
 
 
 # ---------------------------------------------------------------------------
-# Meetings
+# Pinning and saving
 # ---------------------------------------------------------------------------
+# Two shapes for two different things: a pin is the channel's and lives on
+# the message, a save is one person's and gets its own table.
 
-@pytest.fixture()
-def meeting(session, people):
-    from app.utils.timezone import ist_now
-    from datetime import timedelta as _td
-    from app.teams.services import meetings as meetings_service
-
-    author, other = people
-    return meetings_service.schedule(
-        title=f"{PYTEST_MEETING_PREFIX}Standup",
-        starts_at=ist_now() + _td(minutes=5),
-        organiser=author,
-        participants=[other],
-    )
-
-
-def test_the_room_key_is_unguessable_and_not_derived_from_the_meeting(
-        session, meeting):
-    """On the public Jitsi the room name IS the authorisation, so anything
-    derivable from the meeting is an open door."""
-    from app.teams.providers.registry import get_provider
-
-    assert meeting.room_key
-    assert len(meeting.room_key) >= 32
-
-    room = get_provider("jitsi").room_name(meeting)
-    assert str(meeting.id) not in room
-    assert "standup" not in room.lower()
-    # And stable, or two people would end up in different rooms.
-    assert get_provider("jitsi").room_name(meeting) == room
-
-
-def test_two_meetings_never_share_a_room(session, people):
-    from app.utils.timezone import ist_now
-    from app.teams.services import meetings as meetings_service
-
-    author, _ = people
-    keys = {
-        meetings_service.schedule(
-            title=f"{PYTEST_MEETING_PREFIX}m{n}",
-            starts_at=ist_now(), organiser=author).room_key
-        for n in range(5)
-    }
-    assert len(keys) == 5
-
-
-def test_the_organiser_is_always_invited(session, meeting, people):
-    author, other = people
-    invited = {p.id for p in meeting.participants}
-    assert author.id in invited
-    assert other.id in invited
-
-
-def test_meeting_date_is_ist_and_started_at_is_utc(session, meeting):
-    """The landmine this module is built around.
-
-    meeting_date predates Teams and is IST-naive; started_at is a
-    server-recorded UTC actual. Subtracting one from the other would be
-    wrong by five and a half hours, so nothing may treat them as the same
-    clock.
-    """
-    from datetime import datetime
-    from app.teams.services import meetings as meetings_service
-    from app.utils.timezone import IST_OFFSET, ist_now
-
-    meetings_service.mark_started(meeting)
-
-    # meeting_date sits near IST now, started_at near UTC now.
-    assert abs((meeting.meeting_date - ist_now()).total_seconds()) < 600
-    assert abs((meeting.started_at - datetime.utcnow()).total_seconds()) < 600
-    # Which means they genuinely differ by the offset - the thing a naive
-    # comparison would silently get wrong.
-    drift = meeting.meeting_date - meeting.started_at
-    assert abs(drift - IST_OFFSET).total_seconds() < 600
-
-
-def test_a_meeting_opens_shortly_before_it_starts(session, people):
-    from datetime import timedelta as _td
-    from app.teams.services import meetings as meetings_service
-    from app.utils.timezone import ist_now
-
-    author, _ = people
-    soon = meetings_service.schedule(
-        title=f"{PYTEST_MEETING_PREFIX}soon", organiser=author,
-        starts_at=ist_now() + _td(minutes=5))
-    later = meetings_service.schedule(
-        title=f"{PYTEST_MEETING_PREFIX}later", organiser=author,
-        starts_at=ist_now() + _td(hours=3))
-
-    assert meetings_service.is_joinable(soon) is True
-    assert meetings_service.is_joinable(later) is False
-
-
-def test_a_running_meeting_stays_joinable_past_its_end(session, people):
-    """Overrunning is normal; locking out the person arriving late is not."""
-    from datetime import timedelta as _td
-    from app.teams.services import meetings as meetings_service
-    from app.utils.timezone import ist_now
-
-    author, _ = people
-    overdue = meetings_service.schedule(
-        title=f"{PYTEST_MEETING_PREFIX}overdue", organiser=author,
-        starts_at=ist_now() - _td(hours=2), duration_minutes=15)
-
-    assert meetings_service.is_joinable(overdue) is False
-    meetings_service.mark_started(overdue)
-    assert meetings_service.is_joinable(overdue) is True
-
-
-def test_an_ended_meeting_is_not_joinable(session, meeting):
-    from app.teams.services import meetings as meetings_service
-
-    meetings_service.mark_started(meeting)
-    meetings_service.end(meeting)
-    assert meetings_service.is_joinable(meeting) is False
-
-
-def test_a_channel_meeting_admits_the_whole_channel(
-        session, channel, people):
-    """"Huddle in #design" must not need everyone invited one by one."""
-    from app.utils.timezone import ist_now
-    from app.teams.services import meetings as meetings_service
-
+def test_a_pin_is_shared_and_a_save_is_not(session, channel, people):
     author, other = people
     channels_service.add_member(channel, other)
-    call = meetings_service.start_now(
-        f"{PYTEST_MEETING_PREFIX}huddle", author, channel=channel)
+    message = messages_service.post_message(channel, author, "the brief")
 
-    assert meetings_service.can_join(call, other) is True
+    messages_service.toggle_pin(message, author)
+    messages_service.toggle_save(message, author)
+
+    # The pin is on the message, so everyone sees it.
+    assert [m.id for m in messages_service.pinned_in(channel.id)] == [message.id]
+    # The save is not - it is only in the saver's list.
+    assert [m.id for m in messages_service.saved_for(author)] == [message.id]
+    assert messages_service.saved_for(other) == []
 
 
-def test_a_channel_meeting_excludes_people_outside_the_channel(
-        session, people, make_user):
-    from app.teams.services import meetings as meetings_service
+def test_pin_and_save_both_toggle(session, channel, people):
+    author, _ = people
+    message = messages_service.post_message(channel, author, "toggle me")
+
+    assert messages_service.toggle_pin(message, author) is True
+    assert messages_service.toggle_pin(message, author) is False
+    assert message.pinned_at is None
+    assert message.pinned_by_id is None
+
+    assert messages_service.toggle_save(message, author) is True
+    assert messages_service.toggle_save(message, author) is False
+    assert messages_service.saved_for(author) == []
+
+
+def test_pinning_moves_the_change_cursor(session, channel, people):
+    """Pinning changes the bubble, and the bubble is delivered by the
+    change sweep - which only looks at updated_at."""
+    author, _ = people
+    message = messages_service.post_message(channel, author, "pin me")
+    before = message.updated_at
+
+    messages_service.toggle_pin(message, author)
+
+    assert message.updated_at > before
+
+
+def test_a_channel_cannot_be_pinned_to_death(session, channel, people):
+    author, _ = people
+    for n in range(messages_service.MAX_PINS):
+        messages_service.toggle_pin(
+            messages_service.post_message(channel, author, f"pin {n}"), author)
+
+    one_too_many = messages_service.post_message(channel, author, "one more")
+    with pytest.raises(MessageError):
+        messages_service.toggle_pin(one_too_many, author)
+
+
+def test_deleted_messages_leave_both_lists(session, channel, people):
+    author, _ = people
+    message = messages_service.post_message(channel, author, "oops")
+    messages_service.toggle_pin(message, author)
+    messages_service.toggle_save(message, author)
+
+    messages_service.delete_message(message, author)
+
+    assert messages_service.pinned_in(channel.id) == []
+    assert messages_service.saved_for(author) == []
+
+
+def test_saved_state_for_a_page_is_one_query(session, channel, people):
+    """A message list must not ask "is this saved?" per bubble."""
+    from sqlalchemy import event
 
     author, _ = people
-    outsider = make_user(role="content_writer")
-    private = channels_service.create_channel(
-        "Leadership", author, visibility="private")
+    ids = []
+    for n in range(6):
+        message = messages_service.post_message(channel, author, f"m{n}")
+        ids.append(message.id)
+        if n % 2 == 0:
+            messages_service.toggle_save(message, author)
 
-    call = meetings_service.start_now(
-        f"{PYTEST_MEETING_PREFIX}private", author, channel=private)
+    statements = []
 
-    assert meetings_service.can_join(call, author) is True
-    assert meetings_service.can_join(call, outsider) is False
+    # A named function, not two lambdas: `remove` matches on identity, so
+    # passing a fresh lambda would fail to detach and leak the listener
+    # into every test that runs after this one.
+    def record(conn, cursor, statement, params, context, executemany):
+        statements.append(statement)
+
+    # The commits above expired `author`, so reading author.id inside the
+    # call would reload it and land an extra SELECT in the count. Touch it
+    # first, outside the window.
+    _ = author.id
+
+    engine = db.session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        saved = messages_service.saved_ids_for(author, ids)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert len(saved) == 3
+    assert len(statements) <= 1
 
 
-def test_a_meeting_with_no_channel_is_open_to_active_staff(
-        session, meeting, make_user):
-    """Matches what the old meetings page did - every meeting was visible
-    to everyone. Narrowing that silently would strand people."""
-    from app.teams.services import meetings as meetings_service
+def test_pinning_needs_the_right_to_post(session, client, login, channel, people):
+    """A pin is the channel's shared shortlist, so reading is not enough."""
+    author, other = people
+    message = messages_service.post_message(channel, author, "the brief")
+    login(other)                       # can read the public channel, not post
 
-    assert meetings_service.can_join(meeting, make_user(role="video_editor")) is True
-    assert meetings_service.can_join(
-        meeting, make_user(role="video_editor", status="inactive")) is False
+    assert client.post(f"/teams/api/messages/{message.id}/pin").status_code == 403
+    # Saving is private, so reading IS enough.
+    assert client.post(f"/teams/api/messages/{message.id}/save").status_code == 200
 
 
-def test_starting_a_call_posts_a_card_into_the_channel(
+def test_the_saved_and_pins_pages_render(
         session, client, login, channel, people):
     author, _ = people
+    message = messages_service.post_message(channel, author, "keep this one")
+    messages_service.toggle_pin(message, author)
+    messages_service.toggle_save(message, author)
     login(author)
 
-    response = client.post(f"/teams/c/{channel.id}/call")
+    saved_page = client.get("/teams/saved").get_data(as_text=True)
+    pins_page = client.get(f"/teams/c/{channel.id}/pins").get_data(as_text=True)
 
-    assert response.status_code == 302
-    card = TeamMessage.query.filter_by(kind="meeting").order_by(
-        TeamMessage.id.desc()).first()
-    assert card is not None
-    assert card.meta["event"] == "started"
-    assert card.body is None
+    assert "keep this one" in saved_page
+    assert "keep this one" in pins_page
+    # Both deep-link back into the conversation.
+    assert f"#tm-{message.id}" in saved_page
+    assert f"#tm-{message.id}" in pins_page
 
 
-def test_the_join_page_keeps_the_room_out_of_the_url(
-        session, client, login, meeting, people):
+# ---------------------------------------------------------------------------
+# Grouping and date dividers
+# ---------------------------------------------------------------------------
+
+def test_a_second_message_from_the_same_person_is_grouped(
+        session, channel, people):
     author, _ = people
-    login(author)
+    first = messages_service.post_message(channel, author, "one")
+    second = messages_service.post_message(channel, author, "two")
 
-    response = client.get(f"/teams/meetings/{meeting.id}/join")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    # In the config blob, not in any href or the address bar.
-    assert meeting.room_key in body
-    assert f"/{meeting.room_key}" not in response.request.path
+    assert messages_service.is_continuation(second, first) is True
 
 
-def test_the_old_meetings_endpoints_still_resolve(session, app, client, login,
-                                                  meeting, people):
-    """calendar/index.html builds four url_for('meetings.meeting_detail')
-    links and dashboard.py queries Meeting in five places. Removing the
-    endpoints for a tidy-up would break the calendar."""
+def test_a_different_author_breaks_the_group(session, channel, people):
+    author, other = people
+    channels_service.add_member(channel, other)
+    first = messages_service.post_message(channel, author, "mine")
+    second = messages_service.post_message(channel, other, "theirs")
+
+    assert messages_service.is_continuation(second, first) is False
+
+
+def test_a_long_gap_breaks_the_group(session, channel, people):
+    from datetime import timedelta as _td
     author, _ = people
+    first = messages_service.post_message(channel, author, "morning")
+    second = messages_service.post_message(channel, author, "afternoon")
+    second.created_at = first.created_at + _td(hours=4)
+
+    assert messages_service.is_continuation(second, first) is False
+
+
+def test_a_thread_reply_is_never_grouped_with_the_channel(
+        session, channel, people):
+    """It belongs to its thread, not to the run of messages above it."""
+    author, _ = people
+    root = messages_service.post_message(channel, author, "question?")
+    reply = messages_service.post_message(
+        channel, author, "answer", parent_id=root.id)
+
+    assert messages_service.is_continuation(reply, root) is False
+
+
+def test_the_day_boundary_is_ist_not_utc(session, channel, people):
+    """This team's day rolls over at IST midnight. In UTC that lands at
+    18:30, so an evening's messages would file under tomorrow."""
+    from datetime import datetime as _dt
+    author, _ = people
+    a = messages_service.post_message(channel, author, "evening")
+    b = messages_service.post_message(channel, author, "later")
+
+    # 17:00 and 19:00 UTC are 22:30 and 00:30 IST - the same UTC day, but
+    # either side of midnight for the people reading it.
+    a.created_at = _dt(2026, 7, 29, 17, 0)
+    b.created_at = _dt(2026, 7, 29, 19, 0)
+
+    assert messages_service.day_changed(b, a) is True
+    # And grouping has to respect that too, gap or no gap.
+    assert messages_service.is_continuation(b, a) is False
+
+
+def test_the_first_message_always_gets_a_divider(session, channel, people):
+    author, _ = people
+    first = messages_service.post_message(channel, author, "hello")
+
+    assert messages_service.day_changed(first, None) is True
+    assert messages_service.is_continuation(first, None) is False
+
+
+def test_a_polled_message_is_grouped_against_the_row_the_client_holds(
+        session, client, login, channel, people):
+    """The seed the delta cannot contain.
+
+    Without previous_message(), the first message of every tick would
+    restart the block and a run would sprout a fresh avatar every 2s.
+    """
+    author, _ = people
+    held = messages_service.post_message(channel, author, "one")
     login(author)
 
-    endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
-    assert "meetings.meeting_detail" in endpoints
-    assert "meetings.list_meetings" in endpoints
+    payload = client.get(
+        f"/teams/api/sync?channel={channel.id}&after={held.id}").get_json()
+    assert payload["messages"] == []
 
-    # With Teams on they redirect into it rather than rendering the old page.
-    assert client.get("/meetings/").status_code == 302
-    assert client.get(f"/meetings/{meeting.id}").headers["Location"].endswith(
-        f"/teams/meetings/{meeting.id}")
+    messages_service.post_message(channel, author, "two")
+    payload = client.get(
+        f"/teams/api/sync?channel={channel.id}&after={held.id}").get_json()
+
+    assert len(payload["messages"]) == 1
+    assert "is-continuation" in payload["messages"][0]["html"]
+    # Same day, so no divider comes with it.
+    assert payload["messages"][0]["divider"] is None
+
+
+def test_the_divider_is_not_folded_into_the_message_html(
+        session, client, login, channel, people):
+    """`changed` replaces a node with outerHTML, which needs html to be
+    exactly one element. A divider inside it would duplicate on every
+    edit."""
+    author, _ = people
+    messages_service.post_message(channel, author, "first ever")
+    login(author)
+
+    entry = client.get(
+        f"/teams/api/sync?channel={channel.id}&after=0").get_json()["messages"][0]
+
+    assert entry["divider"] is not None
+    assert "tm-day" in entry["divider"]
+    assert "tm-day" not in entry["html"]
+
+
+def test_the_unread_line_marks_where_you_stopped_reading(
+        session, client, login, channel, people):
+    """The route has to capture last_read BEFORE mark_read runs. Read it
+    afterwards and it always equals the newest message, so the line would
+    silently never appear."""
+    author, other = people
+    channels_service.add_member(channel, other)
+    messages_service.post_message(channel, author, "seen already")
+
+    # `other` reads up to here, then two more arrive.
+    unread_service.mark_read(other, channel)
+    messages_service.post_message(channel, author, "missed one")
+    messages_service.post_message(channel, author, "missed two")
+
+    login(other)
+    page = client.get(f"/teams/c/{channel.id}").get_data(as_text=True)
+
+    # The class, not the bare substring - the element carries both a class
+    # and a data attribute with the same name, so a substring count is 2.
+    marker = 'class="tm-unread-line"'
+    assert marker in page
+    assert page.count(marker) == 1, "the line must be drawn once"
+    # And it sits above the first missed message, not the seen one.
+    assert page.index(marker) > page.index("seen already")
+    assert page.index(marker) < page.index("missed one")
+
+
+def test_no_unread_line_when_nothing_is_new(
+        session, client, login, channel, people):
+    author, _ = people
+    messages_service.post_message(channel, author, "only message")
+    login(author)
+
+    page = client.get(f"/teams/c/{channel.id}").get_data(as_text=True)
+    assert "tm-unread-line" not in page
+
+
+def test_your_own_message_never_gets_an_unread_line(
+        session, client, login, channel, people):
+    """Being told your own message is new is nonsense."""
+    author, other = people
+    channels_service.add_member(channel, other)
+    messages_service.post_message(channel, other, "theirs")
+    unread_service.mark_read(author, channel)
+    messages_service.post_message(channel, author, "mine, just sent")
+
+    login(author)
+    page = client.get(f"/teams/c/{channel.id}").get_data(as_text=True)
+
+    assert "tm-unread-line" not in page
 
 
 # ---------------------------------------------------------------------------

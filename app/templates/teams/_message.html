@@ -20,13 +20,27 @@
 {% set viewer = viewer if viewer is defined and viewer else current_user %}
 {% set is_own = viewer and message.user_id == viewer.id %}
 
-<div class="tm-msg{{ ' is-own' if is_own }}{{ ' is-deleted' if message.is_deleted }}"
+{# Continuation of the block above: same person, same day, within a few
+   minutes. Worked out on the server (services/messages.is_continuation) so
+   the poll and the first paint can never disagree. Defaults to False, so a
+   caller that does not care still gets a correct, ungrouped message. #}
+{% set continuation = continuation if continuation is defined else False %}
+
+<div class="tm-msg{{ ' is-own' if is_own }}{{ ' is-deleted' if message.is_deleted }}{{ ' is-continuation' if continuation }}"
      id="tm-{{ message.id }}"
      data-id="{{ message.id }}"
      {% if message.client_msg_id %}data-cid="{{ message.client_msg_id }}"{% endif %}>
 
   <div class="tm-avatar">
-    {% if message.user %}
+    {% if continuation %}
+      {# The gutter is kept, not collapsed - the text stays on the same
+         left edge as the message above it. What sits here is the time,
+         revealed on hover, which is where Slack put it and where people
+         now look for it. #}
+      <time class="tm-hover-time"
+            datetime="{{ message.created_at.isoformat() }}Z"
+            title="{{ message.created_at|ist }}">{{ message.created_at|ist('%I:%M') }}</time>
+    {% elif message.user %}
       {% set src = avatar_url(message.user) %}
       {% if src %}<img src="{{ src }}" alt="{{ message.user.name }}">
       {% else %}{{ message.user.initials }}{% endif %}
@@ -36,41 +50,40 @@
   </div>
 
   <div class="tm-body">
+    {% if message.pinned_at and not message.is_deleted %}
+      {# Shown on the message itself, not only in the pins list - a pin
+         nobody can see in the conversation is a pin nobody remembers. #}
+      <span class="tm-pinned-flag">
+        <i class="fa-solid fa-thumbtack"></i>
+        Pinned{% if message.pinned_by %} by {{ message.pinned_by.name }}{% endif %}
+      </span>
+    {% endif %}
+
+    {% if not continuation %}
     <div class="tm-head">
       {# user_id is SET NULL on delete so history survives a removed
          account — render that state rather than crashing on .name. #}
       <strong>{{ message.user.name if message.user else "Former teammate" }}</strong>
-      <time datetime="{{ message.created_at.isoformat() }}Z">
-        {{ message.created_at|ist }}
+      {# Time only. The day is carried by the divider above the block, so
+         repeating the date on every line is noise. #}
+      <time datetime="{{ message.created_at.isoformat() }}Z"
+            title="{{ message.created_at|ist }}">
+        {{ message.created_at|ist('%I:%M %p') }}
       </time>
-      {% if message.edited_at and not message.is_deleted %}
-        <span class="tm-edited" title="Edited {{ message.edited_at|ist }}">edited</span>
-      {% endif %}
     </div>
+    {% endif %}
 
     {% if message.is_deleted %}
       <p class="tm-text tm-gone"><i class="fa-solid fa-ban"></i> Message deleted</p>
     {% else %}
-      {# A meeting posts a card into its channel instead of a sentence.
-         It is a system message, so it carries no body - everything it
-         needs is in meta, which is why meta is JSONB and not columns. #}
-      {% if message.kind == 'meeting' and message.meta %}
-        <a class="tm-meeting-card"
-           href="{{ url_for('teams.meeting_detail', meeting_id=message.meta.get('meeting_id', 0)) }}">
-          <span class="tm-meeting-card-icon"><i class="fa-solid fa-video"></i></span>
-          <span class="tm-meeting-card-body">
-            <b>{{ message.meta.get('title') or 'Meeting' }}</b>
-            <span>{{ 'started a call' if message.meta.get('event') == 'started'
-                     else 'scheduled a meeting' }}</span>
-          </span>
-          <span class="tm-meeting-card-go">Open</span>
-        </a>
-      {% endif %}
-
       {# A file dropped in with no caption is a real message, so the text
          is only rendered when there is text. #}
       {% if message.body %}
-        <p class="tm-text">{{ message.body|linkify|mentions }}</p>
+        {# "edited" sits inline after the text, not in the header. A
+           grouped message has no header to put it in, and this is where
+           people read it anyway. #}
+        <p class="tm-text">{{ message.body|linkify|mentions }}{% if message.edited_at %}<span
+            class="tm-edited" title="Edited {{ message.edited_at|ist }}">(edited)</span>{% endif %}</p>
       {% endif %}
 
       {% if message.attachments %}
@@ -134,6 +147,14 @@
     <button type="button" class="tm-action" data-reply="{{ message.id }}"
             title="Reply in thread" aria-label="Reply in thread">
       <i class="fa-solid fa-reply"></i></button>
+    <button type="button" class="tm-action{{ ' on' if message.pinned_at }}"
+            data-pin="{{ message.id }}"
+            title="{{ 'Unpin from channel' if message.pinned_at else 'Pin to channel' }}"
+            aria-label="Pin to channel">
+      <i class="fa-solid fa-thumbtack"></i></button>
+    <button type="button" class="tm-action" data-save="{{ message.id }}"
+            title="Save for later" aria-label="Save for later">
+      <i class="fa-regular fa-bookmark"></i></button>
     {% if is_own %}
       <button type="button" class="tm-action" data-edit="{{ message.id }}"
               title="Edit" aria-label="Edit"><i class="fa-solid fa-pen"></i></button>

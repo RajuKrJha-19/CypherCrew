@@ -149,12 +149,12 @@ def _teams_models():
     meeting tests fence themselves by title instead.
     """
     from app.models import (
-        TeamReaction, TeamAttachment, TeamMessage, TeamTyping,
-        TeamPresence, TeamChannelMember, TeamChannel,
+        TeamReaction, TeamAttachment, TeamSavedMessage, TeamMessage,
+        TeamTyping, TeamPresence, TeamChannelMember, TeamChannel,
     )
     return [
-        TeamReaction, TeamAttachment, TeamMessage, TeamTyping,
-        TeamPresence, TeamChannelMember, TeamChannel,
+        TeamReaction, TeamAttachment, TeamSavedMessage, TeamMessage,
+        TeamTyping, TeamPresence, TeamChannelMember, TeamChannel,
     ]
 
 
@@ -296,24 +296,6 @@ def _purge_test_rows():
         User, UserPermission,
     )
 
-    # Meetings, fenced by title. The table predates Teams and holds real
-    # rows, so unlike teams_* it is never truncated - only the ones a test
-    # made are removed, the same way test tasks and clients are.
-    from app.models import Meeting
-    from app.models.meeting import meeting_participants
-    meeting_ids = [
-        row.id for row in _db.session.query(Meeting.id)
-        .filter(Meeting.title.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
-    ]
-    if meeting_ids:
-        _db.session.execute(
-            meeting_participants.delete().where(
-                meeting_participants.c.meeting_id.in_(meeting_ids))
-        )
-        Meeting.query.filter(
-            Meeting.id.in_(meeting_ids)
-        ).delete(synchronize_session=False)
-
     task_ids = [
         row.id for row in _db.session.query(Task.id)
         .filter(Task.title.like(f"{PYTEST_EMAIL_PREFIX}%")).all()
@@ -380,7 +362,7 @@ def _purge_test_rows():
         # belongs here - a missed one surfaces as a teardown-only
         # ForeignKeyViolation, which is a confusing way to find out.
         from app.models import (
-            ContentVersion, Meeting, Notification, SocialAccount,
+            ContentVersion, Notification, SocialAccount,
             SocialAuditLog, SocialPost, SocialPostTarget, TeamChannel,
             TeamMessage,
         )
@@ -396,8 +378,7 @@ def _purge_test_rows():
             # already has ON DELETE SET NULL, but it is detached here too
             # so the teardown does not depend on which layer runs first.
             (TeamChannel, ("created_by_id",)),
-            (TeamMessage, ("user_id",)),
-            (Meeting, ("created_by_id",)),
+            (TeamMessage, ("user_id", "pinned_by_id")),
         ):
             for column in columns:
                 model.query.filter(

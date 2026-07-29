@@ -223,9 +223,6 @@ def create_app():
     # behind its flag, so with it off /teams 404s and nothing about chat or
     # meetings is wired into request handling.
     if app.config.get("TEAMS_ENABLED"):
-        from app.teams.providers.registry import load_meeting_providers
-        load_meeting_providers(app)
-
         from app.routes.teams import teams_bp
         app.register_blueprint(teams_bp)
 
@@ -402,6 +399,20 @@ def create_app():
         return cache[key]
 
     app.jinja_env.globals["teams_file_url"] = _teams_file_url
+
+    # Message grouping and date dividers. Exposed as globals rather than
+    # worked out in the template, so channel.html's first paint and
+    # services/sync.render_message call exactly the same code - the two
+    # renderers agreeing is the whole reason there is only one of them.
+    def _teams_grouping():
+        from app.teams.services import messages as _m
+        return _m
+
+    app.jinja_env.globals.update(
+        teams_is_continuation=lambda m, p: _teams_grouping().is_continuation(m, p),
+        teams_day_changed=lambda m, p: _teams_grouping().day_changed(m, p),
+        teams_day_label=lambda when: _teams_grouping().day_label(when),
+    )
 
     # Cache-bust static assets: append each file's mtime as ?v= so a
     # shipped CSS/JS change is fetched fresh instead of served from a

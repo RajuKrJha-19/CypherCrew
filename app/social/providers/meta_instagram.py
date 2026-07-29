@@ -193,8 +193,17 @@ class MetaInstagramProvider(MetaBaseProvider):
         container_id = provider_state["container_id"]
         ig_id = provider_state["ig_id"]
 
-        status = graph.get(container_id, token=token,
-                           params={"fields": "status_code"}).get("status_code")
+        # Ask for `status` as well as `status_code`.
+        #
+        # status_code is one of FINISHED / IN_PROGRESS / ERROR / EXPIRED and
+        # says nothing about WHY. `status` carries Meta's own sentence -
+        # "moov atom not at front of file", "unsupported codec", the actual
+        # reason. Requesting only the code is why every failure here read
+        # "Instagram container status: ERROR" and left nobody any wiser.
+        container = graph.get(
+            container_id, token=token,
+            params={"fields": "status_code,status"})
+        status = container.get("status_code")
 
         if status == "FINISHED":
             published = graph.post(f"{ig_id}/media_publish", token=token,
@@ -213,9 +222,39 @@ class MetaInstagramProvider(MetaBaseProvider):
 
         # ERROR or EXPIRED - a transient container error is worth one retry;
         # EXPIRED (24h) is permanent.
+        detail = self._container_reason(container)
+        message = f"Instagram container status: {status}"
+        if detail:
+            message = f"{message} - {detail}"
+
         if status == "ERROR":
-            raise TransientError(f"Instagram container status: {status}")
-        raise PermanentError(f"Instagram container status: {status}")
+            raise TransientError(message)
+        raise PermanentError(message)
+
+    @staticmethod
+    def _container_reason(container):
+        """Meta's own words for why a container failed, or None.
+
+        `status` arrives as a prefixed blob - "Error: 2207026, The video
+        format is not supported" - so the code and the prefix are stripped
+        and what is left is the sentence a human can act on. Best-effort:
+        an unexpected shape returns None rather than putting a raw dict in
+        front of somebody trying to fix a video.
+        """
+        raw = (container.get("status") or "").strip()
+        if not raw:
+            return None
+
+        _, _, tail = raw.partition(":")
+        tail = (tail or raw).strip()
+
+        # Drop a leading numeric error code, which means nothing to anyone
+        # who is not reading Meta's error reference.
+        head, _, rest = tail.partition(",")
+        if head.strip().isdigit() and rest.strip():
+            tail = rest.strip()
+
+        return tail or None
 
     def _permalink(self, graph, media_id, token):
         try:

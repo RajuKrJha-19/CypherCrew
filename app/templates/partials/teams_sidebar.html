@@ -29,20 +29,28 @@
        class="{{ 'active' if ep == 'teams.search' }}">
       <i class="fa-solid fa-magnifying-glass"></i> <span>Search</span></a>
 
+    <a href="{{ url_for('teams.saved') }}" title="Saved messages"
+       class="{{ 'active' if ep == 'teams.saved' }}">
+      <i class="fa-regular fa-bookmark"></i> <span>Saved</span></a>
+
     <a href="{{ url_for('teams.browse') }}" title="Browse channels and people"
        class="{{ 'active' if ep == 'teams.browse' }}">
       <i class="fa-solid fa-compass"></i> <span>Browse</span></a>
 
-    <a href="{{ url_for('teams.meetings') }}" title="Meetings"
-       class="{{ 'active' if ep.startswith('teams.meeting') }}">
-      <i class="fa-solid fa-video"></i> <span>Meetings</span></a>
-
+    {# Collapsible. The button carries the state so a screen reader gets
+       aria-expanded; the list is a sibling the CSS hides, which keeps the
+       markup flat and the toggle a one-class change. #}
     <div class="teams-nav-section">
-      Channels
+      <button type="button" class="teams-nav-toggle-section" data-tm-section="channels"
+              aria-expanded="true" aria-controls="teamsNavChannels">
+        <i class="fa-solid fa-chevron-down"></i> Channels
+      </button>
       <a class="teams-nav-add" href="{{ url_for('teams.channel_new') }}"
          title="Create a channel" aria-label="Create a channel">
         <i class="fa-solid fa-plus"></i></a>
     </div>
+
+    <div class="teams-nav-group" id="teamsNavChannels" data-tm-section-body="channels">
 
     {% for row in teams_channels %}
       {% set c = row.channel %}
@@ -63,13 +71,19 @@
         <a href="{{ url_for('teams.channel_new') }}">Create a channel</a>
       </p>
     {% endfor %}
+    </div>
 
     <div class="teams-nav-section">
-      Direct messages
+      <button type="button" class="teams-nav-toggle-section" data-tm-section="dms"
+              aria-expanded="true" aria-controls="teamsNavDms">
+        <i class="fa-solid fa-chevron-down"></i> Direct messages
+      </button>
       <a class="teams-nav-add" href="{{ url_for('teams.browse') }}#people"
          title="Start a conversation" aria-label="Start a conversation">
         <i class="fa-solid fa-plus"></i></a>
     </div>
+
+    <div class="teams-nav-group" id="teamsNavDms" data-tm-section-body="dms">
 
     {% for row in teams_dms %}
       {% set c = row.channel %}
@@ -101,6 +115,7 @@
         <a href="{{ url_for('teams.browse') }}#people">Message a colleague</a>
       </p>
     {% endfor %}
+    </div>
   </nav>
 </aside>
 
@@ -158,5 +173,52 @@
         }
     });
     document.addEventListener("turbo:load", function () { setButton(stored()); });
+})();
+
+(function () {
+    // Collapsible CHANNELS / DIRECT MESSAGES sections.
+    //
+    // Same shape as the rail collapse above and for the same reasons: the
+    // sidebar is re-rendered on every Turbo visit, so this binds once by
+    // delegation, and it re-applies on turbo:before-render or a collapsed
+    // section flashes open on every navigation.
+    if (window.__teamsSectionsBound) return;
+    window.__teamsSectionsBound = true;
+
+    var KEY = "teams_nav_sections";
+
+    function collapsed() {
+        try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
+        catch (e) { return {}; }
+    }
+
+    function apply(root) {
+        var state = collapsed();
+        (root || document).querySelectorAll("[data-tm-section]").forEach(function (btn) {
+            var name = btn.dataset.tmSection;
+            var body = (root || document)
+                .querySelector('[data-tm-section-body="' + name + '"]');
+            var isOpen = !state[name];
+            btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            btn.classList.toggle("is-collapsed", !isOpen);
+            if (body) body.hidden = !isOpen;
+        });
+    }
+
+    document.addEventListener("click", function (event) {
+        var btn = event.target.closest
+            ? event.target.closest("[data-tm-section]") : null;
+        if (!btn) return;
+        event.preventDefault();
+
+        var state = collapsed();
+        var name = btn.dataset.tmSection;
+        state[name] = !state[name];
+        try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+        apply();
+    });
+
+    apply();
+    document.addEventListener("turbo:load", function () { apply(); });
 })();
 </script>

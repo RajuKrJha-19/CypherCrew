@@ -45,7 +45,17 @@
         var input = root.querySelector("[data-tm-input]");
         var typingBar = root.querySelector("[data-tm-typing]");
 
-        scrollToBottom(scroller);
+        // Open at the unread line if there is one, otherwise at the
+        // bottom. Landing on the newest message when 40 arrived overnight
+        // means scrolling back up to find where you were.
+        var unreadLine = root.querySelector("[data-tm-unread-line]");
+        if (unreadLine) {
+            unreadLine.scrollIntoView({ block: "center" });
+        } else {
+            scrollToBottom(scroller);
+        }
+
+        wireJump(root, scroller);
 
         if (window.TeamsRealtime) {
             window.TeamsRealtime.attach(
@@ -74,6 +84,10 @@
                     return;
                 }
                 if (list.querySelector('[data-id="' + m.id + '"]')) return;
+                // The divider is a separate field, not folded into html -
+                // see render_message. Inserted first so the day heading
+                // sits above the first message of that day.
+                if (m.divider) list.insertAdjacentHTML("beforeend", m.divider);
                 list.insertAdjacentHTML("beforeend", m.html);
             });
 
@@ -146,7 +160,7 @@
         App.on(shell, "click", function (event) {
             var target = event.target.closest(
                 "[data-react],[data-react-open],[data-delete],[data-edit]," +
-                "[data-reply],[data-thread]");
+                "[data-reply],[data-thread],[data-pin],[data-save]");
             if (!target) return;
 
             if (target.dataset.react) {
@@ -161,6 +175,27 @@
                     });
             } else if (target.dataset.edit) {
                 startEdit(shell, target.dataset.edit);
+            } else if (target.dataset.pin) {
+                post("/teams/api/messages/" + target.dataset.pin + "/pin")
+                    .then(function (data) {
+                        if (data && data.error) { window.alert(data.error); return; }
+                        if (data && data.message) replaceEverywhere(data.message);
+                    });
+            } else if (target.dataset.save) {
+                // Private, so nothing on screen changes for anyone else -
+                // the button just reports what it did.
+                var icon = target.querySelector("i");
+                post("/teams/api/messages/" + target.dataset.save + "/save")
+                    .then(function (data) {
+                        if (!data || !data.ok) return;
+                        target.classList.toggle("on", !!data.saved);
+                        target.title = data.saved ? "Saved — click to remove"
+                                                  : "Save for later";
+                        if (icon) {
+                            icon.classList.toggle("fa-regular", !data.saved);
+                            icon.classList.toggle("fa-solid", !!data.saved);
+                        }
+                    });
             } else if (target.dataset.reply || target.dataset.thread) {
                 openThread(root, target.dataset.reply || target.dataset.thread);
             }
@@ -188,18 +223,20 @@
 
     // ---- reactions ------------------------------------------------------
 
+    /* Replace every copy on screen. The same message can be rendered twice
+       when its thread pane is open, and updating only the first leaves the
+       other showing the old state. */
+    function replaceEverywhere(rendered) {
+        document.querySelectorAll('[data-id="' + rendered.id + '"]')
+            .forEach(function (node) { node.outerHTML = rendered.html; });
+    }
+
     function react(messageId, emoji) {
         if (!emoji) return;
         closeReactionPicker();
         post("/teams/api/messages/" + messageId + "/react", { emoji: emoji })
             .then(function (data) {
-                if (!data || !data.message) return;
-                // Replace every copy - the same message can be on screen
-                // twice when its thread is open.
-                document.querySelectorAll('[data-id="' + messageId + '"]')
-                    .forEach(function (node) {
-                        node.outerHTML = data.message.html;
-                    });
+                if (data && data.message) replaceEverywhere(data.message);
             });
     }
 
@@ -246,6 +283,33 @@
         picker.style.top = Math.max(8, box.top - picker.offsetHeight - 6) + "px";
         picker.style.left =
             Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)) + "px";
+    }
+
+    // ---- jump to present ------------------------------------------------
+
+    function wireJump(root, scroller) {
+        var button = root.querySelector("[data-tm-jump]");
+        if (!button || !scroller) return;
+
+        function refresh() {
+            button.hidden = atBottom(scroller);
+        }
+
+        // The scroll listener is passive: it only reads scrollTop, and
+        // saying so lets the browser keep scrolling smooth instead of
+        // waiting to see whether this handler cancels it.
+        App.on(scroller, "scroll", refresh, { passive: true });
+        App.on(button, "click", function () {
+            scrollToBottom(scroller);
+            refresh();
+            // Reaching the bottom means you have seen it.
+            var chat = root.dataset.channel;
+            if (chat && window.TeamsRealtime) {
+                markRead(parseInt(chat, 10), window.TeamsRealtime.cursor());
+            }
+        });
+
+        refresh();
     }
 
     // ---- attachments ----------------------------------------------------
@@ -559,7 +623,10 @@
     function pendingBubble(cid, body) {
         var div = document.createElement("div");
         div.textContent = body;          // escape via the DOM, never by hand
-        return '<div class="tm-msg is-own tm-pending" data-pending="1" data-cid="'
+        // Rendered as a continuation: it is almost always one, and the
+        // server's real version replaces it within a tick anyway. Guessing
+        // "grouped" keeps the list from jumping when it arrives.
+        return '<div class="tm-msg is-own is-continuation tm-pending" data-pending="1" data-cid="'
             + cid + '"><div class="tm-avatar"></div><div class="tm-body">'
             + '<p class="tm-text">' + div.innerHTML + "</p></div></div>";
     }

@@ -11,7 +11,7 @@ way that is hard to see in testing and obvious in use:
      table and therefore do not trigger SQLAlchemy's `onupdate`.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 
@@ -334,6 +334,227 @@ def thread_messages(root_id, after_id=None, limit=DELTA_LIMIT):
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Pinning and saving
+# ---------------------------------------------------------------------------
+
+#: A pin list stops being a shortlist somewhere around here. Slack caps it
+#: too; without a cap "pinned" degrades into a second, unsorted channel.
+MAX_PINS = 25
+
+
+def toggle_pin(message, user, commit=True):
+    """Pin or unpin for the whole channel. Returns True if now pinned."""
+    if message.is_deleted:
+        raise MessageError("That message has been deleted.")
+
+    if message.pinned_at:
+        message.pinned_at = None
+        message.pinned_by_id = None
+        pinned = False
+    else:
+        if pinned_count(message.channel_id) >= MAX_PINS:
+            raise MessageError(
+                f"A channel can hold {MAX_PINS} pinned messages. "
+                "Unpin something first.")
+        message.pinned_at = datetime.utcnow()
+        message.pinned_by_id = user.id
+        pinned = True
+
+    # Pinning changes the bubble, and the bubble is delivered by the change
+    # sweep - which only looks at updated_at.
+    _touch(message)
+
+    if commit:
+        db.session.commit()
+    return pinned
+
+
+def pinned_count(channel_id):
+    return db.session.query(db.func.count(TeamMessage.id)).filter(
+        TeamMessage.channel_id == channel_id,
+        TeamMessage.pinned_at.isnot(None),
+    ).scalar() or 0
+
+
+def pinned_in(channel_id):
+    """A channel's pins, most recently pinned first."""
+    from sqlalchemy.orm import joinedload
+
+    return (
+        TeamMessage.query
+        .options(joinedload(TeamMessage.user),
+                 joinedload(TeamMessage.channel),
+                 joinedload(TeamMessage.pinned_by))
+        .filter(
+            TeamMessage.channel_id == channel_id,
+            TeamMessage.pinned_at.isnot(None),
+            TeamMessage.deleted_at.is_(None),
+        )
+        .order_by(TeamMessage.pinned_at.desc())
+        .all()
+    )
+
+
+def toggle_save(message, user, commit=True):
+    """Bookmark for one person. Returns True if now saved."""
+    from app.models import TeamSavedMessage
+
+    existing = TeamSavedMessage.query.filter_by(
+        user_id=user.id, message_id=message.id).first()
+
+    if existing:
+        db.session.delete(existing)
+        saved = False
+    else:
+        db.session.add(TeamSavedMessage(user_id=user.id, message_id=message.id))
+        saved = True
+
+    try:
+        if commit:
+            db.session.commit()
+    except IntegrityError:
+        # Double-click race on saving; the unique constraint already holds
+        # the truth we wanted.
+        db.session.rollback()
+        return True
+
+    return saved
+
+
+def saved_for(user, limit=100):
+    """Someone's bookmarks, newest first.
+
+    Deleted messages are filtered out rather than cascaded away: the save
+    row is harmless, and reaching into another table on every delete to
+    tidy up bookmarks nobody can see is work for nothing.
+    """
+    from sqlalchemy.orm import joinedload
+    from app.models import TeamSavedMessage
+
+    return (
+        db.session.query(TeamMessage)
+        .join(TeamSavedMessage, TeamSavedMessage.message_id == TeamMessage.id)
+        .options(joinedload(TeamMessage.user), joinedload(TeamMessage.channel))
+        .filter(
+            TeamSavedMessage.user_id == user.id,
+            TeamMessage.deleted_at.is_(None),
+        )
+        .order_by(TeamSavedMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def saved_ids_for(user, message_ids):
+    """Which of `message_ids` this person has saved - one query, so a
+    message list can show the state without asking per bubble."""
+    from app.models import TeamSavedMessage
+
+    if not message_ids:
+        return set()
+    rows = db.session.query(TeamSavedMessage.message_id).filter(
+        TeamSavedMessage.user_id == user.id,
+        TeamSavedMessage.message_id.in_(list(message_ids)),
+    ).all()
+    return {row[0] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Grouping
+# ---------------------------------------------------------------------------
+# Consecutive messages from one person collapse into a single block, the
+# way every chat app has since IRC clients started doing it: repeating a
+# name and an avatar six times for six lines typed in ten seconds is noise,
+# and it pushes the actual conversation off the screen.
+#
+# Decided on the SERVER, not in JavaScript, because _message.html is the
+# only renderer - it draws the first paint and every polled delta alike.
+# Working it out in the browser would mean a second implementation that
+# has to agree with this one forever.
+
+#: How long a gap breaks a group. Long enough that a burst of typing stays
+#: together, short enough that "morning" and "afternoon" do not.
+GROUP_WINDOW_MINUTES = 5
+
+
+def is_continuation(message, previous):
+    """Whether `message` should hide its avatar and name.
+
+    Deliberately conservative - anything unusual starts a fresh block:
+    a different author, a system message, a gap, a day boundary, or a
+    reply, which belongs to its thread rather than to the run above it.
+    """
+    if previous is None or message is None:
+        return False
+    if message.user_id is None or previous.user_id is None:
+        return False
+    if message.user_id != previous.user_id:
+        return False
+    if message.kind != "text" or previous.kind != "text":
+        return False
+    if message.parent_id or previous.parent_id:
+        return False
+    if day_changed(message, previous):
+        return False
+
+    gap = message.created_at - previous.created_at
+    return timedelta(0) <= gap <= timedelta(minutes=GROUP_WINDOW_MINUTES)
+
+
+def day_changed(message, previous):
+    """Whether a date divider belongs above `message`.
+
+    Compared in IST, not UTC: the divider says which day it was for the
+    person reading it, and this team's day rolls over at IST midnight. In
+    UTC that boundary lands at 18:30, so half an evening's messages would
+    file under tomorrow.
+    """
+    if message is None:
+        return False
+    if previous is None:
+        return True
+    return _ist_date(message.created_at) != _ist_date(previous.created_at)
+
+
+def day_label(when):
+    """"Today" / "Yesterday" / "29 July 2026", in IST."""
+    if not when:
+        return ""
+    day = _ist_date(when)
+    today = _ist_date(datetime.utcnow())
+
+    if day == today:
+        return "Today"
+    if (today - day).days == 1:
+        return "Yesterday"
+    return day.strftime("%d %B %Y")
+
+
+def _ist_date(value):
+    from app.utils.timezone import IST_OFFSET
+    return (value + IST_OFFSET).date()
+
+
+def previous_message(channel_id, message_id):
+    """The message immediately before `message_id` in its channel.
+
+    The seed for grouping a polled delta: the client already holds that
+    message, so whether the first new one continues its block depends on
+    a row the delta itself does not contain.
+    """
+    return (
+        TeamMessage.query
+        .filter(
+            TeamMessage.channel_id == channel_id,
+            TeamMessage.id < message_id,
+            TeamMessage.parent_id.is_(None),
+        )
+        .order_by(TeamMessage.id.desc())
+        .first()
+    )
+
 
 def _touch(message):
     """Move the change cursor. Assigning explicitly rather than relying on

@@ -19,6 +19,10 @@
   {% endif %}
 
   <div class="tm-channel-actions">
+    <a class="tm-action" title="Pinned messages" aria-label="Pinned messages"
+       href="{{ url_for('teams.channel_pins', channel_id=channel.id) }}">
+      <i class="fa-solid fa-thumbtack"></i></a>
+
     <a class="tm-action" title="Search this conversation" aria-label="Search"
        href="{{ url_for('teams.search', channel=channel.id) }}">
       <i class="fa-solid fa-magnifying-glass"></i></a>
@@ -29,18 +33,6 @@
         <i class="fa-solid fa-gear"></i></a>
     {% endif %}
 
-    {% if can_post %}
-      {# Everyone in the channel is invited, so a huddle needs no invite
-         list - which is the whole difference between this and scheduling. #}
-      <form method="POST"
-            action="{{ url_for('teams.channel_call', channel_id=channel.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary btn-sm"
-                title="Start a call with this channel">
-          <i class="fa-solid fa-video"></i> Start a call
-        </button>
-      </form>
-    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -72,7 +64,39 @@ window.TEAMS_MAX_UPLOAD_MB = {{ config.TEAMS_ATTACHMENT_MAX_MB }};
   <div class="tm-scroll" data-tm-scroll>
     {% if messages %}
       <div class="tm-list" data-tm-list>
+        {# Grouping and the date dividers are decided by the same service
+           the poll uses (services/messages), so a message drawn here and
+           the identical message arriving through /teams/api/sync land in
+           the same block. loop.previtem is the only thing this loop knows
+           that render_message has to look up. #}
+        {# A namespace, because a plain {% set %} inside a for-loop is
+           scoped to the iteration and would reset every time. #}
+        {% set ns = namespace(unread_marked=false) %}
+
         {% for message in messages %}
+          {# `None if loop.first`, not a bare loop.previtem: on the first
+             iteration Jinja hands back Undefined, which is not None, so
+             the service's `is None` guard would sail past it and then
+             blow up reaching for .created_at. #}
+          {% set previous = None if loop.first else loop.previtem %}
+          {% if teams_day_changed(message, previous) %}
+            {% with label = teams_day_label(message.created_at) %}
+              {% include "teams/_day_divider.html" %}
+            {% endwith %}
+          {% endif %}
+
+          {# Where you stopped reading. Drawn once, above the first message
+             you have not seen - and never above your own, because being
+             told your own message is new is nonsense. #}
+          {% if not ns.unread_marked and last_read and message.id > last_read
+                and message.user_id != current_user.id %}
+            {% set ns.unread_marked = true %}
+            <div class="tm-unread-line" data-tm-unread-line role="separator">
+              <span>New messages</span>
+            </div>
+          {% endif %}
+
+          {% set continuation = teams_is_continuation(message, previous) %}
           {% include "teams/_message.html" with context %}
         {% endfor %}
       </div>
@@ -92,6 +116,12 @@ window.TEAMS_MAX_UPLOAD_MB = {{ config.TEAMS_ATTACHMENT_MAX_MB }};
       </div>
     {% endif %}
   </div>
+
+  {# Appears once you scroll away from the bottom. Sits above the composer
+     rather than inside the scroller, so it does not move with the list. #}
+  <button type="button" class="tm-jump" data-tm-jump hidden>
+    <i class="fa-solid fa-arrow-down"></i> Jump to present
+  </button>
 
   <div class="tm-typing" data-tm-typing hidden></div>
 

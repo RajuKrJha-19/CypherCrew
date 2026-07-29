@@ -40,26 +40,7 @@
         </h2>
       </div>
 
-      <ul class="tm-search-results">
-        {% for message in results %}
-          {# Deep-links to the message, which the channel page anchors by
-             id - so a result opens the conversation at the right place
-             rather than at the bottom. #}
-          <li>
-            <a href="{{ url_for('teams.channel', channel_id=message.channel_id) }}#tm-{{ message.id }}">
-              <span class="tm-search-where">
-                <i class="fa-solid {{ 'fa-user' if message.channel.is_dm else 'fa-hashtag' }}"></i>
-                {{ message.channel.display_name(current_user) }}
-              </span>
-              <span class="tm-search-body">{{ message.body }}</span>
-              <span class="tm-search-meta">
-                {{ message.user.name if message.user else 'Former teammate' }}
-                · {{ message.created_at|ist }}
-              </span>
-            </a>
-          </li>
-        {% endfor %}
-      </ul>
+      {% include "teams/_message_list.html" %}
     </section>
   {% endif %}
 </div>
