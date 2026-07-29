@@ -94,9 +94,12 @@ def node_edge(ver, node, edge):
         return jsonify(id=f"IGMEDIA_{n}")
     if edge == "comments":
         if request.method == "GET":                # Engage: read comments
+            base = request.host_url.rstrip("/")
             return jsonify(data=[
                 {"id": f"{node}_c1", "message": "Love this! 🔥 Where can I get it?",
-                 "from": {"id": "user_aditya", "name": "Aditya Rao"},
+                 "from": {"id": "user_aditya", "name": "Aditya Rao",
+                          "picture": {"data": {
+                              "url": f"{base}/mock/avatar/aditya"}}},
                  "created_time": "2026-07-26T10:05:00+0000"},
                 {"id": f"{node}_c2", "message": "Great work team 👏",
                  "from": {"id": "user_neha", "name": "Neha Sharma"},

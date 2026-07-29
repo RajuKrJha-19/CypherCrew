@@ -393,22 +393,31 @@ class MetaBaseProvider(SocialProvider):
         """
         if not external_post_id:
             return []
+        # Facebook and Instagram comments have DIFFERENT schemas: Facebook
+        # returns message/from{name,picture}/created_time; Instagram returns
+        # text/username/timestamp and has no `from`. Ask each for its own
+        # fields (a wrong field name errors the whole call), then map with
+        # `or`-fallbacks so the local emulator - which answers with the
+        # Facebook shape for both - keeps working too.
+        if self.key == "instagram":
+            fields = "id,text,username,timestamp"
+        else:
+            fields = "id,message,from{id,name,picture},created_time,parent"
         resp = self.graph().get(
             f"{external_post_id}/comments", token=token,
-            params={
-                "fields": "id,message,from,username,created_time,parent",
-                "limit": limit,
-            })
+            params={"fields": fields, "limit": limit})
         out = []
         for c in (resp.get("data") or []):
             frm = c.get("from") or {}
+            pic = (((frm.get("picture") or {}).get("data")) or {}).get("url")
             out.append({
                 "external_id": c.get("id"),
-                "message": c.get("message"),
+                "message": c.get("message") or c.get("text"),
                 "author_name": frm.get("name") or c.get("username"),
                 "author_id": frm.get("id"),
+                "author_pic": pic,
                 "parent_external_id": (c.get("parent") or {}).get("id"),
-                "created_time": c.get("created_time"),
+                "created_time": c.get("created_time") or c.get("timestamp"),
             })
         return out
 

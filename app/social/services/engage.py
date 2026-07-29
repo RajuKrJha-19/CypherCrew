@@ -104,6 +104,7 @@ def sync_comments(client_id=None):
                         parent_external_id=c.get("parent_external_id"),
                         author_name=c.get("author_name"),
                         author_id=c.get("author_id"),
+                        author_pic=c.get("author_pic"),
                         message=c.get("message"),
                         created_time=c.get("created_time"),
                         is_ours=False, fetched_at=datetime.utcnow()))

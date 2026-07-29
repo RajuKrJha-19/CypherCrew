@@ -22,6 +22,9 @@ class SocialComment(db.Model):
 
     author_name = db.Column(db.String(255), nullable=True)
     author_id = db.Column(db.String(255), nullable=True)
+    # Commenter's profile-picture URL where the platform gives us one
+    # (Facebook via from{picture}; Instagram's comment API returns none).
+    author_pic = db.Column(db.String(500), nullable=True)
     message = db.Column(db.Text, nullable=True)
     created_time = db.Column(db.String(40), nullable=True)  # platform time str
 

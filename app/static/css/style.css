@@ -17192,6 +17192,10 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 }
 .engage-avatar.lg{ width:38px; height:38px; font-size:14px; }
 .engage-avatar.is-ours{ background:var(--color-primary); color:#fff; }
+/* Real profile picture over the initials fallback; if it 404s the onerror
+   removes it and the initial shows through. */
+.engage-dp{ position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; border-radius:50%; }
 /* Platform badge on the corner of the avatar - which network this came
    from, without spending a whole column on it. */
 .engage-avatar > i{

@@ -99,7 +99,7 @@
            class="engage-row {{ 'is-selected' if selected and selected.id == c.id }} {{ 'is-answered' if thread or c.replied }}"
            data-engage-row>
             <span class="engage-avatar pf-{{ c.platform }}">
-                {{ (c.author_name or '?')[0]|upper }}
+                {% if c.author_pic %}<img class="engage-dp" src="{{ c.author_pic }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}{{ (c.author_name or '?')[0]|upper }}
                 <i class="{{ PF_ICON.get(c.platform,'fa-solid fa-share-nodes') }}"></i>
             </span>
 
@@ -159,7 +159,7 @@
         <div class="engage-thread">
             <div class="engage-msg">
                 <span class="engage-avatar pf-{{ selected.platform }} lg">
-                    {{ (selected.author_name or '?')[0]|upper }}</span>
+                    {% if selected.author_pic %}<img class="engage-dp" src="{{ selected.author_pic }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}{{ (selected.author_name or '?')[0]|upper }}</span>
                 <div class="engage-bubble">
                     <span class="engage-msg-who">
                         <strong>{{ selected.author_name or 'Someone' }}</strong>
