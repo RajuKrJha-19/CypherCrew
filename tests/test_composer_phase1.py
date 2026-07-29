@@ -5,6 +5,7 @@ capability-driven story generalization, per-channel first comment with the
 supports_first_comment / no-story gates, and per-media alt-text capture.
 """
 import json
+from datetime import datetime
 from types import SimpleNamespace
 
 from app.extensions import db
@@ -176,3 +177,49 @@ def test_alt_text_is_captured(session, client, make_user, login):
     post = SocialPost.query.filter_by(title="alt").first()
     media = post.targets[0].media
     assert media and media[0].alt_text == "A red bicycle"
+
+
+# -- per-channel schedule ---------------------------------------------------
+
+def test_per_channel_schedule_override(session, client, make_user, login):
+    login(make_user("admin", permissions=["manage_social"]))
+    fb = _acct("facebook").id
+    ig = _acct("instagram").id
+    db.session.commit()
+
+    value = "social_uploads/x.jpg::image/jpeg"
+    client.post("/social/posts", data={
+        "title": "sched", "post_type": "image", "caption": "hi",
+        "upload_media": value,
+        "account_ids": [str(fb), str(ig)],
+        "publish_mode": "schedule",
+        "schedule": "2026-08-01T10:00",           # shared, IST
+        "schedule_facebook": "2026-08-01T18:30",  # FB override, IST
+    }, follow_redirects=True)
+
+    post = SocialPost.query.filter_by(title="sched").first()
+    by = {t.platform: t for t in post.targets}
+    # IST -> UTC is -5:30. Instagram uses the shared time, Facebook its own.
+    assert by["instagram"].scheduled_for == datetime(2026, 8, 1, 4, 30)
+    assert by["facebook"].scheduled_for == datetime(2026, 8, 1, 13, 0)
+
+
+def test_publish_now_ignores_per_channel_schedule(
+        session, client, make_user, login):
+    login(make_user("admin", permissions=["manage_social"]))
+    fb = _acct("facebook").id
+    db.session.commit()
+
+    value = "social_uploads/x.jpg::image/jpeg"
+    client.post("/social/posts", data={
+        "title": "pnow", "post_type": "image", "caption": "hi",
+        "upload_media": value,
+        "account_ids": [str(fb)],
+        "publish_mode": "now",
+        "schedule_facebook": "2026-08-01T18:30",   # must be ignored
+    }, follow_redirects=True)
+
+    post = SocialPost.query.filter_by(title="pnow").first()
+    t = post.targets[0]
+    assert t.scheduled_for != datetime(2026, 8, 1, 13, 0)     # not the override
+    assert abs((datetime.utcnow() - t.scheduled_for).total_seconds()) < 120

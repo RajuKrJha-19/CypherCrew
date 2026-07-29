@@ -1440,6 +1440,7 @@ def compose():
         first_comment="",
         platform_captions={},
         platform_first_comments={},
+        platform_schedules={},
         media_alt={},
         hashtag_sets=_hashtag_sets(default_client_id),
         story_style="plain",
@@ -1475,6 +1476,13 @@ def edit_post(post_id):
     platform_first_comments = {
         t.platform: t.first_comment for t in post.targets
         if t.first_comment and t.first_comment != first_comment
+    }
+    # Per-platform schedule overrides = any target whose time differs from the
+    # shared (first target's) time, as an IST datetime-local string.
+    _first_when = first.scheduled_for if first else None
+    platform_schedules = {
+        t.platform: _to_ist_input(t.scheduled_for) for t in post.targets
+        if t.scheduled_for and t.scheduled_for != _first_when
     }
     story_target = next(
         (t for t in post.targets if t.post_type == "story"), None)
@@ -1530,6 +1538,7 @@ def edit_post(post_id):
         first_comment=first_comment or "",
         platform_captions=platform_captions,
         platform_first_comments=platform_first_comments,
+        platform_schedules=platform_schedules,
         media_alt=media_alt,
         hashtag_sets=_hashtag_sets(post.client_id),
         # The style lives on the story target - which is `first` for a
@@ -1697,7 +1706,8 @@ def _apply_composer_form(post):
             db.session.add(SocialMediaAsset(**kw))
 
     def _new_target(account, ptype, caption, first_comment=None,
-                    story_style="plain", story_link_target_id=None):
+                    story_style="plain", story_link_target_id=None,
+                    when=None):
         t = SocialPostTarget(
             social_post_id=post.id, social_account_id=account.id,
             platform=account.platform, post_type=ptype, caption=caption,
@@ -1707,7 +1717,8 @@ def _apply_composer_form(post):
             # channel's supports_first_comment.)
             first_comment=(None if ptype == "story" else first_comment),
             status="draft",
-            scheduled_for=scheduled_for,
+            # Per-channel time if the caller passed one, else the shared time.
+            scheduled_for=(when if when is not None else scheduled_for),
             story_style=story_style if ptype == "story" else "plain",
             story_link_target_id=(
                 story_link_target_id if ptype == "story" else None),
@@ -1788,18 +1799,31 @@ def _apply_composer_form(post):
         target_fc = (fc_override or first_comment) \
             if (caps and caps.supports_first_comment) else None
 
+        # Per-channel schedule: this platform's own time if given, else the
+        # shared one. Ignored for publish-now (everything goes ASAP). The
+        # model already stores scheduled_for per target, so different channels
+        # can publish the same post at their own best times.
+        target_when = scheduled_for
+        if not publish_now:
+            chan_when = _parse_schedule(
+                request.form.get(f"schedule_{account.platform}"))
+            if chan_when is not None:
+                target_when = chan_when
+
         feed = _new_target(account, target_type, override or base_caption,
                            first_comment=target_fc,
                            story_style=story_style,
-                           story_link_target_id=standalone_link_id)
+                           story_link_target_id=standalone_link_id,
+                           when=target_when)
         n_created += 1
-        # Optional companion Story (no caption - stories don't use one).
+        # Optional companion Story (no caption - stories don't use one). It
+        # ships at the same time as the feed post it accompanies.
         if also_story:
             prov = registry.get(account.platform)
             caps = prov.capabilities if prov else None
             if caps and caps.story_support and "story" in (caps.post_types or set()):
                 _new_target(account, "story", None, story_style=story_style,
-                            story_link_target_id=feed.id)
+                            story_link_target_id=feed.id, when=target_when)
 
     if skipped:
         flash("Skipped channel(s) that belong to a different client: "

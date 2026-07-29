@@ -104,6 +104,8 @@
                         <div class="cmp-override-head"><span class="pf-chip {{ pf }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(pf, pf|capitalize) }}</span><span class="cmp-count" data-count-for="{{ pf }}"></span></div>
                         <textarea name="caption_{{ pf }}" aria-label="{{ PF_LABEL.get(pf, pf|capitalize) }} caption" placeholder="Leave empty to use the shared caption above">{{ platform_captions.get(pf, '') }}</textarea>
                         <textarea class="cmp-override-fc" name="first_comment_{{ pf }}" rows="2" aria-label="{{ PF_LABEL.get(pf, pf|capitalize) }} first comment" placeholder="First comment — leave empty to use the shared one above">{{ platform_first_comments.get(pf, '') }}</textarea>
+                        <label class="cmp-override-sched"><span><i class="fa-regular fa-clock"></i> Schedule this channel <small>optional · IST</small></span>
+                            <input type="datetime-local" class="cmp-sched-override" name="schedule_{{ pf }}" value="{{ platform_schedules.get(pf, '') }}" aria-label="{{ PF_LABEL.get(pf, pf|capitalize) }} schedule (IST)"></label>
                     </div>
                     {% endfor %}
                 </details>
@@ -808,9 +810,21 @@
     // wire server-rendered uploaded items (edit mode)
     if(uploadGrid) uploadGrid.querySelectorAll('input[name="upload_media"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
 
+    // Per-channel schedule only applies when scheduling for later; on
+    // "publish as soon as approved" the shared time is moot and the per-channel
+    // rows are hidden so nobody sets a time that will be ignored.
+    function scheduleMode(){ const r=document.querySelector('input[name="publish_mode"]:checked'); return r?r.value:"schedule"; }
+    function refreshScheduleMode(){
+        const now = scheduleMode()==="now";
+        const shared=$("scheduleInput"); if(shared) shared.disabled = now;
+        document.querySelectorAll('.cmp-override-sched').forEach(el=>{ el.style.display = now ? "none" : ""; });
+    }
+    document.querySelectorAll('input[name="publish_mode"]').forEach(r=>r.addEventListener("change", refreshScheduleMode));
+
     // init
     filterAccountsByClient();
     refreshAccounts(); applyType();
+    refreshScheduleMode();
     renderPreview();
 })();
 </script>
