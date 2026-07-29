@@ -1526,8 +1526,11 @@ def edit_post(post_id):
         for m in first.media:
             if m.source == "upload" and m.object_key:
                 is_img = (m.mime_type or "").startswith("image")
+                is_vid = (m.mime_type or "").startswith("video")
+                # A URL for images AND videos, so the preview can play a video
+                # on edit, not just show a poster.
                 u = None
-                if is_img:
+                if is_img or is_vid:
                     try:
                         u = pipeline.presigned_url(m.object_key)
                     except Exception:  # noqa: BLE001
@@ -2221,13 +2224,14 @@ def upload_media():
     except (StorageServiceError, Exception):  # noqa: BLE001
         current_app.logger.exception("[social-upload] store failed")
         return jsonify(error="Upload failed — please try again."), 500
+    # A presigned URL for BOTH images and videos, so the composer preview can
+    # show the image or play the video inline (not just a poster).
     url = None
-    if mime.startswith("image"):
-        try:
-            from app.social.media import pipeline
-            url = pipeline.presigned_url(object_key)
-        except Exception:  # noqa: BLE001
-            url = None
+    try:
+        from app.social.media import pipeline
+        url = pipeline.presigned_url(object_key)
+    except Exception:  # noqa: BLE001
+        url = None
     return jsonify(object_key=object_key, mime=mime, filename=safe,
                    is_image=mime.startswith("image"), url=url)
 

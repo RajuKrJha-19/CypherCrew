@@ -319,7 +319,8 @@
     const caption = $("captionInput"), captionCount = $("captionCount");
     const postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount"), typeHintFc = $("fcHint");
     let previewPlatform = "facebook";
-    let selectedMediaUrl = null;
+    let selectedMediaUrl = null;      // image, or a video's poster
+    let selectedVideoUrl = null;      // the video itself, for inline playback
 
     function postType(){ var r=document.querySelector('input[name="post_type"]:checked'); return r?r.value:"image"; }
     function accountsChecked(){ return [...document.querySelectorAll('input[name="account_ids"]:checked')]; }
@@ -580,9 +581,17 @@
         const media=$("ppMedia"); let cls="pp-media";
         if(pt==="reel"||pt==="story")cls+=" "+pt; else if(pf==="youtube")cls+=" yt";
         media.className=cls;
-        let inner = selectedMediaUrl ? '<img src="'+selectedMediaUrl+'" alt="">' : '<i class="fa-regular fa-image"></i>';
-        if(pt==="reel"||pt==="video"||pf==="youtube") inner += '<span class="pp-play"><i class="fa-solid fa-play"></i></span>';
-        if(pt==="carousel"){ const n=Math.max(2, selectedMediaInputs().length||3); inner += '<span class="pp-dots">'+Array.from({length:Math.min(n,5)},(_,i)=>'<span class="'+(i===0?"on":"")+'"></span>').join("")+'</span>'; }
+        let inner;
+        if(selectedVideoUrl){
+            // Play the actual clip inline (like Meta Business Suite), with the
+            // poster frame shown until it loads. No fake play-badge - the
+            // video's own controls do that.
+            inner = '<video src="'+selectedVideoUrl+'" '+(selectedMediaUrl?('poster="'+selectedMediaUrl+'" '):'')+'controls playsinline preload="metadata"></video>';
+        } else {
+            inner = selectedMediaUrl ? '<img src="'+selectedMediaUrl+'" alt="">' : '<i class="fa-regular fa-image"></i>';
+            if(pt==="reel"||pt==="video"||pf==="youtube") inner += '<span class="pp-play"><i class="fa-solid fa-play"></i></span>';
+            if(pt==="carousel"){ const n=Math.max(2, selectedMediaInputs().length||3); inner += '<span class="pp-dots">'+Array.from({length:Math.min(n,5)},(_,i)=>'<span class="'+(i===0?"on":"")+'"></span>').join("")+'</span>'; }
+        }
         media.innerHTML=inner;
         $("ppActions").innerHTML = PP_ACTIONS[pf] || PP_ACTIONS.facebook;
         // First comment preview: per-platform override if present, else the
@@ -690,11 +699,14 @@
     function refreshMediaSelection(){
         const checked=selectedMediaInputs();
         document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
-        // For a video the preview needs its poster frame, not its (video) URL
-        // which an <img> can't render; images use their own URL.
-        selectedMediaUrl = checked[0]
-            ? (isVideoInput(checked[0]) ? posterFor(checked[0]) : (checked[0].dataset.url||null))
+        // Images preview from their own URL; a video previews as a real
+        // <video> (selectedVideoUrl) with its poster frame as the placeholder.
+        const first=checked[0];
+        const firstIsVideo = isVideoInput(first);
+        selectedMediaUrl = first
+            ? (firstIsVideo ? posterFor(first) : (first.dataset.url||null))
             : null;
+        selectedVideoUrl = (first && firstIsVideo) ? (first.dataset.url||null) : null;
         // Measure whatever is now selected, then re-run the per-channel
         // verdict with the real numbers.
         checked.forEach(measure);

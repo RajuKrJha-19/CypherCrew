@@ -17448,6 +17448,7 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .pp-media{ aspect-ratio:1/1; background:var(--color-surface-sunken); display:grid; place-items:center;
     color:var(--color-text-subtle); font-size:26px; }
 .pp-media img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pp-media video{ width:100%; height:100%; object-fit:contain; display:block; background:#000; }
 .pp-body{ padding:11px 13px; }
 .pp-actions{ display:flex; gap:18px; padding:6px 13px 4px; color:var(--color-text-muted); font-size:15px; }
 .pp-caption{ padding:0 13px 13px; font-size:13px; line-height:1.5; color:var(--color-text); white-space:pre-wrap;
