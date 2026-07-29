@@ -31,6 +31,7 @@ from app.social.services import (
     task_link, versioning,
 )
 from app.social.services import engage as engage_svc
+from app.social import utm
 from app.social.services.accounts import AccountManager
 from app.utils.permissions import (
     can_connect_social_accounts, can_manage_social_engine, can_publish,
@@ -464,6 +465,16 @@ def _hashtag_sets(client_id=None):
     else:
         q = q.filter(SocialHashtagSet.client_id.is_(None))
     return q.order_by(SocialHashtagSet.name).all()
+
+
+def _campaigns(client_id=None):
+    """Distinct campaign labels used so far (this client's, or all), for the
+    composer's autocomplete and the drafts filter."""
+    q = db.session.query(SocialPost.campaign).filter(
+        SocialPost.campaign.isnot(None))
+    if client_id:
+        q = q.filter(SocialPost.client_id == client_id)
+    return sorted({c for (c,) in q.distinct().all() if c})
 
 
 @social_bp.route("/")
@@ -1386,12 +1397,17 @@ def drafts():
                "rejected"]
     status_f = request.args.get("status")
     status_f = status_f if status_f in allowed else ""
+    campaign_f = (request.args.get("campaign") or "").strip()
     q = _scope_posts(SocialPost.query, _client_arg())
     q = q.filter(SocialPost.status == status_f) if status_f \
         else q.filter(SocialPost.status.in_(allowed))
+    if campaign_f:
+        q = q.filter(SocialPost.campaign == campaign_f)
     posts = q.order_by(SocialPost.updated_at.desc()).limit(200).all()
     return render_template("social/drafts.html", posts=posts,
-                           status_f=status_f, statuses=allowed)
+                           status_f=status_f, statuses=allowed,
+                           campaign_f=campaign_f,
+                           campaigns=_campaigns(_client_arg()))
 
 
 @social_bp.route("/compose")
@@ -1442,6 +1458,7 @@ def compose():
         platform_first_comments={},
         platform_schedules={},
         media_alt={},
+        campaigns=_campaigns(default_client_id),
         hashtag_sets=_hashtag_sets(default_client_id),
         story_style="plain",
         story_link_target_id=None,
@@ -1540,6 +1557,7 @@ def edit_post(post_id):
         platform_first_comments=platform_first_comments,
         platform_schedules=platform_schedules,
         media_alt=media_alt,
+        campaigns=_campaigns(post.client_id),
         hashtag_sets=_hashtag_sets(post.client_id),
         # The style lives on the story target - which is `first` for a
         # standalone story, and the companion beside it otherwise. A
@@ -1591,6 +1609,10 @@ def _apply_composer_form(post):
     base_caption = (request.form.get("caption") or "").strip() or None
     post.base_caption = base_caption
     first_comment = (request.form.get("first_comment") or "").strip() or None
+
+    # Campaign label (grouping + utm_campaign) and whether to auto-tag links.
+    post.campaign = (request.form.get("campaign") or "").strip()[:120] or None
+    add_utm = bool(request.form.get("add_utm"))
 
     post_type = (request.form.get("post_type") or "image").strip()
     account_ids = request.form.getlist("account_ids", type=int)
@@ -1801,6 +1823,16 @@ def _apply_composer_form(post):
         target_fc = (fc_override or first_comment) \
             if (caps and caps.supports_first_comment) else None
 
+        # UTM tagging: append utm_source (this platform) + campaign to every
+        # link, per target, so a client's analytics attributes social traffic.
+        target_caption = override or base_caption
+        if add_utm:
+            target_caption = utm.tag_text(
+                target_caption, account.platform, campaign=post.campaign)
+            if target_fc:
+                target_fc = utm.tag_text(
+                    target_fc, account.platform, campaign=post.campaign)
+
         # Per-channel schedule: this platform's own time if given, else the
         # shared one - or, in queue mode, the channel's next open slot. Ignored
         # for publish-now (everything goes ASAP). The model already stores
@@ -1816,7 +1848,7 @@ def _apply_composer_form(post):
                 target_when = (queue_slots.next_open_slot(account.id)
                                or scheduled_for or datetime.utcnow())
 
-        feed = _new_target(account, target_type, override or base_caption,
+        feed = _new_target(account, target_type, target_caption,
                            first_comment=target_fc,
                            story_style=story_style,
                            story_link_target_id=standalone_link_id,
@@ -2534,6 +2566,7 @@ def settings():
                     else SocialHashtagSet.query.order_by(
                         SocialHashtagSet.name).all())
     accounts = AccountManager.list_accounts()
+    from app.social.media import transcode
     engine_info = {
         "enabled": current_app.config.get("SOCIAL_ENGINE_ENABLED", False),
         "auto_worker": current_app.config.get("SOCIAL_INPROCESS_WORKER", True),
@@ -2541,6 +2574,10 @@ def settings():
         "simulation": bool(current_app.config.get("META_EMULATOR")),
         "cron_ready": bool(current_app.config.get("SOCIAL_WORKER_TOKEN")),
         "token_vault": bool(current_app.config.get("SOCIAL_TOKEN_KEY")),
+        # Whether oversized videos can be auto-resized on publish (needs
+        # ffmpeg on the host). Surfaced so an admin can see why a too-wide
+        # reel blocked instead of resizing.
+        "video_resize": transcode.available(),
     }
     # Each channel's posting-schedule slots as {account_id: [(weekday, "HH:MM")]}
     # for the "Add to queue" cadence, plus a best-time suggestion per channel.

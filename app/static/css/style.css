@@ -17015,6 +17015,7 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .t-muted{ color:var(--color-text-muted); }
 .t-subtle{ color:var(--color-text-subtle); }
 .t-danger{ color:var(--color-danger); }
+.t-ok{ color:var(--color-success); }
 .t-sm{ font-size:12px; }
 .t-cap{ text-transform:capitalize; }
 .u-nowrap{ white-space:nowrap; }
@@ -17769,6 +17770,12 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-override-sched{ display:flex; flex-direction:column; gap:4px; margin-top:8px; font-size:11px; font-weight:600; color:var(--color-text-muted); }
 .cmp-override-sched small{ color:var(--color-text-subtle); font-weight:500; }
 .cmp-sched-override{ width:100%; }
+
+/* Campaign + UTM: the "Add UTM to links" checkbox line inside a .field */
+.cmp-checkline{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; cursor:pointer; padding:7px 0; }
+.cmp-checkline input{ width:auto; margin:0; }
+.cmp-checkline small{ color:var(--color-text-subtle); font-weight:400; }
+.draft-campaign-filter{ margin-left:auto; padding:5px 8px; }
 
 /* Per-media alt text: this input lives inside .cmp-asset, whose generic
    `input{ opacity:0 }` rule hides the media checkbox - so it must be

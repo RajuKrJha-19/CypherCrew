@@ -57,6 +57,13 @@
                         {% endfor %}
                     </select></label>
             </div>
+            <div class="cmp-field-pair">
+                <label class="field"><span>Campaign <small>(optional · groups posts + tags links)</small></span>
+                    <input type="text" name="campaign" value="{{ (post.campaign if post else '') or '' }}" list="campaignList" placeholder="e.g. Diwali 2026" maxlength="120">
+                    <datalist id="campaignList">{% for c in campaigns %}<option value="{{ c }}">{% endfor %}</datalist></label>
+                <label class="field"><span>Link tracking</span>
+                    <label class="cmp-checkline"><input type="checkbox" name="add_utm" id="addUtm"> Add UTM tags to links <small>attributes clicks in the client’s analytics</small></label></label>
+            </div>
 
             {# --- Post type --- #}
             <div class="cmp-section">

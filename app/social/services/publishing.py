@@ -48,13 +48,14 @@ def validate_target(target) -> list[str]:
     return provider.validate(build_content(target))
 
 
-def _downscale_will_fix(target):
-    """True if every problem with this target is a too-wide video that a
-    downscale on publish will fix (and at least one is). Requires ffmpeg to be
-    usable - without it the resize can't happen, so the target must still be
-    blocked rather than scheduled on a promise we can't keep."""
-    if not transcode.available():
-        return False
+def _downscale_would_fix(target):
+    """True if the target's ONLY problems are a too-wide video that a
+    proportional downscale would fix (aspect/duration/codec all already fine).
+
+    This is the SHAPE test only - it does NOT check whether ffmpeg is
+    installed. schedule_post pairs it with transcode.available(): with ffmpeg
+    the worker resizes on publish; without it, the target is blocked but told
+    exactly why and how to unblock."""
     provider = get_provider(target.platform)
     caps = provider.capabilities if provider else None
     if caps is None:
@@ -85,10 +86,11 @@ def schedule_post(post, actor_id=None):
     problems = {}
     for target in post.targets:
         errs = validate_target(target)
-        if errs and _downscale_will_fix(target):
-            # The only problem is a video too wide for this platform; the
-            # worker downscales it on publish (aspect kept). Schedule it
-            # rather than blocking a file we can fix ourselves.
+        fixable = _downscale_would_fix(target) if errs else False
+        if errs and fixable and transcode.available():
+            # The only problem is a video too wide for this platform; ffmpeg
+            # is available, so the worker downscales it on publish (aspect
+            # kept). Schedule it rather than blocking a file we can fix.
             scheduling.schedule_target(
                 target, target.scheduled_for or datetime.utcnow(), actor_id)
             target.last_error = None
@@ -103,6 +105,15 @@ def schedule_post(post, actor_id=None):
             # could sit at Scheduled forever with one platform quietly dead
             # and no way to act on it - the rollup had nothing to settle
             # against and the UI had no state to offer a fix for.
+            if fixable and not transcode.available():
+                # A downscale WOULD fix it, but ffmpeg isn't on this server, so
+                # we can't do it automatically. Say exactly that - a bare
+                # "2160px, max 1920px" leaves the team re-exporting by hand when
+                # the server could do it once ffmpeg is installed.
+                errs = errs + [
+                    "Auto-resize is off because ffmpeg is not installed on "
+                    "the server. Install ffmpeg (e.g. apt-get install ffmpeg) "
+                    "then retry, or re-export the video 1920px wide or less."]
             problems[target.id] = errs
             target.status = "blocked"
             target.last_error = " ".join(errs)

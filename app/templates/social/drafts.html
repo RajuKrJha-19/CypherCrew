@@ -21,10 +21,18 @@
 {% endwith %}
 
 <div class="social-filters">
-    <a href="{{ url_for('social.drafts', client=selected_client_id) }}" class="draft-chip {{ 'on' if not status_f }}">All</a>
+    <a href="{{ url_for('social.drafts', client=selected_client_id, campaign=campaign_f or none) }}" class="draft-chip {{ 'on' if not status_f }}">All</a>
     {% for s in statuses %}
-    <a href="{{ url_for('social.drafts', client=selected_client_id, status=s) }}" class="draft-chip {{ 'on' if status_f == s }}">{{ s.replace('_',' ')|capitalize }}</a>
+    <a href="{{ url_for('social.drafts', client=selected_client_id, status=s, campaign=campaign_f or none) }}" class="draft-chip {{ 'on' if status_f == s }}">{{ s.replace('_',' ')|capitalize }}</a>
     {% endfor %}
+    {% if campaigns %}
+    <select class="draft-campaign-filter" aria-label="Filter by campaign" onchange="location.href=this.value">
+        <option value="{{ url_for('social.drafts', client=selected_client_id, status=status_f or none) }}">All campaigns</option>
+        {% for c in campaigns %}
+        <option value="{{ url_for('social.drafts', client=selected_client_id, status=status_f or none, campaign=c) }}" {{ 'selected' if campaign_f == c }}>{{ c }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
 </div>
 
 {% if posts %}
@@ -50,6 +58,7 @@
                     <th class="tight"></th>
                     <th>Title</th>
                     <th>Client</th>
+                    <th>Campaign</th>
                     <th>Author</th>
                     <th>Platforms</th>
                     <th>Status</th>
@@ -63,6 +72,7 @@
                     <td class="tight"><input type="checkbox" name="post_ids" value="{{ p.id }}" class="studio-check" aria-label="Select {{ p.title or 'post' }}"></td>
                     <td><a href="{{ url_for('social.post_detail', post_id=p.id) }}">{{ p.title or 'Untitled post' }}</a></td>
                     <td>{{ p.client.client_name if p.client else '—' }}</td>
+                    <td class="t-sm">{% if p.campaign %}<span class="sp-pill muted">{{ p.campaign }}</span>{% else %}<span class="t-muted">—</span>{% endif %}</td>
                     <td class="t-muted t-sm">{{ p.created_by.name if p.created_by else '—' }}</td>
                     <td>
                         <div class="chip-row">

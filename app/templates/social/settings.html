@@ -40,6 +40,11 @@
                 <span class="h">Encrypts connected-account tokens at rest.</span>
             </div>
             <div class="settings-stat">
+                <span class="k">Video auto-resize</span>
+                <span class="v">{% if engine.video_resize %}<span class="t-ok">Available</span>{% else %}<span class="t-danger">ffmpeg not installed</span>{% endif %}</span>
+                <span class="h">{% if engine.video_resize %}An oversized reel/story (e.g. 2160px) is downscaled to the platform’s max on publish, aspect kept.{% else %}Oversized videos are blocked instead of resized. Install <b>ffmpeg</b> on the server (apt-get install ffmpeg) to enable it.{% endif %}</span>
+            </div>
+            <div class="settings-stat">
                 <span class="k">Cron endpoints</span>
                 <span class="v">{{ 'Ready' if engine.cron_ready else 'Closed' }}</span>
                 <span class="h">Backup to the in-process worker for production scale-out.</span>

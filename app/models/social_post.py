@@ -24,6 +24,11 @@ class SocialPost(db.Model):
     title = db.Column(db.String(255), nullable=True)
     base_caption = db.Column(db.Text, nullable=True)
 
+    # A free-text campaign label used to group posts across platforms for
+    # reporting (e.g. "Diwali 2026"), and as the utm_campaign value when UTM
+    # tagging is on. Nullable + indexed so the drafts/history filters are cheap.
+    campaign = db.Column(db.String(120), nullable=True, index=True)
+
     # draft | pending_approval | approved | scheduled | publishing
     # | published | failed | partially_published
     status = db.Column(

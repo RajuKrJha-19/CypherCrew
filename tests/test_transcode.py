@@ -99,3 +99,54 @@ def test_fit_content_leaves_a_fitting_video_alone(monkeypatch):
     n = transcode.fit_content(content, _CAPS)
     assert n == 0
     assert called == []   # never even attempted a resize
+
+
+# -- schedule_post: oversized reel with / without ffmpeg --------------------
+
+def _oversized_reel_post():
+    from app.extensions import db
+    from app.models import (SocialAccount, SocialPost, SocialPostTarget,
+                            SocialMediaAsset)
+    acct = SocialAccount(platform="instagram", external_id="TR-1",
+                         display_name="ig", account_type="ig_business",
+                         status="active")
+    post = SocialPost(title="big reel", status="approved", base_caption="c")
+    db.session.add_all([acct, post])
+    db.session.flush()
+    t = SocialPostTarget(social_post_id=post.id, social_account_id=acct.id,
+                         platform="instagram", post_type="reel",
+                         status="draft")
+    db.session.add(t)
+    db.session.flush()
+    db.session.add(SocialMediaAsset(
+        target_id=t.id, source="upload", role="main", sort_order=0,
+        object_key="social_uploads/big.mp4",
+        meta={"measurements": {"width": 2160, "height": 3840,
+                               "duration": 30, "fps": 30, "codec": "h264"}}))
+    db.session.commit()
+    return post, t
+
+
+def test_oversized_reel_blocks_with_ffmpeg_hint_without_ffmpeg(
+        session, monkeypatch):
+    from app.extensions import db
+    from app.social.services import publishing
+    monkeypatch.setattr(transcode, "available", lambda: False)
+    post, t = _oversized_reel_post()
+
+    publishing.schedule_post(post, actor_id=None)
+    db.session.refresh(t)
+    assert t.status == "blocked"
+    assert "ffmpeg is not installed" in (t.last_error or "")
+
+
+def test_oversized_reel_schedules_when_ffmpeg_present(session, monkeypatch):
+    from app.extensions import db
+    from app.social.services import publishing
+    monkeypatch.setattr(transcode, "available", lambda: True)
+    post, t = _oversized_reel_post()
+
+    publishing.schedule_post(post, actor_id=None)
+    db.session.refresh(t)
+    assert t.status == "scheduled"          # worker will resize on publish
+    assert t.last_error is None
