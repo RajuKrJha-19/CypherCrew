@@ -149,6 +149,12 @@ def _process(job_id):
 
         job.state = "publishing"
         if first_attempt:
+            # Downscale any video too wide for this platform (aspect ratio
+            # kept), so an oversized-but-otherwise-fine reel/story publishes
+            # instead of being rejected. No-op without ffmpeg. In-memory only:
+            # the derived file is ephemeral and the source asset is untouched.
+            from app.social.media import transcode
+            transcode.fit_content(content, provider.capabilities)
             provider_state["started"] = True
             step = provider.start_publish(target, content, token)
         else:

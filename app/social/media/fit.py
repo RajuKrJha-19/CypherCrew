@@ -109,6 +109,40 @@ def check_spec(spec, meta):
     return problems
 
 
+def downscale_target_width(spec, meta):
+    """The width to shrink `meta` down to so it meets `spec`, or None.
+
+    Returns spec.width_max ONLY when width is the *sole* thing wrong - i.e. a
+    proportional downscale (which preserves the aspect ratio and reduces the
+    byte size) would make the file fully pass. If anything a resize can't fix
+    is also wrong (wrong aspect, too long, wrong codec, or the shrink would
+    now breach a minimum height/width), it returns None so a resize is never
+    used to paper over a real problem.
+    """
+    if spec is None or not meta:
+        return None
+    width, wmax = meta.get("width"), spec.width_max
+    if not (width and wmax and width > wmax):
+        return None
+
+    scale = wmax / width
+    scaled = dict(meta)
+    scaled["width"] = wmax
+    if meta.get("height"):
+        # -2 in the ffmpeg filter keeps the height even; mirror that here so
+        # the simulated check matches what the transcode will actually make.
+        scaled["height"] = max(2, (round(meta["height"] * scale) // 2) * 2)
+    if meta.get("bytes"):
+        scaled["bytes"] = max(1, round(meta["bytes"] * scale * scale))
+
+    # Downscaling helps only if the shrunk file fully passes. Aspect,
+    # duration, fps and codec are unchanged by a resize, so if any of those
+    # was the problem the scaled file still fails here and we return None.
+    if check_spec(spec, scaled):
+        return None
+    return wmax
+
+
 def _aspect_problem(spec, meta):
     width, height = meta.get("width"), meta.get("height")
     actual = f"{width}x{height}" if width and height else "this shape"

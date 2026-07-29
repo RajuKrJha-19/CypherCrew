@@ -1,0 +1,101 @@
+"""On-publish video downscaling: fit a too-wide-but-otherwise-fine video to
+the platform's width, and never use a resize to mask a real problem."""
+from app.social.dto import MediaRef, PostContent
+from app.social.media import fit, transcode
+from app.social.providers.meta_instagram import MetaInstagramProvider
+
+_CAPS = MetaInstagramProvider.capabilities
+_REEL = _CAPS.spec_for("reel")
+
+
+# -- fit.downscale_target_width --------------------------------------------
+
+def test_width_is_the_only_problem_returns_the_target_width():
+    # 2160x3840 9:16 clip: correct shape, just too many pixels.
+    meta = {"width": 2160, "height": 3840, "duration": 12,
+            "fps": 30, "codec": "h264"}
+    assert fit.downscale_target_width(_REEL, meta) == 1920
+
+
+def test_a_file_already_within_width_needs_no_resize():
+    meta = {"width": 1080, "height": 1920, "duration": 12,
+            "fps": 30, "codec": "h264"}
+    assert fit.downscale_target_width(_REEL, meta) is None
+
+
+def test_resize_is_refused_when_something_else_is_also_wrong():
+    # Too wide AND too long: a downscale fixes the width but not the 20-minute
+    # duration, so it must not be offered as a fix.
+    meta = {"width": 2160, "height": 3840, "duration": 20 * 60,
+            "fps": 30, "codec": "h264"}
+    assert fit.downscale_target_width(_REEL, meta) is None
+
+
+def test_resize_is_refused_when_the_codec_is_wrong():
+    meta = {"width": 2160, "height": 3840, "duration": 12,
+            "fps": 30, "codec": "vp9"}   # reel wants h264/hevc
+    assert fit.downscale_target_width(_REEL, meta) is None
+
+
+# -- the Instagram story spec (previously missing) -------------------------
+
+def test_story_now_has_a_spec_and_catches_an_oversized_file():
+    spec = _CAPS.spec_for("story")
+    assert spec is not None
+    problems = fit.check_spec(spec, {"width": 2160, "height": 3840})
+    assert any("2160px wide" in p for p in problems)
+    # ...and a resize is the right fix for it.
+    assert fit.downscale_target_width(spec, {"width": 2160, "height": 3840}) \
+        == 1920
+
+
+def test_a_normal_story_still_passes():
+    spec = _CAPS.spec_for("story")
+    assert fit.check_spec(spec, {"width": 1080, "height": 1920}) == []
+
+
+# -- transcode.fit_content --------------------------------------------------
+
+def _content():
+    return PostContent(
+        platform="instagram", post_type="reel",
+        media=[MediaRef(object_key="social_uploads/big.mp4",
+                        mime_type="video/mp4",
+                        measurements={"width": 2160, "height": 3840,
+                                      "duration": 12, "fps": 30,
+                                      "codec": "h264"})])
+
+
+def test_fit_content_downscales_an_oversized_video(monkeypatch):
+    monkeypatch.setattr(transcode, "available", lambda: True)
+    monkeypatch.setattr(
+        transcode, "_downscale",
+        lambda key, w, meas: ("social_uploads/derived/x.mp4",
+                              {"width": w, "height": 3413, "codec": "h264"}))
+    content = _content()
+    n = transcode.fit_content(content, _CAPS)
+    assert n == 1
+    assert content.media[0].object_key == "social_uploads/derived/x.mp4"
+    assert content.media[0].measurements["width"] == 1920
+
+
+def test_fit_content_is_a_noop_without_ffmpeg(monkeypatch):
+    monkeypatch.setattr(transcode, "available", lambda: False)
+    content = _content()
+    n = transcode.fit_content(content, _CAPS)
+    assert n == 0
+    assert content.media[0].object_key == "social_uploads/big.mp4"
+
+
+def test_fit_content_leaves_a_fitting_video_alone(monkeypatch):
+    monkeypatch.setattr(transcode, "available", lambda: True)
+    called = []
+    monkeypatch.setattr(transcode, "_downscale",
+                        lambda *a: called.append(a) or None)
+    content = _content()
+    content.media[0].measurements = {"width": 1080, "height": 1920,
+                                     "duration": 12, "fps": 30,
+                                     "codec": "h264"}
+    n = transcode.fit_content(content, _CAPS)
+    assert n == 0
+    assert called == []   # never even attempted a resize

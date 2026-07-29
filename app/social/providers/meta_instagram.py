@@ -64,6 +64,18 @@ class MetaInstagramProvider(MetaBaseProvider):
                 max_bytes=8 * 1024 * 1024,
                 aspect_label="between 4:5 and 1.91:1",
             ),
+            # A story is video or image; Meta caps its width at 1920px too.
+            # Without a spec here an oversized story was not caught locally
+            # and failed at Meta with an opaque "container status: ERROR".
+            # Kept deliberately loose (width + size only, wide aspect) so it
+            # only ever catches the genuinely-oversized file - which a resize
+            # then fixes - and never blocks a normal 1080x1920 story.
+            "story": MediaSpec(
+                aspect_min=0.01, aspect_max=10.0,
+                width_max=1920,
+                max_bytes=300 * 1024 * 1024,
+                aspect_label="between 0.01:1 and 10:1",
+            ),
         },
         requires_container_poll=True,
         max_carousel=10,

@@ -11,7 +11,7 @@ from app.extensions import db
 from app.models import PublishJob
 from app.social.registry import get_provider
 from app.social.services import approval, scheduling, versioning, audit
-from app.social.media import pipeline, probe
+from app.social.media import pipeline, probe, fit, transcode
 from app.social.dto import PostContent
 
 
@@ -48,6 +48,34 @@ def validate_target(target) -> list[str]:
     return provider.validate(build_content(target))
 
 
+def _downscale_will_fix(target):
+    """True if every problem with this target is a too-wide video that a
+    downscale on publish will fix (and at least one is). Requires ffmpeg to be
+    usable - without it the resize can't happen, so the target must still be
+    blocked rather than scheduled on a promise we can't keep."""
+    if not transcode.available():
+        return False
+    provider = get_provider(target.platform)
+    caps = provider.capabilities if provider else None
+    if caps is None:
+        return False
+    content = build_content(target)
+    if not caps.supports(content.post_type):
+        return False
+    spec = caps.spec_for(content.post_type)
+    if spec is None:
+        return False
+
+    needed = False
+    for media in content.media:
+        if not fit.check_spec(spec, media.measurements or {}):
+            continue                                   # already fits
+        if fit.downscale_target_width(spec, media.measurements or {}) is None:
+            return False                               # a resize won't fix it
+        needed = True
+    return needed
+
+
 def schedule_post(post, actor_id=None):
     """Validate + snapshot + move each target to 'scheduled'. Requires the
     post to be approved."""
@@ -57,6 +85,17 @@ def schedule_post(post, actor_id=None):
     problems = {}
     for target in post.targets:
         errs = validate_target(target)
+        if errs and _downscale_will_fix(target):
+            # The only problem is a video too wide for this platform; the
+            # worker downscales it on publish (aspect kept). Schedule it
+            # rather than blocking a file we can fix ourselves.
+            scheduling.schedule_target(
+                target, target.scheduled_for or datetime.utcnow(), actor_id)
+            target.last_error = None
+            audit.record("auto_resize_planned", target_id=target.id,
+                         post_id=post.id, actor_id=actor_id,
+                         detail={"problems": errs})
+            continue
         if errs:
             # "blocked", not left at "draft". Draft means "nobody has
             # submitted this yet"; this target HAS been submitted and

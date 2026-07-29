@@ -158,6 +158,13 @@ class Config:
     # reporting frame rate and codec. See app/social/media/probe.py.
     FFPROBE_PATH = os.getenv("FFPROBE_PATH", "ffprobe")
 
+    # ffmpeg (same package as ffprobe) powers on-publish video downscaling:
+    # a client's 2160px-wide reel is resized to Instagram's 1920px max,
+    # aspect preserved, instead of being rejected. Optional - with no ffmpeg
+    # an oversized video is blocked with a clear "re-export smaller" message.
+    # See app/social/media/transcode.py.
+    FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
+
     # --- Google (YouTube + Business Profile) ---------------------------
     # One OAuth client covers both; each adapter registers only when its
     # own switch is on, so one can go live while the other waits for
