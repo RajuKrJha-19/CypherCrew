@@ -93,6 +93,45 @@
     </div>
 </div>
 
+{# ---- Posting schedule (the "Add to queue" cadence) ---- #}
+{% set DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+<div class="social-card studio-section">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-calendar-day"></i> Posting schedule</h2>
+        <div class="social-card-tools"><span class="t-muted t-sm">Slots the composer’s “Add to queue” fills · IST</span></div>
+    </div>
+    <div class="social-card-body">
+        {% if accounts %}
+        {% for a in accounts %}
+        <form method="POST" action="{{ url_for('social.save_posting_slots', account_id=a.id) }}" class="posting-sched" data-turbo="false" data-suggest="{{ suggested_by_account.get(a.id, [])|tojson|forceescape }}">
+            <div class="ps-head">
+                <span class="pf-chip {{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i> {{ a.display_name }}</span>
+                <div class="ps-actions">
+                    <button type="button" class="row-action ps-suggest"><i class="fa-solid fa-wand-magic-sparkles"></i> Suggest best times</button>
+                    <button type="submit" class="row-action primary"><i class="fa-solid fa-floppy-disk"></i> Save schedule</button>
+                </div>
+            </div>
+            <div class="ps-slots">
+                {% for wd, hhmm in slots_by_account.get(a.id, []) %}
+                <span class="ps-slot"><b>{{ DAYS[wd] }}</b> {{ hhmm }}<input type="hidden" name="slot" value="{{ wd }}|{{ hhmm }}"><button type="button" class="ps-x" aria-label="Remove">&times;</button></span>
+                {% endfor %}
+                {% if not slots_by_account.get(a.id) %}
+                <span class="ps-empty t-muted t-sm">No slots yet — the queue uses defaults (Mon–Fri 10:00, 13:00, 17:00) until you set your own.</span>
+                {% endif %}
+            </div>
+            <div class="ps-add">
+                <select class="ps-day" aria-label="Day for new slot">{% for d in DAYS %}<option value="{{ loop.index0 }}">{{ d }}</option>{% endfor %}</select>
+                <input type="time" class="ps-time" value="10:00" aria-label="Time for new slot (IST)">
+                <button type="button" class="row-action ps-add-btn"><i class="fa-solid fa-plus"></i> Add slot</button>
+            </div>
+        </form>
+        {% endfor %}
+        {% else %}
+        <p class="connect-note">Connect a channel first, then set when its queued posts should go out.</p>
+        {% endif %}
+    </div>
+</div>
+
 {# ---- Connected channels ---- #}
 <div class="social-card">
     <div class="social-card-head">
@@ -116,4 +155,37 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+(function(){
+    const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    function addSlot(form, wd, hhmm){
+        if(!/^\d{2}:\d{2}$/.test(hhmm)) return;
+        // No duplicate (day, time).
+        if([...form.querySelectorAll('input[name="slot"]')].some(i=>i.value===wd+'|'+hhmm)) return;
+        const span=document.createElement('span'); span.className='ps-slot';
+        span.innerHTML='<b>'+DAYS[wd]+'</b> '+hhmm+'<input type="hidden" name="slot" value="'+wd+'|'+hhmm+'"><button type="button" class="ps-x" aria-label="Remove">&times;</button>';
+        const empty=form.querySelector('.ps-empty'); if(empty) empty.remove();
+        form.querySelector('.ps-slots').appendChild(span);
+    }
+    document.querySelectorAll('.posting-sched').forEach(function(form){
+        const addBtn=form.querySelector('.ps-add-btn');
+        if(addBtn) addBtn.addEventListener('click', function(){
+            addSlot(form, parseInt(form.querySelector('.ps-day').value,10), form.querySelector('.ps-time').value);
+        });
+        const slots=form.querySelector('.ps-slots');
+        if(slots) slots.addEventListener('click', function(ev){
+            const x=ev.target.closest('.ps-x'); if(x) x.closest('.ps-slot').remove();
+        });
+        const sg=form.querySelector('.ps-suggest');
+        if(sg) sg.addEventListener('click', function(){
+            let mins=[]; try{ mins=JSON.parse(form.dataset.suggest||'[]'); }catch(e){}
+            if(!mins.length) mins=[600,780,1020];
+            [0,1,2,3,4].forEach(function(wd){ mins.forEach(function(m){
+                addSlot(form, wd, String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
+            }); });
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -55,6 +55,7 @@ from app.models.social_post import (
 )
 from app.models.publish_job import PublishJob, PublishResult
 from app.models.social_comment import SocialComment
+from app.models.social_posting_slot import SocialPostingSlot
 from app.models.social_analytics import SocialAnalyticsSnapshot
 from app.models.social_audit import SocialAuditLog, ContentVersion
 from app.models.platform_rate_budget import PlatformRateBudget

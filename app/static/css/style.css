@@ -17300,6 +17300,21 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 /* Hashtag sets can be long; keep the column from stretching the table. */
 .settings-tags{ max-width:420px; }
 
+/* Posting schedule (the "Add to queue" cadence) */
+.posting-sched{ padding:12px 0; border-top:1px solid var(--color-border); }
+.posting-sched:first-of-type{ border-top:0; }
+.ps-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.ps-actions{ display:flex; gap:8px; }
+.ps-slots{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:22px; }
+.ps-slot{ display:inline-flex; align-items:center; gap:6px; padding:3px 6px 3px 9px; border:1px solid var(--color-border);
+    border-radius:var(--radius-full); font-size:12px; background:var(--color-surface); }
+.ps-slot b{ font-weight:700; color:var(--color-text); }
+.ps-x{ border:0; background:transparent; cursor:pointer; font-size:15px; line-height:1; color:var(--color-text-subtle); padding:0 2px; }
+.ps-x:hover{ color:var(--color-danger); }
+.ps-empty{ font-style:italic; }
+.ps-add{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ps-add .ps-day, .ps-add .ps-time{ padding:5px 8px; }
+
 /* ---- Task publish-state badge (Social Studio -> task) --------------- */
 .pub-badge{ display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px;
     font-size:11px; font-weight:600; line-height:1.6; white-space:nowrap;

@@ -130,13 +130,13 @@ def _social_models():
         PublishResult, PublishJob, SocialMediaAsset, SocialAnalyticsSnapshot,
         PlatformRateBudget, SocialAuditLog, ContentVersion, SocialPostTarget,
         SocialPost, SocialOAuthState, SocialAccount, SocialComment,
-        DataDeletionRequest,
+        SocialPostingSlot, DataDeletionRequest,
     )
     return [
         PublishResult, PublishJob, SocialComment, SocialMediaAsset,
         SocialAnalyticsSnapshot, PlatformRateBudget, SocialAuditLog,
         ContentVersion, SocialPostTarget, SocialPost, SocialOAuthState,
-        SocialAccount, DataDeletionRequest,
+        SocialPostingSlot, SocialAccount, DataDeletionRequest,
     ]
 
 

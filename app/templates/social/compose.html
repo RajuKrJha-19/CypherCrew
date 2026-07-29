@@ -278,6 +278,8 @@
                     <span class="cmp-label">Schedule <small>Times are IST</small></span>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="schedule" checked> Schedule for later</label>
                     <input type="datetime-local" name="schedule" id="scheduleInput" aria-label="Scheduled date and time (IST)" value="{{ schedule_value }}">
+                    <label class="cmp-radio"><input type="radio" name="publish_mode" value="queue"> Add to the posting queue</label>
+                    <p class="cmp-hint-inline" id="queueHint" hidden><i class="fa-solid fa-layer-group"></i> Each channel fills its next open slot from its posting schedule (set in Settings). A per-channel time overrides its slot.</p>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="now"> Publish as soon as approved</label>
                 </div>
                 <div class="cmp-submit-row">
@@ -815,9 +817,14 @@
     // rows are hidden so nobody sets a time that will be ignored.
     function scheduleMode(){ const r=document.querySelector('input[name="publish_mode"]:checked'); return r?r.value:"schedule"; }
     function refreshScheduleMode(){
-        const now = scheduleMode()==="now";
-        const shared=$("scheduleInput"); if(shared) shared.disabled = now;
+        const mode = scheduleMode(), now = mode==="now", queue = mode==="queue";
+        // Shared time is only for explicit "schedule"; the queue picks the
+        // time, and "now" has none.
+        const shared=$("scheduleInput"); if(shared) shared.disabled = now || queue;
+        // Per-channel time is hidden only for "now" (it overrides in both
+        // schedule and queue modes).
         document.querySelectorAll('.cmp-override-sched').forEach(el=>{ el.style.display = now ? "none" : ""; });
+        const qh=$("queueHint"); if(qh) qh.hidden = !queue;
     }
     document.querySelectorAll('input[name="publish_mode"]').forEach(r=>r.addEventListener("change", refreshScheduleMode));
 

@@ -27,8 +27,8 @@ from app.social.media import fit as media_fit
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
-    approval, audit, lifecycle, publishing, recovery, scheduling, task_link,
-    versioning,
+    approval, audit, lifecycle, publishing, queue_slots, recovery, scheduling,
+    task_link, versioning,
 )
 from app.social.services import engage as engage_svc
 from app.social.services.accounts import AccountManager
@@ -1603,7 +1603,9 @@ def _apply_composer_form(post):
     # a typo would silently strip its media, and nothing would say so.
     asset_ids = _existing_client_asset_ids(post)
     task_file_ids = request.form.getlist("task_file_ids", type=int)
-    publish_now = request.form.get("publish_mode") == "now"
+    publish_mode = request.form.get("publish_mode")
+    publish_now = publish_mode == "now"
+    use_queue = publish_mode == "queue"
     scheduled_for = (
         datetime.utcnow() if publish_now
         else _parse_schedule(request.form.get("schedule"))
@@ -1800,15 +1802,19 @@ def _apply_composer_form(post):
             if (caps and caps.supports_first_comment) else None
 
         # Per-channel schedule: this platform's own time if given, else the
-        # shared one. Ignored for publish-now (everything goes ASAP). The
-        # model already stores scheduled_for per target, so different channels
-        # can publish the same post at their own best times.
+        # shared one - or, in queue mode, the channel's next open slot. Ignored
+        # for publish-now (everything goes ASAP). The model already stores
+        # scheduled_for per target, so different channels can publish the same
+        # post at their own best times / cadence.
         target_when = scheduled_for
         if not publish_now:
             chan_when = _parse_schedule(
                 request.form.get(f"schedule_{account.platform}"))
             if chan_when is not None:
-                target_when = chan_when
+                target_when = chan_when       # explicit per-channel time wins
+            elif use_queue:
+                target_when = (queue_slots.next_open_slot(account.id)
+                               or scheduled_for or datetime.utcnow())
 
         feed = _new_target(account, target_type, override or base_caption,
                            first_comment=target_fc,
@@ -2536,9 +2542,40 @@ def settings():
         "cron_ready": bool(current_app.config.get("SOCIAL_WORKER_TOKEN")),
         "token_vault": bool(current_app.config.get("SOCIAL_TOKEN_KEY")),
     }
+    # Each channel's posting-schedule slots as {account_id: [(weekday, "HH:MM")]}
+    # for the "Add to queue" cadence, plus a best-time suggestion per channel.
+    slots_by_account = {
+        a.id: [(s.weekday, s.hhmm) for s in queue_slots.slots_for(a.id)]
+        for a in accounts
+    }
+    suggested_by_account = {
+        a.id: queue_slots.suggested_minutes(a.id) for a in accounts
+    }
     return render_template(
         "social/settings.html", hashtag_sets=hashtag_sets, accounts=accounts,
+        slots_by_account=slots_by_account,
+        suggested_by_account=suggested_by_account,
         engine=engine_info, is_engine_admin=can_manage_social_engine(current_user))
+
+
+@social_bp.route("/accounts/<int:account_id>/slots", methods=["POST"])
+@login_required
+def save_posting_slots(account_id):
+    """Replace a channel's posting-schedule slots. The form submits one
+    'slot' value per slot as 'weekday|HH:MM'; the whole set is rewritten."""
+    _guard()
+    account = SocialAccount.query.get_or_404(account_id)
+    pairs = []
+    for raw in request.form.getlist("slot"):
+        day, _, hhmm = (raw or "").partition("|")
+        try:
+            h, m = hhmm.split(":")
+            pairs.append((int(day), int(h) * 60 + int(m)))
+        except (ValueError, TypeError):
+            continue
+    n = queue_slots.set_slots(account.id, pairs)
+    flash(f"Saved {n} posting slot(s) for {account.display_name}.", "success")
+    return redirect(url_for("social.settings", client=_client_arg()))
 
 
 @social_bp.route("/settings/hashtag-sets/<int:set_id>/delete", methods=["POST"])
