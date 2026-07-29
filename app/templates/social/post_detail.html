@@ -203,7 +203,7 @@
         <div class="cmp-media-grid">
             {% for m in media_previews %}
             <div class="cmp-asset is-static">
-                <span class="cmp-asset-thumb">{% if m.is_image and m.url %}<img src="{{ m.url }}" loading="lazy" alt="Post media">{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
+                <span class="cmp-asset-thumb">{% if m.is_image and m.url %}<img src="{{ m.url }}" loading="lazy" alt="Post media">{% elif m.is_video and m.object_key %}<img src="{{ url_for('social.media_poster', key=m.object_key) }}" loading="lazy" alt="Video poster" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><i class="fa-regular fa-file-video" style="display:none"></i><span class="pp-play"><i class="fa-solid fa-play"></i></span>{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
             </div>
             {% endfor %}
         </div>

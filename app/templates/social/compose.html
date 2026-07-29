@@ -133,9 +133,9 @@
                 <div class="cmp-media-grid" id="taskMediaGrid">
                     {% for a in task_assets %}
                     <label class="cmp-asset" title="{{ a.filename }}">
-                        <input type="checkbox" name="task_file_ids" value="{{ a.id }}" data-url="{{ a.url or '' }}" data-mime="{{ a.mime or '' }}" {{ 'checked' if a.id in selected_task_file_ids }}>
+                        <input type="checkbox" name="task_file_ids" value="{{ a.id }}" data-url="{{ a.url or '' }}" data-mime="{{ a.mime or '' }}" data-key="{{ a.object_key or '' }}" {{ 'checked' if a.id in selected_task_file_ids }}>
                         <span class="ord"></span>
-                        <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
+                        <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% elif a.mime.startswith('video') and a.object_key %}<img src="{{ url_for('social.media_poster', key=a.object_key) }}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><i class="fa-regular fa-file-video" style="display:none"></i>{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
                         <span class="cmp-asset-name">{{ a.filename }}</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text for {{ a.filename }}" data-altkey="task_file_ids|{{ a.id }}">
@@ -156,9 +156,9 @@
                 <div class="cmp-media-grid" id="uploadGrid">
                     {% for u in uploaded_media %}
                     <label class="cmp-asset selected" title="uploaded">
-                        <input type="checkbox" name="upload_media" value="{{ u.object_key }}::{{ u.mime }}" data-url="{{ u.url or '' }}" data-mime="{{ u.mime }}" checked>
+                        <input type="checkbox" name="upload_media" value="{{ u.object_key }}::{{ u.mime }}" data-url="{{ u.url or '' }}" data-mime="{{ u.mime }}" data-key="{{ u.object_key }}" checked>
                         <span class="ord"></span>
-                        <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
+                        <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% elif u.mime.startswith('video') and u.object_key %}<img src="{{ url_for('social.media_poster', key=u.object_key) }}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><i class="fa-regular fa-file-video" style="display:none"></i>{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
                         <span class="cmp-asset-name">uploaded</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|{{ u.object_key }}::{{ u.mime }}">
@@ -680,10 +680,21 @@
     }
     document.querySelectorAll('.cmp-alt').forEach(wireAlt);
     syncAlt();
+    // A video's cached poster-frame URL (or null), and whether a tile is video.
+    function isVideoInput(input){ return input && /^video/i.test(input.dataset.mime||""); }
+    function posterFor(input){
+        if(!isVideoInput(input)) return null;
+        const key = input.dataset.key;
+        return key ? ("/social/media/poster?key=" + encodeURIComponent(key)) : null;
+    }
     function refreshMediaSelection(){
         const checked=selectedMediaInputs();
         document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
-        selectedMediaUrl = checked[0]?(checked[0].dataset.url||null):null;
+        // For a video the preview needs its poster frame, not its (video) URL
+        // which an <img> can't render; images use their own URL.
+        selectedMediaUrl = checked[0]
+            ? (isVideoInput(checked[0]) ? posterFor(checked[0]) : (checked[0].dataset.url||null))
+            : null;
         // Measure whatever is now selected, then re-run the per-channel
         // verdict with the real numbers.
         checked.forEach(measure);
@@ -788,10 +799,14 @@
     const uploadZone=$("uploadZone"), uploadInput=$("uploadInput"), uploadGrid=$("uploadGrid");
     function addUploaded(d){
         const lab=document.createElement("label"); lab.className="cmp-asset selected"; lab.title=d.filename||"uploaded";
-        lab.innerHTML='<input type="checkbox" name="upload_media" value="'+d.object_key+'::'+d.mime+'" data-url="'+(d.url||"")+'" checked>'
-            +'<span class="ord"></span><span class="cmp-asset-thumb">'
-            +((d.is_image&&d.url)?'<img src="'+d.url+'" alt="">':'<i class="fa-regular fa-file-video"></i>')
-            +'</span><span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
+        const isVid=/^video/i.test(d.mime||"");
+        const poster=(isVid&&d.object_key)?('/social/media/poster?key='+encodeURIComponent(d.object_key)):null;
+        const thumb=(d.is_image&&d.url)?'<img src="'+d.url+'" alt="">'
+            :(poster?'<img src="'+poster+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\';"><i class="fa-regular fa-file-video" style="display:none"></i>'
+            :'<i class="fa-regular fa-file-video"></i>');
+        lab.innerHTML='<input type="checkbox" name="upload_media" value="'+d.object_key+'::'+d.mime+'" data-url="'+(d.url||"")+'" data-mime="'+(d.mime||"")+'" data-key="'+d.object_key+'" checked>'
+            +'<span class="ord"></span><span class="cmp-asset-thumb">'+thumb+'</span>'
+            +'<span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
             +'<input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|'+d.object_key+'::'+d.mime+'">';
         uploadGrid.appendChild(lab);
         const cb=lab.querySelector('input[type="checkbox"]');

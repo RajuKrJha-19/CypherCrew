@@ -330,7 +330,8 @@ def _task_file_preview(tf):
         except Exception:  # noqa: BLE001
             url = None
     return {"id": tf.id, "filename": tf.original_filename,
-            "mime": tf.mime_type or "", "is_image": is_image, "url": url}
+            "mime": tf.mime_type or "", "is_image": is_image, "url": url,
+            "object_key": tf.object_key}
 
 
 def _task_deliverable_files(task):
@@ -1967,13 +1968,16 @@ def post_detail(post_id):
         from app.social.media import pipeline
         for m in post.targets[0].media:
             is_image = (m.mime_type or "").startswith("image")
+            is_video = (m.mime_type or "").startswith("video")
             url = None
             if is_image and m.object_key:
                 try:
                     url = pipeline.presigned_url(m.object_key)
                 except Exception:  # noqa: BLE001
                     url = None
-            media_previews.append({"url": url, "is_image": is_image})
+            media_previews.append({
+                "url": url, "is_image": is_image, "is_video": is_video,
+                "object_key": m.object_key})
     # What actually became of the first comment. It is posted after the
     # publish and can be skipped or refused for reasons the composer can't
     # see (a missing Graph scope, a provider that can't comment), so the
@@ -2167,6 +2171,24 @@ def schedule_post(post_id):
             "success",
         )
     return redirect(url_for("social.post_detail", post_id=post.id))
+
+
+@social_bp.route("/media/poster")
+@login_required
+def media_poster():
+    """A cached video poster frame (generated once with ffmpeg). Templates
+    point a video's <img> here; it 302s to the poster's presigned URL, or 404s
+    so the UI keeps the generic video icon. Restricted to our own media keys."""
+    _guard()
+    key = (request.args.get("key") or "").strip()
+    if (not key or ".." in key
+            or not key.startswith(("social_uploads/", "clients/"))):
+        abort(404)
+    from app.social.media import poster
+    url = poster.poster_url(key)
+    if not url:
+        abort(404)
+    return redirect(url)
 
 
 @social_bp.route("/api/upload", methods=["POST"])
