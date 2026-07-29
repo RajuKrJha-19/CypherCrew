@@ -159,7 +159,7 @@ class MetaInstagramProvider(MetaBaseProvider):
         if content.post_type == "carousel":
             container_id = self._create_carousel(graph, ig_id, token, content, caption)
         elif content.post_type == "reel":
-            container_id = graph.post(f"{ig_id}/media", token=token, data={
+            reel_data = {
                 "media_type": "REELS",
                 "video_url": self._media_url(content.media[0]),
                 "caption": caption,
@@ -168,7 +168,16 @@ class MetaInstagramProvider(MetaBaseProvider):
                 # change to that default cannot quietly move a client's
                 # posts off their grid.
                 "share_to_feed": "true",
-            })["id"]
+            }
+            # Reel cover: a custom image wins over a picked frame; neither ->
+            # Instagram's default first frame.
+            extra = content.extra or {}
+            if extra.get("reel_cover_url"):
+                reel_data["cover_url"] = extra["reel_cover_url"]
+            elif extra.get("reel_thumb_offset") is not None:
+                reel_data["thumb_offset"] = extra["reel_thumb_offset"]
+            container_id = graph.post(
+                f"{ig_id}/media", token=token, data=reel_data)["id"]
         elif content.post_type == "story":
             media = content.media[0]
             key = "video_url" if (media.mime_type or "").startswith("video") else "image_url"

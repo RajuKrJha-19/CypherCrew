@@ -468,6 +468,17 @@ def _hashtag_sets(client_id=None):
     return q.order_by(SocialHashtagSet.name).all()
 
 
+def _reel_cover_url(post):
+    """Presigned URL of a post's custom reel cover, for the edit preview."""
+    if not post or not post.reel_cover_key:
+        return ""
+    try:
+        from app.social.media import pipeline
+        return pipeline.presigned_url(post.reel_cover_key) or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _campaigns(client_id=None):
     """Distinct campaign labels used so far (this client's, or all), for the
     composer's autocomplete and the drafts filter."""
@@ -1468,6 +1479,7 @@ def compose():
         platform_schedules={},
         media_alt={},
         campaigns=_campaigns(default_client_id),
+        reel_cover_key="", reel_thumb_offset="", reel_cover_url="",
         hashtag_sets=_hashtag_sets(default_client_id),
         story_style="plain",
         story_link_target_id=None,
@@ -1570,6 +1582,10 @@ def edit_post(post_id):
         platform_schedules=platform_schedules,
         media_alt=media_alt,
         campaigns=_campaigns(post.client_id),
+        reel_cover_key=post.reel_cover_key or "",
+        reel_thumb_offset=(post.reel_thumb_offset
+                           if post.reel_thumb_offset is not None else ""),
+        reel_cover_url=_reel_cover_url(post),
         hashtag_sets=_hashtag_sets(post.client_id),
         # The style lives on the story target - which is `first` for a
         # standalone story, and the companion beside it otherwise. A
@@ -1625,6 +1641,25 @@ def _apply_composer_form(post):
     # Campaign label (grouping + utm_campaign) and whether to auto-tag links.
     post.campaign = (request.form.get("campaign") or "").strip()[:120] or None
     add_utm = bool(request.form.get("add_utm"))
+
+    # Reel cover: a custom uploaded image (key), a frame picked from the video
+    # (offset ms), or auto (neither). The mode radio decides which to keep so
+    # switching modes can never leave a stale value behind.
+    cover_mode = request.form.get("reel_cover_mode")
+    if cover_mode == "upload":
+        ck = (request.form.get("reel_cover_key") or "").strip()
+        post.reel_cover_key = ck if ck.startswith("social_uploads/") else None
+        post.reel_thumb_offset = None
+    elif cover_mode == "frame":
+        post.reel_cover_key = None
+        try:
+            off = int(request.form.get("reel_thumb_offset") or "")
+            post.reel_thumb_offset = off if off >= 0 else None
+        except (TypeError, ValueError):
+            post.reel_thumb_offset = None
+    else:                                   # auto / unset
+        post.reel_cover_key = None
+        post.reel_thumb_offset = None
 
     post_type = (request.form.get("post_type") or "image").strip()
     account_ids = request.form.getlist("account_ids", type=int)

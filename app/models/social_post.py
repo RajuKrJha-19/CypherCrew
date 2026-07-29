@@ -29,6 +29,13 @@ class SocialPost(db.Model):
     # tagging is on. Nullable + indexed so the drafts/history filters are cheap.
     campaign = db.Column(db.String(120), nullable=True, index=True)
 
+    # Reel cover (Instagram/Facebook reels). Either a custom uploaded cover
+    # image (its R2 key -> cover_url) OR a frame picked from the video
+    # (offset in MILLISECONDS -> thumb_offset). Both null = the platform's
+    # default first frame.
+    reel_cover_key = db.Column(db.String(1000), nullable=True)
+    reel_thumb_offset = db.Column(db.Integer, nullable=True)
+
     # draft | pending_approval | approved | scheduled | publishing
     # | published | failed | partially_published
     status = db.Column(

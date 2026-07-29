@@ -167,6 +167,30 @@
                 </div>
             </div>
 
+            {# --- Reel cover (shown for a Reel) --- #}
+            <div class="cmp-section cmp-reel-cover" id="reelCoverWrap" hidden>
+                <span class="cmp-label"><i class="fa-solid fa-image"></i> Reel cover</span>
+                <div class="cmp-cover-modes">
+                    <label class="cmp-radio"><input type="radio" name="reel_cover_mode" value="auto" {{ 'checked' if not reel_cover_key and reel_thumb_offset == '' }}> First frame <small>(auto)</small></label>
+                    <label class="cmp-radio"><input type="radio" name="reel_cover_mode" value="frame" {{ 'checked' if reel_thumb_offset != '' }}> Pick a frame</label>
+                    <label class="cmp-radio"><input type="radio" name="reel_cover_mode" value="upload" {{ 'checked' if reel_cover_key }}> Upload a cover</label>
+                </div>
+                <div class="cmp-cover-frame" id="coverFramePick" hidden>
+                    <video id="coverVideo" playsinline preload="metadata" controls></video>
+                    <div class="cmp-cover-row">
+                        <button type="button" class="btn btn-secondary btn-sm" id="useFrameBtn"><i class="fa-solid fa-crosshairs"></i> Use current frame</button>
+                        <span class="cmp-hint-inline" id="frameHint"></span>
+                    </div>
+                    <p class="cmp-hint-inline" id="coverNoVideo" hidden>Select the reel's video first, then scrub to a frame.</p>
+                </div>
+                <div class="cmp-cover-upload" id="coverUploadPick" hidden>
+                    <label class="cmp-upload sm" id="coverZone"><input type="file" id="coverInput" accept="image/*" hidden><i class="fa-solid fa-cloud-arrow-up"></i> <span>Upload a cover image <small>(9:16 works best)</small></span></label>
+                    <div class="cmp-cover-preview" id="coverPreview" {{ '' if reel_cover_url else 'hidden' }}><img id="coverPreviewImg" src="{{ reel_cover_url }}" alt="Reel cover"></div>
+                </div>
+                <input type="hidden" name="reel_thumb_offset" id="reelThumbOffset" value="{{ reel_thumb_offset }}">
+                <input type="hidden" name="reel_cover_key" id="reelCoverKey" value="{{ reel_cover_key }}">
+            </div>
+
             {# Brand assets used to be offered here as a third media source.
                Removed deliberately: a client's logo pack belongs to the
                client record, not in the flow of composing a post, and the
@@ -361,8 +385,49 @@
             checked.slice(1).forEach(c=>c.checked=false);
         }
         refreshStory();
+        refreshReelCover();
         refreshMediaSelection();
     }
+
+    // ---- Reel cover (custom image, or a frame picked from the video) ----
+    const reelCoverWrap=$("reelCoverWrap");
+    function coverMode(){ const r=document.querySelector('input[name="reel_cover_mode"]:checked'); return r?r.value:"auto"; }
+    function loadCoverVideo(){
+        const v=$("coverVideo"), no=$("coverNoVideo"); if(!v) return;
+        if(selectedVideoUrl){
+            if(v.getAttribute("src")!==selectedVideoUrl) v.src=selectedVideoUrl;
+            v.style.display=""; if(no) no.hidden=true;
+        } else { v.removeAttribute("src"); v.style.display="none"; if(no) no.hidden=false; }
+    }
+    function refreshReelCover(){
+        if(!reelCoverWrap) return;
+        reelCoverWrap.hidden = postType()!=="reel";
+        const mode=coverMode(), fp=$("coverFramePick"), up=$("coverUploadPick");
+        if(fp) fp.hidden = mode!=="frame";
+        if(up) up.hidden = mode!=="upload";
+        if(mode==="frame") loadCoverVideo();
+    }
+    document.querySelectorAll('input[name="reel_cover_mode"]').forEach(r=>r.addEventListener("change", refreshReelCover));
+    const useFrameBtn=$("useFrameBtn");
+    if(useFrameBtn) useFrameBtn.addEventListener("click", function(){
+        const v=$("coverVideo"); if(!v||!selectedVideoUrl) return;
+        const ms=Math.round((v.currentTime||0)*1000);
+        $("reelThumbOffset").value=ms; $("reelCoverKey").value="";
+        const fh=$("frameHint"); if(fh) fh.textContent="Cover set at "+(ms/1000).toFixed(1)+"s";
+    });
+    const coverInput=$("coverInput");
+    if(coverInput) coverInput.addEventListener("change", function(){
+        const f=this.files&&this.files[0]; if(!f) return;
+        const fd=new FormData(); fd.append("file", f);
+        fetch("/social/api/upload",{method:"POST",body:fd}).then(r=>r.json()).then(d=>{
+            if(d.object_key){
+                $("reelCoverKey").value=d.object_key; $("reelThumbOffset").value="";
+                const img=$("coverPreviewImg"), prev=$("coverPreview");
+                if(img&&d.url){ img.src=d.url; if(prev) prev.hidden=false; }
+            } else alert(d.error||"Cover upload failed.");
+        }).catch(()=>alert("Cover upload failed."));
+        this.value="";
+    });
 
     // accounts
     function refreshAccounts(){
@@ -707,6 +772,8 @@
             ? (firstIsVideo ? posterFor(first) : (first.dataset.url||null))
             : null;
         selectedVideoUrl = (first && firstIsVideo) ? (first.dataset.url||null) : null;
+        // Keep the reel-cover frame picker pointed at the current video.
+        if(coverMode()==="frame") loadCoverVideo();
         // Measure whatever is now selected, then re-run the per-channel
         // verdict with the real numbers.
         checked.forEach(measure);

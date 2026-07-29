@@ -18,6 +18,21 @@ from app.social.dto import PostContent
 def build_content(target) -> PostContent:
     """Resolve a target into the platform-agnostic content the provider
     consumes (media keys resolved from R2 / TaskFile / ClientAsset)."""
+    extra = {}
+    post = target.post
+    if post is not None and target.post_type == "reel":
+        # Reel cover: a custom uploaded image (-> cover_url) or a frame the
+        # user picked (-> thumb_offset ms). Resolved to a presigned URL here so
+        # the provider stays storage-agnostic.
+        if post.reel_cover_key:
+            try:
+                extra["reel_cover_url"] = pipeline.presigned_url(
+                    post.reel_cover_key)
+            except Exception:  # noqa: BLE001
+                pass
+        elif post.reel_thumb_offset is not None:
+            extra["reel_thumb_offset"] = post.reel_thumb_offset
+
     return PostContent(
         platform=target.platform,
         post_type=target.post_type,
@@ -25,6 +40,7 @@ def build_content(target) -> PostContent:
         hashtags=target.hashtags or "",
         media=pipeline.resolve_media(target.media),
         scheduled_for=target.scheduled_for,
+        extra=extra,
     )
 
 
