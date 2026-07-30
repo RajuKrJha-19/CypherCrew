@@ -122,5 +122,36 @@
 
     document.addEventListener("turbo:load", updateActiveNav);
 
+    // --- External-redirect guard (belt-and-suspenders) -------------------
+    //
+    // Some same-origin forms/links 302-redirect to a provider's consent
+    // screen (OAuth connect: Zoho, Meta, Google). Turbo submits via fetch and
+    // CANNOT follow a cross-origin redirect, so such a control appears dead.
+    // Templates set data-turbo="false" explicitly; this auto-tags the known
+    // external-redirect endpoints by URL pattern BEFORE any submit, so a
+    // forgotten attribute never silently breaks an OAuth button again.
+    //
+    // Pattern-based on purpose: reading the cross-origin response to detect
+    // the redirect is impossible (it is opaque), so we prevent Turbo from
+    // ever fetching these instead. Add new external-redirect paths here.
+    var EXTERNAL_REDIRECT = /(\/oauth\/|\/attendance\/connect)/;
+
+    function tagExternalRedirects() {
+        var nodes = document.querySelectorAll("form[action], a[href]");
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var url = el.getAttribute("action") || el.getAttribute("href") || "";
+            // Never override an explicit choice already on the element.
+            if (EXTERNAL_REDIRECT.test(url) && !el.hasAttribute("data-turbo")) {
+                el.setAttribute("data-turbo", "false");
+            }
+        }
+    }
+
+    document.addEventListener("turbo:load", tagExternalRedirects);
+    if (!window.Turbo) {
+        document.addEventListener("DOMContentLoaded", tagExternalRedirects);
+    }
+
     window.App = App;
 })(window, document);
