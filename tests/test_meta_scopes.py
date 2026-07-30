@@ -68,6 +68,70 @@ def test_the_consent_screen_asks_for_the_comment_and_insights_scopes():
         assert scope in META_UNIFIED_SCOPES, f"{scope} is not requested"
 
 
+#: Exactly what was submitted to Meta App Review for the Cypher Crew app,
+#: on 30 July 2026. `public_profile` is not here because Facebook Login
+#: grants it by default and it never reaches a scope= parameter.
+#:
+#: Keep this in step with the App Review dashboard BY HAND - there is no
+#: API telling us what was approved, which is the whole reason it drifts.
+APPROVED_BY_APP_REVIEW = {
+    "pages_show_list",
+    "pages_read_engagement",
+    "pages_read_user_content",
+    "pages_manage_posts",
+    "pages_manage_engagement",
+    "read_insights",
+    "instagram_basic",
+    "instagram_content_publish",
+    "instagram_manage_comments",
+    "instagram_manage_insights",
+}
+
+
+def test_we_ask_for_exactly_what_review_approved():
+    """Both directions of drift are silent, which is why this is an
+    equality check and not a subset one:
+
+      * approved but not requested -> never granted, and the feature just
+        does nothing. That has already happened here twice, to the comment
+        and insights scopes.
+      * requested but not approved -> also never granted, and on top of
+        that it is the single most common App Review rejection: asking for
+        a permission the app cannot demonstrate a use for.
+
+    business_management is deliberately absent. Nothing in this codebase
+    calls a Business Manager endpoint - not /me/accounts, not publishing,
+    not insights - so there was no feature to demonstrate for it, and it
+    was dropped from the submission rather than defended.
+    """
+    requested = set(META_UNIFIED_SCOPES)
+
+    unapproved = requested - APPROVED_BY_APP_REVIEW
+    assert not unapproved, (
+        f"asking for {sorted(unapproved)}, which App Review did not "
+        f"approve. Either get it approved or stop requesting it - Meta "
+        f"rejects submissions for permissions with no demonstrable use."
+    )
+
+    unused = APPROVED_BY_APP_REVIEW - requested
+    assert not unused, (
+        f"{sorted(unused)} was approved but never reaches the consent "
+        f"screen, so it will never be granted and whatever needs it will "
+        f"silently do nothing."
+    )
+
+
+def test_the_engage_inbox_can_read_other_peoples_comments():
+    """pages_read_engagement covers what the PAGE posted; the comments
+    Engage exists to show are written by other people, and that is a
+    different permission. It is also a declared dependency of
+    instagram_basic, so both halves of the connect need it."""
+    assert "pages_read_user_content" in META_UNIFIED_SCOPES, (
+        "without pages_read_user_content, GET /{post-id}/comments is "
+        "refused and the Facebook side of Engage is locked out"
+    )
+
+
 def test_no_messaging_scope_is_requested():
     """There is no messaging code in this app, and asking for a permission
     that cannot be demonstrated is a review rejection."""

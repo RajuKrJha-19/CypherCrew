@@ -58,13 +58,23 @@ _CONTENT_CODES = {1363040, 1363127}
 # declared elsewhere - which is how the comment and insights scopes were
 # approved-but-absent. test_meta_scopes.py pins the union so the lists
 # cannot drift apart again.
+#
+# This list must equal what App Review approved. Both directions of drift
+# are silent: a scope approved but missing here is never granted, and a
+# scope requested here but not approved is never granted either. Neither
+# raises anything - the feature just does nothing.
 META_UNIFIED_SCOPES = [
     "pages_show_list",
     "pages_read_engagement",
+    # Reading the COMMENTS other people leave on a Page post - the Engage
+    # inbox. pages_read_engagement is not enough: it covers the Page's own
+    # content, while visitor-generated content needs this one. It is also
+    # a declared dependency of instagram_basic, so the Instagram half of
+    # the connect leans on it too.
+    "pages_read_user_content",
     "pages_manage_posts",
     "pages_manage_engagement",
     "read_insights",
-    "business_management",
     "instagram_basic",
     "instagram_content_publish",
     "instagram_manage_comments",

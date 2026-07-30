@@ -29,7 +29,7 @@ _PAGE = {
 
 _GRANTED = [
     "pages_show_list", "pages_read_engagement", "pages_manage_posts",
-    "business_management", "instagram_basic", "instagram_content_publish",
+    "pages_read_user_content", "instagram_basic", "instagram_content_publish",
 ]
 
 

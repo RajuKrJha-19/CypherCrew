@@ -18,6 +18,12 @@ class MetaFacebookProvider(MetaBaseProvider):
     SCOPES = [
         "pages_show_list",
         "pages_read_engagement",
+        # Engage reads GET /{post-id}/comments, which returns content other
+        # people wrote. pages_read_engagement only covers what the PAGE
+        # posted; visitor-generated content is this permission. Without it
+        # the inbox is refused, and list_comments raises rather than
+        # reporting "you're all caught up" while locked out.
+        "pages_read_user_content",
         "pages_manage_posts",
         # Writing comments - the auto first comment, and replying from
         # Engage. Without it POST /{post-id}/comments is refused, and
@@ -28,7 +34,6 @@ class MetaFacebookProvider(MetaBaseProvider):
         # scope: fetch_analytics swallows errors and returns {}, so without
         # this the Analytics screen is simply always empty.
         "read_insights",
-        "business_management",
     ]
     capabilities = Capabilities(
         post_types={"text", "image", "video", "reel", "carousel", "story"},

@@ -38,7 +38,10 @@ class MetaInstagramProvider(MetaBaseProvider):
         "instagram_manage_insights",
         "pages_show_list",
         "pages_read_engagement",
-        "business_management",
+        # A declared dependency of instagram_basic - the IG account is
+        # discovered through its linked Page - and what lets Engage read
+        # the comments other people leave.
+        "pages_read_user_content",
     ]
     capabilities = Capabilities(
         # No "video": Instagram publishes video to the feed as a REELS
