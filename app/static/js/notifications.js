@@ -184,6 +184,18 @@
                 if (checkSound && latestId > lastSeenId) {
                     playNotificationSound();
 
+                    // Everything newer than the last one we announced, in
+                    // the order it happened - the payload is newest-first,
+                    // so reversed. Oldest is shown first and therefore
+                    // trimmed first if a burst overflows the stack.
+                    const fresh = (data.notifications || [])
+                        .filter(function (item) {
+                            return Number(item.id) > lastSeenId;
+                        })
+                        .reverse();
+
+                    announce(fresh, config.category);
+
                     lastSeenId = latestId;
                     localStorage.setItem(config.lastSeenKey, String(lastSeenId));
                 }
@@ -263,6 +275,23 @@
         fetchItems(false);
 
         return widget;
+    }
+
+    // Pop the notification itself into the corner as it arrives. Suppressed
+    // while either panel is open: the popups land in that same corner, and
+    // somebody reading the list does not need the list read back to them.
+    // Absent notification-toast.js this is simply a no-op, and the bell and
+    // its sound behave exactly as they did before.
+    function announce(items, category) {
+        if (typeof window.showNotificationToast !== "function") return;
+        if (!items || !items.length) return;
+        if (widgets.some(function (w) { return w.isOpen(); })) return;
+
+        items.forEach(function (item) {
+            window.showNotificationToast(
+                Object.assign({ category: category }, item)
+            );
+        });
     }
 
     let soundAllowed = false;

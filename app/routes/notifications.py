@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Notification
@@ -62,7 +63,12 @@ def api_notifications():
     if category:
         query = query.filter_by(category=category)
 
-    notifications = query.order_by(
+    # The actor is eager-loaded: the popup shows who did the thing, and a
+    # lazy load would be one extra query per row on a poll that runs every
+    # five seconds for every signed-in user.
+    notifications = query.options(
+        joinedload(Notification.actor)
+    ).order_by(
         Notification.id.desc()
     ).limit(
         limit
@@ -94,6 +100,12 @@ def api_notifications():
                 "link": item.link or "#",
                 "is_read": item.is_read,
                 "category": item.category,
+                # Who caused it. Initials rather than an avatar URL on
+                # purpose: avatar_url() presigns against object storage,
+                # which is far too expensive to do per row on a five-second
+                # poll. A system-generated notification has no actor.
+                "actor_name": item.actor.name if item.actor else None,
+                "actor_initials": item.actor.initials if item.actor else None,
                 # Kept for anything relying on the old absolute string;
                 # the widget itself now renders a relative time client-
                 # side from created_at_iso so "2h ago" stays accurate

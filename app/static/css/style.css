@@ -19336,3 +19336,270 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
 /* An action that is currently ON - pinned, or saved by you. */
 .tm-action.on{ color:var(--color-primary); }
 .tm-action.on:hover{ color:var(--color-primary); }
+
+/* ==========================================================================
+   Notification popups (.ntoast) - see static/js/notification-toast.js
+   --------------------------------------------------------------------------
+   The arrival, not the outcome. .toast above is form feedback: one line,
+   red or green, gone. This is content - who, what, when, and a link - so
+   it is a card in the shell's own surface/border/radius language, sharing
+   the .notification-panel corner it slid out of.
+
+   Everything is expressed in the theme tokens, so dark mode needs no
+   overrides of its own beyond the two places that need a real colour.
+   ========================================================================== */
+.ntoast-stack{
+    position:fixed;
+    /* Clear of the 60px topbar, aligned with .notification-panel's own
+       right edge so a popup and the panel it belongs to share a column. */
+    top:76px;
+    right:30px;
+    z-index:99998;   /* just under .notification-panel (99999) */
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    width:370px;
+    max-width:calc(100vw - 40px);
+    pointer-events:none;   /* the cards take clicks, the column does not */
+}
+
+.ntoast{
+    position:relative;
+    pointer-events:auto;
+    overflow:hidden;
+    display:grid;
+    grid-template-columns:36px 1fr auto;
+    gap:12px;
+    align-items:start;
+    padding:14px 14px 15px;
+    border-radius:16px;
+    border:1px solid var(--color-border);
+    background:var(--color-surface);
+    color:var(--color-neutral);
+    box-shadow:0 18px 42px rgba(15,23,42,.20);
+    text-decoration:none;
+    opacity:0;
+    transform:translateX(16px) scale(.98);
+    transition:opacity .22s ease, transform .22s cubic-bezier(.21,1.02,.73,1);
+}
+
+.ntoast.is-shown{
+    opacity:1;
+    transform:translateX(0) scale(1);
+}
+
+.ntoast.is-leaving{
+    opacity:0;
+    transform:translateX(16px) scale(.98);
+}
+
+.ntoast:hover{
+    border-color:var(--color-border-strong);
+    box-shadow:0 22px 50px rgba(15,23,42,.26);
+}
+
+.ntoast:focus-visible{
+    outline:2px solid var(--color-primary);
+    outline-offset:2px;
+}
+
+/* The 3px spine down the left edge is the only thing that differs between
+   an @mention and general activity - enough to tell them apart at a glance
+   without two separately-coloured cards shouting from the same corner. */
+.ntoast::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    bottom:0;
+    width:3px;
+    background:var(--color-primary);
+}
+
+.ntoast.is-mention::before{ background:#8b5cf6; }
+
+.ntoast-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    background:var(--color-primary-soft);
+    color:var(--color-primary);
+    font-size:14px;
+}
+
+/* Initials stand in for the actor's avatar - avatar_url() presigns against
+   object storage, far too costly per row on a 5s poll. */
+.ntoast-icon.is-avatar{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.02em;
+}
+
+.ntoast.is-mention .ntoast-icon{
+    background:rgba(139,92,246,.12);
+    color:#7c3aed;
+}
+
+.ntoast-body{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+}
+
+.ntoast-kicker{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--color-text-muted);
+}
+
+.ntoast-label{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+/* An actor's name, not a category. Uppercase + tracking is right for
+   "MENTION" and wrong for "Raju Kr Jha" - it reads as shouting, and the
+   initialisms inside a name stop being legible. */
+.ntoast-label.is-person{
+    text-transform:none;
+    letter-spacing:0;
+    font-size:12px;
+    color:var(--color-neutral);
+}
+
+.ntoast-time{
+    flex-shrink:0;
+    text-transform:none;
+    letter-spacing:0;
+    font-weight:500;
+}
+
+.ntoast-time::before{
+    content:"·";
+    margin-right:6px;
+}
+
+.ntoast-title{
+    font-size:var(--text-base);
+    font-weight:650;
+    line-height:1.35;
+    color:var(--color-neutral);
+    /* Two lines, then ellipsis: a long task name must not grow the card
+       into a wall, and the panel behind it holds the full text anyway. */
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+
+.ntoast-message{
+    font-size:var(--text-sm);
+    line-height:1.45;
+    color:var(--color-text-muted);
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+
+.ntoast-close{
+    flex-shrink:0;
+    width:24px;
+    height:24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:none;
+    border-radius:8px;
+    background:transparent;
+    color:var(--color-text-muted);
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+    opacity:.65;
+    transition:opacity .15s ease, background .15s ease;
+}
+
+.ntoast-close:hover{
+    opacity:1;
+    background:var(--color-surface-sunken);
+}
+
+/* Time left before this card leaves on its own. Drains left-to-right and
+   holds still while hovered, so the pause is visible rather than something
+   you have to trust. */
+.ntoast-meter{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:2px;
+    background:var(--color-primary);
+    opacity:.35;
+    transform-origin:left center;
+    transform:scaleX(1);
+}
+
+.ntoast.is-mention .ntoast-meter{ background:#8b5cf6; }
+
+:root[data-theme="dark"] .ntoast{
+    box-shadow:0 18px 42px rgba(0,0,0,.5);
+}
+
+:root[data-theme="dark"] .ntoast.is-mention .ntoast-icon{
+    background:rgba(139,92,246,.18);
+    color:#c4b5fd;
+}
+
+/* Full-width along the top on a phone, where a 370px card pinned to the
+   right would sit half off the screen. */
+@media(max-width:640px){
+
+    .ntoast-stack{
+        top:70px;
+        right:12px;
+        left:12px;
+        width:auto;
+    }
+
+    .ntoast{
+        grid-template-columns:32px 1fr auto;
+        padding:12px;
+        border-radius:14px;
+    }
+
+    .ntoast-icon{
+        width:32px;
+        height:32px;
+    }
+}
+
+/* Reduced motion: still appear and still leave, just without travelling.
+   The meter's own transition is set inline from JS, so it is killed here
+   with !important rather than by omission. */
+@media (prefers-reduced-motion: reduce){
+
+    .ntoast{
+        transition:opacity .15s ease;
+        transform:none;
+    }
+
+    .ntoast.is-shown,
+    .ntoast.is-leaving{
+        transform:none;
+    }
+
+    .ntoast-meter{
+        transition:none !important;
+    }
+}

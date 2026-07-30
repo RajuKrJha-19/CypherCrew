@@ -69,4 +69,9 @@
         "{{ url_for('notifications.mark_read') }}";
 </script>
 
+{# The popup that shows a notification as it lands. Loaded before
+   notifications.js, which calls into it - and degrades to the bell alone if
+   this file is ever missing. #}
+<script src="{{ url_for('static', filename='js/notification-toast.js') }}"></script>
+
 <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
