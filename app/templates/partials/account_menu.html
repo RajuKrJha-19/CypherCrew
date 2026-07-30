@@ -84,5 +84,21 @@
         document.addEventListener("keydown", function (event) {
             if (event.key === "Escape") close();
         });
+
+        // The topbar is data-turbo-permanent, so this menu and its open
+        // state survive the body swap: picking an item would otherwise
+        // leave the dropdown hanging open over the page it navigated to.
+        dropdown.addEventListener("click", function (event) {
+            if (event.target.closest("a.account-item")) close();
+        });
+
+        // Logout is a form; submit fires only once its confirm() is accepted,
+        // so a cancelled logout leaves the menu open where the user left it.
+        const logoutForm = dropdown.querySelector("form");
+        if (logoutForm) logoutForm.addEventListener("submit", close);
+
+        // Safety net for navigations started anywhere else (browser back,
+        // another script) — never render a new page with the menu open.
+        document.addEventListener("turbo:visit", close);
     })();
 </script>
