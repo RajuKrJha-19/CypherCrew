@@ -200,6 +200,14 @@ def build_login_url(scopes, state, redirect_uri):
         "state": state,
         "scope": ",".join(scopes),
         "response_type": "code",
+        # Without this, Meta NEVER re-asks for a permission the user has
+        # already declined - or one that simply was not granted on an
+        # earlier authorization, which is every scope added to
+        # META_UNIFIED_SCOPES after someone first connected. The dialog
+        # renders, the user presses Save, the callback succeeds, and the
+        # new scopes are silently absent from the token. auth_type=rerequest
+        # is the documented way to make the dialog ask again.
+        "auth_type": "rerequest",
     }
     return f"{base}/{version}/dialog/oauth?{urlencode(params)}"
 
@@ -312,24 +320,41 @@ class MetaBaseProvider(SocialProvider):
     def exchange_code(self, code, code_verifier, redirect_uri):
         token, expires_at = exchange_code_for_long_lived_token(code, redirect_uri)
 
+        # What Meta ACTUALLY granted. Fetched once and used for both the
+        # required-scope gate and the record we persist.
+        granted = granted_permissions(token)
+
         # Validate that the permissions we need were actually granted.
-        missing = set(self._required_scopes()) - granted_permissions(token)
+        missing = set(self._required_scopes()) - granted
         if missing:
             raise PermanentError(
                 "Missing required Meta permissions: " + ", ".join(sorted(missing))
             )
 
+        # The requested scopes that did NOT come back. _required_scopes is
+        # deliberately narrow (publishing only), so a missing comment or
+        # insights permission does not fail the connect - which is right,
+        # but it must not be invisible either: the caller flashes this so a
+        # partial grant is never reported as a complete one.
+        requested = self.connect_scopes() or self.SCOPES
+        ungranted = [s for s in requested if s not in granted]
+
         return TokenBundle(
             access_token=token,
             token_expires_at=expires_at,
-            scopes=",".join(self.SCOPES),
+            # Meta's own answer, not our declared wish list. Recording
+            # self.SCOPES here meant the row claimed every permission the
+            # adapter wants however little the user actually granted, so a
+            # dropped scope was unobservable after the fact.
+            scopes=",".join(sorted(granted)),
             # The app-scoped id of the person who granted consent. Meta's
             # data-deletion callback identifies the request by exactly this
             # id and nothing else, so without it a deletion request cannot
             # be matched to anything we hold. upsert_from_oauth merges
             # bundle.meta onto the account, so it lands automatically.
             meta={"user_token": True,
-                  "connected_user_id": _me_user_id(token)},
+                  "connected_user_id": _me_user_id(token),
+                  "ungranted_scopes": ungranted},
         )
 
     def _required_scopes(self):

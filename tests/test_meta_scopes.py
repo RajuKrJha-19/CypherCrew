@@ -145,3 +145,79 @@ def test_connect_scopes_is_what_the_oauth_manager_will_use(provider_class):
     """OAuthManager.start() calls connect_scopes() when a provider has it -
     pin that it returns the unified list rather than the adapter's own."""
     assert provider_class().connect_scopes() == META_UNIFIED_SCOPES
+
+
+# --- The grant itself, not just the request -----------------------------------
+#
+# Asking for the right scopes is only half of it. Meta can hand back a token
+# carrying FEWER permissions than the dialog displayed, and says nothing about
+# the difference. Two things made that invisible: the dialog never re-asked for
+# a permission an earlier authorization had not granted, and the account row
+# recorded the adapter's declared SCOPES rather than Meta's answer. The connect
+# then flashed plain success while the new permissions were simply absent.
+
+
+def test_consent_url_rerequests_permissions_meta_would_otherwise_skip(app):
+    """Without auth_type=rerequest, Meta silently omits any permission the
+    user has already declined - including every scope added to
+    META_UNIFIED_SCOPES after they first connected. The dialog appears, Save
+    works, and the token comes back without them."""
+    from app.social.providers.meta_common import build_login_url
+
+    with app.app_context():
+        url = build_login_url(META_UNIFIED_SCOPES, "state123",
+                              "https://example.test/oauth/facebook/callback")
+
+    assert "auth_type=rerequest" in url, (
+        "the consent URL must re-request declined permissions, or newly "
+        "added scopes can never be granted to an existing user"
+    )
+
+
+@pytest.mark.parametrize("provider_class", PROVIDERS)
+def test_exchange_records_what_meta_granted_not_what_we_declared(
+        app, monkeypatch, provider_class):
+    """The stored scopes must be Meta's answer. Recording SCOPES meant the
+    row claimed permissions the user never gave, so a dropped scope could
+    not be diagnosed after the fact - it looked complete."""
+    from app.social.providers import meta_common
+
+    # Meta grants the publishing-critical scopes but withholds the two that
+    # are requested-but-not-required (a pending review looks exactly like
+    # this), plus public_profile which we never put in a scope= parameter.
+    withheld = {"read_insights", "instagram_manage_insights"}
+    granted = (set(META_UNIFIED_SCOPES) - withheld) | {"public_profile"}
+
+    monkeypatch.setattr(meta_common, "exchange_code_for_long_lived_token",
+                        lambda code, redirect_uri: ("tok", None))
+    monkeypatch.setattr(meta_common, "granted_permissions",
+                        lambda token: granted)
+    monkeypatch.setattr(meta_common, "_me_user_id", lambda token: "fbuser1")
+
+    with app.app_context():
+        bundle = provider_class().exchange_code("code", None, "https://x.test/cb")
+
+    assert set(bundle.scopes.split(",")) == granted, (
+        "bundle.scopes must be the granted set, not the declared SCOPES"
+    )
+    assert set(bundle.meta["ungranted_scopes"]) == withheld, (
+        "a requested-but-withheld permission must be reported so the "
+        "connect cannot flash unqualified success"
+    )
+
+
+@pytest.mark.parametrize("provider_class", PROVIDERS)
+def test_full_grant_reports_nothing_ungranted(app, monkeypatch, provider_class):
+    """The happy path stays quiet - no spurious warning on a clean connect."""
+    from app.social.providers import meta_common
+
+    monkeypatch.setattr(meta_common, "exchange_code_for_long_lived_token",
+                        lambda code, redirect_uri: ("tok", None))
+    monkeypatch.setattr(meta_common, "granted_permissions",
+                        lambda token: set(META_UNIFIED_SCOPES))
+    monkeypatch.setattr(meta_common, "_me_user_id", lambda token: "fbuser1")
+
+    with app.app_context():
+        bundle = provider_class().exchange_code("code", None, "https://x.test/cb")
+
+    assert bundle.meta["ungranted_scopes"] == []

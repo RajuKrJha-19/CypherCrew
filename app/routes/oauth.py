@@ -44,6 +44,39 @@ _NO_INSTAGRAM = (
 )
 
 
+# What each requested-but-not-granted Meta permission costs, so the message
+# names the broken feature rather than a raw scope string.
+_SCOPE_FEATURES = {
+    "pages_show_list": "listing the Pages you manage",
+    "pages_read_engagement": "reading your Page's own posts",
+    "pages_read_user_content": "the Engage inbox for Facebook comments",
+    "pages_manage_posts": "publishing to Facebook Pages",
+    "pages_manage_engagement": "replying to Facebook comments and the auto "
+                               "first comment",
+    "read_insights": "Facebook Page analytics",
+    "instagram_basic": "reading the Instagram profile and posts",
+    "instagram_content_publish": "publishing to Instagram",
+    "instagram_manage_comments": "the Engage inbox for Instagram comments",
+    "instagram_manage_insights": "Instagram analytics",
+}
+
+
+def _ungranted_warning(scopes):
+    """Spell out a partial grant. Meta returns a token for the permissions
+    it did give and says nothing about the rest, so without this the connect
+    flashes plain success and the missing features just quietly do nothing."""
+    features = [_SCOPE_FEATURES.get(s, s) for s in scopes]
+    return (
+        "Connected, but Meta did not grant "
+        + str(len(scopes))
+        + (" permission" if len(scopes) == 1 else " permissions")
+        + ": " + ", ".join(features)
+        + ". That part will not work until granted. Re-run Connect and leave "
+          "every permission switched on; if a permission is still missing "
+          "afterwards, it is pending Meta App Review for this app."
+    )
+
+
 def _account_phrase(platform, count):
     singular, plural = _ACCOUNT_NOUNS.get(
         platform, (f"{platform_label(platform)} account",
@@ -145,9 +178,17 @@ def callback(platform):
                  platform, total,
                  ", ".join(f"{k}={v}" for k, v in saved.items()) or "none")
 
+        ungranted = (bundle.meta or {}).get("ungranted_scopes") or []
+        if ungranted:
+            log.warning("[oauth:%s] partial grant - Meta withheld: %s",
+                        platform, ", ".join(ungranted))
+
         if total:
             phrases = [_account_phrase(p, n) for p, n in saved.items()]
             flash("Connected " + " and ".join(phrases) + ".", "success")
+            # A permission the user thinks they just granted but Meta withheld.
+            if ungranted:
+                flash(_ungranted_warning(ungranted), "error")
             # Facebook connected but no linked Instagram - explain, don't hide.
             if "instagram" in empty and "facebook" in saved:
                 flash(_NO_INSTAGRAM, "info")

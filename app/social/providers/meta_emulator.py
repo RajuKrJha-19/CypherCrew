@@ -13,6 +13,8 @@ from itertools import count
 
 from flask import Blueprint, jsonify, redirect, request
 
+from app.social.providers.meta_common import META_UNIFIED_SCOPES
+
 
 meta_emulator_bp = Blueprint("meta_emulator", __name__, url_prefix="/mock/graph")
 
@@ -27,10 +29,12 @@ _PAGE = {
     "instagram_business_account": {"id": "17800000000000001", "username": "demo_brand"},
 }
 
-_GRANTED = [
-    "pages_show_list", "pages_read_engagement", "pages_manage_posts",
-    "pages_read_user_content", "instagram_basic", "instagram_content_publish",
-]
+#: The emulator stands in for a FULLY approved app, so it grants exactly
+#: what the consent screen asks for. Derived from the one list rather than
+#: copied: the hand-written copy went stale the moment the comment and
+#: insights scopes were added, leaving dev mode unable to reproduce the
+#: features that depend on them.
+_GRANTED = list(META_UNIFIED_SCOPES)
 
 
 @meta_emulator_bp.route("/<ver>/dialog/oauth")
