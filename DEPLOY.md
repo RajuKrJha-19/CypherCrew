@@ -7,21 +7,23 @@ is written so that data is never touched.
 
 ## What changed since the last deploy
 
-One thing needs action beyond pulling the code:
+**Five additive database migrations**, all applied by one `flask db upgrade`
+(additive + nullable throughout — no existing row is touched):
 
-**Two database migrations**, applied by the same `flask db upgrade`:
+- `c1a2b3d4e5f6` adds `users.checkin_source` and `users.zoho_employee_id`.
+- `d2b3c4e5f6a7` creates `zoho_connections` (the encrypted org-level Zoho token).
+- `e3c4d5f6a7b8` creates `attendance_sessions` (check-in/out spans).
+- `f4d5e6a7b8c9` creates `attendance_settings` (admin-tunable idle-alert config).
+- `a5e6f7b8c9d0` adds the buzzer columns to `attendance_settings`.
 
-- `c3f7a91b60d4` widens `users.role` and adds a unique constraint plus
-  audit columns to `user_permissions`. It is required: two of the new
-  role values are 29 characters and the old column held 30, so the first
-  person given one would otherwise fail to save.
-- `d7a24c8b91e3` adds the story-style columns to `social_post_targets`
-  (`story_style`, `story_link_target_id`, `story_link_done_at`,
-  `story_link_done_by_id`). Additive and nullable, with existing rows
-  defaulting to `plain` — see *Stories that open a post* below.
+These power the new **Attendance** feature (Zoho People bridge + idle-task
+alerts + inactivity buzzer) — see *Attendance configuration* below. It ships
+behind `ATTENDANCE_ENABLED`, **off by default**, so pulling the code changes
+nothing until you switch it on.
 
-No new dependencies. Everything else is templates, CSS and Python that
-ships with the pull.
+The rest is code-only (no migration): Social Studio scheduler fixes (a blank or
+past schedule is now refused instead of publishing immediately, and per-channel
+times are preserved) and the reel auto-resize gating. No new dependencies.
 
 ---
 
@@ -109,6 +111,49 @@ flask shell
 ```
 
 Whatever that prints is exactly what the Channels page will offer.
+
+---
+
+## Attendance configuration
+
+Attendance (Zoho People check-in + idle-task alerts) is driven by environment
+variables and defaults to *off*. With `ATTENDANCE_ENABLED` unset, the top-bar
+check-in widget never renders, `/attendance` 404s and the worker never starts —
+the app behaves exactly as before.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `ATTENDANCE_ENABLED` | `False` | Master switch. Off means the whole feature — widget, routes, worker — is absent. |
+| `ZOHO_SIMULATION_MODE` | `True` | Uses a local `/mock/zoho` emulator instead of real Zoho, so the flow works with no Zoho app. **Force-disabled the moment `ZOHO_CLIENT_ID` is set.** |
+| `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` | unset | The Zoho People OAuth app. Setting these turns simulation off and enables the real connection. |
+| `ZOHO_DC` | `com` | Your Zoho data centre — `com` / `in` / `eu` / `com.au` / `jp`. Picks the accounts + people API hosts. |
+| `ZOHO_SYNC_TOKEN` | unset | Shared secret for the `/internal/attendance/*` cron endpoints. Without it they stay closed (403). |
+| `ZOHO_WEBHOOK_SECRET` | unset | Verifies an inbound Zoho automation webhook (`/internal/attendance/webhook`). Optional — polling is the guaranteed path. |
+| `SOCIAL_TOKEN_KEY` | unset | Reused to Fernet-encrypt the Zoho refresh token. Must be set to connect a real Zoho org. |
+| `ATTENDANCE_INPROCESS_WORKER` | `True` | Runs sync + idle-alerts in-process (no external cron needed). |
+
+Then, in the app: grant an admin **Manage Attendance**, connect Zoho from
+**Attendance → Connect**, set each intern's source to *In-app* on their user
+page, and tune the alerts/buzzer in the Attendance panel.
+
+### Scheduled jobs (cron)
+
+The in-process worker already runs both attendance jobs (sync ~2 min, idle
+check ~10 min), so **cron is optional**. Add it only if you run with
+`ATTENDANCE_INPROCESS_WORKER=false`, or want a second, out-of-process trigger.
+Each endpoint is idempotent and token-guarded, so running both the worker and
+cron is safe.
+
+```cron
+# Pull attendance from Zoho every 2 minutes
+*/2 * * * *   curl -fsS -X POST -H "X-Zoho-Token: $ZOHO_SYNC_TOKEN" https://crew.cypherms.com/internal/attendance/sync
+# Nudge idle checked-in employees every 10 minutes
+*/10 * * * *  curl -fsS -X POST -H "X-Zoho-Token: $ZOHO_SYNC_TOKEN" https://crew.cypherms.com/internal/attendance/idle-alerts
+```
+
+(For reference, the existing jobs follow the same shape with `X-Reminder-Token`
+for `/internal/reminders/run` + `/internal/task-fallback/run`, and
+`X-Social-Token` for the `/internal/social/*` endpoints.)
 
 ---
 
