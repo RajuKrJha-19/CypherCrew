@@ -84,8 +84,29 @@ def api_notifications():
 
     unread_count = unread_query.count()
 
+    # Attendance idle-alert buzzer: a distinct sound the browser plays only
+    # for idle-alert notifications. Fully guarded so the notification poll is
+    # untouched when attendance is off or half-configured.
+    idle_title = None
+    buzzer = None
+    if current_app.config.get("ATTENDANCE_ENABLED"):
+        try:
+            from app.services.idle_alerts import IDLE_ALERT_TITLE
+            from app.attendance.service import get_settings
+            settings = get_settings()
+            idle_title = IDLE_ALERT_TITLE
+            buzzer = {
+                "enabled": bool(settings.buzzer_enabled
+                                and settings.idle_alerts_enabled),
+                "volume": int(settings.buzzer_volume),
+            }
+        except Exception:  # noqa: BLE001 - never let this break the poll
+            idle_title = None
+            buzzer = None
+
     return jsonify({
         "unread_count": unread_count,
+        "attendance_buzzer": buzzer,
         # Cypher-Teams unread, piggybacked onto the poll the topbar already
         # makes on every page. Teams needs its badge to update outside the
         # module, and a second app-wide poller for one integer would double
@@ -100,6 +121,11 @@ def api_notifications():
                 "link": item.link or "#",
                 "is_read": item.is_read,
                 "category": item.category,
+                # Idle-task alert: the browser plays the distinct buzzer for
+                # these instead of the normal chime.
+                "is_idle_alert": bool(
+                    idle_title and item.category == "activity"
+                    and item.title == idle_title),
                 # Who caused it. Initials rather than an avatar URL on
                 # purpose: avatar_url() presigns against object storage,
                 # which is far too expensive to do per row on a five-second

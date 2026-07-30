@@ -226,6 +226,35 @@ def create_app():
         from app.routes.teams import teams_bp
         app.register_blueprint(teams_bp)
 
+    # Attendance (Zoho People bridge + idle-task alerts). Same contract:
+    # registered ONLY behind ATTENDANCE_ENABLED, so with it off the top-bar
+    # widget never renders, /attendance 404s and the worker never starts.
+    if app.config.get("ATTENDANCE_ENABLED"):
+        from app.routes.attendance import attendance_bp
+        app.register_blueprint(attendance_bp)
+
+        # Local Zoho emulator - drives the whole flow with no real Zoho app.
+        # Simulation is force-disabled the moment ZOHO_CLIENT_ID is set.
+        if app.config.get("ZOHO_SIMULATION_MODE"):
+            from app.attendance.emulator import zoho_emulator_bp
+            app.register_blueprint(zoho_emulator_bp)
+            app.logger.warning(
+                "ZOHO_SIMULATION_MODE is on - attendance is driven by the "
+                "local /mock/zoho emulator, not Zoho People."
+            )
+
+        if not app.config.get("ZOHO_SYNC_TOKEN"):
+            app.logger.warning(
+                "ATTENDANCE_ENABLED is on but ZOHO_SYNC_TOKEN is unset - the "
+                "/internal/attendance/* cron endpoints stay closed (403)."
+            )
+
+        # Background worker: pulls Zoho attendance + runs the idle-task check
+        # so nothing needs an external cron in dev. Off in tests.
+        if app.config.get("ATTENDANCE_INPROCESS_WORKER", True):
+            from app.attendance.worker import start_attendance_worker
+            start_attendance_worker(app)
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()
@@ -236,6 +265,7 @@ def create_app():
         can_assign_tasks, can_view_team_performance, can_manage_users,
         can_manage_permissions, can_manage_leaves, can_manage_holidays,
         can_manage_meetings, can_publish, can_review, access_fingerprint,
+        can_manage_attendance,
     )
     from app.utils import roles as roles_module
     from app.utils.social_platforms import PLATFORM_ICONS, PLATFORM_LABELS
@@ -311,6 +341,9 @@ def create_app():
         can_manage_leaves=can_manage_leaves,
         can_manage_holidays=can_manage_holidays,
         can_manage_meetings=can_manage_meetings,
+        # "May operate the attendance integration" - gates the Attendance
+        # admin link and the per-user check-in source control.
+        can_manage_attendance=can_manage_attendance,
         can_publish=can_publish,
         can_review=can_review,
         # Digest of the signed-in user's role + granted codes. Feeds the

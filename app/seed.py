@@ -27,6 +27,7 @@ PERMISSION_NAMES = {
     "manage_leaves": "Manage Leave",
     "manage_holidays": "Manage Holidays",
     "manage_meetings": "Manage Meetings",
+    "manage_attendance": "Manage Attendance",
     "manage_users": "Manage Users",
     "manage_permissions": "Manage Permissions",
 }

@@ -93,6 +93,23 @@ class User(db.Model, UserMixin):
         db.Date
     )
 
+    # --- Attendance (Zoho People bridge) -----------------------------------
+    #: Where this person's attendance comes from. 'zoho' users punch in on
+    #: Zoho People and their sessions are synced in; 'software' users (e.g.
+    #: interns not on Zoho) check in/out directly in this app. Additive +
+    #: nullable so existing rows stay valid; an admin sets it on the user
+    #: edit screen. Effective default is 'zoho' (see attendance.source_of).
+    checkin_source = db.Column(
+        db.String(20)
+    )
+
+    #: Zoho People employee id (erecno / empId), resolved by email on first
+    #: sync and cached so the write-back checkout call needs no extra lookup.
+    zoho_employee_id = db.Column(
+        db.String(64),
+        index=True
+    )
+
     @property
     def initials(self):
         """One- or two-letter fallback avatar from the name/email."""

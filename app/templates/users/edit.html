@@ -73,6 +73,16 @@
                     <option value="inactive" {% if user.status == "inactive" %}selected{% endif %}>Inactive</option>
                 </select>
 
+                {% if config.ATTENDANCE_ENABLED and can_manage_attendance(current_user) %}
+                <label>Attendance check-in source</label>
+                <select name="checkin_source">
+                    <option value="zoho" {% if user.checkin_source != "software" %}selected{% endif %}>Zoho People (employee punches in on Zoho)</option>
+                    <option value="software" {% if user.checkin_source == "software" %}selected{% endif %}>In-app (intern — checks in here)</option>
+                </select>
+                <small class="field-hint">Zoho users can check out here but check
+                    in on Zoho People. In-app users check in and out here.</small>
+                {% endif %}
+
                 <button type="submit">Update User</button>
 
             </form>

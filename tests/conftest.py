@@ -38,6 +38,13 @@ os.environ.setdefault("SOCIAL_SIMULATION_MODE", "true")
 # routes are reachable; set (like the Meta vars above) BEFORE the app is
 # imported, because config reads the environment at import time.
 os.environ.setdefault("TEAMS_ENABLED", "true")
+# Attendance (Zoho People bridge). On for the suite in simulation mode so the
+# blueprint + emulator register and the routes are reachable. The background
+# worker stays OFF - tests drive sync / idle-alerts explicitly.
+os.environ.setdefault("ATTENDANCE_ENABLED", "true")
+os.environ.setdefault("ZOHO_SIMULATION_MODE", "true")
+os.environ.setdefault("ZOHO_SYNC_TOKEN", "test-zoho-token")
+os.environ.setdefault("ATTENDANCE_INPROCESS_WORKER", "false")
 
 import pytest  # noqa: E402
 
@@ -362,9 +369,9 @@ def _purge_test_rows():
         # belongs here - a missed one surfaces as a teardown-only
         # ForeignKeyViolation, which is a confusing way to find out.
         from app.models import (
-            ContentVersion, Notification, SocialAccount,
+            AttendanceSettings, ContentVersion, Notification, SocialAccount,
             SocialAuditLog, SocialPost, SocialPostTarget, TeamChannel,
-            TeamMessage,
+            TeamMessage, ZohoConnection,
         )
         for model, columns in (
             (SocialAuditLog, ("actor_id",)),
@@ -373,6 +380,10 @@ def _purge_test_rows():
             (SocialAccount, ("connected_by_id",)),
             (ContentVersion, ("edited_by_id",)),
             (Notification, ("actor_id",)),
+            # Attendance: these keep a nullable FK to the acting user and
+            # would otherwise block the user delete below.
+            (AttendanceSettings, ("updated_by_id",)),
+            (ZohoConnection, ("connected_by_id",)),
             # Teams: created_by_id on both of these is a plain FK with no
             # ON DELETE, so it blocks the user delete below. teams_messages
             # already has ON DELETE SET NULL, but it is detached here too
@@ -390,6 +401,15 @@ def _purge_test_rows():
         Notification.query.filter(
             Notification.user_id.in_(user_ids)
         ).delete(synchronize_session=False)
+
+        # Attendance sessions are owned by (and NOT NULL against) their user,
+        # so they go with them - and their user FK would otherwise block the
+        # delete below.
+        from app.models import AttendanceSession
+        AttendanceSession.query.filter(
+            AttendanceSession.user_id.in_(user_ids)
+        ).delete(synchronize_session=False)
+
         User.query.filter(
             User.id.in_(user_ids)
         ).delete(synchronize_session=False)

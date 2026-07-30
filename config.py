@@ -273,3 +273,73 @@ class Config:
     # for reference-file uploads). Without its own cap, one dragged file
     # could push a multi-gigabyte body through a gunicorn worker.
     TEAMS_ATTACHMENT_MAX_MB = int(os.getenv("TEAMS_ATTACHMENT_MAX_MB", "25"))
+
+    # ------------------------------------------------------------------
+    # Attendance (Zoho People bridge + idle-task alerts)
+    # ------------------------------------------------------------------
+    # Master feature flag, same contract as SOCIAL_ENGINE_ENABLED / TEAMS:
+    # OFF by default. With it off the attendance blueprint is never
+    # registered, the top-bar check-in widget never renders and the
+    # background worker never starts - the app behaves exactly as before.
+    ATTENDANCE_ENABLED = (
+        os.getenv("ATTENDANCE_ENABLED", "False").lower() == "true"
+    )
+
+    # Zoho People OAuth app (a single org-level connection an admin
+    # authorises once). The refresh token is stored Fernet-encrypted via the
+    # same vault as the social tokens (SOCIAL_TOKEN_KEY), so that key must be
+    # set to connect a real Zoho org. Data-centre picks the API + accounts
+    # hosts: com | in | eu | com.au | jp ...
+    ZOHO_CLIENT_ID = os.getenv("ZOHO_CLIENT_ID")
+    ZOHO_CLIENT_SECRET = os.getenv("ZOHO_CLIENT_SECRET")
+    ZOHO_DC = os.getenv("ZOHO_DC", "com")
+    ZOHO_ACCOUNTS_BASE_URL = os.getenv(
+        "ZOHO_ACCOUNTS_BASE_URL", f"https://accounts.zoho.{ZOHO_DC}")
+    ZOHO_PEOPLE_API_BASE_URL = os.getenv(
+        "ZOHO_PEOPLE_API_BASE_URL", f"https://people.zoho.{ZOHO_DC}")
+    # Scope Zoho grants for reading + writing attendance entries.
+    ZOHO_SCOPES = os.getenv("ZOHO_SCOPES", "ZOHOPEOPLE.attendance.all")
+
+    # Simulation mode: a local Zoho People emulator mounted at /mock/zoho,
+    # so the whole check-in/out + sync flow is exercisable on localhost with
+    # no real Zoho app - mirrors META_EMULATOR. Hard safety rule: FORCE-
+    # DISABLED the moment real Zoho credentials (ZOHO_CLIENT_ID) are present,
+    # so a stray ZOHO_SIMULATION_MODE=true can never intercept prod traffic.
+    ZOHO_SIMULATION_MODE = (
+        os.getenv("ZOHO_SIMULATION_MODE", "True").lower() == "true"
+        and not os.getenv("ZOHO_CLIENT_ID")
+    )
+
+    # Shared secret for the cron-triggered /internal/attendance/* endpoints
+    # (poll sync + idle-alerts). Same fail-closed contract as REMINDER_TOKEN:
+    # unset => the endpoints stay closed (403).
+    ZOHO_SYNC_TOKEN = os.getenv("ZOHO_SYNC_TOKEN")
+    # Verifies the inbound Zoho People automation webhook. Unset => the
+    # webhook endpoint rejects everything (403), and polling remains the
+    # guaranteed path.
+    ZOHO_WEBHOOK_SECRET = os.getenv("ZOHO_WEBHOOK_SECRET")
+
+    # Idle-task alert tuning. An employee who is checked in but has no task
+    # In Progress is nudged every REPEAT minutes (after a GRACE window from
+    # check-in), and their manager is looped in after ESCALATE_AFTER repeats.
+    ATTENDANCE_IDLE_GRACE_MIN = int(
+        os.getenv("ATTENDANCE_IDLE_GRACE_MIN", "15"))
+    ATTENDANCE_IDLE_REPEAT_MIN = int(
+        os.getenv("ATTENDANCE_IDLE_REPEAT_MIN", "10"))
+    ATTENDANCE_ESCALATE_AFTER = int(
+        os.getenv("ATTENDANCE_ESCALATE_AFTER", "3"))
+    # How long a "Snooze" suppresses the idle alert, in minutes.
+    ATTENDANCE_SNOOZE_MIN = int(os.getenv("ATTENDANCE_SNOOZE_MIN", "15"))
+
+    # In-process background worker: a daemon thread that periodically pulls
+    # attendance from Zoho (SYNC_INTERVAL) and runs the idle-task check
+    # (IDLE_INTERVAL), so nothing needs an external cron in dev. Idempotent +
+    # row-locked, so it is safe in every gunicorn worker and alongside the
+    # /internal/attendance/* cron endpoints. Off in tests.
+    ATTENDANCE_INPROCESS_WORKER = (
+        os.getenv("ATTENDANCE_INPROCESS_WORKER", "True").lower() == "true"
+    )
+    ATTENDANCE_SYNC_INTERVAL = int(
+        os.getenv("ATTENDANCE_SYNC_INTERVAL", "120"))
+    ATTENDANCE_IDLE_INTERVAL = int(
+        os.getenv("ATTENDANCE_IDLE_INTERVAL", "600"))

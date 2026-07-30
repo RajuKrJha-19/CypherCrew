@@ -182,7 +182,6 @@
                 }
 
                 if (checkSound && latestId > lastSeenId) {
-                    playNotificationSound();
 
                     // Everything newer than the last one we announced, in
                     // the order it happened - the payload is newest-first,
@@ -193,6 +192,20 @@
                             return Number(item.id) > lastSeenId;
                         })
                         .reverse();
+
+                    // A fresh idle-task alert plays the distinct buzzer; any
+                    // other fresh item plays the normal chime. So an idle
+                    // nudge is unmistakable, and a normal notification landing
+                    // alongside it still sounds like itself.
+                    const buzzer = data.attendance_buzzer;
+                    const idle = fresh.some(function (i) { return i.is_idle_alert; });
+                    const other = fresh.some(function (i) { return !i.is_idle_alert; });
+                    if (idle && buzzer && buzzer.enabled) {
+                        playBuzzer(buzzer.volume);
+                        if (other) playNotificationSound();
+                    } else {
+                        playNotificationSound();
+                    }
 
                     announce(fresh, config.category);
 
@@ -295,6 +308,7 @@
     }
 
     let soundAllowed = false;
+    let audioCtx = null;                       // for the synthesised buzzer
     const sound = document.getElementById("notificationSound");
 
     function unlockSound() {
@@ -308,6 +322,14 @@
                 })
                 .catch(function () {});
         }
+
+        // Prime the Web Audio context on the same gesture, so the idle
+        // buzzer can play later without being blocked by autoplay policy.
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC && !audioCtx) audioCtx = new AC();
+            if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+        } catch (e) { /* no Web Audio - falls back to the chime */ }
 
         document.removeEventListener("click", unlockSound);
         document.removeEventListener("keydown", unlockSound);
@@ -325,6 +347,39 @@
         sound.play().catch(function (error) {
             console.log("Notification audio blocked:", error);
         });
+    }
+
+    // A distinct inactivity buzzer - two short square-wave bursts, clearly
+    // different from the soft notification chime. Synthesised in-browser so
+    // no audio asset is needed. `volume` is 0-100 (admin-set); 0 is silent.
+    function playBuzzer(volume) {
+        if (!soundAllowed) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) { playNotificationSound(); return; }   // graceful fallback
+        try {
+            if (!audioCtx) audioCtx = new AC();
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            const peak = Math.max(
+                0.0001, Math.min(1, (volume == null ? 70 : volume) / 100) * 0.5);
+            const t0 = audioCtx.currentTime;
+            [0, 0.22].forEach(function (offset) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "square";
+                osc.frequency.setValueAtTime(520, t0 + offset);
+                osc.frequency.setValueAtTime(660, t0 + offset + 0.09);
+                gain.gain.setValueAtTime(0.0001, t0 + offset);
+                gain.gain.exponentialRampToValueAtTime(peak, t0 + offset + 0.02);
+                gain.gain.exponentialRampToValueAtTime(
+                    0.0001, t0 + offset + 0.18);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(t0 + offset);
+                osc.stop(t0 + offset + 0.2);
+            });
+        } catch (e) {
+            playNotificationSound();
+        }
     }
 
     const notificationWidget = createWidget({

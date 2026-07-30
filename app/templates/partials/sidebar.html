@@ -96,6 +96,14 @@
     </a>
     {% endif %}
 
+    {% if config.ATTENDANCE_ENABLED and can_manage_attendance(current_user) %}
+    <a href="{{ url_for('attendance.admin') }}"
+       class="{% if endpoint.startswith('attendance.') %}active{% endif %}">
+        <i class="fa-solid fa-user-clock"></i>
+        <span>Attendance</span>
+    </a>
+    {% endif %}
+
     {#
         Open to everyone, deliberately. The client pages carry the
         brand assets (logo, fonts, guidelines) the whole team needs to

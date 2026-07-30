@@ -150,6 +150,7 @@ _ADMIN_ALL = frozenset({
     "manage_leaves",
     "manage_holidays",
     "manage_meetings",
+    "manage_attendance",
     "view_reports",
     "view_team_performance",
 })
@@ -526,3 +527,26 @@ def can_assign_role(user, value):
     from assignable_by(), but a form post is just a string - this is what
     actually stops one."""
     return value in assignable_by(user)
+
+
+def manager_role_values(value):
+    """Role values that count as "the manager" of someone holding `value`.
+
+    There is no per-user reporting-manager in the schema, so escalation of an
+    idle-employee alert is derived from the role ladder: the LEAD-tier role in
+    the same discipline (a Video Editor -> Video Editing Manager), plus the
+    system administrators as a catch-all. Pure catalog logic - the caller
+    turns these values into actual recipients with a User query.
+    """
+    role = ROLES.get(value)
+    result = set()
+    if role is not None and role.discipline:
+        result.update(
+            r.value for r in ROLE_LIST
+            if r.tier == TIER_LEAD and r.discipline == role.discipline
+        )
+    # Deliberately does NOT union in every admin: escalating each idle person
+    # to all admins floods them on a busy morning. The caller (_managers_for)
+    # falls back to administrators only when a person has no discipline lead,
+    # so an alert still always has someone to reach.
+    return result

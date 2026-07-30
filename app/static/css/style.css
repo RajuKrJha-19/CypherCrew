@@ -19603,3 +19603,130 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
         transition:none !important;
     }
 }
+
+/* =====================================================================
+   Attendance check-in widget (top bar)
+   ===================================================================== */
+.checkin-widget{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    margin-right:2px;
+}
+
+.checkin-trigger{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    height:33px;
+    padding:0 11px;
+    border:1px solid var(--color-border);
+    border-radius:12px;
+    background:var(--color-surface);
+    color:var(--color-text);
+    font-size:12.5px;
+    font-weight:var(--ds-weight-semibold, 600);
+    cursor:pointer;
+    white-space:nowrap;
+}
+.checkin-trigger:hover{ background:var(--color-surface-muted); }
+
+.checkin-dot{
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:var(--color-neutral);
+    flex-shrink:0;
+}
+.checkin-dot.is-in{ background:var(--color-success, #16a34a); }
+.checkin-dot.is-out{ background:var(--color-text-subtle, #94a3b8); }
+/* Idle: amber, and a soft pulse so it draws the eye without nagging. */
+.checkin-dot.is-idle{
+    background:#f59e0b;
+    box-shadow:0 0 0 0 rgba(245,158,11,.55);
+    animation:checkinPulse 1.8s ease-out infinite;
+}
+@keyframes checkinPulse{
+    70%{ box-shadow:0 0 0 6px rgba(245,158,11,0); }
+    100%{ box-shadow:0 0 0 0 rgba(245,158,11,0); }
+}
+
+.checkin-label{ line-height:1; }
+
+.checkin-panel{
+    display:none;
+    position:fixed;
+    top:84px;
+    right:30px;
+    width:300px;
+    max-width:calc(100vw - 40px);
+    background:var(--color-surface);
+    color:var(--color-text);
+    border:1px solid var(--color-border);
+    border-radius:16px;
+    box-shadow:0 22px 55px rgba(15,23,42,.22);
+    z-index:99999;
+    padding:14px 16px;
+}
+.checkin-panel:not([hidden]){ display:flex; flex-direction:column; gap:10px; }
+
+.checkin-panel-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+}
+.checkin-panel-head strong{ font-size:14px; }
+.checkin-since{ font-size:12px; color:var(--color-text-muted); }
+
+.checkin-idle-hint{
+    margin:0;
+    font-size:12.5px;
+    line-height:1.45;
+    color:#92400e;
+    background:#fef3c7;
+    border-radius:10px;
+    padding:9px 11px;
+}
+
+.checkin-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+
+.checkin-btn{
+    flex:1 1 auto;
+    min-width:96px;
+    height:34px;
+    border-radius:10px;
+    border:1px solid var(--color-border);
+    background:var(--color-surface);
+    color:var(--color-text);
+    font-size:12.5px;
+    font-weight:var(--ds-weight-semibold, 600);
+    cursor:pointer;
+}
+.checkin-btn:hover{ background:var(--color-surface-muted); }
+.checkin-btn-in{
+    background:var(--color-primary);
+    border-color:var(--color-primary);
+    color:#fff;
+}
+.checkin-btn-in:hover{ filter:brightness(.95); background:var(--color-primary); }
+.checkin-btn-out{
+    background:var(--color-danger);
+    border-color:var(--color-danger);
+    color:#fff;
+}
+.checkin-btn-out:hover{ filter:brightness(.95); background:var(--color-danger); }
+
+.checkin-note{
+    margin:0;
+    font-size:12px;
+    color:var(--color-text-muted);
+}
+
+/* Mobile: the pill sits with the other top-bar controls; drop the text
+   label to save width, keep the coloured dot (scoped, desktop untouched). */
+@media (max-width:640px){
+    .checkin-label{ display:none; }
+    .checkin-trigger{ padding:0 9px; }
+    .checkin-panel{ right:12px; left:12px; width:auto; }
+}

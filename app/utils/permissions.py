@@ -43,6 +43,7 @@ CATEGORIES = (
         "manage_leaves",
         "manage_holidays",
         "manage_meetings",
+        "manage_attendance",
     )),
     ("Administration", (
         "manage_users",
@@ -138,6 +139,11 @@ DESCRIPTIONS = {
 
     "manage_meetings":
         "Schedule and cancel meetings, and invite participants.",
+
+    "manage_attendance":
+        "Connect the Zoho People attendance integration, set each person's "
+        "check-in source (Zoho or in-app), and view the team's live "
+        "attendance.",
 
     # -- Administration ------------------------------------------------
     "manage_users":
@@ -341,6 +347,23 @@ def can_manage_clients(user):
         return False
 
     return _is_management(user) or has_permission(user, "manage_clients")
+
+
+def can_manage_attendance(user=None):
+    """True for anyone who may operate the attendance integration - connect
+    Zoho, set a person's check-in source, and see the team's attendance.
+
+    Widens to management by role (like can_manage_clients) so existing admins
+    keep it without needing an explicit grant, on top of the explicit
+    manage_attendance permission. Callable with no argument from templates,
+    where it resolves current_user.
+    """
+    if user is None:
+        from flask_login import current_user
+        user = current_user
+    if user is None or not getattr(user, "is_authenticated", True):
+        return False
+    return _is_management(user) or has_permission(user, "manage_attendance")
 
 
 def can_view_all_tasks(user):

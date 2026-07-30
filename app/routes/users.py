@@ -372,6 +372,14 @@ def edit_user(user_id):
 
             user.role = new_role
 
+        # Attendance check-in source. Only settable by an attendance admin,
+        # and only to the two allowed values (a form post is just a string).
+        from app.utils.permissions import can_manage_attendance
+        if can_manage_attendance(current_user):
+            source = request.form.get("checkin_source")
+            if source in ("zoho", "software"):
+                user.checkin_source = source
+
         password = request.form.get("password", "")
 
         if password:

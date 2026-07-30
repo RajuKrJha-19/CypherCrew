@@ -1,0 +1,48 @@
+{# Attendance check-in indicator for the top bar. Live status comes from a
+   JS poll (the shell is data-turbo-permanent, so a Jinja-rendered status
+   would go stale on navigation). Rendered only when ATTENDANCE_ENABLED. #}
+<div class="checkin-widget" id="checkinWidget" hidden>
+
+    <button type="button"
+            class="checkin-trigger"
+            id="checkinTrigger"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Attendance">
+        <span class="checkin-dot" id="checkinDot"></span>
+        <span class="checkin-label" id="checkinLabel">—</span>
+    </button>
+
+    <div class="checkin-panel" id="checkinPanel" hidden>
+        <div class="checkin-panel-head">
+            <strong id="checkinPanelTitle">Attendance</strong>
+            <span class="checkin-since" id="checkinSince"></span>
+        </div>
+
+        <p class="checkin-idle-hint" id="checkinIdleHint" hidden>
+            You're checked in but no task is In Progress — start a task so your
+            time is tracked.
+        </p>
+
+        <div class="checkin-actions">
+            <button type="button" class="checkin-btn checkin-btn-in"
+                    id="checkinBtnIn" hidden>Check in</button>
+            <button type="button" class="checkin-btn checkin-btn-out"
+                    id="checkinBtnOut" hidden>Check out</button>
+            <button type="button" class="checkin-btn checkin-btn-snooze"
+                    id="checkinBtnSnooze" hidden>Snooze 15 min</button>
+        </div>
+
+        <p class="checkin-note" id="checkinNote" hidden></p>
+    </div>
+</div>
+
+<script>
+    window.CYPHER_ATTENDANCE = {
+        status:   "{{ url_for('attendance.status') }}",
+        checkin:  "{{ url_for('attendance.checkin') }}",
+        checkout: "{{ url_for('attendance.checkout') }}",
+        snooze:   "{{ url_for('attendance.snooze') }}"
+    };
+</script>
+<script src="{{ asset_url('js/attendance.js') }}"></script>

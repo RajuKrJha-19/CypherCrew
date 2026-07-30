@@ -61,6 +61,11 @@ from app.models.social_audit import SocialAuditLog, ContentVersion
 from app.models.platform_rate_budget import PlatformRateBudget
 from app.models.data_deletion import DataDeletionRequest
 
+# --- Attendance (Zoho People bridge + idle-task alerts) ---
+from app.models.zoho_connection import ZohoConnection
+from app.models.attendance_session import AttendanceSession
+from app.models.attendance_settings import AttendanceSettings
+
 # --- Cypher-Teams ---
 from app.models.team_channel import TeamChannel, TeamChannelMember
 from app.models.team_message import (

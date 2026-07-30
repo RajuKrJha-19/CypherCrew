@@ -112,6 +112,9 @@
 
         <div class="topbar-right">
             {% include "partials/quick_create.html" %}
+            {% if config.ATTENDANCE_ENABLED %}
+                {% include "partials/checkin_widget.html" %}
+            {% endif %}
             {% include "partials/theme_toggle.html" %}
             {% include "partials/notification_widget.html" %}
             {% include "partials/account_menu.html" %}

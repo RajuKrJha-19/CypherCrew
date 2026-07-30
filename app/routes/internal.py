@@ -47,6 +47,25 @@ def _social_guard():
         abort(403)
 
 
+def _zoho_authorised():
+    """Fail-closed token guard for the attendance cron endpoints, gated by
+    its own ZOHO_SYNC_TOKEN."""
+    expected = current_app.config.get("ZOHO_SYNC_TOKEN")
+    provided = (
+        request.headers.get("X-Zoho-Token")
+        or request.args.get("token")
+    )
+    return bool(expected) and provided == expected
+
+
+def _attendance_guard():
+    """Abort unless attendance is enabled AND the caller is authorised."""
+    if not current_app.config.get("ATTENDANCE_ENABLED"):
+        abort(503)
+    if not _zoho_authorised():
+        abort(403)
+
+
 @internal_bp.route("/reminders/run", methods=["POST"])
 @csrf.exempt
 def run_reminders():
@@ -144,3 +163,49 @@ def social_status():
     _social_guard()
     from app.social.status import engine_status
     return jsonify(success=True, **engine_status())
+
+
+# ----------------------------------------------------------------------
+# Attendance (Zoho People bridge + idle-task alerts) cron endpoints
+# Gated by ATTENDANCE_ENABLED + ZOHO_SYNC_TOKEN. Services imported lazily
+# so the module stays dormant when the flag is off.
+#
+# Cron examples:
+#   */2 * * * *    attendance/sync         (pull Zoho attendance)
+#   */10 * * * *   attendance/idle-alerts  (nudge idle checked-in users)
+# ----------------------------------------------------------------------
+
+@internal_bp.route("/attendance/sync", methods=["POST"])
+@csrf.exempt
+def run_attendance_sync():
+    _attendance_guard()
+    from app.attendance import service
+    return jsonify(success=True, **service.sync_attendance())
+
+
+@internal_bp.route("/attendance/idle-alerts", methods=["POST"])
+@csrf.exempt
+def run_attendance_idle_alerts():
+    _attendance_guard()
+    from app.services.idle_alerts import run_idle_task_alerts
+    return jsonify(success=True, **run_idle_task_alerts())
+
+
+@internal_bp.route("/attendance/webhook", methods=["POST"])
+@csrf.exempt
+def attendance_webhook():
+    """Inbound Zoho People automation webhook. Verifies its own secret and
+    triggers an immediate sync so a check-in shows up without waiting for the
+    poll. Polling remains the guaranteed fallback if this is not configured.
+    """
+    if not current_app.config.get("ATTENDANCE_ENABLED"):
+        abort(503)
+    expected = current_app.config.get("ZOHO_WEBHOOK_SECRET")
+    provided = (
+        request.headers.get("X-Zoho-Webhook-Secret")
+        or request.args.get("secret")
+    )
+    if not expected or provided != expected:
+        abort(403)
+    from app.attendance import service
+    return jsonify(success=True, **service.sync_attendance())
