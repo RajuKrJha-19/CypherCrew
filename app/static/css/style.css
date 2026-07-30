@@ -15392,8 +15392,12 @@ body.ds-screen .selected-reference-file{
     backdrop-filter:blur(2px);
 }
 
+/* Wide enough for the 300px stage PLUS the 20px padding either side and
+   the scrollbar overflow-y:auto puts inside the box when the dialog is
+   taller than the window - at 340px the stage was the thing that
+   overflowed, and the box grew a horizontal scrollbar. */
 .avatar-crop-box{
-    width:min(340px, 100%);
+    width:min(380px, 100%);
     max-height:90vh;
     overflow-y:auto;
     padding:20px;
@@ -15412,53 +15416,159 @@ body.ds-screen .selected-reference-file{
     line-height:1.5;
 }
 
+/* The stage shows MORE of the photo than the crop includes - that is the
+   point of a resizable frame: you can see what you are leaving out. Keep
+   this 300px in step with STAGE in avatar-cropper.js, which does all the
+   clamping in these same pixels. */
 .avatar-crop-stage{
     position:relative;
-    width:260px;
-    height:260px;
+    width:300px;
+    height:300px;
     margin:0 auto;
     border-radius:var(--radius-md, 10px);
     overflow:hidden;
     background:var(--color-surface-muted);
-}
-
-.avatar-crop-viewport{
-    position:absolute;
-    inset:0;
     cursor:grab;
-    touch-action:none;      /* we drive panning ourselves via pointer events */
+    /* Without this the browser claims pinch for page zoom and the second
+       finger's pointer events never arrive - pinch silently does nothing. */
+    touch-action:none;
 }
 
-.avatar-crop-viewport:active{ cursor:grabbing; }
+.avatar-crop-stage:active{ cursor:grabbing; }
 
-.avatar-crop-viewport img{
+/* The working canvas the script builds and positions. */
+.avatar-crop-photo{
     position:absolute;
     max-width:none;         /* the script sizes it; no global img cap */
     user-select:none;
     -webkit-user-drag:none;
 }
 
-/* Everything outside the circle, dimmed. Pointer-transparent so the drag
-   underneath still works. */
-.avatar-crop-mask{
+/* The crop rectangle. Free: any position, size and aspect ratio. It TAKES
+   the pointer, because dragging it is how you move it - only bare photo
+   outside it starts a new selection. The dimming is a huge spread shadow
+   rather than four filler divs, so it follows the rectangle for free; the
+   stage clips it.
+
+   Deliberately NOT circular and deliberately not square-locked. An
+   earlier version drew a circle here and the crop had to fit it, which
+   made the dialog about squeezing the photo into a shape rather than
+   about choosing part of the photo. The circle lives in the preview now,
+   where it informs without constraining. */
+.avatar-crop-frame{
+    position:absolute;
+    pointer-events:auto;
+    cursor:move;
+    border:1px solid rgba(255,255,255,.95);
+    box-shadow:0 0 0 9999px rgba(15,23,42,.55);
+}
+
+/* Rule-of-thirds guides - the one thing that makes a free crop easy to
+   place well, and it costs two gradients. */
+.avatar-crop-frame::after{
+    content:"";
     position:absolute;
     inset:0;
     pointer-events:none;
-    background:radial-gradient(circle at 50% 50%,
-        rgba(15,23,42,0) 0 49.5%,
-        rgba(15,23,42,.55) 50%);
+    background:
+        linear-gradient(to right, transparent calc(33.33% - 1px),
+            rgba(255,255,255,.35) calc(33.33% - 1px) 33.33%,
+            transparent 33.33% calc(66.66% - 1px),
+            rgba(255,255,255,.35) calc(66.66% - 1px) 66.66%,
+            transparent 66.66%),
+        linear-gradient(to bottom, transparent calc(33.33% - 1px),
+            rgba(255,255,255,.35) calc(33.33% - 1px) 33.33%,
+            transparent 33.33% calc(66.66% - 1px),
+            rgba(255,255,255,.35) calc(66.66% - 1px) 66.66%,
+            transparent 66.66%);
 }
 
-.avatar-crop-zoom{
+/* Eight grips: four corners resize two edges, four sides resize one. That
+   split is what makes the crop free rather than square. They have to read
+   as GRABBABLE and stay visible on a pale photo, hence the shadow. */
+.avatar-crop-handle{
+    position:absolute;
+    pointer-events:auto;
+    background:#fff;
+    filter:drop-shadow(0 0 2px rgba(15,23,42,.8));
+}
+
+/* Corners: chunky squares that overhang the frame line. */
+.avatar-crop-handle.ac-nw,
+.avatar-crop-handle.ac-ne,
+.avatar-crop-handle.ac-sw,
+.avatar-crop-handle.ac-se{
+    width:14px;
+    height:14px;
+    border-radius:3px;
+}
+
+.avatar-crop-handle.ac-nw{ top:-7px;    left:-7px;   cursor:nwse-resize; }
+.avatar-crop-handle.ac-ne{ top:-7px;    right:-7px;  cursor:nesw-resize; }
+.avatar-crop-handle.ac-sw{ bottom:-7px; left:-7px;   cursor:nesw-resize; }
+.avatar-crop-handle.ac-se{ bottom:-7px; right:-7px;  cursor:nwse-resize; }
+
+/* Sides: bars, centred, so it is obvious they move one edge only. */
+.avatar-crop-handle.ac-n,
+.avatar-crop-handle.ac-s{
+    left:50%;
+    width:30px;
+    height:10px;
+    margin-left:-15px;
+    border-radius:3px;
+    cursor:ns-resize;
+}
+
+.avatar-crop-handle.ac-n{ top:-5px; }
+.avatar-crop-handle.ac-s{ bottom:-5px; }
+
+.avatar-crop-handle.ac-w,
+.avatar-crop-handle.ac-e{
+    top:50%;
+    width:10px;
+    height:30px;
+    margin-top:-15px;
+    border-radius:3px;
+    cursor:ew-resize;
+}
+
+.avatar-crop-handle.ac-w{ left:-5px; }
+.avatar-crop-handle.ac-e{ right:-5px; }
+
+.avatar-crop-tools{
     display:flex;
     align-items:center;
     gap:10px;
     margin:14px 0 16px;
-    color:var(--color-text-muted);
+}
+
+.avatar-crop-rotate,
+.avatar-crop-reset{
+    flex:0 0 auto;
+    white-space:nowrap;
     font-size:12px;
 }
 
-.avatar-crop-zoom input[type=range]{ flex:1 1 auto; accent-color:var(--color-primary); }
+/* The circle the avatar slots will actually draw. Shown BESIDE the crop,
+   not over it: a wide crop still gets centre-cropped when displayed, and
+   this is where you find that out - without the crop itself being forced
+   into the shape. */
+.avatar-crop-preview{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-left:auto;
+    color:var(--color-text-muted);
+    font-size:11px;
+}
+
+.avatar-crop-preview canvas{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    border:1px solid var(--color-border);
+    background:var(--color-surface-muted);
+}
 
 .avatar-crop-actions{
     display:flex;
