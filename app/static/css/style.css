@@ -13890,6 +13890,61 @@ body.ds-screen textarea:focus{
     box-shadow:var(--ds-focus-ring);
 }
 
+/* ---- Table row controls: one size, and it is View/Manage's ------------
+   A table row is a line of text with a couple of things you can do to it.
+   Everything in it should read at that weight - the row's own controls
+   are not page-level actions and should not compete with the header's
+   "Add Task".
+
+   Three separate rules had been pulling the other way:
+
+     * `body.ds-screen .mini-action` sizes every ds submit button at 34px,
+       which is right for a form footer and far too big for a cell. Scoped
+       here to .table-actions so page-level buttons keep their size.
+     * the global `select{height:40px}` reached .status-select, which sets
+       its own padding but no height - a 40px form control in every row.
+     * `body.ds-screen select` (0,1,2) outranks `.status-select` (0,1,0),
+       so it re-applied a solid border and surface background and undid
+       the deliberate text-like treatment that class exists for (see the
+       note above .status-select): status reads as coloured TEXT, and only
+       reveals itself as a dropdown on hover. A wall of boxed dropdowns is
+       what it was written to avoid.
+
+   Matched to .mini-link's measured footprint: 12px text, 26px tall.
+
+   .status-pill is deliberately NOT touched. It is already a compact tag
+   under `body.ds-screen .status-pill, .tag`, and an override here only
+   fought that rule - which, being later and equally specific, wins on
+   padding and font anyway. Setting a line-height that rule does not
+   carry made the pill TALLER than the thing it was meant to match. */
+body.ds-screen .table-actions .mini-action{
+    height:26px;
+    padding:0 10px;
+    border-radius:7px;
+    font-size:var(--ds-font-12, 12px);
+}
+
+body.ds-screen .table-actions form{
+    /* The Start button is wrapped in a POST form, which the global
+       `form{flex-direction:column}` stretches. Keep it inline so it sits
+       on the row beside View and Manage. */
+    display:inline-flex;
+    margin:0;
+}
+
+body.ds-screen .status-select{
+    height:26px;
+    border-color:transparent;
+    background-color:transparent;
+    font-size:var(--ds-font-12, 12px);
+}
+
+body.ds-screen .status-select:hover,
+body.ds-screen .status-select:focus-visible{
+    border-color:var(--ds-border, var(--color-border));
+    background-color:var(--ds-surface-sunken, var(--color-surface-muted));
+}
+
 /* ---- KPI / metric tiles ---- */
 
 body.ds-screen .kpi-card,
