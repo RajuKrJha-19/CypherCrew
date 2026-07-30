@@ -1,14 +1,16 @@
-"""Cypher-Teams: chat and meetings for the people who run the agency.
+"""Cypher-Teams: chat for the people who run the agency.
+
+Chat only. Meetings were removed along with the Jitsi adapter and the
+provider registry that fronted it - `/meetings` is the old module's own
+again, and nothing here schedules or joins a call.
 
 Layout mirrors the social engine, for the same reason it works there:
 
-    services/   business logic. Routes call these; they never import a
-                provider or touch a template.
-    providers/  meeting backends behind one interface, so swapping Jitsi
-                for LiveKit is a new file rather than a rewrite.
+    services/   business logic. Routes call these; they never touch a
+                template.
 
-The one architectural rule: services may depend on models and on the
-MeetingProvider interface, never on a concrete provider.
+The one architectural rule: services may depend on models, never the
+other way round, and never on a route.
 
 There is no realtime transport here. Chat is polled - one endpoint, one
 cursor, a cadence that slows down as attention drifts (see

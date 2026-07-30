@@ -6,10 +6,9 @@ messages a day, and one notification per message would mean thousands of
 and a bell that people stop looking at within a week. The unread dot IS the
 notification for ordinary channel traffic.
 
-So exactly three things raise one:
+So exactly two things raise one:
   - an explicit @mention
   - a direct message
-  - a meeting invite (Phase 5)
 
 Everything else is deliberately silent.
 """
