@@ -43,6 +43,23 @@
 {# Always fetch fresh; teardown still runs on before-render so no
    pollers leak, and no stale snapshot is ever shown. #}
 <meta name="turbo-cache-control" content="no-cache">
+
+{#
+    What this person may see, as a digest. The sidebar and topbar are
+    data-turbo-permanent: built once per real page load and then kept for
+    every Turbo navigation. They are also built almost entirely from the
+    permission helpers, so granting somebody a permission changed nothing
+    they could see - their nav went on showing what it was first built
+    with, and the save looked like it had silently failed.
+
+    data-turbo-track="reload" is Turbo's answer to exactly this: when the
+    digest in the incoming page differs from the one the shell was built
+    with, Turbo abandons the swap and does a full page load, so the shell
+    is rebuilt against the new permissions on the very next click.
+#}
+<meta name="cc-access"
+      content="{{ access_fingerprint(current_user) }}"
+      data-turbo-track="reload">
 {% endblock %}
 
 {% block body %}

@@ -217,6 +217,38 @@ def granted_codes(user):
     }
 
 
+def access_fingerprint(user):
+    """A short digest of everything that decides what this person may see.
+
+    The app shell (sidebar + topbar) is data-turbo-permanent, so it is
+    rendered ONCE per full page load and then reused for every Turbo
+    navigation - and it is built almost entirely from the capability
+    helpers below. That means a permission granted on the permissions
+    screen changed nothing the holder could see: their nav kept whatever
+    it was built with until they happened to hard-reload, which nobody
+    does, so the save looked like it had not worked.
+
+    Rendered into a `data-turbo-track="reload"` meta tag, so Turbo sees
+    the digest change on the next navigation and performs a real page
+    load, rebuilding the shell. Role is included because it feeds the
+    same helpers via the management widenings.
+    """
+    import hashlib
+
+    if user is None or not getattr(user, "is_authenticated", True):
+        return "anon"
+
+    role = getattr(user, "role", "") or ""
+
+    # The owner holds no rows at all - the bypass is a rule, not a set of
+    # grants - so the role alone is the whole answer for them.
+    if roles.is_owner(role):
+        return "owner"
+
+    payload = role + "|" + ",".join(sorted(granted_codes(user)))
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def set_permissions(user, codes, granted_by=None, commit=False):
     """Make `user` hold exactly `codes`, and return (added, removed).
 

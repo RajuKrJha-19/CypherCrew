@@ -191,3 +191,118 @@ def test_engine_operation_can_now_be_delegated(app, make_user):
         # Previously role-only, so it could not be handed to whoever
         # actually babysits the queue.
         assert perms.can_manage_social_engine(ops)
+
+
+# ----------------------------------------------------------------------
+# Reaching the permanent shell
+# ----------------------------------------------------------------------
+#
+# The sidebar and topbar are data-turbo-permanent: rendered once per real
+# page load and reused for every Turbo navigation afterwards. They are also
+# built almost entirely from the capability helpers above, so a grant made
+# on the permissions screen was invisible to the person who received it -
+# their nav kept whatever it was first built with. The save had worked;
+# nothing said so, which is indistinguishable from a save that had not.
+
+def test_access_fingerprint_moves_when_a_permission_is_granted(app, make_user):
+    """If the digest does not change, Turbo has no reason to reload and the
+    stale sidebar survives the navigation."""
+    from app.models import User
+
+    with app.app_context():
+        user = make_user("video_editor", permissions=["approve_tasks"])
+        before = perms.access_fingerprint(user)
+
+        perms.set_permissions(user, {"approve_tasks", "view_reports"},
+                              commit=True)
+        db.session.expire_all()
+
+        assert perms.access_fingerprint(User.query.get(user.id)) != before
+
+
+def test_access_fingerprint_separates_two_people(app, make_user):
+    with app.app_context():
+        one = make_user("video_editor", permissions=["approve_tasks"])
+        two = make_user("video_editor",
+                        permissions=["approve_tasks", "view_reports"])
+
+        assert perms.access_fingerprint(one) != perms.access_fingerprint(two)
+
+
+def test_access_fingerprint_is_stable_for_an_unchanged_user(app, make_user):
+    """A digest that moved on its own would full-reload every navigation,
+    throwing away the whole point of the permanent shell."""
+    with app.app_context():
+        user = make_user("video_editor", permissions=["approve_tasks"])
+        assert perms.access_fingerprint(user) == perms.access_fingerprint(user)
+
+
+def test_access_fingerprint_handles_no_user(app):
+    with app.app_context():
+        assert perms.access_fingerprint(None) == "anon"
+
+
+def test_the_shell_carries_the_tracked_digest(app, client, login, make_user):
+    with app.app_context():
+        login(make_user("super_admin"))
+        body = client.get("/permissions/").get_data(as_text=True)
+
+        assert 'name="cc-access"' in body
+        assert 'data-turbo-track="reload"' in body
+
+
+# ----------------------------------------------------------------------
+# The permissions screen: a refusal must not read as a success
+# ----------------------------------------------------------------------
+
+def test_a_delegate_is_told_that_a_meta_permission_was_refused(
+        app, client, login, make_user):
+    """Only the owner may hand out manage_users / manage_permissions. The
+    route drops the tick and saves the rest, which is right - but it used to
+    do so under a "Permissions updated" flash and no other word, so the
+    permission looked like it had failed to save."""
+    from app.models import User
+
+    with app.app_context():
+        delegate = make_user("admin", permissions=["manage_permissions"])
+        target = make_user("video_editor", permissions=["approve_tasks"])
+        target_id = target.id
+        login(delegate)
+
+        response = client.post(
+            f"/permissions/user/{target_id}",
+            data={"permissions": ["approve_tasks", "view_reports",
+                                  "manage_users"]},
+            follow_redirects=True,
+        )
+
+        db.session.expire_all()
+        held = perms.granted_codes(User.query.get(target_id))
+
+        assert "manage_users" not in held, "the guard itself must not weaken"
+        assert "view_reports" in held, "the legitimate half must still land"
+        assert "only the owner can grant or revoke" in \
+            response.get_data(as_text=True)
+
+
+def test_the_owner_may_still_grant_a_meta_permission(
+        app, client, login, make_user):
+    from app.models import User
+
+    with app.app_context():
+        owner = make_user("super_admin")
+        target = make_user("video_editor", permissions=["approve_tasks"])
+        target_id = target.id
+        login(owner)
+
+        response = client.post(
+            f"/permissions/user/{target_id}",
+            data={"permissions": ["approve_tasks", "manage_users"]},
+            follow_redirects=True,
+        )
+
+        db.session.expire_all()
+
+        assert "manage_users" in perms.granted_codes(User.query.get(target_id))
+        assert "only the owner can grant or revoke" not in \
+            response.get_data(as_text=True)

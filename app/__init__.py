@@ -235,7 +235,7 @@ def create_app():
         can_use_social, can_connect_social_accounts, can_view_all_tasks,
         can_assign_tasks, can_view_team_performance, can_manage_users,
         can_manage_permissions, can_manage_leaves, can_manage_holidays,
-        can_manage_meetings, can_publish, can_review,
+        can_manage_meetings, can_publish, can_review, access_fingerprint,
     )
     from app.utils import roles as roles_module
     from app.utils.social_platforms import PLATFORM_ICONS, PLATFORM_LABELS
@@ -313,6 +313,10 @@ def create_app():
         can_manage_meetings=can_manage_meetings,
         can_publish=can_publish,
         can_review=can_review,
+        # Digest of the signed-in user's role + granted codes. Feeds the
+        # data-turbo-track="reload" meta tag in base_app.html, which is what
+        # makes a permission change actually reach the permanent shell.
+        access_fingerprint=access_fingerprint,
         # Role display, from the one catalog in utils/roles. role_label is
         # what makes "super_admin" read as "Owner" everywhere at once,
         # instead of eighteen templates each doing .replace("_"," ")|title.

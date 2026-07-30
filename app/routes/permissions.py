@@ -135,14 +135,22 @@ def user_permissions(user_id):
 
         held = granted_codes(user)
 
+        refused = set()
+
         if not roles.is_owner(current_user.role):
             # Leave the meta permissions exactly as they were rather than
             # rejecting the whole save - the rest of the form is a
-            # legitimate edit and should still land.
+            # legitimate edit and should still land. But say so: dropping a
+            # tick without a word, under a flash that reads "Permissions
+            # updated", is indistinguishable from a save that did not work.
             for code in META_CODES:
                 if code in held:
+                    if code not in submitted:
+                        refused.add(code)
                     submitted.add(code)
                 else:
+                    if code in submitted:
+                        refused.add(code)
                     submitted.discard(code)
 
         # Retired codes are not on the form, so a save would silently drop
@@ -160,8 +168,22 @@ def user_permissions(user_id):
                 f"(+{len(added)} / -{len(removed)}).",
                 "success",
             )
-        else:
+        elif not refused:
             flash("No permission changes to save.", "info")
+
+        if refused:
+            display = {
+                p.code: p.name for p in Permission.query
+                .filter(Permission.code.in_(refused)).all()
+            }
+            names = ", ".join(
+                display.get(code, code) for code in sorted(refused)
+            )
+            flash(
+                f"{names} was left unchanged — only the owner can grant or "
+                f"revoke a permission that hands out permissions.",
+                "error",
+            )
 
         return redirect(url_for("permissions.list_permissions"))
 
