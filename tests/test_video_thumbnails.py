@@ -174,3 +174,178 @@ def test_a_ready_video_is_left_alone(app, monkeypatch, session,
 
         assert thumbnails.generate(row.id) == thumbnails.STATE_READY
         assert not called["yes"]
+
+
+# ----------------------------------------------------------------------
+# `ready`, but the object is gone
+# ----------------------------------------------------------------------
+#
+# The grid points <img> straight at a presigned URL for the generated webp,
+# which is what keeps a large gallery fast. The cost is that nothing checks
+# the object is still there: a row can say ready while the object has been
+# deleted underneath it, and then every layer faithfully serves a URL to
+# something that is not there. The tile renders broken and no log disagrees.
+
+
+class FakeStorage:
+    """Stands in for R2. `present` is the set of keys that exist."""
+
+    def __init__(self, present=(), explode=False):
+        self.present = set(present)
+        self.explode = explode
+        self.checked = []
+
+    def exists(self, *, object_key):
+        self.checked.append(object_key)
+        if self.explode:
+            raise RuntimeError("storage is unreachable")
+        return object_key in self.present
+
+
+def _ready_row(make_task_file, key="thumbnails/1.webp"):
+    from app.extensions import db
+
+    row = make_task_file(mime_type="image/png", filename="shot.png")
+    row.thumbnail_state = thumbnails.STATE_READY
+    row.thumbnail_key = key
+    db.session.commit()
+    return row
+
+
+def test_a_missing_object_is_detected(app, monkeypatch, session,
+                                      make_task_file):
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(present=[]))
+
+        assert thumbnails.thumbnail_is_missing(row) is True
+
+
+def test_a_present_object_is_left_alone(app, monkeypatch, session,
+                                        make_task_file):
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(present=[row.thumbnail_key]))
+
+        assert thumbnails.thumbnail_is_missing(row) is False
+        assert thumbnails.forget_missing_thumbnail(row.id) is False
+        assert row.thumbnail_state == thumbnails.STATE_READY
+
+
+def test_an_unreachable_storage_never_reads_as_missing(app, monkeypatch,
+                                                       session,
+                                                       make_task_file):
+    """"I could not check" must not be mistaken for "it is gone" - a blip
+    would otherwise wipe a whole library back to pending and re-render it."""
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(explode=True))
+
+        assert thumbnails.thumbnail_is_missing(row) is False
+        assert row.thumbnail_state == thumbnails.STATE_READY
+
+
+def test_forgetting_puts_the_row_back_to_pending(app, monkeypatch, session,
+                                                 make_task_file):
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(present=[]))
+
+        assert thumbnails.forget_missing_thumbnail(row.id) is True
+        assert row.thumbnail_state == thumbnails.STATE_PENDING
+        assert row.thumbnail_key is None, (
+            "the stale key must go too, or file_thumbnail_url keeps handing "
+            "out a URL for an object that is not there"
+        )
+
+
+def test_only_ready_rows_are_checked(app, monkeypatch, session,
+                                     make_task_file):
+    """A pending or failed row has no thumbnail to be missing, and a HEAD
+    for each would be pure cost."""
+    from app.extensions import db
+
+    with app.app_context():
+        row = make_task_file(mime_type="image/png", filename="shot.png")
+        row.thumbnail_state = thumbnails.STATE_PENDING
+        db.session.commit()
+
+        storage = FakeStorage(present=[])
+        monkeypatch.setattr(thumbnails, "StorageService", lambda: storage)
+
+        assert thumbnails.thumbnail_is_missing(row) is False
+        assert storage.checked == [], "storage should not have been asked"
+
+
+def test_repair_rebuilds_after_forgetting(app, monkeypatch, session,
+                                          make_task_file):
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(present=[]))
+
+        rebuilt = {"yes": False}
+
+        def _generate(file_id, retry=False):
+            rebuilt["yes"] = True
+            return thumbnails.STATE_READY
+
+        monkeypatch.setattr(thumbnails, "generate", _generate)
+
+        assert thumbnails.repair(row.id) == thumbnails.STATE_READY
+        assert rebuilt["yes"]
+
+
+def test_repair_does_nothing_when_the_object_is_there(app, monkeypatch,
+                                                      session,
+                                                      make_task_file):
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        monkeypatch.setattr(thumbnails, "StorageService",
+                            lambda: FakeStorage(present=[row.thumbnail_key]))
+        monkeypatch.setattr(thumbnails, "generate", lambda *a, **k: "SHOULD NOT RUN")
+
+        assert thumbnails.repair(row.id) is None
+
+
+def test_the_gallery_tile_carries_a_repair_url():
+    """The <img> needs somewhere to go when its presigned URL 404s, and
+    thumb-repair.js is what wires it. Both halves, or neither works."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    gallery = (root / "app" / "templates" / "gallery" / "index.html").read_text(
+        encoding="utf-8", errors="ignore")
+    script = (root / "app" / "static" / "js" / "thumb-repair.js").read_text(
+        encoding="utf-8", errors="ignore")
+
+    assert "data-repair-src" in gallery, "the tile has no repair target"
+    assert "thumb-repair.js" in gallery, "nothing wires the error handler"
+    assert "repair=1" in gallery, (
+        "the repair URL must carry ?repair=1 - without it the route serves "
+        "the same dead presigned URL back"
+    )
+
+    # The script has to read the attribute the template writes, and must
+    # bind exactly once or a still-broken tile retries in a loop.
+    assert "repairSrc" in script
+    assert "repairBound" in script
+
+
+def test_a_forged_repair_request_cannot_reset_a_healthy_row(
+        app, monkeypatch, session, make_task_file):
+    """?repair=1 is reachable by anyone who can see the file, so the route
+    must check storage rather than take the caller's word for it."""
+    with app.app_context():
+        row = _ready_row(make_task_file)
+        storage = FakeStorage(present=[row.thumbnail_key])
+        monkeypatch.setattr(thumbnails, "StorageService", lambda: storage)
+
+        # The object is present, so the row must survive the request intact.
+        assert thumbnails.forget_missing_thumbnail(row.id) is False
+        assert row.thumbnail_state == thumbnails.STATE_READY
+        assert storage.checked == [row.thumbnail_key]

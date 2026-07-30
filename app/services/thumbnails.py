@@ -563,6 +563,109 @@ def register_events(session):
     event.listen(session, "after_rollback", _forget_after_rollback)
 
 
+def thumbnail_is_missing(task_file):
+    """True when the row claims a thumbnail that storage does not have.
+
+    A HEAD, so this is never called while rendering a grid - see repair().
+    A storage error answers False: "I could not check" must not be
+    mistaken for "it is gone", or a blip would wipe a library's worth of
+    perfectly good thumbnails back to pending.
+    """
+    if task_file is None:
+        return False
+
+    if task_file.thumbnail_state != STATE_READY or not task_file.thumbnail_key:
+        return False
+
+    try:
+        return not StorageService().exists(object_key=task_file.thumbnail_key)
+    except Exception:  # noqa: BLE001 - see docstring
+        current_app.logger.warning(
+            "Could not check whether thumbnail %s still exists.",
+            task_file.thumbnail_key, exc_info=True,
+        )
+        return False
+
+
+def forget_missing_thumbnail(file_id):
+    """Put a row back to `pending` when its thumbnail is gone from storage.
+
+    `ready` means "there is a thumbnail at this key". When the object is
+    deleted underneath that row - a pruned bucket, a bucket swapped for a
+    new one - the row goes on saying ready, file_thumbnail_url goes on
+    handing out a presigned URL for it, and the grid renders an <img>
+    pointing at a 404. The tile is broken and nothing anywhere disagrees:
+    every layer is faithfully doing what it was told.
+
+    Returns True when it reset the row. Costs one HEAD, so it belongs on
+    an error path (the tile's onerror handler, or the verify sweep) and
+    never in the render path.
+
+    Resetting is all it does. Who rebuilds it differs by caller: a request
+    schedules the work, a maintenance sweep does it inline. See repair().
+    """
+    task_file = db.session.get(TaskFile, file_id)
+
+    if task_file is None or not thumbnail_is_missing(task_file):
+        return False
+
+    current_app.logger.info(
+        "Thumbnail %s is missing from storage; resetting task file %s.",
+        task_file.thumbnail_key, file_id,
+    )
+
+    # Back to undecided, so generate() does the work instead of trusting
+    # the row and handing READY straight back.
+    task_file.thumbnail_state = STATE_PENDING
+    task_file.thumbnail_key = None
+    db.session.commit()
+
+    return True
+
+
+def repair(file_id):
+    """Reset a missing thumbnail and rebuild it inline.
+
+    For maintenance (verify_ready, the CLI), where waiting for the work is
+    the point. A request handler should call forget_missing_thumbnail and
+    let the background pool pick it up instead - decoding a large PDF or
+    PSD inside a request ties up a worker while a grid fires many tile
+    requests at once.
+
+    Returns the resulting state, or None when there was nothing to fix.
+    """
+    if not forget_missing_thumbnail(file_id):
+        return None
+
+    return generate(file_id)
+
+
+def verify_ready(limit=None):
+    """Find `ready` rows whose object is gone, and rebuild them.
+
+    One HEAD per ready file, so this is a maintenance sweep and not
+    something any request path runs. Returns a count per resulting state.
+    """
+    query = (
+        TaskFile.query
+        .filter(TaskFile.thumbnail_state == STATE_READY)
+        .filter(TaskFile.thumbnail_key.isnot(None))
+        .order_by(TaskFile.created_at.desc())
+    )
+
+    if limit:
+        query = query.limit(limit)
+
+    counts = {}
+
+    for task_file in query.all():
+        state = repair(task_file.id)
+        if state is not None:
+            counts[state] = counts.get(state, 0) + 1
+
+    return counts
+
+
 def backfill(limit=None, retry_failed=False):
     """Generate thumbnails for files that predate this feature.
 
@@ -631,7 +734,28 @@ def register_cli(app):
         default=False,
         help="Also retry files previously marked failed.",
     )
-    def _backfill_command(limit, retry_failed):
+    @click.option(
+        # Named explicitly so the flag and the verify_ready() it calls can
+        # share the word without the parameter shadowing the function.
+        "--verify-ready", "verify",
+        is_flag=True,
+        default=False,
+        help="Also check every file already marked ready and rebuild any "
+             "whose thumbnail has gone missing from storage. One HEAD per "
+             "file, so run it when a bucket has been pruned or swapped, "
+             "not routinely.",
+    )
+    def _backfill_command(limit, retry_failed, verify):
+        if verify:
+            repaired = verify_ready(limit=limit)
+
+            if repaired:
+                for state, count in sorted(repaired.items(),
+                                           key=lambda kv: str(kv[0])):
+                    print(f"rebuilt (was missing) -> {state}: {count}")
+            else:
+                print("every ready thumbnail is present in storage")
+
         counts = backfill(limit=limit, retry_failed=retry_failed)
 
         if not counts:

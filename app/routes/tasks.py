@@ -4449,6 +4449,16 @@ def task_file_thumbnail(file_id):
     if not _can_view_task_file(task_file):
         abort(403)
 
+    # ?repair=1 - the grid's own <img> hit a 404 and is asking for the tile
+    # to be rebuilt. Only ever set by an onerror handler, because the check
+    # behind it is a HEAD against storage and must not run while a page of
+    # tiles renders. It verifies before changing anything, so a forged
+    # parameter costs one HEAD and nothing else. The reset drops the row to
+    # pending, which the branch below then schedules.
+    if request.args.get("repair"):
+        thumbnails.forget_missing_thumbnail(task_file.id)
+        db.session.refresh(task_file)
+
     if (
         task_file.thumbnail_state == thumbnails.STATE_PENDING
         and thumbnails.supports(task_file)
@@ -4485,12 +4495,20 @@ def task_file_thumbnail(file_id):
 
     response = redirect(url)
 
-    # The thumbnail for a given file id never changes content, so let
-    # the browser keep it rather than re-walking this route for every
-    # tile on every visit. Kept under the signed URL's own lifetime.
-    response.headers["Cache-Control"] = (
-        f"private, max-age={THUMBNAIL_URL_TTL - 60}"
-    )
+    if task_file.thumbnail_state == thumbnails.STATE_READY:
+        # The thumbnail for a given file id never changes content, so let
+        # the browser keep it rather than re-walking this route for every
+        # tile on every visit. Kept under the signed URL's own lifetime.
+        response.headers["Cache-Control"] = (
+            f"private, max-age={THUMBNAIL_URL_TTL - 60}"
+        )
+    else:
+        # Still being generated, so `url` is the full-size original standing
+        # in for one tile. Caching that for an hour would pin the fallback
+        # in place long after the real thumbnail existed - and on the repair
+        # path it would mean a broken tile healed everywhere except in the
+        # browser that asked for the repair.
+        response.headers["Cache-Control"] = "no-store"
 
     return response
 

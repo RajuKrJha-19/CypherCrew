@@ -163,10 +163,24 @@
 
                             <div class="gallery-thumb-box {% if is_video %}is-video{% endif %}">
 
+                                {#
+                                    data-repair-src: where a tile goes when its
+                                    presigned URL 404s. The row can say "ready"
+                                    while the object has been deleted underneath
+                                    it - a pruned or swapped bucket - and then
+                                    every layer is faithfully serving a URL to
+                                    something that is not there. Verifying up
+                                    front would be a HEAD per tile per render, so
+                                    the check lives on the error path instead.
+                                    gallery.js wires it, once per tile.
+                                #}
+                                {% set repair_src = url_for('tasks.task_file_thumbnail', file_id=file.id, repair=1) %}
+
                                 {% if is_video %}
                                 <div class="gallery-video-poster">
                                     {% if thumb %}
                                     <img class="gallery-video-el" src="{{ thumb }}"
+                                         data-repair-src="{{ repair_src }}"
                                          alt="{{ file.original_filename }}" loading="lazy" decoding="async">
                                     {% endif %}
                                     {# No thumbnail yet -> the poster's own dark gradient shows. #}
@@ -175,6 +189,7 @@
                                 {% elif thumb %}
                                 {# Photo, or a rendered PSD / PDF / AI preview - same fast path. #}
                                 <img class="gallery-thumb" src="{{ thumb }}"
+                                     data-repair-src="{{ repair_src }}"
                                      alt="{{ file.original_filename }}" loading="lazy" decoding="async">
                                 {% elif is_image %}
                                 {#
@@ -259,6 +274,9 @@
 
 <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
 <script src="{{ url_for('static', filename='js/media-viewer.js') }}"></script>
+{# Rebuilds a tile whose thumbnail object has gone missing from storage.
+   Error path only - a healthy grid never calls into it. #}
+<script src="{{ url_for('static', filename='js/thumb-repair.js') }}"></script>
 
 <script>
     // Selects apply immediately; page resets so a filter can't leave you
