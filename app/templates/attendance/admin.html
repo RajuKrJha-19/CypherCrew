@@ -29,13 +29,16 @@
         <p>Connected
         {% if connection.connected_by %}by {{ connection.connected_by.name }}{% endif %}
         · status <strong>{{ connection.status }}</strong>.</p>
-        <form method="post" action="{{ url_for('attendance.disconnect') }}">
+        <form method="post" action="{{ url_for('attendance.disconnect') }}" data-turbo="false">
             <button type="submit" class="btn-danger">Disconnect</button>
         </form>
     {% else %}
         <p>Not connected. An admin authorises the organisation's Zoho People
         account once.</p>
-        <form method="post" action="{{ url_for('attendance.connect') }}">
+        {# data-turbo="false": the connect POST redirects to Zoho's consent
+           screen (external), which Turbo Drive cannot follow - without this the
+           button does nothing. Same pattern as the social OAuth connect links. #}
+        <form method="post" action="{{ url_for('attendance.connect') }}" data-turbo="false">
             <button type="submit">Connect Zoho People</button>
         </form>
     {% endif %}
