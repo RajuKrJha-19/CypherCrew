@@ -333,6 +333,9 @@
 <script>
 (function () {
     const caps = {{ capabilities|tojson }};
+    // Whether the server can downscale/re-encode video on publish (ffmpeg
+    // present). Drives whether a too-wide reel is auto-fixable or a hard block.
+    const TRANSCODE_AVAILABLE = {{ 'true' if transcode_available else 'false' }};
     // Piped from the server's platform catalog, not restated here - a
     // hand-copied list goes stale the day a platform is added.
     const PF_LABEL = {{ PF_LABEL|tojson }};
@@ -538,6 +541,41 @@
         return out;
     }
 
+    /*
+        Mirror app/social/media/fit.downscale_target_width: a reel that is
+        ONLY too wide (aspect, duration and minimum sizes all in spec) is
+        downscaled + re-encoded by the server on publish - so an over-size
+        file is fixable too (the re-encode shrinks bytes and normalises the
+        codec). Anything else - wrong aspect, too long, too small - is a real
+        block a resize cannot fix. This keeps the client from greying out the
+        publish button on a file the server will happily resize.
+    */
+    function reelAutoFixable(spec, m){
+        // The server does the resize with ffmpeg; if it isn't installed the
+        // target is blocked at schedule time, so don't promise a resize here.
+        if(!TRANSCODE_AVAILABLE) return false;
+        if(!spec || !m || !m.width || !m.height) return false;
+        if(spec.width_max==null || m.width<=spec.width_max) return false;  // not the too-wide case
+        const r=m.width/m.height, tol=0.02;
+        if((spec.aspect_min!=null && r<spec.aspect_min-tol) ||
+           (spec.aspect_max!=null && r>spec.aspect_max+tol)) return false;
+        if(m.duration!=null){
+            if(spec.duration_min!=null && m.duration<spec.duration_min) return false;
+            if(spec.duration_max!=null && m.duration>spec.duration_max) return false;
+        }
+        // After scaling width down to width_max, the height shrinks in
+        // proportion; make sure it does not fall under a minimum. Mirror the
+        // server's even-height rounding (fit.py: round then floor to even) so
+        // the boundary decision matches exactly.
+        if(spec.width_min!=null && spec.width_max<spec.width_min) return false;
+        if(spec.height_min!=null){
+            const scaledH=Math.max(2,
+                Math.floor(Math.round(m.height*(spec.width_max/m.width))/2)*2);
+            if(scaledH<spec.height_min) return false;
+        }
+        return true;
+    }
+
     function fitFor(platform, intended, m){
         const c=caps[platform];
         if(!c) return {type:intended, notes:[]};
@@ -551,6 +589,11 @@
         if(c.post_types.includes("reel")){
             reelProblems=specProblems(specs.reel, m);
             if(!reelProblems.length) return {type:"reel", notes:[]};
+            // Too wide but otherwise fine: the server resizes it on publish.
+            if(reelAutoFixable(specs.reel, m))
+                return {type:"reel",
+                        notes:["will be resized to "+specs.reel.width_max
+                               +"px on publish"]};
         }
         if(c.post_types.includes("video")){
             const vp=specProblems(specs.video, m);

@@ -135,6 +135,9 @@ def schedule_post(post, actor_id=None):
             target.last_error = " ".join(errs)
             continue
         # scheduled_for should already be set on the target; default now.
+        # The "user chose Schedule but left the time blank" trap is caught in
+        # the schedule route, which knows publish_mode - a None reaching here
+        # legitimately means "publish now".
         scheduling.schedule_target(
             target, target.scheduled_for or datetime.utcnow(), actor_id
         )

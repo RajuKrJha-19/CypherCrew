@@ -424,6 +424,15 @@ def create_draft_from_task(task, actor_id=None):
     return {"post": post, "n_targets": n_targets, "no_channels": n_targets == 0}
 
 
+def _transcode_available():
+    """Whether the server can downscale/re-encode video on publish. The
+    composer uses this to decide if a too-wide reel is auto-fixable (button
+    stays enabled) or a hard block (no ffmpeg -> it will be blocked at
+    schedule time, so don't promise a resize)."""
+    from app.social.media import transcode
+    return transcode.available()
+
+
 def _capabilities_map():
     """{platform_key: capabilities} for whatever providers are registered,
     so the composer can drive per-platform post-type options client-side."""
@@ -1084,6 +1093,9 @@ def reschedule_post(post_id):
     if not when:
         flash("Pick a valid date and time.", "error")
         return redirect(url_for("social.post_detail", post_id=post.id))
+    if when < datetime.utcnow() - timedelta(minutes=1):
+        flash("That time is in the past. Pick a future time.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     for t in post.targets:
         t.scheduled_for = when
         if t.job is not None and t.job.state == "queued":
@@ -1434,8 +1446,11 @@ def drafts():
 @login_required
 def compose():
     _guard()
-    # A date from the calendar ("compose on this day") pre-fills the schedule.
-    schedule_value = ""
+    # Default the schedule field to a sensible near-future time (one hour
+    # out, IST), so "Schedule for later" - the default choice - is never left
+    # blank. A blank time used to silently fall through to publishing
+    # immediately; it is refused now, but a sane default avoids the dead-end.
+    schedule_value = _to_ist_input(datetime.utcnow() + timedelta(hours=1))
     date_arg = request.args.get("date")
     if date_arg:
         try:
@@ -1469,6 +1484,7 @@ def compose():
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
         capabilities=_capabilities_map(),
+        transcode_available=_transcode_available(),
         selected_account_ids=selected_account_ids,
         post_type="image",
         schedule_value=schedule_value,
@@ -1573,6 +1589,7 @@ def edit_post(post_id):
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
         capabilities=_capabilities_map(),
+        transcode_available=_transcode_available(),
         selected_account_ids=account_ids,
         post_type=(first.post_type if first else "image"),
         schedule_value=_to_ist_input(first.scheduled_for if first else None),
@@ -1937,6 +1954,14 @@ def _apply_composer_form(post):
             "again so the reviewer approves what will actually publish.",
             "info")
 
+    # The new targets were attached by FK (social_post_id), not through the
+    # relationship, so the collection loaded earlier in this function is now
+    # stale (it still reads empty for a brand-new post). Expire it so callers
+    # - notably the "action == submit and post.targets" gate - see the real
+    # targets rather than the cached empty list, which used to leave a
+    # just-submitted post sitting in draft.
+    db.session.expire(post, ["targets"])
+
     return n_created
 
 
@@ -2030,6 +2055,21 @@ def post_detail(post_id):
         .all()
     ) if post.targets else []
 
+    # Schedule prefill: only pre-fill the single datetime field when EVERY
+    # channel shares one time. When channels carry different (per-channel)
+    # times, leave it blank - confirming "Schedule" then keeps each channel's
+    # own time instead of silently collapsing them all to the first channel's.
+    sched_times = [t.scheduled_for for t in post.targets if t.scheduled_for]
+    distinct_times = set(sched_times)
+    uniform_when = (
+        next(iter(distinct_times))
+        if len(distinct_times) == 1 and len(sched_times) == len(post.targets)
+        else None)
+    per_channel_schedule = len(distinct_times) > 1
+    channel_times = (
+        [(platform_label(t.platform), t.scheduled_for) for t in post.targets]
+        if per_channel_schedule else [])
+
     return render_template(
         "social/post_detail.html",
         post=post,
@@ -2039,6 +2079,9 @@ def post_detail(post_id):
         can_approve=can_publish(current_user),
         to_ist=_to_ist_input,
         to_ist_display=_to_ist_display,
+        schedule_prefill=uniform_when,
+        per_channel_schedule=per_channel_schedule,
+        channel_times=channel_times,
     )
 
 
@@ -2171,14 +2214,41 @@ def schedule_post(post_id):
         return redirect(url_for("social.post_detail", post_id=post.id))
 
     publish_now = request.form.get("publish_mode") == "now"
-    when = request.form.get("schedule")
-    for target in post.targets:
-        if publish_now:
-            target.scheduled_for = datetime.utcnow()
-        elif when:
-            target.scheduled_for = _parse_schedule(when)
-        elif target.scheduled_for is None:
-            target.scheduled_for = datetime.utcnow()
+    parsed = _parse_schedule(request.form.get("schedule"))
+    now = datetime.utcnow()
+
+    if not post.targets:
+        flash("This post has no channels to schedule.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
+
+    if publish_now:
+        # Explicit "publish now" - everything goes ASAP.
+        for target in post.targets:
+            target.scheduled_for = now
+    else:
+        if parsed is not None:
+            # A single time typed into the form is a deliberate uniform
+            # override applied to every channel.
+            for target in post.targets:
+                target.scheduled_for = parsed
+        # else: no time in the form -> keep each channel's own scheduled time
+        # (set at compose, possibly per-channel). The template blanks the
+        # field precisely so this branch preserves divergent per-channel times
+        # rather than collapsing them all to the first channel's.
+
+        # A "scheduled" post must have a real future time on EVERY channel. A
+        # blank one (the old "publish immediately" trap) and a past one (a
+        # stale compose default, or a mistyped time) are both refused - use
+        # "Publish now" to go out immediately, on purpose.
+        if any(t.scheduled_for is None for t in post.targets):
+            flash("Pick a date and time to schedule this post, or choose "
+                  "Publish now.", "error")
+            return redirect(url_for("social.post_detail", post_id=post.id))
+        if any(t.scheduled_for < now - timedelta(minutes=1)
+               for t in post.targets):
+            flash("That schedule time is in the past. Pick a future time, or "
+                  "choose Publish now.", "error")
+            return redirect(url_for("social.post_detail", post_id=post.id))
 
     result = publishing.schedule_post(post, actor_id=current_user.id)
     if post.task_id:

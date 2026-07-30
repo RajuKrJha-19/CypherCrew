@@ -112,14 +112,18 @@
         {% elif post.status == 'rejected' %}
             <span class="field-hint"><i class="fa-solid fa-rotate-left"></i> Sent back for changes — edit and resubmit.</span>
         {% elif post.status == 'approved' %}
-            {% set sched = post.targets[0].scheduled_for if post.targets else none %}
             <form method="POST" action="{{ url_for('social.schedule_post', post_id=post.id) }}" class="schedule-form">
-                <input type="datetime-local" name="schedule" value="{{ to_ist(sched) }}" aria-label="Schedule date and time (IST)">
+                <input type="datetime-local" name="schedule" value="{{ to_ist(schedule_prefill) }}" aria-label="Schedule date and time (IST)"
+                       {% if per_channel_schedule %}placeholder="Keep per-channel times"{% endif %}>
                 <button class="btn" name="publish_mode" value="schedule"><i class="fa-solid fa-clock"></i> Schedule</button>
                 <button class="btn btn-secondary" name="publish_mode" value="now"><i class="fa-solid fa-bolt"></i> Publish now</button>
             </form>
             <form method="POST" action="{{ url_for('social.reopen_post', post_id=post.id) }}"><button class="btn btn-ghost"><i class="fa-solid fa-rotate-left"></i> Reopen to draft</button></form>
-            {% if sched %}<span class="field-hint">Currently set for <strong>{{ to_ist_display(sched) }} IST</strong>.</span>{% endif %}
+            {% if per_channel_schedule %}
+                <span class="field-hint">Per-channel times set —
+                    {% for name, when in channel_times %}<strong>{{ name }}</strong> {{ to_ist_display(when) }}{% if not loop.last %}, {% endif %}{% endfor %}.
+                    Leave the field blank to keep them, or enter one time to apply to all.</span>
+            {% elif schedule_prefill %}<span class="field-hint">Currently set for <strong>{{ to_ist_display(schedule_prefill) }} IST</strong>.</span>{% endif %}
         {% elif post.status in ['scheduled','publishing'] %}
             {#
                 Lead with what is actually happening and when, then the
