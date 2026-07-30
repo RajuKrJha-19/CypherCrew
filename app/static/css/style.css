@@ -13704,6 +13704,83 @@ tbody tr:hover{
     background:var(--ds-accent);
 }
 
+/* ---------- Apps: the products that live inside the shell ----------
+   Social Studio and Cypher-Teams are not pages of this ERP. Each has its
+   own dashboard and its own sidebar, and opening one leaves this shell
+   behind; everything above them navigates within the current screen.
+   Rendered identically to Notes and Gallery, nothing said so.
+
+   The treatment is the one suites converge on (Google, Atlassian, Slack):
+   group the products under their own heading and give each a coloured
+   mark of its own. Restrained on purpose - this nav's active state is
+   deliberately "a quiet fill plus an accent rail" rather than a saturated
+   block, and a pair of loud tiles would undo that. Only the mark changes;
+   the row is untouched.
+
+   THIS BLOCK MUST STAY BELOW THE ds-* SIDEBAR RULES. `.sidebar-nav-label`
+   is re-declared up there with the same specificity, so an Apps rule
+   placed earlier loses its margin to it and the heading loses the space
+   that separates the group.
+
+   Colours are mid-tones (sky-500 / emerald-500) over a translucent tint,
+   so both survive the light AND dark nav ramps. A light-theme-only pick
+   like sky-600 goes muddy the moment the theme flips. */
+.sidebar a.nav-app i{
+    /* 22px, because that is the width every other nav icon actually
+       occupies - the ds rule below sets `width:16px` but never clears the
+       base rule's `min-width:22px`, so 22 is what wins there. Match the
+       advance or the two app labels sit out of line with the rest of the
+       column; sizing this to the 16px the CSS appears to say pushed them
+       6px out of true. */
+    width:22px;
+    min-width:22px;
+    height:22px;
+    /* Keeps the row the same height as its neighbours: the label sets
+       that at ~17px, and an untrimmed 22px tile would grow these two
+       rows alone. */
+    margin:-3px 0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:6px;
+    font-size:11px;
+    transition:background-color var(--ds-transition), color var(--ds-transition);
+}
+
+.sidebar a.nav-app-social i{
+    color:#0ea5e9;
+    background:rgba(14,165,233,.14);
+}
+
+.sidebar a.nav-app-teams i{
+    color:#10b981;
+    background:rgba(16,185,129,.14);
+}
+
+/* Hover and active both fill the row behind the mark, so the tint is
+   deepened to keep the tile legible against it rather than dissolving. */
+.sidebar a.nav-app-social:hover i,
+.sidebar a.nav-app-social.active i{
+    background:rgba(14,165,233,.24);
+}
+
+.sidebar a.nav-app-teams:hover i,
+.sidebar a.nav-app-teams.active i{
+    background:rgba(16,185,129,.24);
+}
+
+/* The heading that opens the group. ds re-declares .sidebar-nav-label's
+   margin below its own rule, hence the explicit margin-top here. */
+.sidebar-nav-label-apps{
+    margin-top:var(--ds-space-5);
+    padding-top:var(--ds-space-3);
+    border-top:1px solid var(--ds-nav-border);
+}
+
+/* Collapsed to the rail the headings are hidden, so the tile is the only
+   thing left telling an app from a page - which is why the mark lives on
+   the icon and not on the label or the row. */
+
 .sidebar-logout{
     padding-top:var(--ds-space-3);
     border-top:1px solid var(--ds-nav-border);

@@ -161,12 +161,31 @@
         <span>Gallery</span>
     </a>
 
+    {# ---- Apps ---------------------------------------------------------
+       Social Studio and Cypher-Teams are not pages of this ERP. Each is
+       its own dashboard with its own sidebar, and opening one leaves this
+       shell behind - everything above navigates WITHIN the current screen,
+       these two switch product. Sitting them next to Notes and Gallery
+       gave no hint of that, so they get their own heading and a coloured
+       product mark.
+
+       The heading is conditional on the same flags as the links. Printing
+       "Apps" above nothing is what happens if you forget: on a server with
+       both features off, a lone heading would sit at the bottom of the
+       nav pointing at empty space. #}
+    {% set show_social = config.SOCIAL_ENGINE_ENABLED and can_use_social(current_user) %}
+    {% set show_teams = config.TEAMS_ENABLED %}
+
+    {% if show_social or show_teams %}
+    <span class="sidebar-nav-label sidebar-nav-label-apps">Apps</span>
+    {% endif %}
+
     {# Social Publishing Engine - only visible when the feature flag is on
        and the viewer can work in Studio (both admin roles, or the explicit
        manage_social permission). #}
-    {% if config.SOCIAL_ENGINE_ENABLED and can_use_social(current_user) %}
+    {% if show_social %}
     <a href="{{ url_for('social.index') }}"
-       class="{% if endpoint.startswith('social.') or endpoint.startswith('oauth.') %}active{% endif %}">
+       class="nav-app nav-app-social{% if endpoint.startswith('social.') or endpoint.startswith('oauth.') %} active{% endif %}">
         <i class="fa-solid fa-share-nodes"></i>
         <span>Social</span>
     </a>
@@ -181,9 +200,9 @@
        The unread badge is painted by notifications.js from the count it
        already polls for, so this stays a plain link — a Jinja global that
        queried the database here would cost every ERP page a query. #}
-    {% if config.TEAMS_ENABLED %}
+    {% if show_teams %}
     <a href="{{ url_for('teams.index') }}"
-       class="{% if endpoint.startswith('teams.') %}active{% endif %}">
+       class="nav-app nav-app-teams{% if endpoint.startswith('teams.') %} active{% endif %}">
         <i class="fa-solid fa-comments"></i>
         <span>Teams</span>
         <span class="nav-count" id="teamsNavCount" hidden></span>
