@@ -25,6 +25,8 @@ PyMuPDF==1.28.0
 # Social Publishing Engine.
 # Fernet-encrypts platform access/refresh tokens at rest (token vault).
 cryptography==44.0.0
-# HTTP client for the social provider adapters (Graph / REST calls). The
-# app had no HTTP client before; provider calls are server-side and sync.
-requests==2.32.3
+# HTTP client for the social provider adapters (Graph / REST calls) and the
+# Zoho attendance client. Provider calls are server-side and sync. Kept at
+# >=2.33 so it doesn't downgrade under google-api-core (installed for the
+# YouTube/Google stack), which requires requests>=2.33.
+requests==2.34.2
