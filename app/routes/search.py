@@ -18,6 +18,7 @@ from sqlalchemy import or_, cast, String
 
 from app.models import Task, Client, User, Note
 from app.utils.permissions import has_permission
+from app.utils.timezone import IST_OFFSET
 from app.utils import roles
 
 search_bp = Blueprint("search", __name__, url_prefix="/search")
@@ -42,6 +43,41 @@ def _snippet(text, length=90):
     clean = re.sub(r"<[^>]+>", " ", text)
     clean = re.sub(r"\s+", " ", clean).strip()
     return clean[:length] + ("…" if len(clean) > length else "")
+
+
+def _clock(value):
+    """`30 Jul 2026, 6:00 PM` - no leading zero on the hour, because
+    `%I` renders 6pm as "06:00 PM" and there is no portable `%-I` on
+    Windows, where this also runs in development."""
+    return f"{value:%d %b %Y}, {value.hour % 12 or 12}:{value:%M %p}"
+
+
+def _task_when(task):
+    """The date and time shown beside a task in search results.
+
+    Returns a (label, stamp) pair. The deadline is what people are
+    actually hunting for, so it wins; a task without one falls back to
+    when it was created - LABELLED, because a bare date that silently
+    means two different things for different rows is worse than no date.
+
+    Two timezone regimes meet here, and confusing them is a 5.5-hour
+    error in either direction:
+
+      * `deadline` comes from a `datetime-local` input and is stored as
+        the wall clock the user typed - it is already IST. The task list
+        renders it with a plain `strftime` for exactly this reason.
+      * `created_at` defaults to `datetime.utcnow`.
+
+    So only the second one is shifted. Running both through `|ist` would
+    push every deadline 5.5 hours late.
+    """
+    if task.deadline:
+        return "Due", _clock(task.deadline)
+
+    if task.created_at:
+        return "Created", _clock(task.created_at + IST_OFFSET)
+
+    return "", ""
 
 
 def _scoped_tasks():
@@ -83,18 +119,29 @@ def search_tasks(term, limit):
         .all()
     )
 
-    return [
-        {
-            "type": "task",
-            "url": url_for("tasks.task_detail", task_id=task.id),
-            "title": task.title,
-            "code": task.task_code,
-            "subtitle": task.client.client_name if task.client else "No client",
-            "status": task.status,
-            "priority": task.priority,
-        }
-        for task in rows
-    ]
+    items = []
+
+    for task in rows:
+        # Formatted on the server, not in the browser: the dropdown's
+        # renderer would otherwise need its own copy of the IST rule,
+        # and the deadline/created_at distinction with it.
+        when_label, when = _task_when(task)
+
+        items.append(
+            {
+                "type": "task",
+                "url": url_for("tasks.task_detail", task_id=task.id),
+                "title": task.title,
+                "code": task.task_code,
+                "subtitle": task.client.client_name if task.client else "No client",
+                "status": task.status,
+                "priority": task.priority,
+                "when": when,
+                "when_label": when_label,
+            }
+        )
+
+    return items
 
 
 def search_clients(term, limit):

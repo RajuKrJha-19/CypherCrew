@@ -93,7 +93,7 @@
                         {{ item.title }}
                     </span>
                     <span class="search-result-sub">
-                        {{ item.subtitle }}{% if item.type == 'task' and item.priority %} <span class="dot-sep">·</span> {{ item.priority }} priority{% endif %}
+                        <span class="gs-sub-text">{{ item.subtitle }}{% if item.type == 'task' and item.priority %} <span class="dot-sep">·</span> {{ item.priority }} priority{% endif %}</span>{% if item.when %}<span class="gs-when">{{ item.when_label }} {{ item.when }}</span>{% endif %}
                     </span>
                 </span>
                 {% if item.status %}

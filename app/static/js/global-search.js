@@ -95,12 +95,24 @@
                       '">' + escapeHtml(item.status) + "</span>"
                     : "";
 
+                // Already formatted in IST by the server - see
+                // search._task_when. The label matters: it says whether
+                // this is a deadline or a creation date.
+                const when = item.when
+                    ? '<span class="gs-when">' +
+                      escapeHtml(item.when_label ? item.when_label + " " + item.when : item.when) +
+                      "</span>"
+                    : "";
+
                 html +=
                     '<a class="gs-item" href="' + item.url + '" role="option">' +
                         '<span class="gs-item-icon"><i class="fa-solid ' + icon + '"></i></span>' +
                         '<span class="gs-item-body">' +
                             '<span class="gs-item-title">' + code + escapeHtml(item.title) + "</span>" +
-                            '<span class="gs-item-sub">' + escapeHtml(item.subtitle) + "</span>" +
+                            '<span class="gs-item-sub">' +
+                                '<span class="gs-sub-text">' + escapeHtml(item.subtitle) + "</span>" +
+                                when +
+                            "</span>" +
                         "</span>" +
                         badge +
                     "</a>";

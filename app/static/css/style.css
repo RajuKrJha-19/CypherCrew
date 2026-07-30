@@ -12606,6 +12606,38 @@ a.queue-title:hover { color: var(--color-primary); }
     text-overflow: ellipsis;
 }
 
+/* The sub-line carries the client name AND, for tasks, the date and
+   time. Both sub-lines truncate with an ellipsis, so appending the
+   stamp as plain text meant a long client name ate it completely - the
+   date was "there" and invisible.
+
+   So the line is a flex row: the text shrinks and ellipsises, the stamp
+   does not. The date is now the last thing to go, not the first. The
+   text wrapper is emitted for every result type, not just tasks, so the
+   ellipsis keeps working on clients, people and notes too. */
+.gs-item-sub,
+.search-result-sub {
+    display: flex;
+    align-items: baseline;
+}
+
+.gs-sub-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gs-when {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--color-border);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
 .gs-code {
     margin-right: 6px;
     padding: 1px 5px;
