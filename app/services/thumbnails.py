@@ -173,6 +173,25 @@ def supports(task_file):
     return _is_raster(task_file) or _is_pdf_like(task_file)
 
 
+def _skip_may_be_stale(task_file):
+    """True when a recorded `skipped` described this DEPLOYMENT, not this file.
+
+    supports() reports False for video wherever ffmpeg is absent, and
+    generate() writes that down as skipped - a terminal state. But "there
+    is no ffmpeg here" is a fact about the box, not a verdict on the clip,
+    and it stops being true the moment ffmpeg is installed. Nothing ever
+    re-asked, so every video uploaded before then kept a permanent skipped
+    row and the gallery showed it as a bare gradient forever.
+
+    Deliberately narrow: a file skipped for decoding to too many pixels,
+    or for a format nothing here renders, is a real decision and stays
+    put. Only the tool-shaped skip is reconsidered, and only once ffmpeg
+    can actually be found - a genuinely undecodable clip then lands on
+    failed, which IS terminal, so this cannot become a retry loop.
+    """
+    return _is_video(task_file) and ffmpeg_path() is not None
+
+
 def thumbnail_key_for(task_file):
     """Deterministic key so a regenerated thumbnail replaces the old one."""
     return f"thumbnails/{task_file.id}.webp"
@@ -364,9 +383,11 @@ def generate(file_id, retry=False):
     files, but relying on that meant one careless caller could
     re-download and re-decode a doomed file on every request.
 
-    `retry` re-attempts a previous failure. Skipped files are never
-    retried - that state means "this cannot be thumbnailed", and the
-    answer will not change.
+    `retry` re-attempts a previous failure. Skipped files are not retried
+    either - that state means "this cannot be thumbnailed" - with one
+    exception: a video skipped on a box that had no ffmpeg was a statement
+    about the box, and is reconsidered once ffmpeg is present. See
+    _skip_may_be_stale.
     """
     task_file = db.session.get(TaskFile, file_id)
 
@@ -376,7 +397,8 @@ def generate(file_id, retry=False):
     if task_file.thumbnail_state == STATE_READY and task_file.thumbnail_key:
         return STATE_READY
 
-    if task_file.thumbnail_state == STATE_SKIPPED:
+    if task_file.thumbnail_state == STATE_SKIPPED \
+            and not _skip_may_be_stale(task_file):
         return STATE_SKIPPED
 
     if task_file.thumbnail_state == STATE_FAILED and not retry:
@@ -546,12 +568,31 @@ def backfill(limit=None, retry_failed=False):
 
     Runs inline rather than through the pool so the caller can watch it
     finish. Returns a count per resulting state.
+
+    Skipped rows are swept in too, but only where ffmpeg has since made
+    them answerable (see _skip_may_be_stale) - the videos that were
+    uploaded before it was installed. generate() re-checks each one and
+    puts a genuinely undecodable clip on failed, so nothing here can spin.
     """
+    from sqlalchemy import and_, or_
+
     states = [STATE_PENDING] + ([STATE_FAILED] if retry_failed else [])
+
+    wanted = TaskFile.thumbnail_state.in_(states)
+
+    # Narrowed to video rather than every skipped row: an oversized image
+    # is skipped for a reason that has not changed, and sweeping the whole
+    # skipped set into a large library would read thousands of rows only
+    # for generate() to decline each one.
+    if ffmpeg_path() is not None:
+        wanted = or_(wanted, and_(
+            TaskFile.thumbnail_state == STATE_SKIPPED,
+            TaskFile.mime_type.ilike("video/%"),
+        ))
 
     query = (
         TaskFile.query
-        .filter(TaskFile.thumbnail_state.in_(states))
+        .filter(wanted)
         .order_by(TaskFile.created_at.desc())
     )
 

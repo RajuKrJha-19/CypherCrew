@@ -538,3 +538,46 @@ def make_task(app, make_user):
         # foreign keys, so a comment or an activity row written by the
         # test itself cannot wedge the delete.
         _purge_test_rows()
+
+
+@pytest.fixture()
+def make_task_file(app, make_user, make_task):
+    """Factory: make_task_file(mime_type=..., filename=...) -> TaskFile.
+
+    Hangs a file off a throwaway task, so the generic task-children purge
+    already removes it - see _purge_test_rows and _delete_children_of.
+    Nothing is uploaded: these tests are about the thumbnail STATE machine,
+    and the renderers are monkeypatched.
+    """
+    from app.models import TaskFile
+
+    with app.app_context():
+
+        def _make(mime_type="video/mp4", filename="clip.mp4",
+                  file_size=1024, state="pending"):
+            owner = make_user("video_editor")
+            task = make_task(owner)
+
+            row = TaskFile(
+                task_id=task.id,
+                bucket_name="pytest-bucket",
+                storage_provider="r2",
+                object_key=f"pytest/{filename}",
+                original_filename=filename,
+                stored_filename=filename,
+                mime_type=mime_type,
+                file_size=file_size,
+                folder_type="submissions",
+                version=1,
+                is_final=False,
+                uploaded_by_id=owner.id,
+                thumbnail_state=state,
+            )
+            _db.session.add(row)
+            _db.session.commit()
+
+            return row
+
+        yield _make
+
+        _purge_test_rows()
