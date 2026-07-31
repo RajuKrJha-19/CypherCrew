@@ -86,6 +86,42 @@ def test_requeue_clears_dispatch_so_interrupted_can_be_retried(
     assert t.status == "published"
 
 
+def test_read_timeout_is_kept_as_interrupted_not_duplicated(
+        session, make_target, monkeypatch):
+    """A read timeout during start_publish (request sent, response lost) may
+    have already published, so the marker is KEPT and the resume is treated as
+    interrupted - never re-sent."""
+    import requests
+    from app.social.registry import get_provider
+
+    _, _, target = make_target()
+    prov = get_provider("fake")
+
+    def _timeout(*a, **k):
+        raise requests.exceptions.ReadTimeout("read timed out")
+    monkeypatch.setattr(prov, "start_publish", _timeout)
+    FakeProvider.mode = "transient"      # map_error -> TransientError (reschedules)
+
+    scheduling.enqueue_due()
+    worker.drain()                       # times out -> marker kept, rescheduled
+    db.session.expire_all()
+    job = PublishJob.query.filter_by(target_id=target.id).first()
+    assert (job.provider_state or {}).get("dispatched") is True
+    assert job.state == "queued"
+
+    # The retry resume hits the interrupted guard - no republish.
+    job.next_run_at = datetime.utcnow() - timedelta(seconds=1)
+    db.session.commit()
+    worker.drain()
+    db.session.expire_all()
+    job = PublishJob.query.filter_by(target_id=target.id).first()
+    t = db.session.get(SocialPostTarget, target.id)
+    assert job.state == "dead"
+    assert t.status == "failed"
+    assert "interrupt" in (t.last_error or "").lower()
+    assert PublishResult.query.filter_by(target_id=target.id).count() == 0
+
+
 def test_successful_publish_leaves_no_dispatch_marker(session, make_target):
     """The happy path clears the dispatch marker (started, not dispatched)."""
     _, _, target = make_target()

@@ -22,6 +22,11 @@ from app.social.errors import (
 
 _MAX_BACKOFF_SECONDS = 3600
 
+#: A rate-limited job is deferred, not attempted - but a permanently throttled
+#: account (or an error that always maps to RateLimit) must not defer forever.
+#: At a 15-min floor per deferral this is ~5h+ before we give up and flag it.
+_MAX_RATE_DEFERRALS = 20
+
 
 def classify_and_schedule(job, error) -> str:
     """Mutate the job in place (state / attempts / next_run_at / last_error)
@@ -33,6 +38,16 @@ def classify_and_schedule(job, error) -> str:
 
     if isinstance(error, RateLimitError):
         wait = error.retry_after or 900
+        # Not a hard attempt (the window passes), but bound the deferrals so a
+        # perpetually-throttled job dead-letters and its target settles +
+        # gets flagged, instead of hanging in "publishing" forever.
+        ps = dict(job.provider_state or {})
+        deferrals = int(ps.get("rate_deferrals", 0)) + 1
+        ps["rate_deferrals"] = deferrals
+        job.provider_state = ps
+        if deferrals >= _MAX_RATE_DEFERRALS:
+            job.state = "dead"
+            return "dead"
         job.next_run_at = datetime.utcnow() + timedelta(seconds=wait)
         job.state = "queued"
         return "rate_limited"

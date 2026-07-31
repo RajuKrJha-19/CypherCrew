@@ -87,6 +87,12 @@ def _downscale_would_fix(target):
     for media in content.media:
         if not fit.check_spec(spec, media.measurements or {}):
             continue                                   # already fits
+        # Only video can be auto-resized (transcode.fit_content re-encodes to
+        # H.264/MP4). An oversized image must be treated as un-fixable so it is
+        # BLOCKED with a "re-export smaller" message, not falsely promised an
+        # auto-resize that then corrupts it.
+        if not fit.is_video(media.mime_type, content.post_type):
+            return False
         if fit.downscale_target_width(spec, media.measurements or {}) is None:
             return False                               # a resize won't fix it
         needed = True
@@ -158,6 +164,18 @@ def schedule_post(post, actor_id=None):
 def publish_target_now(target, actor_id=None):
     """Enqueue an immediate publish for one target (idempotent for this
     instant)."""
+    # Refuse a second live job for a target that already has one in flight -
+    # two jobs would both dispatch and double-publish. The per-second key only
+    # dedupes clicks landing in the same second; this covers the rest.
+    live = PublishJob.query.filter(
+        PublishJob.target_id == target.id,
+        PublishJob.state.in_(("queued", "claimed", "publishing")),
+    ).first()
+    if live is not None:
+        target.status = "publishing"
+        db.session.commit()
+        return target
+
     key = f"tgt-{target.id}-now-{int(datetime.utcnow().timestamp())}"
     if not PublishJob.query.filter_by(idempotency_key=key).first():
         db.session.add(PublishJob(

@@ -23,6 +23,19 @@ pre-flight run at schedule time.
 """
 
 
+def is_video(mime_type, post_type):
+    """Whether a media item is a video (downscalable by re-encoding to MP4) vs
+    an image (which must be re-exported smaller, never re-encoded). Prefer the
+    mime type; fall back to the post type when the mime is missing/unknown -
+    reel and video are always video."""
+    mime = (mime_type or "")
+    if mime.startswith("video"):
+        return True
+    if mime.startswith("image"):
+        return False
+    return post_type in ("reel", "video")
+
+
 def _ratio(meta):
     width, height = meta.get("width"), meta.get("height")
     if not width or not height:

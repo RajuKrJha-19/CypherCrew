@@ -38,6 +38,11 @@ from app.storage.storage_service import StorageService
 
 _PREFIX = "social_uploads/"
 _STAGING_PREFIX = "task_staging/"
+#: The video-poster cache (app/social/media/poster.py) lives under this
+#: sub-prefix and is referenced only by on-demand URL generation, never by a
+#: SocialMediaAsset row - so the sweep must NOT treat it as an orphan, or it
+#: wipes the cache every day and forces ffmpeg to regenerate every thumbnail.
+_KEEP_SUBPREFIXES = ("social_uploads/posters/",)
 
 
 def _grace_hours():
@@ -119,6 +124,10 @@ def _sweep_prefix(storage, prefix, referenced, cutoff, dry_run):
     for obj in objects:
         key = obj.get("object_key")
         if not key or key in referenced:
+            continue
+        # Durable caches that no DB row references (e.g. the poster cache) are
+        # not orphans - never sweep them.
+        if key.startswith(_KEEP_SUBPREFIXES):
             continue
         orphaned += 1
 

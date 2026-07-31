@@ -59,6 +59,20 @@ class AccountManager:
         acct.status = "active"
         acct.connected_by_id = connected_by_id
         acct.meta = {**(acct.meta or {}), **(info.meta or {}), **(bundle.meta or {})}
+
+        # An Instagram account belongs to the same client as the Facebook Page
+        # it is linked to. Discovery never passes a client_id, which used to
+        # leave IG accounts agency-wide (client_id NULL) - and an agency-wide
+        # channel passes the cross-client publish guard (_channel_client_ok),
+        # so Client A's Instagram could publish under Client B's post. Inherit
+        # the parent Page's client_id when this account has none of its own.
+        if platform == "instagram" and acct.client_id is None:
+            page_id = (acct.meta or {}).get("page_id")
+            if page_id:
+                parent = SocialAccount.query.filter_by(
+                    platform="facebook", external_id=page_id).first()
+                if parent is not None and parent.client_id is not None:
+                    acct.client_id = parent.client_id
         return acct
 
     @staticmethod

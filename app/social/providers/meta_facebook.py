@@ -105,33 +105,43 @@ class MetaFacebookProvider(MetaBaseProvider):
         silently-dropped Page is exactly the "Meta says 4, Studio says 3"
         confusion, so make it visible in the logs at least.
         """
-        resp = self.graph().get("me/accounts", token=token, params={
-            "fields": "id,name,access_token,tasks",
-            "limit": 100,
-        })
-        data = resp.get("data", [])
-        # Follow pagination so an account with many Pages isn't truncated.
-        paging_next = (resp.get("paging") or {}).get("next")
+        params = {"fields": "id,name,access_token,tasks", "limit": 100}
+        resp = self.graph().get("me/accounts", token=token, params=params)
+        data = list(resp.get("data", []))
+        # Follow cursor pagination so an account with many Pages isn't
+        # truncated. We re-request the SAME endpoint with the `after` cursor
+        # rather than following paging.next: paging.next is an ABSOLUTE URL,
+        # and MetaGraph._url would prepend base+version to it, producing a
+        # malformed request that would crash discovery. Capped so a provider
+        # that always echoes a cursor can never loop forever.
         guard = 0
-        while paging_next and guard < 20:
+        while guard < 20:
+            paging = resp.get("paging") or {}
+            after = (paging.get("cursors") or {}).get("after")
+            if not (paging.get("next") and after):
+                break
             guard += 1
-            page_resp = self.graph().get(paging_next, token=token)
-            data.extend(page_resp.get("data", []))
-            paging_next = (page_resp.get("paging") or {}).get("next")
+            resp = self.graph().get(
+                "me/accounts", token=token, params={**params, "after": after})
+            data.extend(resp.get("data", []))
 
         accounts, skipped = [], []
         for page in data:
+            page_id = page.get("id")
+            if not page_id:
+                continue  # a Page with no id is unusable - skip defensively
+            name = page.get("name") or page_id
             tasks = page.get("tasks") or []
             # tasks present but none of them permit publishing -> skip.
             if tasks and not (self._PUBLISH_TASKS & set(tasks)):
-                skipped.append((page.get("name", page["id"]), tasks))
+                skipped.append((name, tasks))
                 continue
             accounts.append(AccountInfo(
-                external_id=page["id"],
-                display_name=page.get("name", page["id"]),
+                external_id=page_id,
+                display_name=name,
                 account_type="page",
                 access_token=page.get("access_token"),
-                meta={"page_id": page["id"]},
+                meta={"page_id": page_id},
             ))
 
         if skipped:

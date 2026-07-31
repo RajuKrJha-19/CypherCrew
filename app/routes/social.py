@@ -2210,6 +2210,13 @@ def posts_bulk():
 def submit_post(post_id):
     _guard()
     post = SocialPost.query.get_or_404(post_id)
+    # Only a draft/rejected post may be submitted. Without this a stale or
+    # replayed POST could regress an approved/scheduled/published post back to
+    # pending_approval - the approve/reject/schedule routes are all guarded,
+    # so this one must be too.
+    if post.status not in ("draft", "rejected"):
+        flash("This post can no longer be submitted for approval.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
     if not post.targets:
         flash("Add at least one platform before submitting.", "error")
         return redirect(url_for("social.post_detail", post_id=post.id))

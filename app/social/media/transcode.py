@@ -80,6 +80,13 @@ def fit_content(content, capabilities):
 
     resized = 0
     for media in content.media:
+        # Only VIDEO is downscaled this way - the encoder outputs H.264/MP4.
+        # An oversized image must be blocked (re-export), never re-encoded into
+        # a 1-frame MP4 that still claims image/* and that the platform then
+        # rejects. (_downscale_would_fix mirrors this so such an image is
+        # reported as blocked, not "auto-resize planned".)
+        if not fit.is_video(media.mime_type, content.post_type):
+            continue
         target_w = fit.downscale_target_width(spec, media.measurements or {})
         if target_w is None:
             continue

@@ -84,9 +84,18 @@ def _derive(task):
             "label": "Live", "tone": "success", "icon": "fa-circle-check",
             "post_id": pid, "permalinks": links}
 
-    if any(s == "failed" for s in statuses):
+    # "blocked" is terminal like "failed" (a target that cannot publish as it
+    # stands). Without it here, a post live on one channel but blocked on
+    # another fell through to "Draft in Social Studio" - the task board said
+    # un-published while the post was actually live, and completed_at never
+    # stamped. Treat it as delivered-with-a-problem, distinguishing the partial
+    # case so the label isn't misleading.
+    if any(s in ("failed", "blocked") for s in statuses):
+        some_live = any(s == "published" for s in statuses)
         return "Published", {
-            "label": "Publish failed · retry", "tone": "danger",
+            "label": "Partially published · retry" if some_live
+            else "Publish failed · retry",
+            "tone": "warning" if some_live else "danger",
             "icon": "fa-triangle-exclamation", "post_id": pid, "retry": True}
 
     if any(s == "publishing" for s in statuses) or due_now:

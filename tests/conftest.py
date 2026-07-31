@@ -197,6 +197,16 @@ def client(app):
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def _no_publish_kick(monkeypatch):
+    """Publish-now / retry fire worker.kick_async, which drains the queue in a
+    background thread. The suite drives drain() explicitly, so stub the kick to
+    a no-op - otherwise a background thread races the shared DB and makes
+    publishing non-deterministic. Production behaviour is unaffected."""
+    import app.social.queue.worker as _worker
+    monkeypatch.setattr(_worker, "kick_async", lambda *a, **k: None)
+
+
 @pytest.fixture()
 def make_target(session):
     """Factory: build an approved, scheduled (due) target on the fake

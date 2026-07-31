@@ -30,7 +30,11 @@ from app.social.errors import AuthError, PermanentError, SocialError
 from app.social.dto import StepStatus
 
 
-_STALE_CLAIM_MINUTES = 10
+# A claim older than this is treated as abandoned by a dead worker. Sized
+# above the longest realistic single start_publish (a large resumable YouTube
+# upload can run several minutes) so a slow-but-alive upload is not requeued
+# out from under itself and falsely flagged as interrupted.
+_STALE_CLAIM_MINUTES = 20
 
 
 def _reset_stale(worker_id):
@@ -103,40 +107,69 @@ def drain(batch=None, worker_id=None):
     }
 
 
+#: Single-flight state for kick_async: at most ONE kick thread runs at a
+#: time, and a kick requested while one is running schedules exactly one more
+#: pass (so a burst of "publish now" / "retry" clicks can never spawn a thread
+#: storm and exhaust the DB pool). Coalescing is safe because a drain claims
+#: ALL due jobs, so one extra pass covers every click that arrived meanwhile.
+_kick_lock = threading.Lock()
+_kick = {"running": False, "again": False}
+
+
+def _kick_drain(app, rounds):
+    with app.app_context():
+        from app.social.services import scheduling
+        scheduling.enqueue_due()
+        for _ in range(max(1, rounds)):
+            # Pull forward jobs due now / waiting on a short async poll (like
+            # the manual Process-queue button) so a start -> poll -> publish
+            # chain completes without waiting on the tick. Deliberately does
+            # NOT pull forward a rate/backoff deferral that is minutes out.
+            horizon = datetime.utcnow() + timedelta(seconds=60)
+            PublishJob.query.filter(
+                PublishJob.state == "queued",
+                PublishJob.next_run_at <= horizon,
+            ).update({PublishJob.next_run_at: datetime.utcnow()})
+            db.session.commit()
+            outcome = drain()
+            if outcome.get("claimed", 0) == 0:
+                break
+
+
 def kick_async(app, rounds=3):
-    """Fire a one-off enqueue + bounded drain in a background thread, so a
-    "publish now" (or a manual retry) goes out within a second or two instead
-    of waiting for the next periodic worker tick. Safe alongside the periodic
-    worker and other kicks: claiming is FOR UPDATE SKIP LOCKED and every job
-    is idempotent, so at worst two drains find nothing to do."""
+    """Fire an enqueue + bounded drain soon, so a "publish now" (or a manual
+    retry) goes out within a second or two instead of waiting for the next
+    periodic worker tick. Single-flight: concurrent calls coalesce into one
+    running thread plus at most one follow-up pass, so a click burst can't
+    storm threads. Safe alongside the periodic worker (claim is FOR UPDATE
+    SKIP LOCKED; jobs are idempotent)."""
+    with _kick_lock:
+        if _kick["running"]:
+            _kick["again"] = True      # a running kick will do one more pass
+            return
+        _kick["running"] = True
+        _kick["again"] = False
 
     def _run():
-        try:
-            with app.app_context():
-                from app.social.services import scheduling
-                scheduling.enqueue_due()
-                for _ in range(max(1, rounds)):
-                    # Pull forward jobs due now / waiting on a short async poll
-                    # (like the manual Process-queue button) so a
-                    # start -> poll -> publish chain completes without waiting
-                    # on the tick. Deliberately does NOT pull forward a
-                    # rate/backoff deferral that is minutes out.
-                    horizon = datetime.utcnow() + timedelta(seconds=60)
-                    PublishJob.query.filter(
-                        PublishJob.state == "queued",
-                        PublishJob.next_run_at <= horizon,
-                    ).update({PublishJob.next_run_at: datetime.utcnow()})
-                    db.session.commit()
-                    outcome = drain()
-                    if outcome.get("claimed", 0) == 0:
-                        break
-        except Exception:  # noqa: BLE001 - a kick must never break its caller
+        while True:
             try:
-                with app.app_context():
-                    app.logger.exception(
-                        "[social] immediate publish kick failed")
-            except Exception:  # noqa: BLE001
-                pass
+                _kick_drain(app, rounds)
+            except Exception:  # noqa: BLE001 - never break the caller
+                try:
+                    with app.app_context():
+                        app.logger.exception(
+                            "[social] immediate publish kick failed")
+                except Exception:  # noqa: BLE001
+                    pass
+            # Check "again" and clear "running" atomically under one lock hold,
+            # so a kick that arrives in this window is never lost and never
+            # spawns a second thread.
+            with _kick_lock:
+                if _kick["again"]:
+                    _kick["again"] = False
+                    continue           # do one more pass for the coalesced kicks
+                _kick["running"] = False
+                return
 
     threading.Thread(target=_run, name="social-kick", daemon=True).start()
 
@@ -159,6 +192,16 @@ def _process(job_id):
         job.last_error = "target missing"
         db.session.commit()
         return {"job": job_id, "result": "no_target"}
+
+    # Target-level idempotency: if this target is already published (a sibling
+    # job, a double "publish now" whose two jobs carry different idempotency
+    # keys, or any future enqueuer that doesn't check target.job), never
+    # dispatch again - just settle this job. Complements the per-attempt
+    # dispatch marker with a per-target guard against a duplicate live post.
+    if target.status == "published" or target.external_post_id:
+        job.state = "succeeded"
+        db.session.commit()
+        return {"job": job_id, "result": "already_published"}
 
     try:
         provider = get_provider(target.platform)
@@ -207,27 +250,20 @@ def _process(job_id):
             transcode.fit_content(content, provider.capabilities)
 
             # Persist a dispatch marker BEFORE the side-effecting call, with
-            # the job still 'claimed'. If the worker dies during start_publish,
-            # _reset_stale returns the claimed job to the queue and the guard
-            # above turns it into an interrupted-publish for manual
+            # the job still 'claimed'. On a worker KILL mid-publish the marker
+            # survives, _reset_stale requeues the claimed job, and the guard
+            # above turns the resume into an interrupted-publish for manual
             # verification - instead of silently re-uploading and duplicating.
+            # A NORMAL start_publish error propagates to _handle_failure, which
+            # clears the marker so the retry is a clean first attempt - EXCEPT
+            # a read-timeout, where the request may have been delivered and the
+            # marker is kept so the resume is treated as interrupted. (No
+            # fragile pre-raise commit here: _handle_failure owns the clear.)
             provider_state["dispatched"] = True
             job.provider_state = dict(provider_state)
             db.session.commit()
 
-            try:
-                step = provider.start_publish(target, content, token)
-            except Exception:
-                # start_publish returned control via a NORMAL error, so it did
-                # not complete: clear the marker and let the standard retry run
-                # a clean first attempt again (preserving today's behaviour).
-                # A worker KILL raises nothing here, so the marker stays set
-                # and the resume is treated as interrupted.
-                cleared = dict(job.provider_state or {})
-                cleared.pop("dispatched", None)
-                job.provider_state = cleared
-                db.session.commit()
-                raise
+            step = provider.start_publish(target, content, token)
 
             provider_state["started"] = True
             provider_state.pop("dispatched", None)
@@ -333,14 +369,10 @@ def _handle_interrupted(job, target):
     job.state = "dead"
     job.last_error = msg
 
-    # Release any rate slot the interrupted attempt reserved.
-    if target is not None and (job.provider_state or {}).get("_reserved") \
-            and target.social_account_id:
-        provider = get_provider(target.platform)
-        if provider and provider.capabilities \
-                and provider.capabilities.publish_rate:
-            _, window = provider.capabilities.publish_rate
-            ratelimit.release(target.social_account_id, window)
+    # Deliberately do NOT release the reserved rate slot: the post may already
+    # be live on the platform, so keep the slot consumed (under-counting the
+    # window by one is the safe direction - it avoids letting an extra post
+    # through against a possibly-already-published one).
 
     if target is not None:
         target.status = "failed"
@@ -369,8 +401,26 @@ def _handle_interrupted(job, target):
 
 def _handle_failure(job_id, exc):
     job = db.session.get(PublishJob, job_id)
+    if job is None:
+        # The job row vanished mid-failure (deleted concurrently). Nothing to
+        # reschedule; classify_and_schedule would dereference None.
+        db.session.rollback()
+        return {"job": job_id, "result": "missing"}
     target = db.session.get(SocialPostTarget, job.target_id) if job else None
     provider = get_provider(target.platform) if target else None
+
+    # Reaching here means start_publish (or poll_publish) returned via an
+    # exception, not a worker kill, so the dispatch marker must not survive to
+    # trip the interrupted guard on the retry - clear it. The exception is a
+    # read timeout, though (request sent, response lost), the publish MAY have
+    # landed on the platform; keep the marker so the resume is treated as an
+    # interrupted-publish (verify manually) rather than a silent duplicate.
+    if job is not None and (job.provider_state or {}).get("dispatched"):
+        import requests
+        if not isinstance(exc, requests.exceptions.ReadTimeout):
+            ps = dict(job.provider_state)
+            ps.pop("dispatched", None)
+            job.provider_state = ps or None
 
     error = provider.map_error(exc) if provider else exc
     if not isinstance(error, SocialError):
