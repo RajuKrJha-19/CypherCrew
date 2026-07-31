@@ -36,6 +36,12 @@ from app.social.dto import StepStatus
 # out from under itself and falsely flagged as interrupted.
 _STALE_CLAIM_MINUTES = 20
 
+# Max async status polls (~30s apart) before giving up on a remote op that
+# never completes - e.g. an Instagram container stuck IN_PROGRESS. ~20 min,
+# enough for normal video processing, so a genuinely stuck job settles and is
+# flagged instead of polling forever with the post pinned at "publishing".
+_MAX_PENDING_POLLS = 40
+
 
 def _reset_stale(worker_id):
     """Return jobs abandoned by a dead worker (stuck 'claimed' past the
@@ -347,7 +353,21 @@ def _apply_step(job, target, step, provider_state, provider=None, token=None):
     if status in (StepStatus.PENDING.value, "pending"):
         merged = {**provider_state, **(step.provider_state or {})}
         merged["started"] = True
+        polls = int(merged.get("polls", 0)) + 1
+        merged["polls"] = polls
         job.provider_state = merged
+        # Cap the async poll loop: a remote op that never finishes (e.g. an IG
+        # container stuck IN_PROGRESS) would otherwise poll every 30s forever
+        # with the post pinned at "publishing" and never flagged. Past the
+        # ceiling, settle the target as failed so it rolls up + surfaces.
+        if polls >= _MAX_PENDING_POLLS:
+            job.state = "dead"
+            job.last_error = ("The platform did not finish processing this "
+                              "media in time - try republishing.")
+            target.status = "failed"
+            target.last_error = job.last_error
+            _maybe_finalize_post(target)
+            return "poll_timeout"
         job.state = "queued"
         job.next_run_at = datetime.utcnow() + timedelta(seconds=30)
         return "pending"

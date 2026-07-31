@@ -55,6 +55,36 @@ def test_publish_target_now_wont_double_queue(session, make_target):
     assert PublishJob.query.filter_by(target_id=target.id).count() == 1
 
 
+# --- M-2: an async publish that never completes must dead-letter ------------
+
+def test_pending_poll_loop_is_capped(session, make_target, monkeypatch):
+    from app.social.registry import get_provider
+    from app.social.dto import PublishStep
+    from app.social.queue import worker
+
+    _, _, target = make_target()
+    prov = get_provider("fake")
+    monkeypatch.setattr(
+        prov, "poll_publish",
+        lambda *a, **k: PublishStep(status="pending", provider_state={}))
+
+    # A job already at the poll ceiling; one more PENDING poll must give up.
+    job = PublishJob(
+        target_id=target.id, state="queued",
+        next_run_at=datetime.utcnow() - timedelta(seconds=1),
+        provider_state={"started": True, "polls": 39},
+        idempotency_key=f"tgt-{target.id}-poll")
+    db.session.add(job)
+    db.session.commit()
+
+    worker.drain()
+    db.session.expire_all()
+    job = db.session.get(PublishJob, job.id)
+    t = db.session.get(SocialPostTarget, target.id)
+    assert job.state == "dead"
+    assert t.status == "failed"
+
+
 # --- B3: OAuth state must be bound to the user who started the connect -------
 
 def test_oauth_state_is_bound_to_the_creating_user(session, make_user):

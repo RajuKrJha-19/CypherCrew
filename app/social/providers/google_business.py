@@ -55,6 +55,23 @@ class GoogleBusinessProvider(GoogleBaseProvider, SocialProvider):
 
     # -- Discovery ---------------------------------------------------------
 
+    @staticmethod
+    def _paged(client, path, token, params, key, cap=50):
+        """Collect every page of a Google list endpoint (nextPageToken), so an
+        agency with >100 accounts/locations doesn't silently lose channels."""
+        items, page_token, guard = [], None, 0
+        while guard < cap:
+            guard += 1
+            p = dict(params)
+            if page_token:
+                p["pageToken"] = page_token
+            resp = client.get(path, token=token, params=p)
+            items.extend(resp.get(key) or [])
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return items
+
     def list_publishable_accounts(self, token):
         """Every location under every account the user administers.
 
@@ -64,9 +81,8 @@ class GoogleBusinessProvider(GoogleBaseProvider, SocialProvider):
         info_client = GoogleClient(INFO_API)
 
         found = []
-        accounts = accounts_client.get(
-            "accounts", token=token, params={"pageSize": 100}
-        ).get("accounts", [])
+        accounts = self._paged(
+            accounts_client, "accounts", token, {"pageSize": 100}, "accounts")
 
         for account in accounts:
             # "accounts/12345"
@@ -74,10 +90,9 @@ class GoogleBusinessProvider(GoogleBaseProvider, SocialProvider):
             if not account_name:
                 continue
 
-            locations = info_client.get(
-                f"{account_name}/locations", token=token,
-                params={"readMask": _LOCATION_FIELDS, "pageSize": 100},
-            ).get("locations", [])
+            locations = self._paged(
+                info_client, f"{account_name}/locations", token,
+                {"readMask": _LOCATION_FIELDS, "pageSize": 100}, "locations")
 
             for location in locations:
                 # v1 gives "locations/678"; v4 needs the account prefix.
