@@ -212,6 +212,15 @@ def apply_completion_effects(task, new_status):
         task.employee_completed = True
         if not task.employee_completed_at:
             task.employee_completed_at = ist_now()
+    elif task.employee_completed:
+        # Moved back into an active/working state (rework after a review, an
+        # undo, or a void): it is no longer "completed by the assignee", so
+        # clear the flag - otherwise a reworked task keeps counting as
+        # completed in the KPIs and the "Completed" filter. reject_task already
+        # does this; centralising it here covers the edit-dropdown and board-
+        # drag paths too, which previously left the phantom flag set.
+        task.employee_completed = False
+        task.employee_completed_at = None
 
     if new_status == "Published" and not task.completed_at:
         task.completed_at = ist_now()
@@ -2213,31 +2222,18 @@ def edit_task(task_id):
 
         # Void and On Hold are set from the task page, where a reason
         # can be captured, so they are not offered in this dropdown.
-        allowed_statuses = task_status.SELECTABLE_STATUSES
-
-        if new_status not in allowed_statuses:
-            flash(
-                "Invalid task status selected.",
-                "error"
-            )
-            return redirect(
-                url_for(
-                    "tasks.edit_task",
-                    task_id=task.id
-                )
-            )
-
-        # A self-assigned owner without manage_tasks reaches this form, but the
-        # edit dropdown must not become a back door around the approval gate
-        # (e.g. jumping their own task straight to Published without review).
-        # Hold non-managers to the employee transition table; managers keep the
-        # any-to-any moves MANAGER_MOVES already grants them elsewhere.
+        # Drive the allowed set from hand_moves for EVERYONE (managers too), so
+        # Scheduled and Published (drag-locked - they belong to Studio and the
+        # approval sign-off) and On Hold / Void (reason-required, set from the
+        # task page) are never hand-reachable via the edit dropdown. This closes
+        # a back door around the publish gate and the review stages: a
+        # manage_tasks holder without publish_tasks could otherwise set a task
+        # straight to Published, skipping Core/Client Review entirely.
         can_manage_tasks = has_permission(current_user, "manage_tasks")
         if (
             new_status != task.status
-            and not can_manage_tasks
-            and not task_status.can_move(
-                task.status, new_status, can_manage=False
+            and new_status not in task_status.hand_moves(
+                task.status, can_manage_tasks
             )
         ):
             flash(
@@ -2482,6 +2478,22 @@ def edit_task(task_id):
             # Start the clock when moved into In Progress from the dropdown
             # (the board path does this; the edit path used to leave it dead).
             if new_status == "In Progress" and task.timer_started_at is None:
+                # One running task per assignee: pause whichever of theirs is
+                # already going, so the edit dropdown can't create two live
+                # timers (Start and the board drag both enforce this).
+                other_running = Task.query.filter(
+                    Task.assigned_to_id == task.assigned_to_id,
+                    Task.id != task.id,
+                    Task.timer_started_at.isnot(None),
+                    Task.status == "In Progress",
+                ).first()
+                if other_running is not None:
+                    pause_timer(other_running)
+                    add_activity(
+                        other_running, action="auto_paused",
+                        message=(f"Auto paused because {current_user.name} "
+                                 f"started another task: {task.title}"),
+                        old_status="In Progress", new_status="In Progress")
                 start_timer(task)
 
             # Notify reviewers when the edit pushes a task into review.
@@ -2988,7 +3000,8 @@ def void_task(task_id):
         task.status, task_status.VOID, True
     ):
         flash(
-               "error"
+            f"A {task.status} task cannot be voided.",
+            "error"
         )
         return redirect(
             url_for("tasks.task_detail", task_id=task.id)
@@ -3668,6 +3681,14 @@ def bulk_update_tasks():
     skipped = 0
 
     for task in tasks:
+
+        # Per-task visibility, same gate the single-item quick-edit enforces.
+        # The entry guard only requires assign_tasks, which does NOT imply
+        # view_all_tasks, so without this a user could bulk-reassign tasks from
+        # a client/team they can't even see. Skip (don't error) the rest.
+        if not can_view_task(task):
+            skipped += 1
+            continue
 
         if task.status in task_status.TERMINAL_STATUSES:
             skipped += 1

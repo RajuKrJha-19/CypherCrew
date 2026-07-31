@@ -260,18 +260,18 @@
                 On Hold and Void are absent on purpose: both need a written
                 reason, so they are set from the task page instead.
             #}
+            {# Offer only the hand-reachable destinations for THIS task's
+               current status (hand_moves excludes Scheduled/Published, which
+               belong to Studio + the approval sign-off, and On Hold/Void,
+               which need a written reason from the task page). The current
+               status is always listed so an unrelated edit can be saved
+               without changing it. #}
+            {% set _can_manage = has_permission(current_user, "manage_tasks") %}
             <select name="status">
-                {% for status in task_status.SELECTABLE_STATUSES %}
-                    <option value="{{ status }}" {% if task.status == status %}selected{% endif %}>
-                        {{ status }}
-                    </option>
+                <option value="{{ task.status }}" selected>{{ task.status }} (current)</option>
+                {% for status in task_status.hand_moves(task.status, _can_manage) %}
+                    <option value="{{ status }}">{{ status }}</option>
                 {% endfor %}
-
-                {% if task.status in task_status.REASON_REQUIRED_STATUSES %}
-                <option value="{{ task.status }}" selected disabled>
-                    {{ task.status }} (change this from the task page)
-                </option>
-                {% endif %}
             </select>
 
             <label>Deadline</label>
