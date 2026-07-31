@@ -1,0 +1,387 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ client.client_name }} · Dashboard | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{#
+    period_url carries the client through every period link. The dashboard's
+    own _activity_band.html builds these with url_for(request.endpoint, ...),
+    which only works for endpoints that take no arguments - this one takes a
+    client_id, so it uses the macro form social/analytics.html uses.
+#}
+{% macro period_url(key) -%}
+{{ url_for('clients.client_dashboard', client_id=client.id, period=key) }}
+{%- endmacro %}
+
+{% block content %}
+{% set p = period %}
+{% set has_any = data.total_live or data.delivered %}
+
+<div class="page-header">
+    <div>
+        <h1>{{ client.client_name }}</h1>
+        <p>Delivery and throughput{% if client.assigned_manager %} ·
+            Managed by {{ client.assigned_manager.name }}{% endif %}</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('tasks.list_tasks', client=client.id) }}" class="btn btn-secondary">
+            <i class="fa-solid fa-list-check"></i> All tasks
+        </a>
+    </div>
+</div>
+
+{% set active = 'dashboard' %}
+{% include "clients/_client_tabs.html" with context %}
+
+{% if not has_any %}
+{#
+    No tasks at all is a different thing from a quiet month, and saying
+    "0 delivered" for a client nobody has booked work against reads as a
+    failure rather than an absence.
+#}
+<div class="table-card">
+    <div class="empty-state">
+        <i class="fa-regular fa-folder-open"></i>
+        <strong>Nothing to report yet</strong>
+        <p>No tasks have been created for {{ client.client_name }}. Delivery
+           figures appear here as work moves through to Published.</p>
+    </div>
+</div>
+{% else %}
+
+{# ---- Period ---- #}
+<section class="activity-band">
+    <div class="activity-head">
+        <div class="activity-head-text">
+            <h3>{{ p.label }}</h3>
+            <p>
+                {% if not p.is_all_time %}{{ p.from }} to {{ p.to }}{% else %}
+                Everything on record{% endif %}
+            </p>
+        </div>
+        <div class="period-toggle" role="group" aria-label="Period">
+            <a href="{{ period_url('month') }}" class="period-opt{{ ' is-active' if p.key == 'month' }}">This month</a>
+            <a href="{{ period_url('prev_month') }}" class="period-opt{{ ' is-active' if p.key == 'prev_month' }}">Last month</a>
+            <a href="{{ period_url('30d') }}" class="period-opt{{ ' is-active' if p.key == '30d' }}">30 days</a>
+            <a href="{{ period_url('all') }}" class="period-opt{{ ' is-active' if p.key == 'all' }}">All time</a>
+        </div>
+    </div>
+</section>
+
+{# ---- Headline figures ---- #}
+<div class="dashboard-kpi-grid client-kpi-grid">
+
+    <div class="kpi-card kpi-green">
+        <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="kpi-content">
+            <span>Delivered</span>
+            <h2>{{ data.delivered }}</h2>
+            {% if data.delivered_percent is not none %}
+            <p class="{{ data.delivered_direction }}">
+                {{ data.delivered_percent }}% vs previous
+            </p>
+            {% else %}
+            <p class="neutral">{{ data.delivered_previous }} before</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="kpi-card kpi-purple">
+        <div class="kpi-icon"><i class="fa-solid fa-bullseye"></i></div>
+        <div class="kpi-content">
+            <span>Month target</span>
+            <h2>{{ data.delivered_against_target }}<small>/{{ data.target_total or '—' }}</small></h2>
+            <p class="neutral">
+                {% if data.target_percent is not none %}{{ data.target_percent }}% of target
+                {% else %}No target set{% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="kpi-card kpi-blue">
+        <div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="kpi-content">
+            <span>In progress</span>
+            <h2>{{ data.in_progress }}</h2>
+            <p class="neutral">of {{ data.total_live }} live</p>
+        </div>
+    </div>
+
+    <div class="kpi-card kpi-orange">
+        <div class="kpi-icon"><i class="fa-solid fa-eye"></i></div>
+        <div class="kpi-content">
+            <span>In review</span>
+            <h2>{{ data.in_review }}</h2>
+            <p class="neutral">core + client</p>
+        </div>
+    </div>
+
+    <div class="kpi-card kpi-red{{ ' kpi-alert' if data.overdue }}">
+        <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="kpi-content">
+            <span>Overdue</span>
+            <h2>{{ data.overdue }}</h2>
+            <p class="neutral">past deadline</p>
+        </div>
+    </div>
+
+    <div class="kpi-card kpi-sky">
+        <div class="kpi-icon"><i class="fa-regular fa-clock"></i></div>
+        <div class="kpi-content">
+            <span>Avg turnaround</span>
+            <h2>{{ format_seconds(data.turnaround_seconds) }}</h2>
+            <p class="neutral">
+                {% if data.review_seconds %}{{ format_seconds(data.review_seconds) }} in client review
+                {% else %}created to published{% endif %}
+            </p>
+        </div>
+    </div>
+
+</div>
+
+{# ---- Target vs delivered, per service ---- #}
+<div class="table-card">
+    <div class="section-head">
+        <div>
+            <h2>Delivery against target</h2>
+            <p>
+                {% if data.target %}
+                {{ data.target.month }}/{{ data.target.year }} — counted from
+                tasks that reached Published
+                {% else %}
+                No monthly target has been set for this period
+                {% endif %}
+            </p>
+        </div>
+        <a class="section-head-link"
+           href="{{ url_for('clients.client_detail', client_id=client.id) }}">Edit targets</a>
+    </div>
+
+    {% if data.service_lines %}
+    {% if data.has_drift %}
+    {#
+        The stored counter is maintained in four places and is also editable
+        by hand, so it can disagree with the tasks that actually published.
+        Showing both is the only honest option - picking one silently is how
+        a wrong number survives for months.
+    #}
+    <p class="cd-drift-note">
+        <i class="fa-solid fa-circle-info"></i>
+        Some stored counts differ from the tasks actually published. Both are
+        shown; the task count is the one derived from real work.
+    </p>
+    {% endif %}
+
+    <table class="cd-table">
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Deliverable</th>
+                <th class="u-right">Delivered</th>
+                <th class="u-right">Target</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in data.service_lines %}
+            <tr>
+                <td>{{ line.service }}</td>
+                <td>{{ line.name }}</td>
+                <td class="u-right">
+                    <strong>{{ line.delivered }}</strong>
+                    {% if line.drift %}
+                    <span class="cd-drift" title="The stored counter on this deliverable says {{ line.stored }}">
+                        stored {{ line.stored }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="u-right">{{ line.target or '—' }}</td>
+                <td>
+                    {% if line.target %}
+                    <span class="cd-bar" role="img"
+                          aria-label="{{ line.percent }} percent of target">
+                        <span class="cd-bar-fill{{ ' is-full' if line.percent >= 100 }}"
+                              style="width:{{ [line.percent, 100]|min }}%"></span>
+                    </span>
+                    <small>{{ line.percent }}%</small>
+                    {% else %}
+                    <small class="t-subtle">no target</small>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="panel-empty">
+        <i class="fa-regular fa-circle-question"></i>
+        <p>No deliverables are set for this month. Add them on the Overview tab
+           to track delivery against a target.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ---- Trend + people ---- #}
+<div class="dashboard-split">
+
+    <div class="chart-card">
+        <div class="card-header">
+            <div>
+                <h3>Delivered per day</h3>
+                <p>{{ p.label }}</p>
+            </div>
+        </div>
+        {% if data.trend.labels %}
+        <canvas id="clientTrendChart" height="220"></canvas>
+        {% else %}
+        <div class="panel-empty">
+            <i class="fa-solid fa-chart-line"></i>
+            <p>Pick a bounded period to see a daily trend.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="table-card">
+        <div class="section-head">
+            <div>
+                <h2>Who delivered</h2>
+                <p>{{ p.label }}</p>
+            </div>
+        </div>
+        {% if data.top_people %}
+        <div class="queue-list">
+            {% for row in data.top_people %}
+            <div class="queue-row">
+                <div class="queue-body">
+                    <span class="queue-title">{{ row.user.name }}</span>
+                    <span class="queue-meta">{{ role_label(row.user.role) }}</span>
+                </div>
+                <span class="sp-pill info">{{ row.delivered }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="panel-empty">
+            <i class="fa-regular fa-user"></i>
+            <p>Nothing was delivered in this period.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{# ---- Recent deliveries ---- #}
+<div class="table-card">
+    <div class="section-head">
+        <div>
+            <h2>Recent deliveries</h2>
+            <p>Most recently published, {{ p.label|lower }}</p>
+        </div>
+    </div>
+    {% if data.recent %}
+    <table class="cd-table">
+        <thead>
+            <tr><th>Task</th><th>Assignee</th><th>Published</th></tr>
+        </thead>
+        <tbody>
+            {% for task in data.recent %}
+            <tr>
+                <td>
+                    <a class="table-link" href="{{ url_for('tasks.task_detail', task_id=task.id) }}">
+                        {{ task.title }}
+                    </a>
+                </td>
+                <td>{{ task.assigned_to.name if task.assigned_to else '—' }}</td>
+                <td>{{ task.completed_at.strftime('%d %b %Y') if task.completed_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="panel-empty">
+        <i class="fa-regular fa-circle-check"></i>
+        <p>Nothing published in this period.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if data.trend.labels %}
+<script>
+    (function () {
+        // Chart.js loads from the CDN in exactly one place app-wide
+        // (dashboard/_dashboard_charts_js.html). This page is not under that
+        // template, so it loads it the same way rather than adding it to a
+        // bundle every page would then pay for.
+        function draw() {
+            var el = document.getElementById("clientTrendChart");
+            if (!el || typeof Chart === "undefined") return;
+
+            function cssVar(name, fallback) {
+                var v = getComputedStyle(document.documentElement)
+                    .getPropertyValue(name).trim();
+                return v || fallback;
+            }
+
+            var ctx = el.getContext("2d");
+            var fill = ctx.createLinearGradient(0, 0, 0, 220);
+            fill.addColorStop(0, "rgba(79,70,229,.28)");
+            fill.addColorStop(1, "rgba(79,70,229,0)");
+
+            var chart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: {{ data.trend.labels | tojson }},
+                    datasets: [{
+                        label: "Delivered",
+                        data: {{ data.trend.counts | tojson }},
+                        borderColor: cssVar("--color-primary", "#4f46e5"),
+                        backgroundColor: fill,
+                        borderWidth: 2,
+                        fill: true,
+                        // monotone, not a plain tension: a smoothed spline
+                        // overshoots between points, so a day with one
+                        // delivery either side of a zero draws a curve that
+                        // dips below the axis and reads as negative output.
+                        cubicInterpolationMode: "monotone",
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false },
+                             ticks: { color: cssVar("--color-text-muted", "#6b7280"),
+                                      maxTicksLimit: 8 } },
+                        // Deliveries are whole tasks; a y-axis offering 0.5 of
+                        // one is noise.
+                        y: { beginAtZero: true,
+                             ticks: { precision: 0, stepSize: 1,
+                                      color: cssVar("--color-text-muted", "#6b7280") },
+                             grid: { color: cssVar("--color-border", "#e5e7eb") } },
+                    },
+                },
+            });
+
+            // Destroyed before the next Turbo render, or the canvas is still
+            // claimed when this page is revisited.
+            if (window.App) window.App.trackChart(chart);
+        }
+
+        if (typeof Chart !== "undefined") { draw(); return; }
+
+        var tag = document.createElement("script");
+        tag.src = "https://cdn.jsdelivr.net/npm/chart.js";
+        tag.onload = draw;
+        document.head.appendChild(tag);
+    })();
+</script>
+{% endif %}
+{% endblock %}

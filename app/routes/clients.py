@@ -3,6 +3,7 @@ from calendar import month_name
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     render_template,
@@ -15,8 +16,12 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import User, Client, ClientMonthlyTarget, ClientDeliverable, Task, ClientAsset
-from app.utils.permissions import has_permission, can_manage_clients
+from app.utils.permissions import (
+    has_permission, can_manage_clients, can_view_client_stats,
+)
 from app.utils import roles
+from app.utils import periods
+from app.services import client_dashboard as client_dashboard_service
 from app.utils.timezone import ist_now
 from app.utils import client_assets as client_asset_catalog
 from app.storage.storage_service import StorageService, StorageServiceError
@@ -303,6 +308,49 @@ def client_detail(client_id):
         task_code_example="1277",
         today_ddmmyy=ist_now().strftime("%d-%m-%y"),
     )
+
+
+@clients_bp.route("/<int:client_id>/dashboard")
+@login_required
+def client_dashboard(client_id):
+    """Delivery figures for one client.
+
+    A sibling route rather than a tab toggled on the detail page: the
+    aggregates would otherwise run on every client view whether or not
+    anyone looked at them, the period picker needs query args anyway, and
+    this way the window someone is looking at has a shareable URL.
+    """
+    if not can_view_client_stats(current_user):
+        abort(403)
+
+    client = Client.query.get_or_404(client_id)
+
+    # Defaults to the calendar month, because "how much have we delivered
+    # this month" is the question this page exists for. All-time is offered
+    # too - a client's whole history is a fair thing to ask for.
+    period = periods.resolve_period(request.args, allow_all=True,
+                                    default="month")
+
+    return render_template(
+        "clients/dashboard.html",
+        client=client,
+        period=period,
+        data=client_dashboard_service.build_dashboard(client, period),
+        format_seconds=_format_duration,
+    )
+
+
+def _format_duration(seconds):
+    """Seconds -> "3h 20m" / "2.4d". None when there was nothing to average."""
+    if not seconds:
+        return "—"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{hours:.1f}h".replace(".0h", "h")
+    return f"{hours / 24:.1f}d".replace(".0d", "d")
 
 
 @clients_bp.route("/<int:client_id>/short-code", methods=["POST"])

@@ -265,6 +265,7 @@ def create_app():
         can_assign_tasks, can_view_team_performance, can_manage_users,
         can_manage_permissions, can_manage_leaves, can_manage_holidays,
         can_manage_meetings, can_publish, can_review, access_fingerprint,
+        can_view_client_stats,
         can_manage_attendance,
     )
     from app.utils import roles as roles_module
@@ -338,6 +339,9 @@ def create_app():
         can_view_team_performance=can_view_team_performance,
         can_manage_users=can_manage_users,
         can_manage_permissions=can_manage_permissions,
+        # "May read this client's delivery figures" - gates the client
+        # dashboard tab, and is what finally gives view_client_stats a job.
+        can_view_client_stats=can_view_client_stats,
         can_manage_leaves=can_manage_leaves,
         can_manage_holidays=can_manage_holidays,
         can_manage_meetings=can_manage_meetings,

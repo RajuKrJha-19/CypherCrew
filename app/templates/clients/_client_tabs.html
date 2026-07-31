@@ -1,0 +1,23 @@
+{#
+    The client's two surfaces. Included by both, so neither can drift out of
+    step with the other.
+
+    Dashboard only appears for someone who may read the figures - the tab is a
+    door, and a door to a 403 is worse than no door. `active` is passed by the
+    including template.
+#}
+<nav class="client-tabs" aria-label="Client sections">
+    <a href="{{ url_for('clients.client_detail', client_id=client.id) }}"
+       class="client-tab{{ ' is-active' if active == 'detail' }}"
+       {{ 'aria-current=page' if active == 'detail' }}>
+        <i class="fa-solid fa-address-card"></i> Overview
+    </a>
+
+    {% if can_view_client_stats(current_user) %}
+    <a href="{{ url_for('clients.client_dashboard', client_id=client.id) }}"
+       class="client-tab{{ ' is-active' if active == 'dashboard' }}"
+       {{ 'aria-current=page' if active == 'dashboard' }}>
+        <i class="fa-solid fa-chart-line"></i> Dashboard
+    </a>
+    {% endif %}
+</nav>

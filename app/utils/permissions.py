@@ -416,6 +416,23 @@ def can_view_team_performance(user):
     return _is_management(user) or has_permission(user, "view_team_performance")
 
 
+def can_view_client_stats(user):
+    """True for anyone allowed to open a client's dashboard - delivery against
+    the month's target, turnaround, who worked on it.
+
+    `view_client_stats` has been in the catalog and in three roles' defaults
+    since the permission rebuild, and until this dashboard existed nothing
+    checked it: granting it changed nothing a person could see. It reads the
+    numbers only - editing the client, its targets or its deliverables is
+    can_manage_clients, which is a different question and stays separate.
+    """
+
+    if user is None:
+        return False
+
+    return _is_management(user) or has_permission(user, "view_client_stats")
+
+
 def can_manage_users(user):
     """True for anyone allowed to create and edit accounts.
 

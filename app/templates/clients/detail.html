@@ -42,6 +42,9 @@
             </div>
         </div>
 
+        {% set active = 'detail' %}
+        {% include "clients/_client_tabs.html" with context %}
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}

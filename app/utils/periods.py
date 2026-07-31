@@ -19,7 +19,18 @@ MAX_PERIOD_DAYS = 92
 
 #: The presets, in the order they are offered. "all" is opt-in per caller -
 #: see resolve_period(allow_all=...).
-PRESETS = ("all", "today", "yesterday", "7d", "30d", "custom")
+PRESETS = ("all", "today", "yesterday", "7d", "30d", "month", "prev_month",
+           "custom")
+
+
+def _month_bounds(any_day):
+    """(first, last) calendar day of the month `any_day` falls in."""
+    first = any_day.replace(day=1)
+    if first.month == 12:
+        next_first = first.replace(year=first.year + 1, month=1)
+    else:
+        next_first = first.replace(month=first.month + 1)
+    return first, next_first - timedelta(days=1)
 
 
 def parse_date(value):
@@ -93,6 +104,37 @@ def resolve_period(args, allow_all=False, default="7d"):
     elif key == "30d":
         start, end = today - timedelta(days=29), today
         label = "Last 30 days"
+
+    elif key in ("month", "prev_month"):
+        # A calendar month compares against the CALENDAR month before it, not
+        # against "the same number of days earlier". The generic span maths
+        # below would put a 31-day month against a 30-day one and call the
+        # difference a trend.
+        if key == "month":
+            start, month_end = _month_bounds(today)
+            # Month-to-date: counting to the end of a month that has not
+            # happened yet only pads the per-day chart with empty future days.
+            end = min(today, month_end)
+            label = "This month"
+        else:
+            start, end = _month_bounds(today.replace(day=1) - timedelta(days=1))
+            label = start.strftime("%B %Y")
+
+        prev_start, prev_end = _month_bounds(start - timedelta(days=1))
+
+        return {
+            "key": key,
+            "label": label,
+            "start": start,
+            "end": end,
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "prev_start": prev_start,
+            "prev_end": prev_end,
+            "span_days": (end - start).days + 1,
+            "today": today.isoformat(),
+            "is_all_time": False,
+        }
 
     elif key == "custom":
         start = parse_date(args.get("from")) or today - timedelta(days=6)
