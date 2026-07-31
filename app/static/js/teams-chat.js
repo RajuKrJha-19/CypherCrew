@@ -321,6 +321,10 @@
     var pending = [];
 
     function wireAttachments(root, composer, input, list, empty, scroller, channelId) {
+        // Start each channel's composer with an empty tray. `pending` is
+        // module-level, so without this an attachment picked in one channel but
+        // not sent would carry over and post to the next channel you open.
+        pending = [];
         var picker = composer.querySelector("[data-tm-file]");
         var button = composer.querySelector("[data-tm-attach]");
         var tray = root.querySelector("[data-tm-pending]");

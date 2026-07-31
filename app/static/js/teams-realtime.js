@@ -209,9 +209,12 @@
     window.__teamsPoller = poller;
     window.TeamsRealtime = poller;
 
-    // Turbo tears down page scripts between visits; make sure a navigation
-    // inside the Teams shell doesn't leave an orphan timer behind.
+    // Turbo tears down page scripts between visits; make sure leaving Teams
+    // fully stops the poller. Just clearing the timer left state.stopped false,
+    // so the document-level visibilitychange listener (bound on the persistent
+    // document) would resume /teams/api/sync from any ERP page. stop() clears
+    // the timer AND flips the flag, and is idempotent.
     if (window.App && window.App.onCleanup) {
-        window.App.onCleanup(function () { clearTimeout(state.timer); });
+        window.App.onCleanup(function () { poller.stop(); });
     }
 })();

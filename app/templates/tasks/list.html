@@ -1425,6 +1425,10 @@
                         downloadLink.className = "file-popup-download";
                         downloadLink.href = file.download_url;
                         downloadLink.title = "Download";
+                        // Opt out of Turbo: the download 302s cross-origin, which
+                        // Turbo can't follow (works today only via the click
+                        // stopPropagation below - make it explicit + robust).
+                        downloadLink.setAttribute("data-turbo", "false");
                         downloadLink.innerHTML = "↓";
                         downloadLink.addEventListener("click", function (e) {
                             e.stopPropagation();

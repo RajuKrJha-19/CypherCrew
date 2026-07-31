@@ -11638,7 +11638,9 @@ body.panel-mode .main-panel{
 .main:has(#kanbanViewPanel.active){
     display:flex;
     flex-direction:column;
-    height:100vh;
+    /* Subtract the 60px fixed topbar - height:100vh pushed the board's bottom
+       (the last row / horizontal scrollbar) below the viewport. */
+    height:calc(100vh - 60px);
     overflow:hidden;
 }
 
@@ -16121,6 +16123,10 @@ body.ds-screen .selected-reference-file{
     max-width:240px;
     max-height:280px;
     overflow-y:auto;
+    /* Above the sticky task-page header (z 500) and topbar (z 2000), matching
+       the .mention-suggest / .emoji-panel overlay tier - a quick-edit opened
+       near the top of the table was painting partly under the sticky header. */
+    z-index:3000;
     padding:6px;
     background:var(--ds-surface,#fff);
     border:1px solid var(--ds-border-strong,#cfd2dc);

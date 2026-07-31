@@ -223,6 +223,16 @@
     var activeField = null;
     var activeCategory = "recent";
 
+    // The panel is built once and appended to <body>. Turbo swaps <body> on
+    // navigation, detaching that cached node - so drop the caches before a
+    // render and buildPanel() rebuilds against the fresh body. Without this the
+    // picker renders into a detached node and nothing appears after any nav.
+    ["turbo:before-render", "turbo:before-cache"].forEach(function (evt) {
+        document.addEventListener(evt, function () {
+            panel = searchInput = gridEl = tabsEl = null;
+        });
+    });
+
     // ---- recents -----------------------------------------------------
 
     function readRecent() {

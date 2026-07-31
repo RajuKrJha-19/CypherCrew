@@ -38,6 +38,11 @@
 
         if (!message) return;
 
+        // In an HTML attribute a "\n" is the two characters backslash-n, not a
+        // newline, so a multi-line data-confirm would show a literal "\n".
+        // Turn the escape back into a real newline for the dialog.
+        message = message.replace(/\\n/g, "\n");
+
         if (!window.confirm(message)) {
             event.preventDefault();
             // Stop Turbo's own submit listener seeing it as well; without

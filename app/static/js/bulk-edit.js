@@ -10,6 +10,12 @@
 */
 (function () {
 
+    // Per-page body script with document-delegated listeners -> bind ONCE.
+    // Without this, a Turbo revisit of the list stacks handlers and one bulk
+    // action fires N pickers and N /tasks/bulk-update POSTs (each reloading).
+    if (window.__bulkEditInit) return;
+    window.__bulkEditInit = true;
+
     const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
     let assignees = null;
     let pop = null;

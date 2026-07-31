@@ -21,6 +21,13 @@
 (function () {
     "use strict";
 
+    // The document-level submit listener must bind exactly ONCE. This is a
+    // per-page body script that Turbo re-executes on each navigation; without
+    // the guard the handler stacks and Approve & Publish opens N confirm
+    // modals on an irreversible action (the comment above assumed "once").
+    if (window.__socialConfirmInit) return;
+    window.__socialConfirmInit = true;
+
     function buildModal(platforms) {
 
         const overlay = document.createElement("div");

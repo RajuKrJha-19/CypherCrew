@@ -578,6 +578,9 @@ window.CypherMediaViewer = (function () {
             const dl = document.createElement("a");
             dl.className = "btn";
             dl.href = currentFile.downloadUrl;
+            // The download endpoint 302s to a cross-origin storage URL, which
+            // Turbo can't follow - opt this link out so the download works.
+            dl.setAttribute("data-turbo", "false");
             dl.innerHTML = '<i class="fa-solid fa-download"></i> Download';
             actions.appendChild(dl);
         }

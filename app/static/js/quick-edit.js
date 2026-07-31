@@ -12,6 +12,13 @@
 */
 (function () {
 
+    // Loaded as a per-page body script, but every listener below is delegated
+    // on document/window, so it must bind exactly ONCE. Turbo re-executes body
+    // scripts on each navigation; without this guard the handlers stack and a
+    // single click fires N times -> N popovers and duplicate quick-update POSTs.
+    if (window.__qeInit) return;
+    window.__qeInit = true;
+
     const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -226,6 +233,14 @@
     }, true);
 
     window.addEventListener("resize", close);
-    window.addEventListener("scroll", function () { if (pop) close(); }, true);
+    // Capture-phase scroll, but ignore scrolls INSIDE the popover itself - the
+    // assignee list has its own overflow-y:auto, and closing on its first
+    // scroll tick made that list impossible to scroll.
+    window.addEventListener("scroll", function (e) {
+        if (pop && !(e.target && e.target.closest
+                     && e.target.closest(".qe-pop"))) {
+            close();
+        }
+    }, true);
     document.addEventListener("turbo:before-visit", close);
 })();
