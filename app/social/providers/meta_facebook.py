@@ -91,17 +91,40 @@ class MetaFacebookProvider(MetaBaseProvider):
 
     # -- Discovery ---------------------------------------------------------
 
+    #: Page-level tasks that permit publishing. CREATE_CONTENT is the direct
+    #: one; MANAGE (full control) implies it, and Meta occasionally returns
+    #: MANAGE without listing CREATE_CONTENT - dropping such a page would
+    #: silently lose a Page the user can absolutely publish to.
+    _PUBLISH_TASKS = {"CREATE_CONTENT", "MANAGE"}
+
     def list_publishable_accounts(self, token):
         """Pages the user manages, each with its own Page token. Only Pages
-        that grant the CREATE_CONTENT task can publish."""
+        the user can publish to (CREATE_CONTENT or MANAGE task) are kept.
+
+        Pages skipped for lack of a publish task are logged BY NAME - a
+        silently-dropped Page is exactly the "Meta says 4, Studio says 3"
+        confusion, so make it visible in the logs at least.
+        """
         resp = self.graph().get("me/accounts", token=token, params={
             "fields": "id,name,access_token,tasks",
             "limit": 100,
         })
-        accounts = []
-        for page in resp.get("data", []):
+        data = resp.get("data", [])
+        # Follow pagination so an account with many Pages isn't truncated.
+        paging_next = (resp.get("paging") or {}).get("next")
+        guard = 0
+        while paging_next and guard < 20:
+            guard += 1
+            page_resp = self.graph().get(paging_next, token=token)
+            data.extend(page_resp.get("data", []))
+            paging_next = (page_resp.get("paging") or {}).get("next")
+
+        accounts, skipped = [], []
+        for page in data:
             tasks = page.get("tasks") or []
-            if tasks and "CREATE_CONTENT" not in tasks:
+            # tasks present but none of them permit publishing -> skip.
+            if tasks and not (self._PUBLISH_TASKS & set(tasks)):
+                skipped.append((page.get("name", page["id"]), tasks))
                 continue
             accounts.append(AccountInfo(
                 external_id=page["id"],
@@ -110,6 +133,18 @@ class MetaFacebookProvider(MetaBaseProvider):
                 access_token=page.get("access_token"),
                 meta={"page_id": page["id"]},
             ))
+
+        if skipped:
+            try:
+                from flask import current_app
+                current_app.logger.warning(
+                    "[meta_facebook] skipped %d Page(s) with no publish task "
+                    "(the user's role there can't create content): %s",
+                    len(skipped),
+                    "; ".join(f"{name} tasks={tasks}" for name, tasks in skipped),
+                )
+            except Exception:  # noqa: BLE001 - logging must never break connect
+                pass
         return accounts
 
     # -- Validation --------------------------------------------------------
