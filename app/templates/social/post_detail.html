@@ -173,7 +173,7 @@
                it says what it does. The per-platform version is one row
                down in the Platforms table, and on the Published list. #}
             <form method="POST" action="{{ url_for('social.remove_post', post_id=post.id) }}"
-                  onsubmit="return confirm('Delete this post from all {{ live_targets|length }} platform(s)?\n\nFacebook posts are deleted through the API. Instagram cannot be deleted this way - it will be marked as removed here and you must delete it in the app.');">
+                  data-confirm="Delete this post from all {{ live_targets|length }} platform(s)?\n\nFacebook posts are deleted through the API. Instagram cannot be deleted this way - it will be marked as removed here and you must delete it in the app.">
                 <button class="btn btn-secondary btn-danger-text">
                     <i class="fa-solid fa-trash-can"></i> Delete from platforms</button>
             </form>
@@ -183,7 +183,7 @@
         {% endif %}
 
         {% if post.status not in ['publishing','published','partially_published'] %}
-        <form method="POST" action="{{ url_for('social.delete_post', post_id=post.id) }}" onsubmit="return confirm('Delete this draft?');" class="delete-form">
+        <form method="POST" action="{{ url_for('social.delete_post', post_id=post.id) }}" data-confirm="Delete this draft?" class="delete-form">
             <button class="btn btn-ghost btn-danger-text"><i class="fa-solid fa-trash"></i> Delete</button>
         </form>
         {% endif %}
@@ -394,13 +394,13 @@
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> Fix automatically</button>
                             </form>
                             <form method="POST" action="{{ url_for('social.drop_target', target_id=t.id) }}"
-                                  onsubmit="return confirm('Remove {{ PF_LABEL.get(t.platform, t.platform) }} from this post? Nothing was published there.');">
+                                  data-confirm="Remove {{ PF_LABEL.get(t.platform, t.platform) }} from this post? Nothing was published there.">
                                 <button type="submit" class="row-action danger">
                                     <i class="fa-solid fa-xmark"></i> Remove platform</button>
                             </form>
                             {% elif t.status == 'published' %}
                             <form method="POST" action="{{ url_for('social.remove_target', target_id=t.id) }}"
-                                  onsubmit="return confirm('Remove this {{ PF_LABEL.get(t.platform, t.platform) }} post from the platform?');">
+                                  data-confirm="Remove this {{ PF_LABEL.get(t.platform, t.platform) }} post from the platform?">
                                 <button type="submit" class="row-action danger"><i class="fa-solid fa-trash-can"></i> Remove</button>
                             </form>
                             {% endif %}

@@ -93,7 +93,7 @@
                         <a class="acct-icon-btn" href="{{ url_for('social.analytics') }}" title="View analytics" aria-label="View analytics">
                             <i class="fa-solid fa-chart-line"></i></a>
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=a.id) }}"
-                              onsubmit="return confirm('Disconnect {{ a.display_name }}? Any Instagram account linked through it will stop publishing too.');"
+                              data-confirm="Disconnect {{ a.display_name }}? Any Instagram account linked through it will stop publishing too."
                               data-turbo="false">
                             <button type="submit" class="acct-icon-btn danger" title="Disconnect" aria-label="Disconnect account">
                                 <i class="fa-solid fa-link-slash"></i></button>
@@ -117,7 +117,7 @@
                     </div>
                     <div class="account-actions">
                         <form method="POST" action="{{ url_for('social.disconnect_account', account_id=ig.id) }}"
-                              onsubmit="return confirm('Disconnect {{ ig.display_name }}?');"
+                              data-confirm="Disconnect {{ ig.display_name }}?"
                               data-turbo="false">
                             <button type="submit" class="acct-icon-btn danger" title="Disconnect Instagram" aria-label="Disconnect Instagram">
                                 <i class="fa-solid fa-link-slash"></i></button>

@@ -44,7 +44,7 @@
         </form>
         {% if buckets.failed %}
         <form method="POST" action="{{ url_for('social.requeue_all') }}"
-              onsubmit="return confirm('Retry all {{ buckets.failed|length }} failed job(s)?');">
+              data-confirm="Retry all {{ buckets.failed|length }} failed job(s)?">
             <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Retry {{ buckets.failed|length }} failed</button>
         </form>
         {% endif %}

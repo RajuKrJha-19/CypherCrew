@@ -18,6 +18,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
 
+    {# data-confirm on a form. Beside csrf.js because it belongs to the same
+       submit path and, like it, has to be in place before Turbo takes over
+       the submission. Replaces onsubmit="return confirm('… {{ name }} …')",
+       which built a JS string out of user-authored text and broke on an
+       apostrophe - silently skipping the dialog on destructive actions. #}
+    <script src="{{ url_for('static', filename='js/confirm-submit.js') }}"></script>
+
     {#
         Resolve the theme before the first paint so there is no flash of
         the wrong mode. Saved preference wins; otherwise follow the OS.

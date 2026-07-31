@@ -82,7 +82,7 @@
                         <td>
                             <div class="row-actions">
                             <form method="POST" action="{{ url_for('social.delete_hashtag_set', set_id=hs.id, client=selected_client_id) }}" data-turbo="false"
-                                  onsubmit="return confirm('Delete the “{{ hs.name }}” hashtag set?');">
+                                  data-confirm="Delete the “{{ hs.name }}” hashtag set?">
                                 <button type="submit" class="row-action danger"><i class="fa-solid fa-trash"></i> Delete</button>
                             </form>
                             </div>

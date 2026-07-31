@@ -78,7 +78,7 @@
                                     <span class="row-menu-head">Remove from platform</span>
                                     {% for t in r.del_targets %}
                                     <form method="POST" action="{{ url_for('social.remove_target', target_id=t.id) }}" data-turbo="false"
-                                          onsubmit="return confirm('Delete this {{ PF_LABEL.get(t.platform, t.platform|capitalize) }} post?\n\nFacebook is deleted through the API. Instagram cannot be deleted this way — it is marked removed here and you must delete it in the Instagram app.');">
+                                          data-confirm="Delete this {{ PF_LABEL.get(t.platform, t.platform|capitalize) }} post?\n\nFacebook is deleted through the API. Instagram cannot be deleted this way — it is marked removed here and you must delete it in the Instagram app.">
                                         <input type="hidden" name="back" value="history">
                                         <button type="submit" class="row-menu-item danger">
                                             <span class="pf-icon {{ t.platform }}" style="width:20px;height:20px;font-size:11px;"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i></span>

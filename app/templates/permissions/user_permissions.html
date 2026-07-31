@@ -60,7 +60,7 @@
        checkbox form below could reach. #}
     <form method="POST"
           action="{{ url_for('permissions.apply_defaults', user_id=user.id) }}"
-          onsubmit="return confirm('Reset {{ user.name }} to the {{ role_label(user.role) }} defaults? Any custom permissions will be removed.')"
+          data-confirm="Reset {{ user.name }} to the {{ role_label(user.role) }} defaults? Any custom permissions will be removed."
           style="margin:0;">
         <button type="submit" class="btn btn-secondary">
             <i class="fa-solid fa-rotate-left"></i> Apply role defaults
