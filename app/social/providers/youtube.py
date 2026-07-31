@@ -23,7 +23,9 @@ not a dead post.
 
 import requests
 
-from app.social.dto import AccountInfo, Capabilities, PublishStep, StepStatus
+from app.social.dto import (
+    AccountInfo, Capabilities, MediaSpec, PublishStep, StepStatus,
+)
 from app.social.errors import PermanentError, TransientError
 from app.social.providers.base import SocialProvider
 from app.social.providers.google_common import (
@@ -55,6 +57,14 @@ class YouTubeProvider(GoogleBaseProvider, SocialProvider):
 
     capabilities = Capabilities(
         post_types={"video"},
+        # No limits - YouTube accepts essentially any shape and letterboxes
+        # the rest. But the PLAYER is 16:9, so a vertical clip publishes
+        # fine and then plays inside two black pillars. display_aspect is
+        # advisory only (see MediaSpec) and adds no validation.
+        media_specs={
+            "video": MediaSpec(display_aspect=16 / 9,
+                               display_label="16:9"),
+        },
         requires_container_poll=True,
         supports_native_scheduling=True,
         max_caption_chars=5000,

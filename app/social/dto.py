@@ -58,6 +58,21 @@ class MediaSpec:
     #: Shown when explaining a mismatch, e.g. "9:16".
     aspect_label: str | None = None
 
+    #: The shape the platform DISPLAYS this post type in, which is a different
+    #: question from what its API accepts. Instagram takes a Reel anywhere
+    #: between 0.01 and 10.0 and then shows it at 9:16, cropping the rest on
+    #: its own terms - so a landscape clip uploads, validates and publishes
+    #: perfectly while losing both sides, and nothing here would have said so.
+    #:
+    #: Advisory only. The composer's safe-area overlay draws it; check_spec
+    #: never reads it. Widening the validator to match would start refusing
+    #: posts that publish fine, which is the opposite of the problem.
+    #:
+    #: Unset means "no overlay" - inventing a frame is as bad as missing one,
+    #: the same rule the limits above follow.
+    display_aspect: float | None = None
+    display_label: str | None = None      # e.g. "9:16"
+
 
 @dataclass
 class Capabilities:

@@ -511,6 +511,12 @@ def _capabilities_map():
                     "height_min": spec.height_min,
                     "max_bytes": spec.max_bytes,
                     "aspect_label": spec.aspect_label,
+                    # The shape the platform SHOWS this in, which the limits
+                    # above do not answer - Instagram takes a Reel at any
+                    # aspect and then displays it at 9:16. Drives the
+                    # composer's safe-area overlay; validates nothing.
+                    "display_aspect": spec.display_aspect,
+                    "display_label": spec.display_label,
                 }
                 for ptype, spec in ((caps.media_specs or {}) if caps else {}).items()
             },

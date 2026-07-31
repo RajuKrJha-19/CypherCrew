@@ -45,13 +45,15 @@ _IG_REEL = MediaSpec(
     duration_min=3, duration_max=15 * 60,
     width_max=1920, max_bytes=300 * 1024 * 1024,
     fps_min=23, fps_max=60, codecs=("h264", "hevc"),
-    aspect_label="between 0.01:1 and 10:1")
+    aspect_label="between 0.01:1 and 10:1",
+    display_aspect=0.5625, display_label="9:16")
 _FB_REEL = MediaSpec(
     aspect_min=0.5625, aspect_max=0.5625,
     duration_min=3, duration_max=90,
     width_min=540, height_min=960,
     fps_min=24, fps_max=60, codecs=("h264", "hevc", "vp9", "av1"),
-    aspect_label="9:16")
+    aspect_label="9:16",
+    display_aspect=0.5625, display_label="9:16")
 
 CAPABILITY_PROFILES = {
     "instagram": Capabilities(
@@ -72,7 +74,13 @@ CAPABILITY_PROFILES = {
         max_carousel=20, max_caption_chars=3000,
         supports_first_comment=True, supports_comments=True),
     "youtube": Capabilities(
-        post_types={"video"}, supports_native_scheduling=True,
+        post_types={"video"},
+        # No limits - YouTube takes any shape - but the PLAYER is 16:9, so a
+        # vertical clip publishes fine and then plays between two pillars.
+        # Mirrors the real provider; display_aspect validates nothing.
+        media_specs={"video": MediaSpec(display_aspect=16 / 9,
+                                        display_label="16:9")},
+        supports_native_scheduling=True,
         requires_container_poll=True, max_caption_chars=5000,
         supports_first_comment=True, supports_comments=True),
     # X counts characters, not bytes, and 280 is the free/basic tier limit -

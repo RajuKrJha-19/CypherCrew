@@ -20234,3 +20234,106 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
     .cd-table th:last-child,
     .cd-table td:last-child{ display:none; }
 }
+
+/* ==========================================================================
+   Safe area — what the platform will cut
+   --------------------------------------------------------------------------
+   The normal preview hides the problem it exists to reveal: an image is
+   object-fit:cover (already centre-cropped, so the lost part is invisible)
+   and a video is contain (letterboxed, so the frame shown is not the frame
+   that publishes). With the toggle on, .pp-media is given the SOURCE's own
+   aspect-ratio from JS so the whole frame paints, and .pp-safe marks the part
+   that survives.
+   ========================================================================== */
+.preview-head-tools{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.safe-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:600;
+    color:var(--color-text-muted);
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+}
+
+.safe-toggle input{ margin:0; cursor:pointer; }
+.safe-toggle:hover{ color:var(--color-text); }
+
+/* With safe area on the media fills its box exactly, at the source's shape -
+   no cover crop and no contain letterbox, so what is shaded is genuinely what
+   is lost. */
+.pp-media.is-safe img,
+.pp-media.is-safe video{
+    width:100%;
+    height:100%;
+    object-fit:fill;
+    background:transparent;
+}
+
+/*
+    The danger zone: the part the platform cuts.
+
+    Two bands, not a window with a giant shadow. A centre-crop only ever loses
+    one axis - left+right, or top+bottom - so two elements cover it exactly,
+    and the shading lands on the lost part ONLY. Hatching the whole box and
+    punching a hole tints the part you are keeping, which is backwards.
+
+    Hatched as well as tinted: a red wash alone says "warning" without saying
+    "this is gone", and colour alone is not a signal everyone receives.
+*/
+.pp-media .pp-cut{
+    position:absolute;
+    z-index:2;
+    pointer-events:none;
+    background:
+        repeating-linear-gradient(45deg,
+            rgba(255,255,255,.28) 0 6px,
+            rgba(255,255,255,0) 6px 12px),
+        rgba(190,18,60,.55);
+}
+
+/* Lost sides: full height, pinned left and right. */
+.pp-media .pp-cut.is-x{ top:0; bottom:0; }
+.pp-media .pp-cut.is-x.at-start{ left:0; }
+.pp-media .pp-cut.is-x.at-end{ right:0; }
+
+/* Lost top and bottom: full width. */
+.pp-media .pp-cut.is-y{ left:0; right:0; }
+.pp-media .pp-cut.is-y.at-start{ top:0; }
+.pp-media .pp-cut.is-y.at-end{ bottom:0; }
+
+/* The frame that survives - an outline only, so nothing is tinted. */
+.pp-media .pp-keep{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    z-index:3;
+    pointer-events:none;
+    /* Dark red rather than white: this line lands on the CLEAN area, which
+       is whatever the media happens to be - white vanished on a light frame
+       and on the sunken placeholder. */
+    outline:2px dashed rgba(190,18,60,.85);
+    outline-offset:-2px;
+}
+
+.pp-media.is-safe{ overflow:hidden; }
+
+/* The numbers behind the shading. Without them the overlay says "some of
+   this goes" and leaves the editor to guess how much. */
+.pp-safe-note{
+    margin:9px 0 0;
+    font-size:11px;
+    line-height:1.5;
+}
+
+.pp-safe-note.is-warn{ color:var(--color-danger); }
+.pp-safe-note.is-ok{ color:var(--color-success); }

@@ -60,12 +60,19 @@ class MetaInstagramProvider(MetaBaseProvider):
                 fps_min=23, fps_max=60,
                 codecs=("h264", "hevc"),
                 aspect_label="between 0.01:1 and 10:1",
+                # Accepted anywhere in that range, DISPLAYED at 9:16 -
+                # a landscape clip publishes and loses both sides.
+                display_aspect=0.5625, display_label="9:16",
             ),
             "image": MediaSpec(
                 aspect_min=0.8, aspect_max=1.91,      # 4:5 .. 1.91:1
                 width_min=320, width_max=1440,
                 max_bytes=8 * 1024 * 1024,
                 aspect_label="between 4:5 and 1.91:1",
+                # The feed honours the upload; the profile GRID crops it
+                # to a square, which is where a 1.91:1 banner loses its
+                # ends.
+                display_aspect=1.0, display_label="1:1",
             ),
             # A story is video or image; Meta caps its width at 1920px too.
             # Without a spec here an oversized story was not caught locally
@@ -78,6 +85,7 @@ class MetaInstagramProvider(MetaBaseProvider):
                 width_max=1920,
                 max_bytes=300 * 1024 * 1024,
                 aspect_label="between 0.01:1 and 10:1",
+                display_aspect=0.5625, display_label="9:16",
             ),
         },
         requires_container_poll=True,

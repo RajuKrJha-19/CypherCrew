@@ -270,7 +270,19 @@
         <div class="social-card">
             <div class="social-card-head">
                 <h3><i class="fa-solid fa-eye"></i> Live preview</h3>
-                <div class="preview-switch" id="previewSwitch"></div>
+                <div class="preview-head-tools">
+                    {#
+                        Safe area: show the media WHOLE and mark the part the
+                        platform will cut. Off by default - the normal preview
+                        is the one you want while writing - and remembered, so
+                        somebody who works in vertical keeps it on.
+                    #}
+                    <label class="safe-toggle" id="safeToggleWrap" hidden>
+                        <input type="checkbox" id="safeToggle">
+                        <span>Safe area</span>
+                    </label>
+                    <div class="preview-switch" id="previewSwitch"></div>
+                </div>
             </div>
             <div class="social-card-body">
                 <div class="phone-preview">
@@ -286,6 +298,9 @@
                         <span class="av"></span><span class="bd"><b id="ppFcName">Your Page</b><span id="ppFcText"></span></span>
                     </div>
                 </div>
+                {# What the shading means, in numbers. Rendered by
+                   renderSafeNote(); hidden whenever the overlay is. #}
+                <p class="pp-safe-note" id="safeNote" hidden></p>
             </div>
         </div>
 
@@ -346,6 +361,12 @@
     const caption = $("captionInput"), captionCount = $("captionCount");
     const postTypeWarn = $("postTypeWarn"), accountCount = $("accountCount"), typeHintFc = $("fcHint");
     let previewPlatform = "facebook";
+
+    // Off by default - the plain preview is the one you want while writing -
+    // but remembered, so somebody who works in vertical keeps it on.
+    let safeAreaOn = false;
+    try { safeAreaOn = localStorage.getItem("cypher_safe_area") === "1"; }
+    catch(e) {}
     let selectedMediaUrl = null;      // image, or a video's poster
     let selectedVideoUrl = null;      // the video itself, for inline playback
 
@@ -676,8 +697,39 @@
         previewSwitch.innerHTML = tabs.map(p=>`<button type="button" data-pf="${p}" class="${p===previewPlatform?'active':''}">${PF_LABEL[p]||p}</button>`).join("");
     }
     previewSwitch.addEventListener("click", ev=>{ const b=ev.target.closest("button"); if(!b)return; previewPlatform=b.dataset.pf; [...previewSwitch.children].forEach(c=>c.classList.toggle("active",c===b)); renderPreview(); });
+
+    // The toggle only appears where it could do something: a platform that
+    // publishes at whatever shape it is given has no frame to draw, and an
+    // switch that never changes anything is worse than no switch.
+    function refreshSafeToggle(){
+        const wrap = $("safeToggleWrap"), box = $("safeToggle");
+        if(!wrap || !box) return;
+
+        const offered = selectedPlatforms().some(p => {
+            const specs = caps[p] && caps[p].media_specs;
+            const spec = specs && specs[postType()];
+            return !!(spec && spec.display_aspect);
+        });
+
+        wrap.hidden = !offered;
+        box.checked = safeAreaOn;
+    }
+
+    const safeBox = $("safeToggle");
+    if(safeBox){
+        safeBox.addEventListener("change", () => {
+            safeAreaOn = safeBox.checked;
+            try { localStorage.setItem("cypher_safe_area", safeAreaOn ? "1" : "0"); }
+            catch(e) {}
+            renderPreview();
+        });
+    }
     function renderPreview(){
         const pf=previewPlatform, pt=postType();
+        // Every path that changes the platform, the post type or the media
+        // ends here, so the toggle's visibility rides on this rather than
+        // being wired separately to each of them.
+        refreshSafeToggle();
         const acct=accountsChecked().find(c=>c.dataset.platform===pf);
         const ava=$("ppAva"); ava.className="pp-ava "+pf; ava.innerHTML='<i class="'+(PF_ICON_JS[pf]||"fa-solid fa-share-nodes")+'"></i>';
         $("ppName").textContent = acct?acct.dataset.name:(PP_NAME[pf]||"Your account");
@@ -688,7 +740,16 @@
         if(ppCount){ const c=caps[pf], max=c&&c.max_caption_chars; ppCount.textContent = max?`${text.length} / ${max}`:""; ppCount.classList.toggle("over", max&&text.length>max); }
         const media=$("ppMedia"); let cls="pp-media";
         if(pt==="reel"||pt==="story")cls+=" "+pt; else if(pf==="youtube")cls+=" yt";
+        // Safe area computed BEFORE the class is written: this line replaces
+        // media.className wholesale, so anything added from outside would be
+        // wiped on the next keystroke.
+        const safe = safeArea(pf, pt);
+        if(safe) cls += " is-safe";
         media.className=cls;
+        // Shown at the source's own shape so the whole frame is visible - the
+        // normal preview crops (img, object-fit:cover) or letterboxes (video,
+        // contain), and neither shows what is being lost.
+        media.style.aspectRatio = safe ? (safe.sw + " / " + safe.sh) : "";
         let inner;
         if(selectedVideoUrl){
             // Play the actual clip inline (like Meta Business Suite), with the
@@ -700,7 +761,29 @@
             if(pt==="reel"||pt==="video"||pf==="youtube") inner += '<span class="pp-play"><i class="fa-solid fa-play"></i></span>';
             if(pt==="carousel"){ const n=Math.max(2, selectedMediaInputs().length||3); inner += '<span class="pp-dots">'+Array.from({length:Math.min(n,5)},(_,i)=>'<span class="'+(i===0?"on":"")+'"></span>').join("")+'</span>'; }
         }
+        if(safe && !safe.fits){
+            // A centre-crop only ever loses ONE axis - left+right, or
+            // top+bottom, never four sides. So two bands, drawn as
+            // percentages of the source so they survive every resize
+            // without measuring a painted rectangle.
+            //
+            // Bands rather than a window with a huge shadow: the shading has
+            // to land on the lost part ONLY. Hatching the whole box and
+            // punching a hole is the version that tints the part you are
+            // keeping, which is exactly backwards.
+            const side = safe.keepW < 1;
+            const band = ((side ? (1 - safe.keepW) : (1 - safe.keepH)) / 2) * 100;
+            const axis = side ? "is-x" : "is-y";
+            const size = side ? ("width:" + band + "%") : ("height:" + band + "%");
+            inner += '<span class="pp-cut ' + axis + ' at-start" style="' + size + '"></span>'
+                   + '<span class="pp-cut ' + axis + ' at-end" style="' + size + '"></span>'
+                   + '<span class="pp-keep" style="'
+                   + (side ? "width:" + (safe.keepW * 100) + "%;height:100%"
+                           : "height:" + (safe.keepH * 100) + "%;width:100%")
+                   + '"></span>';
+        }
         media.innerHTML=inner;
+        renderSafeNote(safe, pf, pt);
         $("ppActions").innerHTML = PP_ACTIONS[pf] || PP_ACTIONS.facebook;
         // First comment preview: per-platform override if present, else the
         // shared one — and only where the channel can actually post one.
@@ -738,6 +821,82 @@
     function currentMeasurement(){
         const first = selectedMediaInputs()[0];
         return first ? (measurements[measureKey(first)] || null) : null;
+    }
+
+    /*
+        Safe area — what survives, and what the platform cuts.
+
+        A platform's accept/reject limits and the shape it DISPLAYS in are
+        different questions, and the gap between them is where work is lost
+        silently: Instagram takes a Reel at any aspect from 0.01 to 10.0 and
+        then shows it at 9:16, so a landscape clip uploads, validates,
+        publishes — and loses both sides, with nothing having said so.
+        display_aspect (see MediaSpec) is that second number.
+
+        Returns null when there is nothing honest to draw: toggle off, no
+        media, no measurement yet, or a platform that publishes at whatever
+        shape it is given.
+    */
+    function safeArea(platform, postType){
+        if(!safeAreaOn) return null;
+
+        const m = currentMeasurement();
+        if(!m || !m.width || !m.height) return null;
+
+        const spec = (caps[platform] && caps[platform].media_specs)
+            ? caps[platform].media_specs[postType] : null;
+        const target = spec && spec.display_aspect;
+        if(!target) return null;
+
+        const source = m.width / m.height;
+
+        // The centre-crop rect, as a fraction of the source. Wider than the
+        // frame loses its sides; taller loses top and bottom.
+        const keepW = source > target ? (target / source) : 1;
+        const keepH = source > target ? 1 : (source / target);
+
+        return {
+            sw: m.width, sh: m.height,
+            source: source, target: target,
+            label: spec.display_label || "",
+            keepW: keepW, keepH: keepH,
+            // Within a hair of the frame is not a crop worth warning about,
+            // and the same 0.02 tolerance check_spec uses.
+            fits: Math.abs(source - target) <= 0.02,
+        };
+    }
+
+    function ratioText(r){
+        // "1.78:1" reads worse than "16:9" for the shapes people actually
+        // use, so name the common ones and fall back to a decimal.
+        const known = [[16/9,"16:9"],[9/16,"9:16"],[1,"1:1"],[4/5,"4:5"],
+                       [4/3,"4:3"],[3/4,"3:4"],[1.91,"1.91:1"],[2/3,"2:3"]];
+        for(const [value,name] of known){ if(Math.abs(r-value)<=0.02) return name; }
+        return (Math.round(r*100)/100) + ":1";
+    }
+
+    function renderSafeNote(safe, platform, postType){
+        const note = $("safeNote");
+        if(!note) return;
+
+        if(!safe){ note.hidden = true; note.textContent = ""; note.className = "pp-safe-note"; return; }
+
+        note.hidden = false;
+
+        if(safe.fits){
+            note.className = "pp-safe-note is-ok";
+            note.textContent = "Your media is " + safe.sw + "x" + safe.sh
+                + " (" + ratioText(safe.source) + ") — it fills the "
+                + (safe.label || ratioText(safe.target)) + " frame.";
+            return;
+        }
+
+        const lost = Math.round((1 - safe.keepW * safe.keepH) * 100);
+        note.className = "pp-safe-note is-warn";
+        note.textContent = "Your media is " + safe.sw + "x" + safe.sh + " ("
+            + ratioText(safe.source) + "). " + (PF_LABEL[platform] || platform)
+            + " shows this at " + (safe.label || ratioText(safe.target))
+            + " — the shaded " + lost + "% gets cut.";
     }
 
     function measure(input){

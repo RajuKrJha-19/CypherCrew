@@ -50,6 +50,7 @@ class MetaFacebookProvider(MetaBaseProvider):
                 fps_min=24, fps_max=60,
                 codecs=("h264", "hevc", "vp9", "av1"),
                 aspect_label="9:16",
+                display_aspect=0.5625, display_label="9:16",
             ),
             # A Page video has no comparable published limit worth
             # enforcing here; anything the reel spec rejects lands here.
@@ -64,6 +65,7 @@ class MetaFacebookProvider(MetaBaseProvider):
                 width_max=1920,
                 max_bytes=300 * 1024 * 1024,
                 aspect_label="between 0.01:1 and 10:1",
+                display_aspect=0.5625, display_label="9:16",
             ),
         },
         supports_native_scheduling=True,   # available, but engine owns timing
