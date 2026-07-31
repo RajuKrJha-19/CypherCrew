@@ -27,8 +27,8 @@ from app.social.media import fit as media_fit
 from app.social import status as engine_status
 from app.social.registry import registry
 from app.social.services import (
-    approval, audit, lifecycle, publishing, queue_slots, recovery, scheduling,
-    task_link, versioning,
+    approval, audit, lifecycle, publish_review, publishing, queue_slots,
+    recovery, scheduling, task_link, versioning,
 )
 from app.social.services import engage as engage_svc
 from app.social import utm
@@ -2263,6 +2263,33 @@ def reject_post(post_id):
     return redirect(url_for("social.post_detail", post_id=post.id))
 
 
+@social_bp.route("/posts/<int:post_id>/review")
+@login_required
+def review_post(post_id):
+    """What pressing Publish will actually do, as an HTML fragment.
+
+    Fetched by publish-review.js when the schedule form is submitted. A GET
+    that only reads: everything it reports comes from the same functions the
+    publish path runs a moment later, so the review cannot promise one thing
+    and the publish do another.
+    """
+    _guard()
+    post = SocialPost.query.get_or_404(post_id)
+
+    mode = request.args.get("publish_mode", "schedule")
+    raw = request.args.get("schedule", "")
+
+    review = publish_review.build_review(
+        post,
+        publish_mode=mode,
+        schedule_override=_parse_schedule(raw),
+        schedule_raw=raw,
+    )
+
+    return render_template("social/_publish_review.html", review=review,
+                           post=post)
+
+
 @social_bp.route("/posts/<int:post_id>/schedule", methods=["POST"])
 @login_required
 def schedule_post(post_id):
@@ -2273,8 +2300,21 @@ def schedule_post(post_id):
         return redirect(url_for("social.post_detail", post_id=post.id))
 
     publish_now = request.form.get("publish_mode") == "now"
-    parsed = _parse_schedule(request.form.get("schedule"))
+    raw_schedule = request.form.get("schedule", "")
+    parsed = _parse_schedule(raw_schedule)
     now = datetime.utcnow()
+
+    # The review the person actually read has to still describe this post.
+    # Without this the dangerous case is silent: you open the review, someone
+    # edits the post in another tab, you press Confirm - and publish something
+    # you never saw. Mirrors how approve_task treats confirmed_platforms: the
+    # modal is the UI, this is the gate.
+    expected = publish_review.fingerprint(
+        post, request.form.get("publish_mode", ""), raw_schedule)
+    if request.form.get("review_fingerprint") != expected:
+        flash("This post changed since you reviewed it — check what is going "
+              "out and publish again.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
 
     if not post.targets:
         flash("This post has no channels to schedule.", "error")

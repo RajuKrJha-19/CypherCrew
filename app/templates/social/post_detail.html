@@ -112,7 +112,15 @@
         {% elif post.status == 'rejected' %}
             <span class="field-hint"><i class="fa-solid fa-rotate-left"></i> Sent back for changes — edit and resubmit.</span>
         {% elif post.status == 'approved' %}
-            <form method="POST" action="{{ url_for('social.schedule_post', post_id=post.id) }}" class="schedule-form">
+            {# data-publish-review: publish-review.js intercepts this submit and
+               shows what will actually go out - resolved post type per channel,
+               the caption as it will be sent, each channel's own publish time,
+               and any channel that will be blocked. The fingerprint it returns
+               travels back in the hidden field below; schedule_post refuses a
+               confirmation that no longer describes this post. #}
+            <form method="POST" action="{{ url_for('social.schedule_post', post_id=post.id) }}" class="schedule-form"
+                  data-publish-review="{{ post.id }}">
+                <input type="hidden" name="review_fingerprint" value="">
                 <input type="datetime-local" name="schedule" value="{{ to_ist(schedule_prefill) }}" aria-label="Schedule date and time (IST)"
                        {% if per_channel_schedule %}placeholder="Keep per-channel times"{% endif %}>
                 <button class="btn" name="publish_mode" value="schedule"><i class="fa-solid fa-clock"></i> Schedule</button>

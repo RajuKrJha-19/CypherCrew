@@ -13,7 +13,25 @@ from app.extensions import db
 from app.models import (
     PublishJob, SocialAccount, SocialMediaAsset, SocialPost, SocialPostTarget,
 )
-from app.social.services import publishing, scheduling
+from app.social.services import publish_review, publishing, scheduling
+
+
+def _publish(client, post, mode="schedule", schedule=""):
+    """POST the schedule form the way the browser does - with the fingerprint
+    the pre-publish review handed back.
+
+    schedule_post refuses a confirmation that no longer describes the post, so
+    without this every test below would be refused by the review gate instead
+    of by the guard it is actually testing - and the "is refused" ones would
+    pass for entirely the wrong reason.
+    """
+    data = {"publish_mode": mode}
+    if schedule:
+        data["schedule"] = schedule
+    data["review_fingerprint"] = publish_review.fingerprint(
+        post, mode, schedule)
+    return client.post(f"/social/posts/{post.id}/schedule",
+                       data=data, follow_redirects=False)
 
 
 # --- Engine: due vs future ---------------------------------------------------
@@ -61,8 +79,7 @@ def test_blank_schedule_is_refused_not_published(
     post, target = _approved_post_with_blank_time(session)
 
     # "Schedule for later" with no time in the form.
-    r = client.post(f"/social/posts/{post.id}/schedule",
-                    data={"publish_mode": "schedule"}, follow_redirects=False)
+    r = _publish(client, post, "schedule")
     assert r.status_code in (302, 303)
 
     db.session.refresh(post)
@@ -76,8 +93,7 @@ def test_publish_now_still_works(session, client, make_user, login):
     login(make_user("admin", permissions=["manage_social"]))
     post, target = _approved_post_with_blank_time(session)
 
-    r = client.post(f"/social/posts/{post.id}/schedule",
-                    data={"publish_mode": "now"}, follow_redirects=False)
+    r = _publish(client, post, "now")
     assert r.status_code in (302, 303)
 
     db.session.refresh(target)
@@ -121,8 +137,7 @@ def test_per_channel_times_preserved_on_blank_confirm(
     post, tg1, tg2 = _two_channel_post(t1, t2)
 
     # "Schedule" with a BLANK field (the template blanks it for per-channel).
-    client.post(f"/social/posts/{post.id}/schedule",
-                data={"publish_mode": "schedule"}, follow_redirects=False)
+    _publish(client, post, "schedule")
 
     db.session.refresh(tg1)
     db.session.refresh(tg2)
@@ -137,8 +152,7 @@ def test_mixed_none_time_is_refused(session, client, make_user, login):
     t1 = datetime.utcnow() + timedelta(hours=2)
     post, tg1, tg2 = _two_channel_post(t1, None)   # one channel blank
 
-    client.post(f"/social/posts/{post.id}/schedule",
-                data={"publish_mode": "schedule"}, follow_redirects=False)
+    _publish(client, post, "schedule")
 
     db.session.refresh(post)
     assert post.status == "approved"               # refused, not published
@@ -151,8 +165,7 @@ def test_past_schedule_is_refused(session, client, make_user, login):
     past = datetime.utcnow() - timedelta(hours=1)
     post, tg1, tg2 = _two_channel_post(past, past)
 
-    client.post(f"/social/posts/{post.id}/schedule",
-                data={"publish_mode": "schedule"}, follow_redirects=False)
+    _publish(client, post, "schedule")
 
     db.session.refresh(post)
     assert post.status == "approved"               # refused

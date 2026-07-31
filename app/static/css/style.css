@@ -19864,3 +19864,238 @@ a.stat-tile:hover .stat-tile-icon{ transform:scale(1.05); transition:transform v
         width:100%;
     }
 }
+
+/* ==========================================================================
+   Pre-publish review (.publish-review-* / .pubrev-*)
+   --------------------------------------------------------------------------
+   See static/js/publish-review.js. The overlay follows .social-confirm-overlay
+   at z-index 5000, which leaves the media viewer (99999) free to open ON TOP
+   of the review rather than behind it.
+   ========================================================================== */
+.publish-review-overlay{
+    position:fixed;
+    inset:0;
+    z-index:5000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    background:rgba(15,23,42,.45);
+    backdrop-filter:blur(2px);
+}
+
+.publish-review-box{
+    display:flex;
+    flex-direction:column;
+    width:min(620px,100%);
+    max-height:85vh;
+    background:var(--color-surface);
+    color:var(--color-neutral);
+    border:1px solid var(--color-border);
+    border-radius:18px;
+    box-shadow:0 24px 60px rgba(15,23,42,.28);
+    overflow:hidden;
+}
+
+.publish-review-body{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    padding:20px;
+}
+
+.publish-review-actions{
+    flex-shrink:0;
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    padding:14px 20px;
+    border-top:1px solid var(--color-border);
+    background:var(--color-surface-muted);
+}
+
+.publish-review-loading{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:26px 4px;
+    color:var(--color-text-muted);
+    font-size:var(--text-sm);
+}
+
+/* ---- The fragment itself ---- */
+.pubrev-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom:14px;
+}
+
+.pubrev-head h3{ margin:0; font-size:16px; line-height:1.3; }
+
+.pubrev-sub{
+    display:block;
+    margin-top:3px;
+    font-size:12px;
+    color:var(--color-text-muted);
+}
+
+/* Is this going out NOW? The one thing that must never be ambiguous. */
+.pubrev-mode{
+    flex-shrink:0;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 11px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:650;
+}
+
+.pubrev-mode.is-now{ background:var(--color-danger-soft); color:var(--color-danger); }
+.pubrev-mode.is-scheduled{ background:var(--color-primary-soft); color:var(--color-primary); }
+
+.pubrev-alert{
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    margin:0 0 12px;
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:var(--text-sm);
+    line-height:1.45;
+}
+
+.pubrev-alert.is-bad{ background:var(--color-danger-soft); color:var(--color-danger); }
+.pubrev-alert.is-warn{ background:var(--color-warning-soft); color:var(--color-warning); }
+.pubrev-alert.is-info{ background:var(--color-surface-sunken); color:var(--color-text-muted); }
+
+.pubrev-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+
+.pubrev-row{
+    position:relative;
+    display:grid;
+    grid-template-columns:36px 1fr;
+    gap:12px;
+    padding:13px 14px;
+    border:1px solid var(--color-border);
+    border-radius:13px;
+    background:var(--color-surface);
+}
+
+/* A 3px spine, the same device the Channels sections use: the state of the
+   row readable before any of its text is. */
+.pubrev-row::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; bottom:0;
+    width:3px;
+    border-radius:13px 0 0 13px;
+    background:var(--color-success);
+}
+
+.pubrev-row.is-resize::before{ background:var(--color-warning); }
+.pubrev-row.is-block::before{ background:var(--color-danger); }
+
+/* A channel that will not publish is not the same kind of thing as one that
+   will - it should not read as an equal member of the list. */
+.pubrev-row.is-block{ background:var(--color-surface-muted); }
+
+.pubrev-body{ min-width:0; display:flex; flex-direction:column; gap:5px; }
+
+.pubrev-row-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.pubrev-row-head strong{
+    font-size:var(--text-base);
+    font-weight:650;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.pubrev-type{
+    flex-shrink:0;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    color:var(--color-text-subtle);
+}
+
+.pubrev-type em{ font-style:normal; text-transform:none; letter-spacing:0; cursor:help; }
+
+.pubrev-when{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    font-size:12px;
+    color:var(--color-text-muted);
+}
+
+.pubrev-tag{
+    display:inline-flex;
+    align-items:center;
+    padding:2px 8px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:650;
+}
+
+.pubrev-tag.is-now{ background:var(--color-danger-soft); color:var(--color-danger); }
+.pubrev-tag.is-warn{ background:var(--color-warning-soft); color:var(--color-warning); }
+.pubrev-tag.is-bad{ background:var(--color-danger-soft); color:var(--color-danger); }
+
+.pubrev-caption{
+    margin:2px 0 0;
+    font-size:var(--text-sm);
+    line-height:1.5;
+    color:var(--color-text);
+    /* Three lines: enough to recognise the post, not so much that eight
+       channels become a page nobody reads. */
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+
+.pubrev-caption.is-empty{ color:var(--color-text-subtle); font-style:italic; }
+
+.pubrev-meta{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    font-size:11px;
+    color:var(--color-text-subtle);
+}
+
+.pubrev-meta .is-over{ color:var(--color-danger); font-weight:650; }
+
+.pubrev-reason{
+    margin:4px 0 0;
+    font-size:12px;
+    line-height:1.45;
+    color:var(--color-danger);
+}
+
+@media(max-width:520px){
+
+    .publish-review-overlay{ padding:0; align-items:flex-end; }
+
+    .publish-review-box{
+        width:100%;
+        max-height:92vh;
+        border-radius:18px 18px 0 0;
+    }
+
+    .pubrev-head{ flex-direction:column; gap:8px; }
+
+    .pubrev-row-head{ flex-direction:column; align-items:flex-start; gap:2px; }
+}

@@ -1,0 +1,125 @@
+{#
+    The pre-publish review, rendered server-side and dropped into the modal by
+    publish-review.js.
+
+    Server-rendered on purpose. The composer has a live preview, but it draws
+    from the compose form's own JS state and so can only ever show what the
+    browser already believes. This reads the saved targets and runs the same
+    validation the publish path runs, so what it promises is what goes out.
+
+    A fragment, not a page: no {% extends %}, because it is fetched and
+    inserted rather than navigated to.
+#}
+{% set TYPE_LABEL = {'image':'Image','carousel':'Carousel','reel':'Reel','story':'Story','video':'Video','text':'Text','document':'Document'} %}
+
+<div class="pubrev" data-fingerprint="{{ review.fingerprint }}">
+
+    <div class="pubrev-head">
+        <div class="pubrev-headline">
+            <h3>{{ post.title or 'Untitled post' }}</h3>
+            <span class="pubrev-sub">
+                {% if post.client %}{{ post.client.client_name }} · {% endif %}
+                {{ review.channels|length }} channel{{ '' if review.channels|length == 1 else 's' }}
+            </span>
+        </div>
+
+        {# The one thing that must never be ambiguous: is this going out now? #}
+        <span class="pubrev-mode {{ 'is-now' if review.publish_now else 'is-scheduled' }}">
+            {% if review.publish_now %}
+            <i class="fa-solid fa-bolt"></i> Publishing immediately
+            {% else %}
+            <i class="fa-solid fa-clock"></i> Scheduled
+            {% endif %}
+        </span>
+    </div>
+
+    {% if review.nothing_to_publish %}
+    <p class="pubrev-alert is-bad">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        Nothing can be published. Every channel below is blocked, so this post
+        would be marked failed rather than scheduled.
+    </p>
+    {% elif review.blocked_count %}
+    <p class="pubrev-alert is-warn">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        {{ review.blocked_count }} of {{ review.channels|length }} channels
+        {{ 'is' if review.blocked_count == 1 else 'are' }} blocked and will not
+        publish. The rest will go ahead.
+    </p>
+    {% endif %}
+
+    {% if review.staggered and not review.publish_now %}
+    <p class="pubrev-alert is-info">
+        <i class="fa-regular fa-clock"></i>
+        These channels publish at different times — each one is shown below.
+    </p>
+    {% endif %}
+
+    <ul class="pubrev-list">
+        {% for c in review.channels %}
+        <li class="pubrev-row is-{{ c.outcome }}">
+
+            <span class="channel-avatar sm pf-{{ c.platform }}">
+                <i class="{{ PF_ICON.get(c.platform, 'fa-solid fa-share-nodes') }}"></i>
+            </span>
+
+            <div class="pubrev-body">
+                <div class="pubrev-row-head">
+                    <strong>{{ c.account_name or PF_LABEL.get(c.platform, c.platform) }}</strong>
+                    <span class="pubrev-type">
+                        {{ TYPE_LABEL.get(c.resolved_type, c.resolved_type or '—') }}
+                        {% if c.type_changed %}
+                        {# A Reel this platform cannot take goes out as a plain
+                           video. Better learnt here than from the permalink. #}
+                        <em title="{{ c.type_notes|join(' ') }}">— was {{ TYPE_LABEL.get(c.target.post_type, c.target.post_type) }}</em>
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="pubrev-when">
+                    {% if c.outcome == 'block' %}
+                    <span class="pubrev-tag is-bad">Will not publish</span>
+                    {% elif c.immediate %}
+                    <span class="pubrev-tag is-now">Immediately</span>
+                    {% elif c.when_ist %}
+                    <i class="fa-regular fa-clock"></i>
+                    {{ c.when_ist.strftime('%d %b %Y, %H:%M') }} IST
+                    {% else %}
+                    <span class="pubrev-tag is-bad">No time set</span>
+                    {% endif %}
+
+                    {% if c.outcome == 'resize' %}
+                    <span class="pubrev-tag is-warn"
+                          title="{{ c.reasons|join(' ') }}">Video will be resized on publish</span>
+                    {% endif %}
+                </div>
+
+                {% if c.caption %}
+                <p class="pubrev-caption">{{ c.caption }}</p>
+                {% else %}
+                <p class="pubrev-caption is-empty">No caption</p>
+                {% endif %}
+
+                <div class="pubrev-meta">
+                    {% if c.max_caption %}
+                    <span class="{{ 'is-over' if c.caption_over }}">
+                        {{ c.caption_len }} / {{ c.max_caption }} characters
+                    </span>
+                    {% endif %}
+                    {% if c.first_comment %}
+                    <span><i class="fa-regular fa-comment"></i> First comment</span>
+                    {% endif %}
+                    {% if c.story_style and c.target.post_type == 'story' %}
+                    <span><i class="fa-solid fa-circle-notch"></i> Story{{ ' with link' if c.story_style == 'post_link' }}</span>
+                    {% endif %}
+                </div>
+
+                {% if c.outcome == 'block' and c.reasons %}
+                <p class="pubrev-reason">{{ c.reasons|join(' ') }}</p>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+
+</div>
