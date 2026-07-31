@@ -75,6 +75,15 @@ META_UNIFIED_SCOPES = [
     "pages_manage_posts",
     "pages_manage_engagement",
     "read_insights",
+    # REQUIRED for discovering Pages owned by a Business Manager. A previous
+    # change dropped this on the belief that "nothing calls a Business Manager
+    # endpoint - not /me/accounts" - which is wrong: /me/accounts only returns
+    # a business-portfolio Page (an agency managing a client's Page, the norm
+    # here) when the token carries business_management. Without it those Pages
+    # silently vanish from discovery - "Meta granted 4, Studio connected 3".
+    # Must be included in the App Review submission for public/live use; in
+    # Development/Testing mode it is granted to admins/devs/testers already.
+    "business_management",
     "instagram_basic",
     "instagram_content_publish",
     "instagram_manage_comments",

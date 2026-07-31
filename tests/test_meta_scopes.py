@@ -81,6 +81,11 @@ APPROVED_BY_APP_REVIEW = {
     "pages_manage_posts",
     "pages_manage_engagement",
     "read_insights",
+    # Required to DISCOVER Business-Manager-owned Pages (agency-managed client
+    # Pages) via /me/accounts - without it they never reach connect. Must be
+    # part of the App Review submission for public use; keep this set in step
+    # with the dashboard by hand.
+    "business_management",
     "instagram_basic",
     "instagram_content_publish",
     "instagram_manage_comments",
@@ -99,10 +104,12 @@ def test_we_ask_for_exactly_what_review_approved():
         that it is the single most common App Review rejection: asking for
         a permission the app cannot demonstrate a use for.
 
-    business_management is deliberately absent. Nothing in this codebase
-    calls a Business Manager endpoint - not /me/accounts, not publishing,
-    not insights - so there was no feature to demonstrate for it, and it
-    was dropped from the submission rather than defended.
+    business_management is REQUIRED, contrary to an earlier belief that
+    "nothing calls a Business Manager endpoint - not /me/accounts". That was
+    wrong: /me/accounts only returns a Page owned inside a Business Manager
+    (agency-managed client Pages, the norm here) when the token carries
+    business_management. Dropping it silently hid those Pages from discovery.
+    It must therefore be in the App Review submission too.
     """
     requested = set(META_UNIFIED_SCOPES)
 
