@@ -295,7 +295,11 @@ def build_dashboard(client, period):
         "in_review": in_review,
         "overdue": overdue,
         "due_today": due_today,
-        "total_live": sum(by_status.values()),
+        # "of N live" means work actually in flight - not Published/Scheduled
+        # (those are done/queued). by_status excludes Void already; sum only
+        # the active statuses so "3 of 503 live" can't happen.
+        "total_live": sum(by_status.get(s, 0)
+                          for s in task_status.ACTIVE_STATUSES),
         "by_status": by_status,
         # Target lives per calendar month; a non-month window still reports
         # against the month it ends in.

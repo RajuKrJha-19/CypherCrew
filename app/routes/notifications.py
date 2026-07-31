@@ -53,8 +53,12 @@ def api_notifications():
         type=int
     )
 
-    if limit > 30:
-        limit = 30
+    # Floor as well as cap: a negative ?limit reaches SQL LIMIT and Postgres
+    # rejects it ("LIMIT must not be negative") - a 500 on an endpoint every
+    # open tab polls every 5s. type=int can also yield None on garbage input.
+    if not isinstance(limit, int):
+        limit = 10
+    limit = max(1, min(limit, 30))
 
     category = _category_filter()
 

@@ -411,6 +411,21 @@ def add_deliverable(client_id):
         )
         return redirect(url_for("clients.client_detail", client_id=client_id))
 
+    # A month outside 1-12 (or a wild year) produces a deliverable that
+    # client_detail can never render again; counts must be non-negative.
+    if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+        flash("Pick a valid month (1-12) and year.", "error")
+        return redirect(url_for("clients.client_detail", client_id=client_id))
+    completed_count = max(0, completed_count)
+    target_count = max(0, target_count)
+
+    # service_name / deliverable_name are NOT NULL - a blank submit would 500.
+    service_name = (request.form.get("service_name") or "").strip()
+    deliverable_name = (request.form.get("deliverable_name") or "").strip()
+    if not service_name or not deliverable_name:
+        flash("Service and deliverable name are required.", "error")
+        return redirect(url_for("clients.client_detail", client_id=client_id))
+
     monthly_target = ClientMonthlyTarget.query.filter_by(
         client_id=client.id,
         month=month,
@@ -428,8 +443,8 @@ def add_deliverable(client_id):
 
     deliverable = ClientDeliverable(
         monthly_target_id=monthly_target.id,
-        service_name=request.form.get("service_name"),
-        deliverable_name=request.form.get("deliverable_name"),
+        service_name=service_name,
+        deliverable_name=deliverable_name,
         completed_count=completed_count,
         target_count=target_count
     )
@@ -475,10 +490,19 @@ def edit_deliverable(deliverable_id):
                 )
             )
 
-        deliverable.service_name = request.form.get("service_name")
-        deliverable.deliverable_name = request.form.get("deliverable_name")
-        deliverable.completed_count = completed_count
-        deliverable.target_count = target_count
+        # NOT NULL names, and non-negative counts (a negative gives a false
+        # progress % and a spurious "drift" flag on the client dashboard).
+        service_name = (request.form.get("service_name") or "").strip()
+        deliverable_name = (request.form.get("deliverable_name") or "").strip()
+        if not service_name or not deliverable_name:
+            flash("Service and deliverable name are required.", "error")
+            return redirect(url_for(
+                "clients.edit_deliverable", deliverable_id=deliverable.id))
+
+        deliverable.service_name = service_name
+        deliverable.deliverable_name = deliverable_name
+        deliverable.completed_count = max(0, completed_count)
+        deliverable.target_count = max(0, target_count)
 
         db.session.commit()
 

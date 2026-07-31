@@ -321,21 +321,28 @@ def add_report():
             flash("Please describe the work you completed today.", "error")
             return redirect(url_for("reports.add_report"))
 
-        report = DailyReport(
-            employee_id=current_user.id,
-            report_date=today,
-            completed_work=completed_work,
-            in_progress_work=request.form.get("in_progress_work"),
-            hours_worked=total_hours,
-            issues=request.form.get("issues"),
-            tomorrow_plan=request.form.get("tomorrow_plan")
-        )
+        # One report per employee per day: a second submit (double-click, or
+        # re-opening /reports/add) used to insert a duplicate row that both
+        # showed in the list and skewed the report counts. Update today's
+        # report instead of adding another.
+        report = DailyReport.query.filter_by(
+            employee_id=current_user.id, report_date=today).first()
+        created = report is None
+        if created:
+            report = DailyReport(
+                employee_id=current_user.id, report_date=today)
+            db.session.add(report)
 
-        db.session.add(report)
+        report.completed_work = completed_work
+        report.in_progress_work = request.form.get("in_progress_work")
+        report.hours_worked = total_hours
+        report.issues = request.form.get("issues")
+        report.tomorrow_plan = request.form.get("tomorrow_plan")
         db.session.commit()
 
         flash(
-            "Daily report submitted successfully.",
+            "Daily report submitted successfully." if created
+            else "Today's report was updated.",
             "success"
         )
 

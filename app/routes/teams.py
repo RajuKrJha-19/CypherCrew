@@ -517,7 +517,14 @@ def api_edit_message(message_id):
 
     try:
         if request.method == "DELETE":
-            messages_service.delete_message(message, current_user)
+            # A channel admin/owner can remove anyone's message (moderation),
+            # not just their own - otherwise delete_message's is_admin path is
+            # unreachable and an abusive post can't be taken down.
+            channel = db.session.get(TeamChannel, message.channel_id)
+            is_admin = bool(channel) and channels_service.can_administer(
+                channel, current_user)
+            messages_service.delete_message(
+                message, current_user, is_admin=is_admin)
         else:
             data = request.get_json(silent=True) or request.form
             messages_service.edit_message(
