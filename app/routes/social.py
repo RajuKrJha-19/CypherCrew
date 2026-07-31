@@ -38,7 +38,7 @@ from app.utils.permissions import (
     can_use_social, has_permission,
 )
 from app.utils.social_platforms import (
-    PLATFORMS, label as platform_label, parse_platforms,
+    PLATFORMS, PLATFORM_KEYS, label as platform_label, parse_platforms,
 )
 
 
@@ -116,6 +116,60 @@ def _grouped_accounts(accounts):
         else:
             groups.append({"account": a, "children": []})
     return groups
+
+
+def _channels_by_client(groups, clients):
+    """Gather the platform groups under the CLIENT each one serves.
+
+    A flat grid of channels asks the reader to do the grouping in their
+    head: "which of these eight is Hope Plus IVF's?" - and that is the
+    only question this page is ever open to answer, because every other
+    Studio screen is already scoped to one client. So the client is the
+    heading and the channels sit under it.
+
+    Returns [{client, accounts, groups, platforms}], clients in the
+    switcher's own order (parents before their sub-clients) so this page
+    and the client picker cannot disagree, and the unassigned bucket last:
+    it is the pile that still needs a decision, not a client.
+    """
+    by_client = {}
+    for g in groups:
+        by_client.setdefault(g["account"].client_id, []).append(g)
+
+    sections = []
+    for client in clients:
+        owned = by_client.pop(client.id, [])
+        if owned:
+            sections.append(_client_section(client, owned))
+
+    # A channel bound to a client that is no longer active still has to
+    # appear - dropping it would hide a live publishing target - so
+    # whatever is left over joins the unassigned bucket rather than
+    # vanishing with its client.
+    leftover = [g for gs in by_client.values() for g in gs]
+    if leftover:
+        sections.append(_client_section(None, leftover))
+
+    return sections
+
+
+def _client_section(client, groups):
+    accounts = [g["account"] for g in groups] + [
+        child for g in groups for child in g["children"]
+    ]
+    return {
+        "client": client,
+        "groups": groups,
+        "accounts": accounts,
+        # Distinct platforms, in catalog order, for the header's pips.
+        "platforms": [
+            key for key in PLATFORM_KEYS
+            if any(a.platform == key for a in accounts)
+        ],
+        "needs_attention": sum(
+            1 for a in accounts if a.status != "active"
+        ),
+    }
 
 
 # ======================================================================
@@ -565,15 +619,20 @@ def index():
 def accounts():
     _guard()
     accts = AccountManager.list_accounts(include_revoked=False)
+    studio_clients = _studio_clients()
+    groups = _grouped_accounts(accts)
     return render_template(
         "social/accounts.html",
-        groups=_grouped_accounts(accts),
+        groups=groups,
+        # The page renders from these: one section per client, the channels
+        # that serve them inside. `groups` stays for the empty-state check.
+        client_sections=_channels_by_client(groups, studio_clients),
         accounts=accts,
         platforms=PLATFORMS,
         available=registry.keys(),
         connectable=_connectable_keys(),
         simulated=_simulated_keys(),
-        clients=_studio_clients(),
+        clients=studio_clients,
         has_facebook=any(a.platform == "facebook" for a in accts),
         has_instagram=any(a.platform == "instagram" for a in accts),
         status=engine_status.engine_status(),

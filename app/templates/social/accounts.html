@@ -29,14 +29,41 @@
 {% endwith %}
 
 {% if groups %}
-<div class="social-card studio-section">
-    <div class="social-card-head">
-        <h2><i class="fa-solid fa-plug"></i> Your channels</h2>
-        <div class="social-card-tools"><span class="sp-pill info">{{ accounts|length }} connected</span></div>
+{#
+    One section per CLIENT, not a flat grid of channels. This page exists
+    to answer "what can the Studio publish for X" - every other Studio
+    screen is already scoped to a client - and a flat grid made the reader
+    do that grouping in their head. The unassigned bucket sorts last: it
+    is the pile that still needs a decision, not a client.
+#}
+{% for section in client_sections %}
+{% set client = section.client %}
+<div class="social-card studio-section client-channels{% if not client %} is-unassigned{% endif %}">
+    <div class="social-card-head client-channels-head">
+        <span class="client-crest">{{ client.code if client else '—' }}</span>
+        <div class="client-channels-id">
+            <h2>{{ client.client_name if client else 'Agency-wide' }}</h2>
+            <span class="client-channels-meta">
+                {{ section.accounts|length }} channel{{ '' if section.accounts|length == 1 else 's' }}
+                {% if not client %}· not assigned to any client{% endif %}
+                {% if section.needs_attention %}
+                <span class="sp-pill warn">{{ section.needs_attention }} need{{ '' if section.needs_attention == 1 else '' }} attention</span>
+                {% endif %}
+            </span>
+        </div>
+        {# The platforms this client can reach, at a glance - the question
+           asked before opening the composer for them. #}
+        <div class="client-channels-pips">
+            {% for key in section.platforms %}
+            <span class="pf-pip pf-{{ key }}" title="{{ PF_LABEL.get(key, key) }}">
+                <i class="{{ PF_ICON.get(key,'fa-solid fa-share-nodes') }}"></i>
+            </span>
+            {% endfor %}
+        </div>
     </div>
     <div class="social-card-body">
         <div class="account-grid">
-            {% for g in groups %}
+            {% for g in section.groups %}
             {% set a = g.account %}
             <div class="account-card">
                 <div class="account-row">
@@ -111,8 +138,21 @@
                 </div>
                 {% endif %}
 
+                {# The section heading already says who this serves, so the
+                   control is labelled by what it DOES - move it - rather
+                   than repeating the client's name back at them. #}
                 <div class="account-bind">
-                    <span><i class="fa-solid fa-user-tie"></i> Serves client{% if g.children %} <small>(applies to linked Instagram too)</small>{% endif %}</span>
+                    {# The caveat is a footnote, not a label: inline it wrapped
+                       to two lines inside a narrow card and dragged the strip
+                       taller than the control it labels. #}
+                    <span>
+                        <i class="fa-solid fa-right-left"></i> Move to
+                        {% if g.children %}
+                        <i class="fa-regular fa-circle-question bind-hint"
+                           title="Reassigning this Page moves the Instagram account linked to it as well — they belong to the same brand."
+                           aria-label="Reassigning this Page moves its linked Instagram too"></i>
+                        {% endif %}
+                    </span>
                     <form method="POST" action="{{ url_for('social.set_account_client', account_id=a.id) }}" data-turbo="false">
                         {# requestSubmit(), not submit(): this is a POST, and
                            only requestSubmit fires the submit event csrf.js
@@ -130,6 +170,7 @@
         </div>
     </div>
 </div>
+{% endfor %}
 {% endif %}
 
 {# ---- Connect a channel ---- #}
