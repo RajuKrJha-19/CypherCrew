@@ -165,3 +165,89 @@ def test_channels_needing_attention_are_counted():
 
 def test_no_channels_at_all_is_no_sections():
     assert _sections([]) == []
+
+
+# ----------------------------------------------------------------------
+# The markup the grouping renders into
+# ----------------------------------------------------------------------
+#
+# Found by auditing the change rather than by anything failing: a pill
+# asking for a class the stylesheet does not define renders unstyled, and
+# a conditional whose branches are identical renders the wrong word. Both
+# are silent - the page looks fine at a glance and says the wrong thing.
+
+import re
+from pathlib import Path
+
+TEMPLATE = (Path(__file__).resolve().parent.parent
+            / "app" / "templates" / "social" / "accounts.html")
+STYLESHEET = (Path(__file__).resolve().parent.parent
+              / "app" / "static" / "css" / "style.css")
+
+
+def _template():
+    return TEMPLATE.read_text(encoding="utf-8", errors="ignore")
+
+
+def _css():
+    return STYLESHEET.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_the_attention_pill_uses_a_class_the_stylesheet_defines():
+    """It was written as `sp-pill warn`; the stylesheet defines
+    `.sp-pill.warning`. The pill rendered with no warning colour at all -
+    the one thing it exists to convey."""
+    css = _css()
+    pills = re.findall(r'class="sp-pill ([a-z-]+)"', _template())
+
+    assert pills, "no sp-pill modifiers found - has the markup changed?"
+
+    for modifier in set(pills):
+        assert ".sp-pill.%s{" % modifier in css, (
+            "sp-pill '%s' is not defined in the stylesheet, so the pill "
+            "renders unstyled" % modifier
+        )
+
+
+def test_the_attention_count_reads_correctly_for_one():
+    """Written as `need{{ '' if n == 1 else '' }}` - both branches empty,
+    so it always said "1 need attention"."""
+    template = _template()
+
+    match = re.search(r"need\{\{ (.+?) \}\} attention", template)
+    assert match, "the attention wording has moved - check its pluralisation"
+
+    expression = match.group(1)
+    assert "'s'" in expression, (
+        "the singular branch must add an 's' ('1 needs attention'); a "
+        "conditional with two identical branches is not a conditional"
+    )
+
+
+def test_a_platform_tile_is_never_invisible():
+    """The glyph inside .channel-avatar is white. Without a default
+    background, a platform with no brand rule renders white-on-transparent
+    - invisible, and indistinguishable from the row failing to render."""
+    css = _css()
+
+    match = re.search(r"\.channel-avatar\{(.*?)\}", css, re.S)
+    assert match, ".channel-avatar is no longer defined"
+
+    body = re.sub(r"/\*.*?\*/", "", match.group(1), flags=re.S)
+    assert "background:" in body, (
+        ".channel-avatar has no default background - an unrecognised "
+        "platform renders an invisible tile"
+    )
+
+
+def test_every_platform_in_the_catalog_has_a_pip_colour():
+    """The header pips are built from PLATFORM_KEYS, so a platform added to
+    the catalog without a matching rule renders a white glyph on a
+    transparent square."""
+    from app.utils.social_platforms import PLATFORM_KEYS
+
+    css = _css()
+    for key in PLATFORM_KEYS:
+        assert ".pf-pip.pf-%s{" % key in css, (
+            "%s is in the platform catalog but has no .pf-pip colour" % key
+        )

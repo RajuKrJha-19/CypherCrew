@@ -17000,6 +17000,11 @@ a.stat-tile:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px);
 .channel-avatar{
     position:relative; flex:0 0 auto; width:44px; height:44px; border-radius:13px;
     display:grid; place-items:center; font-size:20px; color:#fff;
+    /* Neutral ground for a platform with no brand rule of its own. The
+       glyph is white, so without this an unrecognised platform renders a
+       white icon on a transparent tile - invisible, and indistinguishable
+       from the row failing to render at all. */
+    background:var(--color-text-muted);
     /* A tinted lift rather than a flat swatch: a hairline of the brand
        colour under the tile and a highlight across the top, so six
        different brand colours still read as one set of components. The

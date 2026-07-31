@@ -47,7 +47,7 @@
                 {{ section.accounts|length }} channel{{ '' if section.accounts|length == 1 else 's' }}
                 {% if not client %}· not assigned to any client{% endif %}
                 {% if section.needs_attention %}
-                <span class="sp-pill warn">{{ section.needs_attention }} need{{ '' if section.needs_attention == 1 else '' }} attention</span>
+                <span class="sp-pill warning">{{ section.needs_attention }} need{{ 's' if section.needs_attention == 1 else '' }} attention</span>
                 {% endif %}
             </span>
         </div>
