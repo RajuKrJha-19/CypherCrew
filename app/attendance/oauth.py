@@ -25,7 +25,7 @@ def start_connect(redirect_uri, created_by_id):
 def finish_connect(code, state, created_by_id):
     """Validate state, exchange the code, and upsert the org connection.
     Returns the ZohoConnection. Raises on an invalid state or Zoho error."""
-    row = consume_state(state)
+    row = consume_state(state, expected_by_id=created_by_id)
     if row is None or row.platform != PLATFORM:
         raise ValueError("This connection link has expired. Please try again.")
 

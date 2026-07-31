@@ -41,12 +41,13 @@ class OAuthManager:
     # -- Handshake completion ---------------------------------------------
 
     @staticmethod
-    def _exchange(platform, code, state):
+    def _exchange(platform, code, state, expected_by_id=None):
         """Validate state + exchange the code once. Returns (provider,
-        bundle). Logs each step (never the token)."""
+        bundle). Logs each step (never the token). `expected_by_id` binds the
+        callback to the user who started the connect (CSRF defence)."""
         log = current_app.logger
 
-        row = state_store.consume_state(state)
+        row = state_store.consume_state(state, expected_by_id=expected_by_id)
         if row is None or row.platform != platform:
             log.warning("[oauth:%s] state validation FAILED (missing/expired)",
                         platform)
@@ -64,9 +65,10 @@ class OAuthManager:
         return provider, bundle
 
     @staticmethod
-    def finish(platform, code, state):
+    def finish(platform, code, state, expected_by_id=None):
         """Single-platform completion (kept for direct callers/tests)."""
-        provider, bundle = OAuthManager._exchange(platform, code, state)
+        provider, bundle = OAuthManager._exchange(
+            platform, code, state, expected_by_id=expected_by_id)
         accounts = provider.list_publishable_accounts(bundle.access_token)
         current_app.logger.info(
             "[oauth:%s] 3/4 discovery returned %d publishable account(s)",
@@ -88,7 +90,7 @@ class OAuthManager:
         return members
 
     @staticmethod
-    def finish_all(platform, code, state):
+    def finish_all(platform, code, state, expected_by_id=None):
         """Complete the handshake AND discover every sibling platform that
         shares this consent. One Facebook login therefore returns both the
         Facebook Pages and the Instagram Business accounts linked to them.
@@ -99,7 +101,8 @@ class OAuthManager:
                      (so the caller can explain *why*, e.g. no IG linked).
         """
         log = current_app.logger
-        provider, bundle = OAuthManager._exchange(platform, code, state)
+        provider, bundle = OAuthManager._exchange(
+            platform, code, state, expected_by_id=expected_by_id)
 
         results, empty = [], []
         for key in OAuthManager._group_members(platform):

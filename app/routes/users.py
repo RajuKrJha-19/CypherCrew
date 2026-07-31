@@ -271,7 +271,11 @@ def add_user():
         password = request.form.get("password", "")
         role = request.form.get("role")
         designation = request.form.get("designation", "").strip()
+        # Allow-list the status: a form can omit it (-> None) or send anything,
+        # and a user row whose status isn't "active" can never log in.
         status = request.form.get("status")
+        if status not in ("active", "inactive"):
+            status = "active"
 
         # role is NOT NULL and name/email/password are required for a usable
         # account; without this an incomplete submit hit the DB and raised an
@@ -360,7 +364,18 @@ def edit_user(user_id):
         user.name = request.form.get("name", "").strip()
         user.phone = request.form.get("phone", "").strip()
         user.designation = request.form.get("designation", "").strip()
-        user.status = request.form.get("status")
+
+        # Status is allow-listed, and neither the owner nor your own account
+        # can be deactivated - the owner's has_permission bypass is worthless
+        # if they can't sign in, and self-deactivation would lock you out with
+        # no in-app way back (every non-owner is blocked from editing a
+        # management account).
+        new_status = request.form.get("status")
+        if new_status not in ("active", "inactive"):
+            new_status = user.status or "active"
+        if roles.is_owner(user.role) or is_self:
+            new_status = "active"
+        user.status = new_status
 
         new_role = request.form.get("role")
 

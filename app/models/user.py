@@ -111,6 +111,15 @@ class User(db.Model, UserMixin):
     )
 
     @property
+    def is_active(self):
+        """Flask-Login uses this to refuse a deactivated account at login.
+        Per-request rejection of an ALREADY-open session is enforced in
+        auth.load_user (which returns None for a non-active user) - overriding
+        is_active alone does not, because login_required checks is_authenticated.
+        """
+        return self.status == "active"
+
+    @property
     def initials(self):
         """One- or two-letter fallback avatar from the name/email."""
         source = (self.name or self.email or "?").strip()

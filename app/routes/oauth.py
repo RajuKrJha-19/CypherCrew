@@ -54,6 +54,8 @@ _SCOPE_FEATURES = {
     "pages_manage_engagement": "replying to Facebook comments and the auto "
                                "first comment",
     "read_insights": "Facebook Page analytics",
+    "business_management": "discovering Pages managed through a Business "
+                           "Manager (agency-managed client Pages)",
     "instagram_basic": "reading the Instagram profile and posts",
     "instagram_content_publish": "publishing to Instagram",
     "instagram_manage_comments": "the Engage inbox for Instagram comments",
@@ -164,7 +166,8 @@ def callback(platform):
         # finish_all also discovers sibling platforms that share this consent:
         # one Facebook login returns the Facebook Pages AND the Instagram
         # Business accounts linked to them.
-        bundle, results, empty = OAuthManager.finish_all(platform, code, state)
+        bundle, results, empty = OAuthManager.finish_all(
+            platform, code, state, expected_by_id=current_user.id)
         saved = {}
         for plat, info in results:
             # upsert_from_oauth encrypts the (per-Page) token via the vault.

@@ -64,7 +64,15 @@ def _reset_serializer():
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    """Resolve the signed-in user for each request. A deactivated account is
+    rejected here (returns None -> anonymous), so 'Inactive' actually cuts
+    access immediately for a still-open session, not only at the next login.
+    Role/permission changes already take effect per-request because the
+    permission rows are re-read; status was the one gap."""
+    user = User.query.get(int(user_id))
+    if user is None or user.status != "active":
+        return None
+    return user
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
