@@ -41,9 +41,12 @@ def requeue_job(job, actor_id=None, commit=False):
     job.locked_by = None
 
     # Clear the resumption markers so the publish restarts from step one
-    # (a fresh attempt, not a resume of a half-finished remote op).
+    # (a fresh attempt, not a resume of a half-finished remote op). `dispatched`
+    # is cleared too, so a manually-retried INTERRUPTED job runs a clean first
+    # attempt instead of tripping the interrupted guard forever.
     provider_state = dict(job.provider_state or {})
     provider_state.pop("started", None)
+    provider_state.pop("dispatched", None)
     provider_state.pop("_reserved", None)
     job.provider_state = provider_state or None
 

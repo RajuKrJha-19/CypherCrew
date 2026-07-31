@@ -11,6 +11,7 @@ the gunicorn worker, each task in its own app context + DB session. Claiming
 uses FOR UPDATE SKIP LOCKED so multiple workers never grab the same job.
 """
 
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -102,6 +103,44 @@ def drain(batch=None, worker_id=None):
     }
 
 
+def kick_async(app, rounds=3):
+    """Fire a one-off enqueue + bounded drain in a background thread, so a
+    "publish now" (or a manual retry) goes out within a second or two instead
+    of waiting for the next periodic worker tick. Safe alongside the periodic
+    worker and other kicks: claiming is FOR UPDATE SKIP LOCKED and every job
+    is idempotent, so at worst two drains find nothing to do."""
+
+    def _run():
+        try:
+            with app.app_context():
+                from app.social.services import scheduling
+                scheduling.enqueue_due()
+                for _ in range(max(1, rounds)):
+                    # Pull forward jobs due now / waiting on a short async poll
+                    # (like the manual Process-queue button) so a
+                    # start -> poll -> publish chain completes without waiting
+                    # on the tick. Deliberately does NOT pull forward a
+                    # rate/backoff deferral that is minutes out.
+                    horizon = datetime.utcnow() + timedelta(seconds=60)
+                    PublishJob.query.filter(
+                        PublishJob.state == "queued",
+                        PublishJob.next_run_at <= horizon,
+                    ).update({PublishJob.next_run_at: datetime.utcnow()})
+                    db.session.commit()
+                    outcome = drain()
+                    if outcome.get("claimed", 0) == 0:
+                        break
+        except Exception:  # noqa: BLE001 - a kick must never break its caller
+            try:
+                with app.app_context():
+                    app.logger.exception(
+                        "[social] immediate publish kick failed")
+            except Exception:  # noqa: BLE001
+                pass
+
+    threading.Thread(target=_run, name="social-kick", daemon=True).start()
+
+
 def _process_in_ctx(app, job_id):
     with app.app_context():
         try:
@@ -131,11 +170,23 @@ def _process(job_id):
             raise AuthError("Account not connected or needs re-authorisation")
 
         provider_state = dict(job.provider_state or {})
-        first_attempt = not provider_state.get("started")
+        started = bool(provider_state.get("started"))
 
-        # Rate gate: reserve one slot on the first publish attempt only.
-        if first_attempt and provider.capabilities \
-                and provider.capabilities.publish_rate:
+        # A previous attempt DISPATCHED start_publish but the worker died
+        # before recording the outcome (deploy / restart / OOM mid-upload).
+        # The post may already be live on the platform, so re-sending risks a
+        # DUPLICATE and there is no remote handle to poll. Hand it to a human
+        # to verify rather than silently republish. (A normal error clears the
+        # marker below, so this only fires on an actual worker death.)
+        if provider_state.get("dispatched") and not started:
+            return _handle_interrupted(job, target)
+
+        first_attempt = not started
+
+        # Rate gate: reserve one slot, once. Guard on _reserved so a retry
+        # (which is still not-started) doesn't reserve a second slot.
+        if first_attempt and not provider_state.get("_reserved") \
+                and provider.capabilities and provider.capabilities.publish_rate:
             limit, window = provider.capabilities.publish_rate
             if not ratelimit.reserve(account.id, limit, window):
                 job.next_run_at = datetime.utcnow() + timedelta(minutes=30)
@@ -147,7 +198,6 @@ def _process(job_id):
         token = AccountManager.access_token(account)
         content = build_content(target)
 
-        job.state = "publishing"
         if first_attempt:
             # Downscale any video too wide for this platform (aspect ratio
             # kept), so an oversized-but-otherwise-fine reel/story publishes
@@ -155,9 +205,35 @@ def _process(job_id):
             # the derived file is ephemeral and the source asset is untouched.
             from app.social.media import transcode
             transcode.fit_content(content, provider.capabilities)
+
+            # Persist a dispatch marker BEFORE the side-effecting call, with
+            # the job still 'claimed'. If the worker dies during start_publish,
+            # _reset_stale returns the claimed job to the queue and the guard
+            # above turns it into an interrupted-publish for manual
+            # verification - instead of silently re-uploading and duplicating.
+            provider_state["dispatched"] = True
+            job.provider_state = dict(provider_state)
+            db.session.commit()
+
+            try:
+                step = provider.start_publish(target, content, token)
+            except Exception:
+                # start_publish returned control via a NORMAL error, so it did
+                # not complete: clear the marker and let the standard retry run
+                # a clean first attempt again (preserving today's behaviour).
+                # A worker KILL raises nothing here, so the marker stays set
+                # and the resume is treated as interrupted.
+                cleared = dict(job.provider_state or {})
+                cleared.pop("dispatched", None)
+                job.provider_state = cleared
+                db.session.commit()
+                raise
+
             provider_state["started"] = True
-            step = provider.start_publish(target, content, token)
+            provider_state.pop("dispatched", None)
+            job.state = "publishing"
         else:
+            job.state = "publishing"
             step = provider.poll_publish(target, provider_state, token)
 
         result = _apply_step(job, target, step, provider_state,
@@ -242,6 +318,53 @@ def _apply_step(job, target, step, provider_state, provider=None, token=None):
 
     # FAILED - route through the normal failure path.
     raise PermanentError(step.error or "publish step failed")
+
+
+def _handle_interrupted(job, target):
+    """Terminal handler for a publish that was dispatched but never confirmed
+    (the worker died mid-publish). Re-sending could duplicate the post and
+    there is no remote handle to poll, so flag the target and ask the creator
+    to verify on the platform. A manual retry from History is a deliberate
+    choice once they have checked."""
+    platform = target.platform if target is not None else "the platform"
+    msg = ("Publishing was interrupted after the upload had started, so the "
+           f"post may already be live on {platform}. Check it there before "
+           "retrying.")
+    job.state = "dead"
+    job.last_error = msg
+
+    # Release any rate slot the interrupted attempt reserved.
+    if target is not None and (job.provider_state or {}).get("_reserved") \
+            and target.social_account_id:
+        provider = get_provider(target.platform)
+        if provider and provider.capabilities \
+                and provider.capabilities.publish_rate:
+            _, window = provider.capabilities.publish_rate
+            ratelimit.release(target.social_account_id, window)
+
+    if target is not None:
+        target.status = "failed"
+        target.last_error = msg
+        audit.record(
+            "publish_interrupted", target_id=target.id,
+            post_id=target.social_post_id, task_id=_task_id(target),
+            message=msg,
+        )
+        post = target.post
+        if post and post.created_by_id:
+            audit.notify(
+                post.created_by_id, "Check a possibly-published post",
+                f"“{post.title or 'Your post'}” on {platform} was interrupted "
+                "mid-publish and may already be live — check the platform "
+                "before retrying.",
+                link=f"/social/posts/{target.social_post_id}", actor_id=None)
+        _maybe_finalize_post(target)
+
+    current_app.logger.warning(
+        "social publish INTERRUPTED job=%s target=%s — flagged for manual "
+        "verification", job.id, target.id if target is not None else "?")
+    db.session.commit()
+    return {"job": job.id, "result": "interrupted"}
 
 
 def _handle_failure(job_id, exc):

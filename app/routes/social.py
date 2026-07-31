@@ -1000,16 +1000,19 @@ def retry_target(target_id):
     job = target.job
     if job is not None and recovery.requeue_job(
             job, actor_id=current_user.id, commit=True):
-        flash(f"Retrying {target.platform} — it will publish on the next "
-              "worker run.", "success")
+        flash(f"Retrying {target.platform} now — it will go out in a moment.",
+              "success")
     else:
         publishing.publish_target_now(target, actor_id=current_user.id)
-        flash(f"Re-queued {target.platform} for publishing.", "success")
+        flash(f"Re-queued {target.platform} — publishing now.", "success")
     # Roll the parent back from failed so the UI reflects the in-flight retry.
     post = target.post
     if post and post.status == "failed":
         post.status = "publishing"
         db.session.commit()
+    # Immediate drain so the retry doesn't wait for the next worker tick.
+    from app.social.queue import worker
+    worker.kick_async(current_app._get_current_object())
     return redirect(url_for("social.post_detail",
                             post_id=target.social_post_id))
 
@@ -2377,12 +2380,25 @@ def schedule_post(post_id):
             + "Not scheduled — " + "; ".join(lines),
             "error" if not result["scheduled"] else "info",
         )
+    elif publish_now:
+        flash(
+            f"Publishing to {result['scheduled']} platform(s) now — it will "
+            "go out in a moment.",
+            "success",
+        )
     else:
         flash(
             f"Scheduled {result['scheduled']} platform(s). Use "
             "“Process queue” (or the cron worker) to publish.",
             "success",
         )
+
+    # Publish-now shouldn't wait for the next periodic worker tick: kick an
+    # immediate background drain so it goes out within a second or two.
+    if publish_now and result["scheduled"]:
+        from app.social.queue import worker
+        worker.kick_async(current_app._get_current_object())
+
     return redirect(url_for("social.post_detail", post_id=post.id))
 
 
