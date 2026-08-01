@@ -22,6 +22,15 @@ from tests.conftest import FakeProvider
 # Vault
 # --------------------------------------------------------------------------
 
+
+def _a_key():
+    """publish_jobs.idempotency_key is unique AND NOT NULL - that is
+    what makes "never publish the same target twice for one schedule"
+    a guarantee rather than a convention."""
+    import uuid
+    return "pytest-" + uuid.uuid4().hex
+
+
 def test_vault_roundtrip(app):
     from cryptography.fernet import Fernet
     v = TokenVault([Fernet.generate_key().decode()])
@@ -41,7 +50,7 @@ def test_vault_disabled_without_key():
 
 def test_retry_transient_backs_off(session, make_target):
     _, _, target = make_target()
-    job = PublishJob(target_id=target.id, state="claimed", attempts=0,
+    job = PublishJob(idempotency_key=_a_key(), target_id=target.id, state="claimed", attempts=0,
                      max_attempts=5, next_run_at=datetime.utcnow())
     db.session.add(job)
     db.session.flush()
@@ -53,7 +62,7 @@ def test_retry_transient_backs_off(session, make_target):
 
 def test_retry_transient_dead_letters_after_max(session, make_target):
     _, _, target = make_target()
-    job = PublishJob(target_id=target.id, state="claimed", attempts=4,
+    job = PublishJob(idempotency_key=_a_key(), target_id=target.id, state="claimed", attempts=4,
                      max_attempts=5, next_run_at=datetime.utcnow())
     db.session.add(job)
     db.session.flush()
@@ -63,7 +72,7 @@ def test_retry_transient_dead_letters_after_max(session, make_target):
 
 def test_retry_rate_limit_reschedules(session, make_target):
     _, _, target = make_target()
-    job = PublishJob(target_id=target.id, state="claimed", attempts=0,
+    job = PublishJob(idempotency_key=_a_key(), target_id=target.id, state="claimed", attempts=0,
                      max_attempts=5, next_run_at=datetime.utcnow())
     db.session.add(job)
     db.session.flush()
@@ -74,7 +83,7 @@ def test_retry_rate_limit_reschedules(session, make_target):
 
 def test_retry_auth_fails_job(session, make_target):
     _, _, target = make_target()
-    job = PublishJob(target_id=target.id, state="claimed", attempts=0,
+    job = PublishJob(idempotency_key=_a_key(), target_id=target.id, state="claimed", attempts=0,
                      max_attempts=5, next_run_at=datetime.utcnow())
     db.session.add(job)
     db.session.flush()
@@ -84,7 +93,7 @@ def test_retry_auth_fails_job(session, make_target):
 
 def test_retry_permanent_dead_letters(session, make_target):
     _, _, target = make_target()
-    job = PublishJob(target_id=target.id, state="claimed", attempts=0,
+    job = PublishJob(idempotency_key=_a_key(), target_id=target.id, state="claimed", attempts=0,
                      max_attempts=5, next_run_at=datetime.utcnow())
     db.session.add(job)
     db.session.flush()
@@ -352,7 +361,12 @@ def test_task_link_marks_published(session):
     deliv = ClientDeliverable.query.first()
     if not (client and deliv):
         pytest.skip("no client/deliverable in DB")
+    import random
+
     task = Task(title="__qa_tasklink__", client_id=client.id,
+                # task_code is unique AND NOT NULL - a real task gets one from
+                # generate_task_code(), which needs a request context.
+                task_code=random.randint(10_000_000, 99_999_999),
                 deliverable_id=deliv.id, status="Client Review",
                 is_social_media=True, social_platforms="facebook")
     db.session.add(task)

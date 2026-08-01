@@ -388,7 +388,14 @@
                                 settle instead of hanging on a target that
                                 will never move.
                             #}
-                            {% if t.status == 'failed' %}
+                            {# 'blocked' too, not only 'failed'. A blocked
+                               target was refused before sending for a reason
+                               the composer can fix (caption length, media the
+                               platform won't take), so it is the most
+                               retryable state there is - but the button was
+                               hidden for it, leaving Drop or a remap as the
+                               only ways out even after the cause was fixed. #}
+                            {% if t.status in ['failed', 'blocked'] %}
                             <form method="POST" action="{{ url_for('social.retry_target', target_id=t.id) }}">
                                 <button type="submit" class="row-action"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
                             </form>

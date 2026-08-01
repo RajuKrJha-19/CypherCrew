@@ -1,8 +1,22 @@
+import hashlib
 from datetime import datetime
 
 from flask_login import UserMixin
 
 from app.extensions import db
+
+
+def password_fingerprint(password_hash):
+    """A short, stable digest of a password hash.
+
+    Lives here rather than in app.routes.auth because both the session
+    identity (User.get_id) and the reset-token payload need it, and models
+    cannot import routes. Truncated to 16 hex characters: long enough that
+    two live hashes will not collide, short enough to sit in a cookie.
+    """
+    return hashlib.sha256(
+        (password_hash or "").encode()
+    ).hexdigest()[:16]
 
 
 class User(db.Model, UserMixin):
@@ -118,6 +132,27 @@ class User(db.Model, UserMixin):
         is_active alone does not, because login_required checks is_authenticated.
         """
         return self.status == "active"
+
+    def get_id(self):
+        """Session identity: the user id, bound to the current password.
+
+        Flask-Login stores whatever this returns in the session cookie AND in
+        the remember-me cookie, then hands it back to the user_loader. Mixing
+        the password fingerprint in is what makes changing a password end
+        every other open session.
+
+        Without it, Flask-Login's identity is the bare user id, so "reset the
+        password" - the standard response to a stolen laptop or a phished
+        cookie - left the attacker signed in indefinitely; with
+        WTF_CSRF_TIME_LIMIT unset and no PERMANENT_SESSION_LIFETIME, that
+        session never aged out on its own either.
+
+        Deliberately not a separate session-epoch column: the password hash is
+        already the thing that changes on every event that should invalidate a
+        session, so deriving from it needs no migration and cannot drift out
+        of step with the password itself.
+        """
+        return "%s|%s" % (self.id, password_fingerprint(self.password_hash))
 
     @property
     def initials(self):

@@ -498,6 +498,23 @@ def _capabilities_map():
             "max_carousel": caps.max_carousel if caps else None,
             "max_caption_chars": caps.max_caption_chars if caps else None,
             "supports_first_comment": bool(caps and caps.supports_first_comment),
+            # Emitted because the composer gates the "Also share to Story"
+            # checkbox on it (storyPlatforms(), compose.html) - and it was
+            # never in this dict, so that lookup was always undefined, the
+            # list was always empty, and the checkbox was permanently
+            # disabled. A finished feature - companion Story targets,
+            # story_style, the story_link flow and its tests - reachable by
+            # nobody, because of one absent key.
+            #
+            # Computed with the SAME test the server applies when it decides
+            # whether to actually create the companion target (schedule_post,
+            # "if caps.story_support and 'story' in caps.post_types"). Two
+            # different tests would mean a tickable box that silently
+            # produced no Story.
+            "story_support": bool(
+                caps and caps.story_support
+                and "story" in (caps.post_types or set())
+            ),
             "simulation": getattr(provider, "is_simulation", False),
             # The real media limits, so the composer can run the same
             # reel-first decision the server will and show the answer
@@ -988,13 +1005,23 @@ def requeue_all():
 @social_bp.route("/targets/<int:target_id>/retry", methods=["POST"])
 @login_required
 def retry_target(target_id):
-    """Re-run a single FAILED platform for a post. Available to publishers
+    """Re-run a single stuck platform for a post. Available to publishers
     (not just engine admins) so a one-platform failure on a multi-platform
-    post can be fixed without touching the whole Queue."""
+    post can be fixed without touching the whole Queue.
+
+    "blocked" counts as retryable alongside "failed". A blocked target is one
+    the app itself refused before sending - a caption over the limit, media
+    the platform will not take, a missing account - and the fix is to correct
+    the post and try again. But the gate only accepted "failed", so once the
+    composer had been fixed the target still could not be retried: the only
+    ways out were Drop, or a remap that changed the post type. The one status
+    whose cause is most likely to have been repaired was the one that could
+    not be re-run.
+    """
     _guard()
     target = SocialPostTarget.query.get_or_404(target_id)
-    if target.status != "failed":
-        flash("Only a failed platform can be retried.", "error")
+    if target.status not in lifecycle.STUCK_TARGET_STATUSES:
+        flash("Only a failed or blocked platform can be retried.", "error")
         return redirect(url_for("social.post_detail",
                                 post_id=target.social_post_id))
     job = target.job
@@ -2177,8 +2204,30 @@ def post_detail(post_id):
 def delete_post(post_id):
     _guard()
     post = SocialPost.query.get_or_404(post_id)
-    if post.status in ("publishing", "published", "partially_published"):
-        flash("A published post cannot be deleted.", "error")
+
+    # Decided from the targets, not from post.status. The status string can be
+    # stale: posts stranded by the rollup gap that lifecycle.post_status_from
+    # closes are still sitting in the database carrying "publishing" or
+    # "partially_published", and refusing on that string alone left them
+    # permanently undeletable - which is half of what made them stuck.
+    #
+    # Only two things actually block a delete, and they are named explicitly
+    # rather than derived from "is this post settled yet". Deriving it was
+    # wrong in a way that mattered: an unsettled post is not necessarily a
+    # busy one, and draft / pending_approval / approved / scheduled targets
+    # are all unsettled - so treating "not settled" as "still publishing"
+    # made ordinary drafts undeletable, which is most of what this route is
+    # for.
+    statuses = [t.status for t in post.targets]
+
+    if any(s == "published" for s in statuses):
+        flash("A published post cannot be deleted. Remove it from the "
+              "platform first.", "error")
+        return redirect(url_for("social.post_detail", post_id=post.id))
+
+    if any(s == "publishing" for s in statuses):
+        flash("This post is publishing right now - wait for it to finish.",
+              "error")
         return redirect(url_for("social.post_detail", post_id=post.id))
     audit.record("post_deleted", post_id=None, actor_id=current_user.id,
                  detail={"post_id": post.id, "title": post.title})

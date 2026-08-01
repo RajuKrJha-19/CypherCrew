@@ -413,6 +413,31 @@ def is_management(value):
     return value in MANAGEMENT_ROLES
 
 
+def rank(value):
+    """Position in TIER_ORDER. Lower number is higher authority.
+
+    An unrecognised role reads as TIER_GENERAL (`_UNKNOWN_TIER`), the bottom
+    of the ladder, so a role somebody forgot to add to the catalog can never
+    come out ranking above a real one.
+    """
+    return TIER_ORDER.index(tier(value))
+
+
+def outranks(actor_role, target_role):
+    """May somebody holding `actor_role` administer somebody holding
+    `target_role`?
+
+    Strictly above, so peers cannot administer each other: two admins cannot
+    reset one another's passwords, and nobody can use the user-edit form as a
+    route to their own tier.
+
+    `assignable_by` answers the same question for the role <select>; this
+    answers it for the person. Both read TIER_ORDER so there is one notion of
+    rank in the app rather than two that can drift apart.
+    """
+    return rank(actor_role) < rank(target_role)
+
+
 def badge_class(value):
     """CSS modifier for the role badge.
 

@@ -32,7 +32,6 @@ from app.utils.permissions import (
     ALL_CODES,
     CATEGORIES,
     DEPRECATED_CODES,
-    apply_role_defaults,
     can_manage_permissions,
     description as permission_description,
     granted_codes,
@@ -263,7 +262,28 @@ def apply_defaults(user_id):
     if roles.is_owner(user.role):
         return _refuse("The owner already has every permission.")
 
-    codes = apply_role_defaults(user, granted_by=current_user)
+    codes = set(roles.defaults_for(user.role))
+
+    if not roles.is_owner(current_user.role):
+        # The same META_CODES fence user_permissions applies to the checkbox
+        # form. Without it this button was the way around it: user_permissions
+        # carefully refuses to let a non-owner grant manage_users or
+        # manage_permissions, and then "Apply role defaults" wrote the role's
+        # entire default set with no filter at all.
+        #
+        # No role's defaults contain a meta code today, so this is not
+        # exploitable right now - it is one catalog edit away from being a
+        # two-click escalation, and the edit would look completely innocuous.
+        # Fencing both paths identically means the catalog cannot become a
+        # privilege decision by accident.
+        held = granted_codes(user)
+        for code in META_CODES:
+            if code in held:
+                codes.add(code)
+            else:
+                codes.discard(code)
+
+    set_permissions(user, codes, granted_by=current_user)
     db.session.commit()
 
     flash(

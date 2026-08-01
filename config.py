@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -62,20 +63,37 @@ class Config:
         "SESSION_COOKIE_SAMESITE",
         "Lax",
     )
+    # Default ON, and opt OUT for local development - the reverse of how this
+    # started. Defaulting to False meant a production environment that simply
+    # did not mention these variables shipped session cookies over plain HTTP,
+    # with nothing in the logs or the boot output to say so. A missing setting
+    # should cost a developer an inconvenience on localhost, not cost
+    # production its session security in silence.
     SESSION_COOKIE_SECURE = (
         os.getenv(
             "SESSION_COOKIE_SECURE",
-            "False",
+            "True",
         ).lower()
         == "true"
     )
     REMEMBER_COOKIE_SECURE = (
         os.getenv(
             "REMEMBER_COOKIE_SECURE",
-            "False",
+            "True",
         ).lower()
         == "true"
     )
+
+    # Upper bound on a signed-in session. Sessions are deliberately NOT
+    # permanent (the cookie dies when the browser closes, which is the
+    # stricter default), so this is the cap that applies if anything ever
+    # sets session.permanent - and the duration of a remember-me cookie.
+    #
+    # It is not what stops a stolen session: that is User.get_id, which binds
+    # the session identity to the current password hash so changing a password
+    # ends every other open session immediately rather than at expiry.
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+    REMEMBER_COOKIE_DURATION = timedelta(hours=12)
 
     # Seed
 

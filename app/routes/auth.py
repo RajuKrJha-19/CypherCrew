@@ -1,7 +1,6 @@
-import hashlib
-
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, current_app,
+    session,
 )
 from flask_limiter.util import get_remote_address
 from flask_login import login_user, logout_user, login_required, current_user
@@ -9,6 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app.models import User
+from app.models.user import password_fingerprint
 from app.extensions import login_manager, db, limiter
 from app.utils.email import send_email, email_enabled
 
@@ -36,10 +36,12 @@ def _pw_fingerprint(user):
     this fingerprint - changes, and every previously-issued link stops
     validating. Closes the replay window where a captured link kept working
     for the full hour even after the user already used it.
+
+    The digest itself now lives on the model, because User.get_id builds the
+    session identity from the same value - one definition, so a reset link and
+    an open session can never disagree about which password is current.
     """
-    return hashlib.sha256(
-        (user.password_hash or "").encode()
-    ).hexdigest()[:16]
+    return password_fingerprint(user.password_hash)
 
 
 def _email_rate_key():
@@ -68,10 +70,27 @@ def load_user(user_id):
     rejected here (returns None -> anonymous), so 'Inactive' actually cuts
     access immediately for a still-open session, not only at the next login.
     Role/permission changes already take effect per-request because the
-    permission rows are re-read; status was the one gap."""
-    user = User.query.get(int(user_id))
+    permission rows are re-read; status was the one gap.
+
+    The identity is now `<id>|<password fingerprint>` (see User.get_id), so a
+    session opened under an older password is refused here too. A cookie from
+    before this shipped carries a bare id, partitions to an empty fingerprint
+    and fails the comparison - i.e. everyone signs in once more after deploy,
+    which is the correct outcome for a change whose whole point is that old
+    sessions must not survive."""
+    raw_id, _, fingerprint = str(user_id).partition("|")
+
+    try:
+        user = User.query.get(int(raw_id))
+    except (TypeError, ValueError):
+        return None
+
     if user is None or user.status != "active":
         return None
+
+    if fingerprint != password_fingerprint(user.password_hash):
+        return None
+
     return user
 
 
@@ -117,6 +136,10 @@ def login():
             flash("Your account is inactive.", "error")
             return redirect(url_for("auth.login"))
 
+        # Fresh session per sign-in. Anything a pre-login request left behind
+        # (flash state, a next-url, or a value an attacker managed to plant)
+        # is dropped rather than inherited by the authenticated session.
+        session.clear()
         login_user(user)
 
         return redirect(url_for("dashboard.index"))

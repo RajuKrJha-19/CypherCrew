@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, login_user
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -10,6 +10,7 @@ from app.utils import periods, roles, task_status
 from app.utils.timezone import ist_date, ist_now
 from app.utils.permissions import (
     apply_role_defaults, can_manage_users as _can_manage_users,
+    can_view_team_performance,
 )
 
 
@@ -43,11 +44,19 @@ def may_administer(target):
     the same thing back when "employee" was the only non-administrator
     role. With thirteen of them, the question is about tier, not about one
     particular value.
+
+    "Only downwards" is compared against the *actor*, which is the part that
+    used to be missing: the test was `not is_management(target)`, and since
+    MANAGEMENT_ROLES is only super_admin and admin, that let anybody holding
+    `manage_users` edit every other role in the app - including the craft
+    managers, whose accounts carry publish_tasks and approve_tasks. Combined
+    with the password field below, that was a takeover of an account with
+    publish access to client social profiles.
     """
     if roles.is_owner(current_user.role):
         return True
 
-    return not roles.is_management(getattr(target, "role", None))
+    return roles.outranks(current_user.role, getattr(target, "role", None))
 
 
 @users_bp.route("/")
@@ -138,7 +147,14 @@ def user_detail(user_id):
 @login_required
 def user_performance(user_id):
 
-    if not can_manage_users():
+    # view_team_performance is the permission the catalog describes as opening
+    # "any individual's performance page", and dashboard.super_admin gates the
+    # same figures on it - but this route asked for manage_users instead, so
+    # granting the documented permission produced a link that bounced. Accept
+    # either: the per-person fence below is what actually scopes the data, and
+    # requiring manage_users on top would mean handing out user administration
+    # just to let someone read a performance page.
+    if not (can_view_team_performance(current_user) or can_manage_users()):
         return redirect(url_for("dashboard.index"))
 
     user = User.query.get_or_404(user_id)
@@ -401,6 +417,13 @@ def edit_user(user_id):
             user.password_hash = generate_password_hash(password)
 
         db.session.commit()
+
+        # Setting a password ends every session that was opened under the old
+        # one - that is the point (User.get_id). The owner is the one account
+        # that may edit itself here, so without re-issuing the cookie they
+        # would be signed out by their own password change on the next click.
+        if password and user.id == current_user.id:
+            login_user(user)
 
         flash("User updated successfully.", "success")
 

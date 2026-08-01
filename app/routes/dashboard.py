@@ -397,7 +397,13 @@ def build_workload():
         User.status == "active"
     ).order_by(User.name.asc()).all()
 
-    now = datetime.utcnow()
+    # ist_now(), not utcnow(). Task.deadline is parsed from a datetime-local
+    # input, so it is naive IST wall-clock, and every other overdue test in
+    # the app compares it to ist_now() (dashboard 503/1028/1277, tasks 1153,
+    # users 153). Comparing it to UTC here under-counted overdue by 5h30m, so
+    # the same task showed red on the task list and green on this panel - the
+    # only signal being that the two screens disagreed.
+    now = ist_now()
     workload = []
 
     for employee in employees:

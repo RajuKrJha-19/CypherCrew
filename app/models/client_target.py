@@ -40,6 +40,13 @@ class ClientMonthlyTarget(db.Model):
 class ClientDeliverable(db.Model):
     __tablename__ = "client_deliverables"
 
+    __table_args__ = (
+        db.CheckConstraint(
+            "completed_count >= 0 AND target_count >= 0",
+            name="ck_client_deliverables_counts_non_negative",
+        ),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
 
     monthly_target_id = db.Column(
@@ -52,9 +59,18 @@ class ClientDeliverable(db.Model):
 
     deliverable_name = db.Column(db.String(150), nullable=False)
 
-    completed_count = db.Column(db.Integer, default=0)
+    # NOT NULL with a server-side default and a non-negative CHECK (see the
+    # table args below). These were nullable with a Python-only default, and
+    # the max(0, ...) clamp lived in two routes - so anything writing outside
+    # them could store NULL or a negative, and the client dashboard coalesces
+    # NULL to 0, which renders a negative drift as if the counter were simply
+    # behind. All writes now go through app/services/deliverables.py; this is
+    # the floor under that.
+    completed_count = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0")
 
-    target_count = db.Column(db.Integer, default=0)
+    target_count = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0")
 
     created_at = db.Column(
         db.DateTime,

@@ -15,6 +15,13 @@
     </div>
     {% if job.last_error and job.state in ['failed','dead'] %}
     <div class="qc-err" title="{{ job.last_error }}">{{ job.last_error }}</div>
+    {% elif job.last_error and job.state == 'queued' %}
+    {# A queued job carrying a message is waiting on a platform rate limit,
+       not broken - so it reads as a note rather than an error. Without this
+       the card showed a bare "queued" pill and the reason was invisible. #}
+    <div class="qc-note" title="{{ job.last_error }}">
+        <i class="fa-solid fa-hourglass-half"></i> {{ job.last_error }}
+    </div>
     {% endif %}
     <div class="qc-foot">
         <span class="qc-meta">

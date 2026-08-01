@@ -4,6 +4,7 @@ Authenticated by a shared secret token (not a user session), so system
 cron can call them. Not @login_required; the token is the auth.
 """
 
+import hmac
 import os
 
 from flask import Blueprint, abort, current_app, jsonify, request
@@ -16,27 +17,37 @@ from app.services.task_fallback import run_task_fallback_reassignment
 internal_bp = Blueprint("internal", __name__, url_prefix="/internal")
 
 
+def _secret_ok(expected, header):
+    """True only when `expected` is configured AND the caller presents it in
+    `header`. Fail-closed: an unset secret keeps the endpoint shut, so it can
+    never run unauthenticated by default.
+
+    **Header only.** These guards used to accept `?token=` / `?secret=` as an
+    alternative, and a query string is not a private channel: it is written to
+    nginx, Cloudflare and gunicorn access logs, and forwarded in Referer. One
+    leaked log line handed over /internal/social/worker/run and
+    /internal/social/tokens/refresh. Any cron job still passing the secret in
+    the URL has to move it into the header.
+
+    Compared with hmac.compare_digest rather than `==`, which returns as soon
+    as two bytes differ and so leaks the secret's prefix to anyone who can
+    time the response. Same pattern legal.py:178 already uses.
+    """
+    provided = request.headers.get(header)
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(str(provided), str(expected))
+
+
 def _authorised():
-    """True only when REMINDER_TOKEN is configured AND the caller presents
-    it (header or ?token=). If the token isn't set, the endpoint stays
-    closed - so it can never run unauthenticated by default."""
-    expected = os.getenv("REMINDER_TOKEN")
-    provided = (
-        request.headers.get("X-Reminder-Token")
-        or request.args.get("token")
-    )
-    return bool(expected) and provided == expected
+    return _secret_ok(os.getenv("REMINDER_TOKEN"), "X-Reminder-Token")
 
 
 def _social_authorised():
-    """Same fail-closed pattern for the Social Publishing Engine cron
-    endpoints, gated by its own SOCIAL_WORKER_TOKEN."""
-    expected = current_app.config.get("SOCIAL_WORKER_TOKEN")
-    provided = (
-        request.headers.get("X-Social-Token")
-        or request.args.get("token")
-    )
-    return bool(expected) and provided == expected
+    """Fail-closed guard for the Social Publishing Engine cron endpoints,
+    gated by its own SOCIAL_WORKER_TOKEN."""
+    return _secret_ok(
+        current_app.config.get("SOCIAL_WORKER_TOKEN"), "X-Social-Token")
 
 
 def _social_guard():
@@ -50,12 +61,8 @@ def _social_guard():
 def _zoho_authorised():
     """Fail-closed token guard for the attendance cron endpoints, gated by
     its own ZOHO_SYNC_TOKEN."""
-    expected = current_app.config.get("ZOHO_SYNC_TOKEN")
-    provided = (
-        request.headers.get("X-Zoho-Token")
-        or request.args.get("token")
-    )
-    return bool(expected) and provided == expected
+    return _secret_ok(
+        current_app.config.get("ZOHO_SYNC_TOKEN"), "X-Zoho-Token")
 
 
 def _attendance_guard():
@@ -200,12 +207,8 @@ def attendance_webhook():
     """
     if not current_app.config.get("ATTENDANCE_ENABLED"):
         abort(503)
-    expected = current_app.config.get("ZOHO_WEBHOOK_SECRET")
-    provided = (
-        request.headers.get("X-Zoho-Webhook-Secret")
-        or request.args.get("secret")
-    )
-    if not expected or provided != expected:
+    if not _secret_ok(current_app.config.get("ZOHO_WEBHOOK_SECRET"),
+                      "X-Zoho-Webhook-Secret"):
         abort(403)
     from app.attendance import service
     return jsonify(success=True, **service.sync_attendance())

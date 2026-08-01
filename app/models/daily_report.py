@@ -6,6 +6,17 @@ from app.extensions import db
 class DailyReport(db.Model):
     __tablename__ = "daily_reports"
 
+    __table_args__ = (
+        # One report per person per day. add_report get-or-creates on this
+        # pair, so without the constraint a double-submitted form raced into
+        # two rows for one employee-day - and the timesheet then listed the
+        # day twice and doubled its completed count.
+        db.UniqueConstraint(
+            "employee_id", "report_date",
+            name="uq_daily_report_employee_date",
+        ),
+    )
+
     id = db.Column(
         db.Integer,
         primary_key=True

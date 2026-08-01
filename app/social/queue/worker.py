@@ -45,11 +45,36 @@ _MAX_PENDING_POLLS = 40
 
 def _reset_stale(worker_id):
     """Return jobs abandoned by a dead worker (stuck 'claimed' past the
-    stale window) to the queue."""
+    stale window) to the queue.
+
+    'claimed' is deliberately the only state swept, and that is not an
+    oversight: it is the only in-flight state that ever reaches the database.
+    `publishing` is assigned in memory during _process but _apply_step always
+    overwrites it - with succeeded, dead or queued - before the commit, and an
+    exception rolls the whole thing back. So there is no such thing as a job
+    stranded in `publishing`, and sweeping for it would be dead code that
+    looked like a safety net.
+
+    What this DID get wrong is the clock. `locked_at` was stamped once, at
+    claim time, and never touched again, so the window had to cover claim
+    overhead plus the entire upload. A YouTube resumable upload that ran past
+    it was requeued out from under a worker that was alive and succeeding -
+    and because the dispatch marker survives, the resume was then treated as
+    an interrupted publish and killed. A video that uploaded perfectly came
+    back to the creator as "may already be live, check before retrying", and
+    the target never published. _process now refreshes locked_at at the moment
+    the long call begins, so this window measures the operation rather than
+    the operation plus everything before it.
+    """
     cutoff = datetime.utcnow() - timedelta(minutes=_STALE_CLAIM_MINUTES)
     stale = (
         PublishJob.query
         .filter(PublishJob.state == "claimed", PublishJob.locked_at < cutoff)
+        # SKIP LOCKED, like _claim: several gunicorn workers run this tick at
+        # once, and a plain SELECT let two of them read the same row and both
+        # requeue it. Whichever worker gets there first does the reset; the
+        # others move on instead of blocking behind it.
+        .with_for_update(skip_locked=True)
         .all()
     )
     for job in stale:
@@ -58,6 +83,39 @@ def _reset_stale(worker_id):
     if stale:
         db.session.commit()
     return len(stale)
+
+
+def _rate_defer_message(platform, limit, window_seconds, next_run_at):
+    """Plain-language reason a post is sitting in the queue untouched.
+
+    The window is spelled out because the caps are not guessable and the
+    tight one is the whole problem: YouTube allows six uploads per 24 hours,
+    so a busy day silently parks everything after the sixth. Times are shown
+    in IST, the timezone everyone reading this works in - next_run_at is UTC.
+
+    The platform name comes from PLATFORM_LABELS, not from `.capitalize()`,
+    which renders "Youtube", "Linkedin" and "Google business" - wrong in a
+    sentence whose entire job is to be read and believed.
+    """
+    from app.utils.social_platforms import PLATFORM_LABELS
+    from app.utils.timezone import IST_OFFSET
+
+    hours = (window_seconds or 0) / 3600.0
+    if hours >= 23:
+        window_text = "%g hours" % round(hours)
+    elif hours >= 1:
+        window_text = "%g hour%s" % (round(hours), "" if round(hours) == 1 else "s")
+    else:
+        window_text = "%d minutes" % round((window_seconds or 0) / 60.0)
+
+    when = (next_run_at + IST_OFFSET).strftime("%d %b %H:%M")
+
+    return (
+        "Waiting on the %s upload limit (%d per %s), which is currently used "
+        "up. This post has not failed - the next attempt is at %s IST."
+        % (PLATFORM_LABELS.get(platform, platform.capitalize()),
+           limit, window_text, when)
+    )
 
 
 def _claim(batch, worker_id):
@@ -240,9 +298,46 @@ def _process(job_id):
             if not ratelimit.reserve(account.id, limit, window):
                 job.next_run_at = datetime.utcnow() + timedelta(minutes=30)
                 job.state = "queued"
+                # Say so. This branch used to defer in complete silence: the
+                # job went back to 'queued', the post sat in the queue, and
+                # nothing anywhere named the reason. YouTube's cap is six
+                # uploads per 24 hours, so once it is spent every attempt
+                # lands here and re-defers 30 minutes at a time - which from
+                # the outside is indistinguishable from a broken publisher,
+                # and is what "Instagram aur YouTube pe jaa hi nahi raha"
+                # actually looked like.
+                #
+                # Written to the target as well as the job because that is
+                # where someone chasing a late post looks first (the post
+                # detail page lists target.last_error as the reason it is not
+                # out yet). _apply_step clears it on success.
+                job.last_error = _rate_defer_message(
+                    target.platform, limit, window, job.next_run_at)
+                target.last_error = job.last_error
                 db.session.commit()
                 return {"job": job_id, "result": "rate_deferred"}
+
+            # Commit the reservation NOW, before anything slow.
+            #
+            # ratelimit.reserve() takes SELECT ... FOR UPDATE on this
+            # account's platform_rate_budgets row, and that lock is held until
+            # the transaction ends. The next commit used to be the dispatch
+            # marker below - on the far side of a token refresh, a media
+            # download and transcode.fit_content(), which shells out to
+            # ffmpeg and can run for minutes. So every concurrent publish for
+            # one Instagram account serialised behind that ffmpeg run, each
+            # holding an idle-in-transaction lock; under a burst the pool
+            # drained and the whole autoworker tick failed.
+            #
+            # Persisting _reserved in the same commit is what makes this safe
+            # to do early: a crash between here and the publish leaves the
+            # slot spent and the flag set, so the retry does not reserve a
+            # second one. Spending a slot for a publish that never happened
+            # under-counts the window by one, which is the safe direction -
+            # the same trade-off _handle_interrupted already documents.
             provider_state["_reserved"] = True
+            job.provider_state = dict(provider_state)
+            db.session.commit()
 
         token = AccountManager.access_token(account)
         content = build_content(target)
@@ -267,6 +362,15 @@ def _process(job_id):
             # fragile pre-raise commit here: _handle_failure owns the clear.)
             provider_state["dispatched"] = True
             job.provider_state = dict(provider_state)
+            # Restart the stale clock here, not at claim time. Everything above
+            # - token refresh, build_content, and especially transcode.fit_content,
+            # which shells out to ffmpeg - already ran, and the upload itself is
+            # still ahead. Measuring from the claim meant a large YouTube upload
+            # could cross _STALE_CLAIM_MINUTES while succeeding, get requeued by
+            # _reset_stale, and then be killed as an interrupted publish by the
+            # dispatched guard above. Stamping it here makes the window cover the
+            # publish call, which is what it was sized for.
+            job.locked_at = datetime.utcnow()
             db.session.commit()
 
             step = provider.start_publish(target, content, token)
@@ -584,16 +688,16 @@ def _maybe_finalize_post(target):
     statuses = [s for (s,) in db.session.query(SocialPostTarget.status)
                 .filter(SocialPostTarget.social_post_id == post.id).all()]
 
-    # A target that is "blocked" settles the post just like a failed one.
-    # Without this a post with one published platform and one that could
-    # never publish stayed at "scheduled" forever - the list said Scheduled
-    # while the post page showed one live and one dead, and nothing could
-    # ever resolve it because the rollup was waiting on a target that was
-    # never going to move.
-    STUCK = ("failed", "blocked")
+    # The status these targets imply, shared with lifecycle's removal rollup so
+    # the two cannot disagree about what a settled post looks like. It returns
+    # None while anything is still in flight.
+    from app.social.services.lifecycle import post_status_from
+
+    settled = post_status_from(statuses)
+    if settled is not None:
+        post.status = settled
 
     if all(s == "published" for s in statuses):
-        post.status = "published"
         # Tell the creator their (often scheduled) post is now live.
         if post.created_by_id:
             plats = sorted({t.platform for t in post.targets})
@@ -602,12 +706,6 @@ def _maybe_finalize_post(target):
                 f"“{post.title or 'Your post'}” is now live on "
                 + ", ".join(plats) + ".",
                 link=f"/social/posts/{post.id}", actor_id=None)
-    elif (any(s == "published" for s in statuses)
-            and any(s in STUCK for s in statuses)
-            and all(s in ("published", "removed") + STUCK for s in statuses)):
-        post.status = "partially_published"
-    elif statuses and all(s in STUCK for s in statuses):
-        post.status = "failed"
 
     # Reflect the post's settled state on the originating task (live / in
     # queue / failed) in every case, not only on full success.

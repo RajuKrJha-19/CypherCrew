@@ -25,6 +25,12 @@ from app.utils.timezone import ist_now
 PREFIX = "pytest-role-"
 
 
+def _a_code():
+    """tasks.task_code is unique and NOT NULL; a test row still needs one."""
+    import random
+    return random.randint(10_000_000, 99_999_999)
+
+
 @pytest.fixture()
 def client_with_work(session, make_user):
     """A client, this month's target with one deliverable, and an assignee."""
@@ -54,6 +60,7 @@ def _task(customer, deliverable, owner, status, completed_at=None,
           title=PREFIX + "t", deadline=None):
     task = Task(
         title=title, status=status,
+        task_code=_a_code(),
         client_id=customer.id, deliverable_id=deliverable.id,
         assigned_to_id=owner.id, created_by_id=owner.id,
         deadline=deadline or (datetime.utcnow() + timedelta(days=3)),

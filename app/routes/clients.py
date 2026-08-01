@@ -24,6 +24,7 @@ from app.utils.permissions import (
 from app.utils import roles
 from app.utils import periods
 from app.services import client_dashboard as client_dashboard_service
+from app.services import deliverables
 from app.utils.timezone import ist_now
 from app.utils import client_assets as client_asset_catalog
 from app.storage.storage_service import StorageService, StorageServiceError
@@ -296,8 +297,13 @@ def client_detail(client_id):
     can_edit_deliverables = _can_edit_deliverables(current_user)
 
     try:
-        selected_month = int(request.args.get("month", date.today().month))
-        selected_year = int(request.args.get("year", date.today().year))
+        # ist_now(), not date.today(): the server runs on UTC, so on the 1st of
+        # a month before IST 05:30 this opened the client on LAST month's
+        # targets and deliverables - the one moment in the month when someone
+        # is most likely to be checking whether the new month is set up.
+        _today = ist_now().date()
+        selected_month = int(request.args.get("month", _today.month))
+        selected_year = int(request.args.get("year", _today.year))
         # month_name is indexed 1..12 below; an out-of-range month parses
         # fine as an int but would raise IndexError, so reject it here.
         if not (1 <= selected_month <= 12):
@@ -572,8 +578,13 @@ def edit_deliverable(deliverable_id):
 
         deliverable.service_name = service_name
         deliverable.deliverable_name = deliverable_name
-        deliverable.completed_count = max(0, completed_count)
         deliverable.target_count = max(0, target_count)
+
+        # Under the row lock like every other writer of this column. A human
+        # typing an absolute number still races the publish worker: without
+        # the lock, a delivery that lands while this form is open is silently
+        # overwritten by whatever the count was when the page rendered.
+        deliverables.set_count(deliverable.id, completed_count)
 
         db.session.commit()
 

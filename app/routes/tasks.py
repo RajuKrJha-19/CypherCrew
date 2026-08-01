@@ -58,6 +58,7 @@ from app.storage.storage_service import (
 )
 
 from app.services import thumbnails
+from app.services import deliverables
 
 from app.models import TaskFile
 
@@ -157,6 +158,19 @@ def record_status_time(task, new_status):
             field,
             (getattr(task, field) or 0) + elapsed
         )
+    elif elapsed > 0:
+        # The table-driven lookup does not by itself prevent the failure the
+        # comment above describes: duration_field() returns None quietly and
+        # the branch above just skips, so a status with no bucket loses its
+        # time exactly the way "Hold" did. A status in ALL_STATUSES missing
+        # from DURATION_FIELD is caught by tests before it ships; this covers
+        # the other route in - a literal typed straight into the database, or
+        # written by a path that never consulted the catalog - where the only
+        # symptom is time quietly going missing from someone's timesheet.
+        current_app.logger.warning(
+            "task %s left status %r with no duration bucket - %ds of tracked "
+            "time discarded", task.id, task.status, elapsed,
+        )
 
     # Leaving On Hold or Void must drop the reason that put it there.
     # Every status change funnels through here, so doing it at this
@@ -180,9 +194,13 @@ def record_status_time(task, new_status):
     if task.status == task_status.PUBLISHED \
             and new_status != task_status.PUBLISHED and task.completed_at:
         task.completed_at = None
-        if task.deliverable is not None and task.deliverable.completed_count:
-            task.deliverable.completed_count = \
-                max(0, (task.deliverable.completed_count or 0) - 1)
+        # Unconditional, unlike the `if deliverable.completed_count:` this
+        # replaces. That guard skipped the subtraction whenever the stored
+        # count was already 0 - but still cleared completed_at, so the next
+        # approval added 1 back and a rework cycle netted +1 with no delivery.
+        # deliverables.adjust_count clamps at 0 inside the row lock, which is
+        # what the guard was reaching for without the race.
+        deliverables.adjust_count(task.deliverable_id, -1)
 
     task.status = new_status
     task.status_started_at = now
@@ -224,9 +242,7 @@ def apply_completion_effects(task, new_status):
 
     if new_status == "Published" and not task.completed_at:
         task.completed_at = ist_now()
-        if task.deliverable is not None:
-            task.deliverable.completed_count = \
-                (task.deliverable.completed_count or 0) + 1
+        deliverables.adjust_count(task.deliverable_id, +1)
         if task.is_social_media and task.social_platforms \
                 and not task.social_platforms_published:
             task.social_platforms_published = task.social_platforms
@@ -944,6 +960,13 @@ def list_tasks():
     )
 
     tasks = query.all()
+
+    # Load every Studio post for this page in one query. list.html renders
+    # publish_badge twice per task (the table row and the board card), and
+    # each call used to issue its own SocialPost query plus a lazy load of
+    # that post's targets. Priming here collapses the whole page into two.
+    from app.social.services import task_link
+    task_link.prime_badges(tasks)
 
     statuses = task_status.ALL_STATUSES
 
@@ -2291,6 +2314,15 @@ def edit_task(task_id):
         if can_assign_tasks(current_user):
             task.assigned_to_id = assigned_to_id
         if can_manage_tasks:
+            # Retargeting an already-delivered task has to carry its delivery
+            # across, or both service lines are permanently wrong: move a
+            # Published task from Reels to Statics and Reels stays +1 while
+            # Statics stays -1, with nothing able to reconcile them later.
+            # Guarded on completed_at because a task that never counted has
+            # nothing to move.
+            if task.completed_at and task.deliverable_id != deliverable_id:
+                deliverables.move(task.deliverable_id, deliverable_id)
+
             task.client_id = client_id
             task.deliverable_id = deliverable_id
             fallback_config_changed = (
@@ -3874,11 +3906,16 @@ def approve_task(task_id):
             new_status="Published"
         )
 
-        task.completed_at = ist_now()
-        status_changed = True
+        # Guarded on completed_at, the way apply_completion_effects already
+        # was. Without it a double-clicked Approve stamped completed_at twice
+        # and counted the delivery twice - the second click arrives while the
+        # first request is still in flight, so "the task is already Published"
+        # is not yet true anywhere the second request can see.
+        if not task.completed_at:
+            task.completed_at = ist_now()
+            deliverables.adjust_count(task.deliverable_id, +1)
 
-        task.deliverable.completed_count = \
-            (task.deliverable.completed_count or 0) + 1
+        status_changed = True
 
         flash(
             "Task published successfully.",
@@ -4044,11 +4081,15 @@ def retry_task_publish(task_id):
             or can_use_social(current_user)):
         return redirect(url_for("dashboard.index"))
     task = Task.query.get_or_404(task_id)
-    from app.social.services import task_link, recovery, publishing
+    from app.social.services import task_link, recovery, publishing, lifecycle
     n = 0
     for post in task_link.linked_posts(task):
         for t in post.targets:
-            if t.status != "failed":
+            # "blocked" as well as "failed" - same reasoning as
+            # social.retry_target: a blocked target was refused before sending
+            # for a reason the composer can fix, so it is the most retryable
+            # state there is, and it was the one this skipped.
+            if t.status not in lifecycle.STUCK_TARGET_STATUSES:
                 continue
             job = t.job
             if job is not None and recovery.requeue_job(
@@ -4061,7 +4102,7 @@ def retry_task_publish(task_id):
             n += 1
     task_link.sync_task_from_posts(task, actor_id=current_user.id)
     db.session.commit()
-    flash(f"Re-queued {n} failed publish(es) — they'll go out on the next "
+    flash(f"Re-queued {n} stuck publish(es) — they'll go out on the next "
           "worker run." if n else "Nothing to retry.",
           "success" if n else "info")
     return redirect(url_for("tasks.task_detail", task_id=task.id))
@@ -5244,6 +5285,27 @@ def commit_submission_upload(task_id):
     return jsonify(success=True, count=count)
 
 
+def _submission_key_belongs_to(task, object_key):
+    """Does this multipart key live under this task's own submission prefix?
+
+    The same test the storage layer already applies when a multipart upload is
+    COMPLETED (StorageService.complete_task_file_multipart_upload), which is
+    what stops a tampered client registering a TaskFile row against an
+    arbitrary object. The part-url and abort routes took object_key straight
+    out of the JSON body with no such check, so a signed-in user could mint
+    part URLs against - or abort - another task's in-flight upload just by
+    naming its key.
+
+    S3 semantics contain it in practice: a live multipart upload has to exist
+    for that exact key and upload_id. That makes it latent rather than live,
+    but the containment is a property of the object store, not of anything
+    this application controls, and it costs one comparison to not depend on it.
+    """
+    expected = "/TASK-%s/submission/" % (getattr(task, "task_code", "") or "")
+    key = str(object_key or "")
+    return key.startswith("clients/") and expected in key
+
+
 @tasks_bp.route(
     "/<int:task_id>/multipart/initiate",
     methods=["POST"],
@@ -5308,6 +5370,12 @@ def get_submission_multipart_part_url(task_id):
     object_key = data.get("object_key")
     upload_id = data.get("upload_id")
     part_number = data.get("part_number")
+
+    if not _submission_key_belongs_to(task, object_key):
+        return jsonify(
+            success=False,
+            message="object_key does not match this task's storage location.",
+        ), 400
 
     storage = StorageService()
 
@@ -5428,6 +5496,12 @@ def abort_submission_multipart_upload(task_id):
 
     object_key = data.get("object_key")
     upload_id = data.get("upload_id")
+
+    if not _submission_key_belongs_to(task, object_key):
+        return jsonify(
+            success=False,
+            message="object_key does not match this task's storage location.",
+        ), 400
 
     storage = StorageService()
 

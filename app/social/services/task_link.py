@@ -35,10 +35,67 @@ def _task_of(post):
     return db.session.get(Task, post.task_id)
 
 
+#: Key on flask.g holding {task_id: [posts]} for a primed batch. Absent unless
+#: prime_badges() ran, so nothing outside a list render is affected.
+_PRIME_KEY = "_task_link_posts"
+
+
+def prime_badges(tasks):
+    """Load the Studio posts for a whole page of tasks in one go.
+
+    publish_badge() is rendered twice per row on the task list (the row itself
+    and the board card), and each call went through linked_posts(), which is a
+    fresh query - then touched post.targets, which lazy-loads another. On a
+    list of social tasks that is four queries per task before anything is
+    drawn, and the list has no pagination, so it grew with the table forever.
+
+    Priming turns the whole page into two queries. The cache is deliberately
+    opt-in and per-request: only a caller that has just loaded a batch of
+    tasks knows the data is fresh, so nothing else - the worker, the publish
+    path, the detail page - reads it or has to think about invalidating it.
+    """
+    from flask import g, has_request_context
+
+    if not tasks or not has_request_context():
+        return
+
+    from sqlalchemy.orm import selectinload
+
+    from app.models import SocialPost
+
+    ids = [t.id for t in tasks if getattr(t, "is_social_media", False)]
+    if not ids:
+        # Still mark the batch primed: a page of non-social tasks must not
+        # fall through to a query each.
+        setattr(g, _PRIME_KEY, {})
+        return
+
+    posts = (SocialPost.query
+             .options(selectinload(SocialPost.targets))
+             .filter(SocialPost.task_id.in_(ids),
+                     SocialPost.status != "removed")
+             .order_by(SocialPost.created_at.asc())
+             .all())
+
+    grouped = {task_id: [] for task_id in ids}
+    for post in posts:
+        grouped.setdefault(post.task_id, []).append(post)
+
+    setattr(g, _PRIME_KEY, grouped)
+
+
 def linked_posts(task):
     """Non-removed Social Studio posts created from this task, newest last."""
     if task is None:
         return []
+
+    from flask import g, has_request_context
+
+    if has_request_context():
+        primed = getattr(g, _PRIME_KEY, None)
+        if primed is not None and task.id in primed:
+            return primed[task.id]
+
     from app.models import SocialPost
     return (SocialPost.query
             .filter(SocialPost.task_id == task.id,
@@ -153,10 +210,30 @@ def sync_task_from_posts(task, actor_id=None):
 
     if live and not task.completed_at:
         from app.utils.timezone import ist_now
-        task.completed_at = ist_now()
-        if task.deliverable is not None:
-            task.deliverable.completed_count = \
-                (task.deliverable.completed_count or 0) + 1
+        from app.models import Task
+        from app.services import deliverables
+
+        # Re-read the task under its own row lock before stamping. This runs
+        # from the publish worker's thread pool, in every gunicorn worker, and
+        # the caller (_maybe_finalize_post) locks the SocialPost only - so two
+        # posts finishing for one task, or two tasks on one deliverable, both
+        # saw completed_at as NULL here and both counted a delivery.
+        #
+        # The lock is taken only on the path that actually writes, so the
+        # common case (a target settling with nothing to finalise) still costs
+        # nothing.
+        locked = (
+            db.session.query(Task)
+            .filter_by(id=task.id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+        if locked is None or locked.completed_at:
+            return
+
+        locked.completed_at = ist_now()
+        deliverables.adjust_count(locked.deliverable_id, +1)
         posts = linked_posts(task)
         plats = sorted({t.platform for p in posts for t in p.targets
                         if t.status == "published"})

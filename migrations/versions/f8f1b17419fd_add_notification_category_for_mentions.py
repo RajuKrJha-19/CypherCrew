@@ -23,6 +23,19 @@ depends_on = None
 
 
 def upgrade():
+    # Idempotent. The baseline migration now builds notifications instead of leaving
+    # it to a schema created by hand, so on a database restored from nothing
+    # this column already exists by the time we get here and there is nothing
+    # to add. On the production database this migration ran long ago. Either
+    # way, re-running it must not raise - which is what it did before, because
+    # a batch_alter_table block cannot guard its own statements.
+    _bind = op.get_bind()
+    _inspector = sa.inspect(_bind)
+    if "notifications" not in set(_inspector.get_table_names()):
+        return
+    if "category" in {c["name"] for c in _inspector.get_columns("notifications")}:
+        return
+
     with op.batch_alter_table('notifications', schema=None) as batch_op:
         batch_op.add_column(
             sa.Column(

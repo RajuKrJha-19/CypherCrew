@@ -26,3 +26,14 @@ limiter = Limiter(
 )
 
 login_manager.login_view = "auth.login"
+
+#: Deliberately left at Flask-Login's default ("basic") rather than "strong".
+#: Strong protection binds the session to a hash of the User-Agent plus
+#: request.remote_addr - and this app runs behind Cloudflare with no ProxyFix,
+#: so remote_addr is whichever Cloudflare edge node forwarded the request and
+#: varies between requests from one user. Under "strong" that reads as a
+#: hijacked session and signs people out at random.
+#:
+#: What actually stops a stolen session here is User.get_id, which binds the
+#: session identity to the current password hash - so changing a password ends
+#: every other open session, without depending on the client's address.

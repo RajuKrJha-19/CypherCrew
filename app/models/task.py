@@ -13,11 +13,15 @@ class Task(db.Model):
     __tablename__ = "tasks"
 
     id = db.Column(db.Integer, primary_key=True)
+    # NOT NULL. Unique-but-nullable let Postgres accept any number of
+    # code-less rows, and R2 object keys are built from this - two NULLs would
+    # fall back to the same path and collide. generate_task_code always sets
+    # it; this stops anything that does not.
     task_code = db.Column(
-    db.Integer,
-    unique=True,
-    nullable=True
-)
+        db.Integer,
+        unique=True,
+        nullable=False,
+    )
 
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)

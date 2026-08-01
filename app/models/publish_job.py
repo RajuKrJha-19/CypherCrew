@@ -35,7 +35,11 @@ class PublishJob(db.Model):
     locked_at = db.Column(db.DateTime, nullable=True)
     locked_by = db.Column(db.String(64), nullable=True)
 
-    idempotency_key = db.Column(db.String(255), nullable=True, unique=True)
+    # NOT NULL: Postgres allows unlimited NULLs in a unique index, so a
+    # job created without a key silently escaped the "never publish the
+    # same target twice for one schedule" guarantee this class documents.
+    idempotency_key = db.Column(
+        db.String(255), nullable=False, unique=True)
     provider_state = db.Column(JSONB, nullable=True)
 
     priority = db.Column(db.Integer, nullable=False, default=100)

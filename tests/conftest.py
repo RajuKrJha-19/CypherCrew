@@ -365,6 +365,15 @@ def _purge_test_rows():
     ]
 
     if user_ids:
+        # daily_reports holds a NOT NULL FK to users with no cascade, so a
+        # test that files a report leaves its author undeletable here - and
+        # the symptom is a teardown-only ForeignKeyViolation in a completely
+        # unrelated test, which is a miserable way to find out.
+        from app.models import DailyReport
+        DailyReport.query.filter(
+            DailyReport.employee_id.in_(user_ids)
+        ).delete(synchronize_session=False)
+
         UserPermission.query.filter(
             UserPermission.user_id.in_(user_ids)
         ).delete(synchronize_session=False)
@@ -481,7 +490,12 @@ def login(client):
 
     def _login(user):
         with client.session_transaction() as session:
-            session["_user_id"] = str(user.id)
+            # get_id(), not str(user.id): the session identity is the user id
+            # bound to a fingerprint of the current password hash, which is
+            # what makes a password change end other sessions. Writing a bare
+            # id here would be rejected by auth.load_user exactly the way a
+            # stale cookie is.
+            session["_user_id"] = user.get_id()
             session["_fresh"] = True
 
         # Flask-Login caches the resolved user on `g`, and `g` belongs to
@@ -507,6 +521,15 @@ def _no_csrf(app):
     app.config["WTF_CSRF_ENABLED"] = False
     yield
     app.config["WTF_CSRF_ENABLED"] = previous
+
+
+
+#: tasks.task_code is unique AND NOT NULL - a real task always gets one from
+#: generate_task_code(), which needs a request. Tests build Task rows directly,
+#: so they mint their own from a high range that production codes never reach.
+def a_test_task_code():
+    import random
+    return random.randint(10_000_000, 99_999_999)
 
 
 @pytest.fixture()
@@ -550,6 +573,7 @@ def make_task(app, make_user):
 
             task = Task(
                 title=title,
+                task_code=a_test_task_code(),
                 status="Assigned",
                 client_id=client.id,
                 deliverable_id=deliverable.id,

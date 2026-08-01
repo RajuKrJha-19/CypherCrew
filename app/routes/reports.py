@@ -10,6 +10,7 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import DailyReport, Task, User
+from app.utils.timezone import ist_now
 from app.utils.permissions import has_permission
 from app.utils import roles
 
@@ -94,7 +95,10 @@ def parse_filter_date(value):
 
 def _resolve_period(args):
     """month/year from the query string, clamped to something sane."""
-    now = datetime.utcnow()
+    # IST, for the same reason as add_report: on the 1st of a month, between
+    # IST 00:00 and 05:30, utcnow() is still in the previous month and the
+    # page opened on last month's figures.
+    now = ist_now()
     try:
         month = int(args.get("month", now.month))
         year = int(args.get("year", now.year))
@@ -278,7 +282,14 @@ def list_reports():
 @login_required
 def add_report():
 
-    today = date.today()
+    # The IST day, not the server's. employee_completed_at is stamped with
+    # ist_now(), and no TZ is set anywhere in config.py / Procfile /
+    # gunicorn.conf.py - so the server runs on UTC and date.today() rolls over
+    # 5h30m late. Between IST 00:00 and 05:30 this form was stamped with
+    # YESTERDAY's date and pre-filled yesterday's completed tasks, which is
+    # exactly the mistake app/utils/timezone.py exists to prevent, and it hit
+    # the people most likely to be filing a report at that hour.
+    today = ist_now().date()
 
     completed_tasks = Task.query.filter(
         Task.assigned_to_id == current_user.id,
