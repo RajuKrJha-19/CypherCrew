@@ -40,6 +40,19 @@ class Client(db.Model):
         db.String(100)
     )
 
+    #: Brand knowledge base - the free-text context the AI assist layer reads
+    #: so captions and media QA come out on-brand. brand_voice is the tone
+    #: ("warm, premium, no emojis"); brand_guidelines_notes holds do's/don'ts
+    #: and any rules worth stating (colours, logo usage, banned words). Both
+    #: optional; empty = the AI falls back to industry + brief only.
+    brand_voice = db.Column(
+        db.Text
+    )
+
+    brand_guidelines_notes = db.Column(
+        db.Text
+    )
+
     assigned_manager_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id")

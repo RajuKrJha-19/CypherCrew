@@ -45,6 +45,12 @@ os.environ.setdefault("ATTENDANCE_ENABLED", "true")
 os.environ.setdefault("ZOHO_SIMULATION_MODE", "true")
 os.environ.setdefault("ZOHO_SYNC_TOKEN", "test-zoho-token")
 os.environ.setdefault("ATTENDANCE_INPROCESS_WORKER", "false")
+# AI Assist. On for the suite so the composer routes are reachable, in
+# simulation mode so nothing hits a real provider or the network (no provider
+# key is set, so AI_SIMULATION_MODE resolves True on its own - pinned here for
+# clarity and so an ambient key in a dev .env can't flip it on).
+os.environ.setdefault("AI_ENABLED", "true")
+os.environ.setdefault("AI_SIMULATION_MODE", "true")
 
 import pytest  # noqa: E402
 

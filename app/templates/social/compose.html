@@ -100,6 +100,13 @@
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
+                    {% if config.AI_ENABLED %}
+                    <button type="button" class="cmp-linkbtn cmp-ai" id="aiGenBtn"
+                        title="Draft an on-brand caption from the task brief, selected media and the client's brand voice"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate caption</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" id="aiAltBtn"
+                        title="Fill empty alt-text on the selected images"><i class="fa-solid fa-wand-magic-sparkles"></i> Alt-text for images</button>
+                    <input type="hidden" name="ai_assisted" id="aiAssisted" value="">
+                    {% endif %}
                 </div>
 
                 {# per-platform overrides — caption + first comment #}
@@ -1299,5 +1306,12 @@
     renderPreview();
 })();
 </script>
+{% endif %}
+{% if config.AI_ENABLED %}
+<script>
+    window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
+    window.AI_ALT_URL = "{{ url_for('social.ai_alt_text_api') }}";
+</script>
+<script src="{{ asset_url('js/ai-caption.js') }}" defer></script>
 {% endif %}
 {% endblock %}

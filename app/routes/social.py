@@ -16,7 +16,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
     Client, ClientAsset, ContentVersion, PublishJob, PublishResult,
     SocialAccount, SocialAuditLog, SocialComment, SocialMediaAsset, SocialPost,
@@ -1750,6 +1750,10 @@ def _apply_composer_form(post):
     post.base_caption = base_caption
     first_comment = (request.form.get("first_comment") or "").strip() or None
 
+    # Set by the composer when the caption was drafted with AI Assist, so we
+    # can later report how much output was AI-assisted. Advisory only.
+    ai_assisted = bool(request.form.get("ai_assisted"))
+
     # Campaign label (grouping + utm_campaign) and whether to auto-tag links.
     post.campaign = (request.form.get("campaign") or "").strip()[:120] or None
     add_utm = bool(request.form.get("add_utm"))
@@ -1924,6 +1928,7 @@ def _apply_composer_form(post):
             story_style=story_style if ptype == "story" else "plain",
             story_link_target_id=(
                 story_link_target_id if ptype == "story" else None),
+            ai_generated=ai_assisted,
         )
         db.session.add(t)
         db.session.flush()
@@ -2561,6 +2566,99 @@ def mentions_api():
     # Preferred-platform handles first, then alphabetical.
     out.sort(key=lambda m: (m["platform"] != prefer, m["label"].lower()))
     return jsonify(suggestions=out[:8])
+
+
+# ---------------------------------------------------------------------------
+# AI assist (provider-agnostic - see app/ai/). Gated behind AI_ENABLED on top
+# of the usual social guard; throttled so a stuck client can't run up a bill.
+# Both routes return a DRAFT the user edits before saving - never auto-publish.
+# ---------------------------------------------------------------------------
+
+def _ai_guard():
+    _guard()
+    if not current_app.config.get("AI_ENABLED"):
+        abort(503)
+
+
+def _ai_error_response(exc):
+    """Map a typed AI error to a clean JSON response. Never echoes a key."""
+    from app.ai.errors import AIAuth, AIDisabled, AIPermanent, AITransient
+    if isinstance(exc, AIDisabled):
+        return jsonify(error="AI assist is not available."), 503
+    if isinstance(exc, AITransient):
+        return jsonify(error="The AI service is busy — try again in a moment."), 503
+    if isinstance(exc, AIAuth):
+        current_app.logger.error("[ai] provider auth failed")
+        return jsonify(error="AI is misconfigured — contact an admin."), 502
+    if isinstance(exc, AIPermanent):
+        return jsonify(error="Couldn't generate that — please try again."), 502
+    current_app.logger.exception("[ai] unexpected failure")
+    return jsonify(error="Something went wrong with AI assist."), 500
+
+
+def _csv(value):
+    return [p.strip() for p in (value or "").split(",") if p.strip()]
+
+
+@social_bp.route("/api/ai/caption", methods=["POST"])
+@login_required
+@limiter.limit("30 per hour")
+def ai_caption_api():
+    """Draft an on-brand, per-platform caption from the task brief + attached
+    media + the client's brand knowledge base. Returns a draft the composer
+    drops into the editable fields."""
+    _ai_guard()
+    from app.ai import service as ai_service
+
+    task_id = request.form.get("task_id", type=int)
+    client_id = request.form.get("client_id", type=int)
+    platforms = _csv(request.form.get("platforms"))
+    media_keys = _csv(request.form.get("media_keys"))
+
+    task = Task.query.get(task_id) if task_id else None
+    client = None
+    if client_id:
+        client = Client.query.get(client_id)
+    elif task is not None:
+        client = getattr(task, "client", None)
+
+    brief = ""
+    if task is not None:
+        brief = "\n".join(p for p in (task.title, task.description) if p)
+
+    if not brief and not media_keys:
+        return jsonify(error="Add a brief (link a task) or some media first."), 400
+
+    try:
+        result = ai_service.generate_caption(
+            brief=brief,
+            industry=getattr(client, "industry", None),
+            brand_voice=getattr(client, "brand_voice", None),
+            brand_notes=getattr(client, "brand_guidelines_notes", None),
+            platforms=platforms,
+            media=[(k, None) for k in media_keys],
+        )
+    except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
+        return _ai_error_response(exc)
+    return jsonify(**result)
+
+
+@social_bp.route("/api/ai/alt-text", methods=["POST"])
+@login_required
+@limiter.limit("120 per hour")
+def ai_alt_text_api():
+    """One accessible alt-text line for a single attached image."""
+    _ai_guard()
+    from app.ai import service as ai_service
+
+    object_key = (request.form.get("object_key") or "").strip()
+    if not object_key:
+        return jsonify(error="No image selected."), 400
+    try:
+        alt = ai_service.generate_alt_text(object_key)
+    except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
+        return _ai_error_response(exc)
+    return jsonify(alt_text=alt)
 
 
 @social_bp.route("/api/hashtag-sets", methods=["POST"])

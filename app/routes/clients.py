@@ -267,6 +267,12 @@ def edit_client(client_id):
         client.phone = (request.form.get("phone") or "").strip() or None
         client.email = (request.form.get("email") or "").strip() or None
         client.industry = (request.form.get("industry") or "").strip() or None
+        # Brand knowledge base - free text the AI assist reads for on-brand
+        # captions/QA. Empty clears it (falls back to industry + brief).
+        client.brand_voice = (
+            request.form.get("brand_voice") or "").strip() or None
+        client.brand_guidelines_notes = (
+            request.form.get("brand_guidelines_notes") or "").strip() or None
         client.assigned_manager_id = manager_id
         client.status = status
         db.session.commit()

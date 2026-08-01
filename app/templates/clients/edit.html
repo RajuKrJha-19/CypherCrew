@@ -60,6 +60,30 @@
                     {% endif %}
                 </select>
 
+                <div class="form-group">
+                    <label>Brand voice &mdash; AI assist</label>
+                    <p class="form-hint">
+                        How this client's captions should sound — the AI uses
+                        this to keep posts on-brand. e.g.
+                        <em>"Warm and premium, first-person plural, no emojis,
+                        no slang."</em> Leave blank to fall back to the
+                        industry and task brief only.
+                    </p>
+                    <textarea name="brand_voice" rows="2"
+                        placeholder="e.g. Warm, premium, confident. No emojis.">{{ client.brand_voice or '' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Brand do's &amp; don'ts / guideline notes &mdash; AI assist</label>
+                    <p class="form-hint">
+                        Rules the AI should respect when drafting captions and,
+                        later, checking submitted media — colours, logo usage,
+                        words to avoid, claims to never make.
+                    </p>
+                    <textarea name="brand_guidelines_notes" rows="4"
+                        placeholder="Do: terracotta accent, serif headings.&#10;Don't: stock photos, discount language, competitor names.">{{ client.brand_guidelines_notes or '' }}</textarea>
+                </div>
+
                 {% if client.parent_client_id and client.parent %}
                 <p class="form-hint" style="margin-top:12px">
                     Sub-client of <strong>{{ client.parent.client_name }}</strong>.

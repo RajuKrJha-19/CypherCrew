@@ -361,3 +361,52 @@ class Config:
         os.getenv("ATTENDANCE_SYNC_INTERVAL", "120"))
     ATTENDANCE_IDLE_INTERVAL = int(
         os.getenv("ATTENDANCE_IDLE_INTERVAL", "600"))
+
+    # ------------------------------------------------------------------
+    # AI Assist (provider-agnostic: caption + alt-text now, media QA next)
+    # ------------------------------------------------------------------
+    # Master feature flag, same contract as SOCIAL_ENGINE_ENABLED / TEAMS /
+    # ATTENDANCE: OFF by default. With it off, no AI route is registered and
+    # the composer shows no "Generate" button - the app behaves exactly as
+    # before. Turn on per-environment once a provider key is set.
+    AI_ENABLED = os.getenv("AI_ENABLED", "False").lower() == "true"
+
+    # Which backend the AI layer talks to. The app is provider-agnostic (an
+    # adapter per backend, like the social providers), so this + the per-task
+    # model strings are the only switch needed to move between Gemini / OpenAI
+    # / Claude. Default Gemini: cheapest capable vision + a real free tier.
+    AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").lower()
+
+    # Per-task model ids (env-overridable - set the CURRENT id for your
+    # provider; these are sensible defaults, not pinned guarantees). Captions
+    # and alt-text use the cheap/fast tier; media QA uses the stronger tier.
+    AI_CAPTION_MODEL = os.getenv("AI_CAPTION_MODEL", "gemini-2.5-flash")
+    AI_QA_MODEL = os.getenv("AI_QA_MODEL", "gemini-2.5-pro")
+
+    # Provider API keys. Only the one for AI_PROVIDER is needed. Like every
+    # other secret here they are read at call time and NEVER logged.
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+    # Output ceiling per AI call (a caption/checklist is small), request
+    # timeout, and a hard cap on how large a media file we send to the model
+    # (protects cost + latency; oversized media is skipped with a clear note).
+    AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "1024"))
+    AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "30"))
+    AI_MEDIA_MAX_MB = int(os.getenv("AI_MEDIA_MAX_MB", "10"))
+
+    # Simulation mode: the AI layer returns scripted captions/alt-text/findings
+    # instead of calling a real provider, so the whole flow is exercisable on
+    # localhost and in tests with no key and no network - mirrors META_EMULATOR
+    # / ZOHO_SIMULATION_MODE. Hard safety rule: FORCE-DISABLED the moment any
+    # real provider key is present, so a stray flag can never intercept a real
+    # deployment into returning canned output.
+    AI_SIMULATION_MODE = (
+        os.getenv("AI_SIMULATION_MODE", "True").lower() == "true"
+        and not (
+            os.getenv("GEMINI_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("ANTHROPIC_API_KEY")
+        )
+    )

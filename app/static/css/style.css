@@ -18065,6 +18065,10 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-linkbtn{ border:0; background:transparent; color:var(--color-primary); font-size:12px; font-weight:600;
     cursor:pointer; display:inline-flex; align-items:center; gap:5px; padding:4px 6px; border-radius:var(--radius-sm); }
 .cmp-linkbtn:hover{ background:var(--color-primary-soft); }
+/* AI-assist buttons: a subtle spinner while a request is in flight. */
+.cmp-ai.is-loading{ opacity:.55; pointer-events:none; }
+.cmp-ai.is-loading i{ animation:cmp-ai-spin .8s linear infinite; }
+@keyframes cmp-ai-spin{ to{ transform:rotate(360deg); } }
 
 .cmp-overrides{ margin-top:12px; border:1px dashed var(--color-border); border-radius:var(--radius-md);
     overflow:hidden; }
