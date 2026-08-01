@@ -1841,6 +1841,25 @@ def _apply_composer_form(post):
                 object_key=key, mime_type=(mime or None), id=None,
                 form_value=raw)))
 
+    # The slide order the composer's strip was showing. Until this existed the
+    # sequence was an accident of the markup: every task file first (in
+    # checkbox order), then brand assets, then uploads - so a carousel could
+    # not be arranged at all, and the cover was whichever file the picker
+    # happened to list first.
+    #
+    # Keyed by _measure_key, the same string the browser already builds to
+    # match up measurements, so one vocabulary covers both.
+    requested_order = [
+        raw for raw in request.form.getlist("media_order") if raw
+    ]
+    if requested_order:
+        rank = {key: i for i, key in enumerate(requested_order)}
+        # Anything the strip did not know about - a brand asset carried over
+        # from an existing post - keeps its position at the end rather than
+        # jumping to the front on a sort it never took part in.
+        media_items.sort(
+            key=lambda item: rank.get(_measure_key(*item), len(rank)))
+
     def _add_media(target_id):
         for i, (source, obj) in enumerate(media_items):
             kw = dict(target_id=target_id, source=source,

@@ -167,6 +167,31 @@
                 </div>
             </div>
 
+            {#
+                --- Slide order ---
+                Which slide is first, and what follows it. Before this the
+                sequence was an accident of the markup - every task file, then
+                brand assets, then uploads - so a carousel could not be
+                arranged and the cover was whichever file the picker listed
+                first. Only shown once there is more than one slide to order.
+
+                A strip of just the CHOSEN media, not the whole grid: with
+                thirty files in the picker, finding the four that are in the
+                post to drag them is the work this is meant to remove.
+            #}
+            <div class="cmp-section cmp-slide-order" id="slideOrderWrap" hidden>
+                <span class="cmp-label">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i> Slide order
+                    <small>drag to rearrange — the first one is the cover</small>
+                </span>
+                <div class="slide-strip" id="slideStrip"></div>
+                {# The sequence the server sorts by - one hidden field per
+                   slide, so request.form.getlist("media_order") reads it the
+                   same way it reads every other repeated field. Rebuilt on
+                   every change, so it can never disagree with the strip. #}
+                <div id="mediaOrderFields" hidden></div>
+            </div>
+
             {# --- Reel cover (shown for a Reel) --- #}
             <div class="cmp-section cmp-reel-cover" id="reelCoverWrap" hidden>
                 <span class="cmp-label"><i class="fa-solid fa-image"></i> Reel cover</span>
@@ -801,7 +826,54 @@
     // media assets (spans BOTH the task-deliverables grid and brand-assets grid)
     const MEDIA_SEL = 'input[name="task_file_ids"], input[name="upload_media"]';
     const MEDIA_SEL_CHECKED = 'input[name="task_file_ids"]:checked, input[name="upload_media"]:checked';
-    function selectedMediaInputs(){ return [...document.querySelectorAll(MEDIA_SEL_CHECKED)]; }
+    /*
+        Slide order.
+
+        DOM order used to decide everything - which slide published first,
+        and therefore the cover - and nothing could change it. `mediaOrder`
+        holds the sequence the person actually wants, keyed the same way
+        measurements are (name|value, see measureKey), and every reader of the
+        selection goes through it.
+
+        Ticking appends and unticking removes, so the order you select in is
+        the order you get before anyone touches the strip.
+    */
+    let mediaOrder = [];
+
+    function orderKey(input){ return input.name + "|" + input.value; }
+
+    function syncMediaOrder(){
+        const live = new Set(
+            [...document.querySelectorAll(MEDIA_SEL_CHECKED)].map(orderKey));
+
+        // Drop anything no longer selected, keep the rest in their sequence,
+        // then append newly-ticked items in the order they were ticked.
+        mediaOrder = mediaOrder.filter(k => live.has(k));
+        [...document.querySelectorAll(MEDIA_SEL_CHECKED)].forEach(inp => {
+            const key = orderKey(inp);
+            if(!mediaOrder.includes(key)) mediaOrder.push(key);
+        });
+
+        const fields = $("mediaOrderFields");
+        if(fields){
+            fields.innerHTML = mediaOrder.map(k =>
+                '<input type="hidden" name="media_order" value="'
+                + k.replace(/"/g, "&quot;") + '">').join("");
+        }
+    }
+
+    function selectedMediaInputs(){
+        const checked = [...document.querySelectorAll(MEDIA_SEL_CHECKED)];
+        const rank = new Map(mediaOrder.map((k, i) => [k, i]));
+        // Stable: anything not yet in mediaOrder keeps its DOM position at
+        // the end rather than jumping the queue.
+        return checked
+            .map((inp, i) => [inp, rank.has(orderKey(inp))
+                                   ? rank.get(orderKey(inp))
+                                   : mediaOrder.length + i])
+            .sort((a, b) => a[1] - b[1])
+            .map(pair => pair[0]);
+    }
 
     /*
         Measure the chosen file so the checks above can quote real numbers.
@@ -963,7 +1035,95 @@
         const key = input.dataset.key;
         return key ? ("/social/media/poster?key=" + encodeURIComponent(key)) : null;
     }
+    /*
+        The strip of chosen slides, in order, draggable.
+
+        Rebuilt from mediaOrder rather than kept in sync with it, so the two
+        cannot drift: what you see IS the sequence that will be submitted.
+    */
+    function renderSlideStrip(){
+        const wrap = $("slideOrderWrap"), strip = $("slideStrip");
+        if(!wrap || !strip) return;
+
+        const items = selectedMediaInputs();
+
+        // One slide has no sequence to arrange, and an empty strip is a
+        // heading over nothing.
+        wrap.hidden = items.length < 2;
+        if(wrap.hidden){ strip.innerHTML = ""; return; }
+
+        strip.innerHTML = items.map((inp, i) => {
+            const isVideo = isVideoInput(inp);
+            const thumb = isVideo
+                ? (inp.dataset.key
+                    ? '<img src="/social/media/poster?key='
+                      + encodeURIComponent(inp.dataset.key) + '" alt="">'
+                    : '<i class="fa-regular fa-file-video"></i>')
+                : (inp.dataset.url
+                    ? '<img src="' + inp.dataset.url + '" alt="">'
+                    : '<i class="fa-regular fa-image"></i>');
+
+            return '<div class="slide-chip" draggable="true"'
+                 + ' data-key="' + orderKey(inp).replace(/"/g, "&quot;") + '"'
+                 + ' title="Drag to reorder">'
+                 + '<span class="slide-num">' + (i + 1) + '</span>'
+                 + '<span class="slide-thumb">' + thumb + '</span>'
+                 + (i === 0 ? '<span class="slide-cover">Cover</span>' : '')
+                 + '</div>';
+        }).join("");
+    }
+
+    (function bindSlideDrag(){
+        const strip = $("slideStrip");
+        if(!strip) return;
+
+        let dragKey = null;
+
+        strip.addEventListener("dragstart", ev => {
+            const chip = ev.target.closest(".slide-chip");
+            if(!chip) return;
+            dragKey = chip.dataset.key;
+            chip.classList.add("is-dragging");
+            ev.dataTransfer.effectAllowed = "move";
+            // Firefox will not start a drag without payload.
+            try { ev.dataTransfer.setData("text/plain", dragKey); } catch(e) {}
+        });
+
+        strip.addEventListener("dragend", () => {
+            dragKey = null;
+            strip.querySelectorAll(".slide-chip").forEach(
+                c => c.classList.remove("is-dragging", "is-over"));
+        });
+
+        strip.addEventListener("dragover", ev => {
+            if(!dragKey) return;
+            ev.preventDefault();                       // or drop never fires
+            const over = ev.target.closest(".slide-chip");
+            strip.querySelectorAll(".slide-chip").forEach(
+                c => c.classList.toggle("is-over", c === over && c.dataset.key !== dragKey));
+        });
+
+        strip.addEventListener("drop", ev => {
+            const over = ev.target.closest(".slide-chip");
+            if(!dragKey || !over || over.dataset.key === dragKey) return;
+            ev.preventDefault();
+
+            const from = mediaOrder.indexOf(dragKey);
+            const to = mediaOrder.indexOf(over.dataset.key);
+            if(from < 0 || to < 0) return;
+
+            mediaOrder.splice(to, 0, mediaOrder.splice(from, 1)[0]);
+            dragKey = null;
+            // Straight back through the one path, so the badges, the hidden
+            // fields, the cover and the preview all move together.
+            refreshMediaSelection();
+        });
+    })();
+
     function refreshMediaSelection(){
+        // Reconcile the sequence with what is actually ticked BEFORE anything
+        // reads the selection - selectedMediaInputs() sorts by it.
+        syncMediaOrder();
         const checked=selectedMediaInputs();
         document.querySelectorAll(MEDIA_SEL).forEach(inp=>{ const lab=inp.closest(".cmp-asset"); if(!lab)return; lab.classList.toggle("selected", inp.checked); const ord=lab.querySelector(".ord"); if(ord)ord.textContent = inp.checked?(checked.indexOf(inp)+1):""; });
         // Images preview from their own URL; a video previews as a real
@@ -981,6 +1141,7 @@
         checked.forEach(measure);
         syncMeasurements();
         refreshTypeWarn();
+        renderSlideStrip();
         renderPreview();
     }
     function mediaChanged(inp){
