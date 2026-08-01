@@ -14,6 +14,8 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
 from app.models import User, Client, ClientMonthlyTarget, ClientDeliverable, Task, ClientAsset
 from app.utils.permissions import (
@@ -497,7 +499,18 @@ def add_deliverable(client_id):
             year=year
         )
         db.session.add(monthly_target)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except IntegrityError:
+            # A concurrent submit created this month's target first and the
+            # unique (client, month, year) constraint tripped. Reuse theirs
+            # rather than 500 - the deliverable still lands on the right month.
+            db.session.rollback()
+            monthly_target = ClientMonthlyTarget.query.filter_by(
+                client_id=client.id,
+                month=month,
+                year=year
+            ).first()
 
     deliverable = ClientDeliverable(
         monthly_target_id=monthly_target.id,

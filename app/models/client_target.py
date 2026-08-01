@@ -6,6 +6,15 @@ from app.extensions import db
 class ClientMonthlyTarget(db.Model):
     __tablename__ = "client_monthly_targets"
 
+    # One target row per client per month - the add-deliverable path
+    # get-or-creates on these three, and a duplicate would split a month's
+    # deliverables across two rows and undercount the dashboard tally.
+    __table_args__ = (
+        db.UniqueConstraint(
+            "client_id", "month", "year", name="uq_client_month_year"
+        ),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
 
     client_id = db.Column(

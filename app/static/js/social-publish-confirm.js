@@ -102,7 +102,14 @@
             if (event.key === "Escape") close();
         }
 
+        // Trap Tab within the checklist and restore focus to the trigger on
+        // close (the box already handles Escape + initial focus below).
+        const releaseTrap = (window.App && App.trapFocus)
+            ? App.trapFocus(overlay, { initialFocus: false })
+            : function () {};
+
         function close() {
+            releaseTrap();
             overlay.remove();
             document.removeEventListener("keydown", onKeydown);
         }

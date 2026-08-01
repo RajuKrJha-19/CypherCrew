@@ -74,6 +74,7 @@
             var confirm = box.querySelector("[data-confirm]");
 
             function close(value) {
+                releaseTrap();
                 document.removeEventListener("keydown", onKey);
                 overlay.remove();
                 resolve(value);
@@ -110,6 +111,12 @@
             overlay.appendChild(box);
             document.body.appendChild(overlay);
             field.focus();
+
+            // Trap Tab within the dialog + restore focus on close (Escape and
+            // the initial textarea focus are handled just above).
+            var releaseTrap = (window.App && App.trapFocus)
+                ? App.trapFocus(box, { initialFocus: false })
+                : function () {};
         });
     }
 

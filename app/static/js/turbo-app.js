@@ -61,6 +61,75 @@
             } else {
                 document.addEventListener("DOMContentLoaded", fn, { once: true });
             }
+        },
+
+        // Keep keyboard focus inside an open modal/dialog `container`:
+        // Tab / Shift+Tab cycle within it instead of escaping to the page
+        // behind, and focus is returned to whatever was focused before it
+        // opened once released. Returns a release() function the caller MUST
+        // call when the modal closes. Escape is left to the caller unless an
+        // onEscape option is given, so a modal with its own Escape handling
+        // isn't double-fired.
+        trapFocus: function (container, opts) {
+            opts = opts || {};
+            var FOCUSABLE = 'a[href], button:not([disabled]), ' +
+                'textarea:not([disabled]), select:not([disabled]), ' +
+                'input:not([disabled]):not([type="hidden"]), ' +
+                '[tabindex]:not([tabindex="-1"])';
+            var previouslyFocused = document.activeElement;
+
+            function items() {
+                return Array.prototype.slice
+                    .call(container.querySelectorAll(FOCUSABLE))
+                    .filter(function (el) {
+                        // Skip hidden controls; keep the current one so an
+                        // empty visible list never traps focus nowhere.
+                        return el.offsetWidth > 0 || el.offsetHeight > 0 ||
+                            el === document.activeElement;
+                    });
+            }
+
+            function onKeydown(event) {
+                if (event.key === "Escape" &&
+                    typeof opts.onEscape === "function") {
+                    opts.onEscape(event);
+                    return;
+                }
+                if (event.key !== "Tab") return;
+                var list = items();
+                if (!list.length) { event.preventDefault(); return; }
+                var first = list[0];
+                var last = list[list.length - 1];
+                var active = document.activeElement;
+                if (event.shiftKey) {
+                    if (active === first || !container.contains(active)) {
+                        event.preventDefault();
+                        last.focus();
+                    }
+                } else if (active === last || !container.contains(active)) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+
+            // Capture phase so this runs before a modal's own bubble-phase
+            // key handlers, and survives stopPropagation inside the modal.
+            document.addEventListener("keydown", onKeydown, true);
+
+            if (opts.initialFocus !== false) {
+                var target = (opts.initialFocus && opts.initialFocus.focus)
+                    ? opts.initialFocus
+                    : (items()[0] || container);
+                try { target.focus(); } catch (e) {}
+            }
+
+            return function release() {
+                document.removeEventListener("keydown", onKeydown, true);
+                if (opts.restoreFocus !== false && previouslyFocused &&
+                    typeof previouslyFocused.focus === "function") {
+                    try { previouslyFocused.focus(); } catch (e) {}
+                }
+            };
         }
     };
 

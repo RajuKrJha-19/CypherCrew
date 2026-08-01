@@ -152,12 +152,29 @@ class MetaInstagramProvider(MetaBaseProvider):
     # -- Validation --------------------------------------------------------
 
     def validate(self, content):
-        from app.social.media import pipeline
+        from app.social.media import pipeline, fit
         problems = pipeline.validate_against(self.capabilities, content)
         if not content.media:
             problems.append(f"An Instagram {content.post_type} needs media.")
-        if content.post_type == "carousel" and len(content.media) < 2:
-            problems.append("An Instagram carousel needs at least 2 items.")
+
+        # validate_against measures only the FIRST item, against the (absent)
+        # carousel spec - so every slide past the first goes unchecked and a
+        # wrong-aspect one fails mid-publish, leaving a partial carousel on the
+        # grid. Each child is a feed image or video, so hold it to that spec
+        # here (count bounds are already handled generically). Unmeasured
+        # children add nothing and are left for Meta to judge.
+        if content.post_type == "carousel":
+            image_spec = self.capabilities.spec_for("image")
+            video_spec = self.capabilities.spec_for("reel")
+            for i, media in enumerate(content.media, start=1):
+                meta = media.measurements or {}
+                if not meta:
+                    continue
+                is_video = (media.mime_type or "").startswith("video")
+                spec = video_spec if is_video else image_spec
+                for reason in fit.check_spec(spec, meta):
+                    problems.append(
+                        f"Carousel item {i} can't publish here: {reason}.")
         return problems
 
     # -- Publishing (async: create container -> poll -> publish) ----------
@@ -237,6 +254,26 @@ class MetaInstagramProvider(MetaBaseProvider):
             params={"fields": "status_code,status"})
         status = container.get("status_code")
 
+        if status == "PUBLISHED":
+            # The container has ALREADY been published. In the normal flow we
+            # go FINISHED -> media_publish -> DONE in a single poll and never
+            # come back, so a container reporting PUBLISHED here means a prior
+            # attempt fired media_publish (the post is live) but the worker
+            # died before recording the id. Re-issuing media_publish would
+            # duplicate the post - instead recover the id of the media the
+            # container produced and settle idempotently.
+            media_id = self._recover_published_media(graph, ig_id, token)
+            if media_id:
+                return PublishStep(
+                    status=StepStatus.DONE.value,
+                    external_post_id=media_id,
+                    permalink=self._permalink(graph, media_id, token),
+                )
+            # Published but the id isn't queryable yet - keep polling to
+            # recover it; never re-publish.
+            return PublishStep(status=StepStatus.PENDING.value,
+                              provider_state=provider_state)
+
         if status == "FINISHED":
             published = graph.post(f"{ig_id}/media_publish", token=token,
                                   data={"creation_id": container_id})
@@ -247,7 +284,7 @@ class MetaInstagramProvider(MetaBaseProvider):
                 permalink=self._permalink(graph, media_id, token),
             )
 
-        if status in ("IN_PROGRESS", None, "PUBLISHED"):
+        if status in ("IN_PROGRESS", None):
             # Still processing - stay PENDING so the worker polls again.
             return PublishStep(status=StepStatus.PENDING.value,
                               provider_state=provider_state)
@@ -292,6 +329,26 @@ class MetaInstagramProvider(MetaBaseProvider):
         try:
             resp = graph.get(media_id, token=token, params={"fields": "permalink"})
             return resp.get("permalink")
+        except Exception:
+            return None
+
+    def _recover_published_media(self, graph, ig_id, token):
+        """The media id for a container we already published but whose result
+        was lost to a mid-publish worker death.
+
+        Instagram exposes no container -> published-media mapping, so we take
+        the account's most recent media as the item the just-consumed
+        container produced. Safe for this use case: an agency account
+        publishes one post at a time through the queue (targets serialise on
+        the per-account rate slot), so "most recent" is unambiguous. Returns
+        None if nothing is queryable yet, so the caller keeps polling rather
+        than re-publishing.
+        """
+        try:
+            resp = graph.get(f"{ig_id}/media", token=token,
+                             params={"fields": "id", "limit": 1})
+            items = resp.get("data") or []
+            return items[0]["id"] if items else None
         except Exception:
             return None
 

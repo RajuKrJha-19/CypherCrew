@@ -179,6 +179,45 @@ def test_an_old_post_is_outside_a_short_window(session):
     assert everything["post_count"] == 1
 
 
+def test_attribution_is_by_publish_time_not_last_update(session):
+    """M-9: a post PUBLISHED 90 days ago whose row was touched today (an
+    analytics re-sync or a permalink/status edit bumps updated_at) must stay
+    in the old window, not be dragged into the last 7 days."""
+    from app.models import PublishResult
+
+    target = _publish(session, metrics={"reach": 100})
+    target.updated_at = datetime.utcnow()               # touched today...
+    session.add(PublishResult(                          # ...published 90d ago
+        target_id=target.id, external_post_id=target.external_post_id,
+        published_at=datetime.utcnow() - timedelta(days=90)))
+    session.flush()
+
+    recent = analytics_report.build_report(_period("7d"))
+    everything = analytics_report.build_report(_period("all"))
+
+    assert recent["post_count"] == 0, "attributed by updated_at, not publish"
+    assert everything["post_count"] == 1
+
+
+def test_earliest_publish_time_is_the_attribution(session):
+    """A republish after a removal adds a second PublishResult; the target's
+    canonical time is its first publish, so a recent republish of an old post
+    doesn't move it into a recent window."""
+    from app.models import PublishResult
+
+    target = _publish(session, metrics={"reach": 100})
+    session.add(PublishResult(
+        target_id=target.id, external_post_id=target.external_post_id,
+        published_at=datetime.utcnow() - timedelta(days=90)))
+    session.add(PublishResult(
+        target_id=target.id, external_post_id=target.external_post_id,
+        published_at=datetime.utcnow()))                # republished today
+    session.flush()
+
+    recent = analytics_report.build_report(_period("7d"))
+    assert recent["post_count"] == 0
+
+
 def test_channels_are_broken_out(session):
     _publish(session, metrics={"reach": 10})
     _publish(session, metrics={"reach": 20})

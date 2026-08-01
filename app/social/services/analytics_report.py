@@ -17,7 +17,8 @@ from sqlalchemy import func, select
 
 from app.extensions import db
 from app.models import (
-    SocialAccount, SocialAnalyticsSnapshot, SocialPost, SocialPostTarget,
+    PublishResult, SocialAccount, SocialAnalyticsSnapshot, SocialPost,
+    SocialPostTarget,
 )
 
 #: The figures the screen shows, in display order. Providers report a
@@ -57,9 +58,25 @@ def _published_targets(period, client_id=None, campaign=None):
         if campaign:
             q = q.filter(SocialPost.campaign == campaign)
     if period and not period.get("is_all_time"):
+        # Attribute a post to the window by when it was PUBLISHED - not by
+        # updated_at, which an analytics re-sync or a permalink/status edit
+        # bumps, dragging an old post into a recent window (the exact drift
+        # the docstring warns against). published_at is the immutable publish
+        # stamp; a target can carry more than one PublishResult (a republish
+        # after removal), so its earliest is the canonical publish time.
+        # COALESCE to updated_at only as a safety net for any published target
+        # somehow lacking a result row - real ones always have one.
+        published_at = (
+            select(func.min(PublishResult.published_at))
+            .where(PublishResult.target_id == SocialPostTarget.id)
+            .correlate(SocialPostTarget)
+            .scalar_subquery()
+        )
+        attributed_date = func.date(
+            func.coalesce(published_at, SocialPostTarget.updated_at))
         q = q.filter(
-            func.date(SocialPostTarget.updated_at) >= period["start"],
-            func.date(SocialPostTarget.updated_at) <= period["end"],
+            attributed_date >= period["start"],
+            attributed_date <= period["end"],
         )
     return q
 

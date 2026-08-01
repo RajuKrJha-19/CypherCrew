@@ -33,6 +33,7 @@
 window.CypherMediaViewer = (function () {
 
     let overlay = null;
+    let releaseTrap = null;
     let stage = null;
     let titleEl = null;
     let menu = null;
@@ -652,6 +653,13 @@ window.CypherMediaViewer = (function () {
 
         overlay.classList.add("show");
         document.body.classList.add("media-viewer-open");
+
+        // Keep Tab within the overlay. Its own Escape + focus-restore
+        // (lastFocused, below) already run, so the trap only cycles Tab.
+        if (window.App && App.trapFocus) {
+            releaseTrap = App.trapFocus(overlay, {
+                initialFocus: false, restoreFocus: false });
+        }
     }
 
     function teardownStage() {
@@ -680,6 +688,7 @@ window.CypherMediaViewer = (function () {
 
         teardownStage();
         setMenuOpen(false);
+        if (releaseTrap) { releaseTrap(); releaseTrap = null; }
         overlay.classList.remove("show");
         document.body.classList.remove("media-viewer-open");
 
