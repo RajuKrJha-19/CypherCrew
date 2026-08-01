@@ -100,7 +100,7 @@
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
-                    {% if config.AI_ENABLED %}
+                    {% if ai_enabled %}
                     <button type="button" class="cmp-linkbtn cmp-ai" id="aiGenBtn"
                         title="Draft an on-brand caption from the task brief, selected media and the client's brand voice"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate caption</button>
                     <button type="button" class="cmp-linkbtn cmp-ai" id="aiAltBtn"
@@ -1307,7 +1307,7 @@
 })();
 </script>
 {% endif %}
-{% if config.AI_ENABLED %}
+{% if ai_enabled %}
 <script>
     window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
     window.AI_ALT_URL = "{{ url_for('social.ai_alt_text_api') }}";

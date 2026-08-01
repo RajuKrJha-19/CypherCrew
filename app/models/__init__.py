@@ -20,6 +20,8 @@ from app.models.daily_report import (
     ActivityLog
 )
 from app.models.task_feedback import TaskFeedback
+from app.models.ai_check import AICheck
+from app.models.ai_settings import AISettings
 from app.models.notification import Notification
 
 from app.models.task_activity import TaskActivity

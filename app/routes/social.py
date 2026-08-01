@@ -2576,7 +2576,8 @@ def mentions_api():
 
 def _ai_guard():
     _guard()
-    if not current_app.config.get("AI_ENABLED"):
+    from app.ai import settings as ai_settings
+    if not ai_settings.is_enabled():
         abort(503)
 
 
@@ -2600,6 +2601,43 @@ def _csv(value):
     return [p.strip() for p in (value or "").split(",") if p.strip()]
 
 
+# At most this many media items are fed to one caption call (carousel max),
+# so a caller can't force reading an unbounded number of objects into memory.
+_AI_MAX_CAPTION_MEDIA = 10
+
+
+def _ai_can_view_task(task):
+    """Task visibility, reusing the tasks blueprint's own rule (lazy import to
+    avoid an import cycle). No task = nothing task-scoped to protect."""
+    if task is None:
+        return True
+    from app.routes.tasks import can_view_task
+    return can_view_task(task)
+
+
+def _ai_media_allowed(object_key):
+    """May the current user feed this storage object to the AI? Prevents an
+    IDOR where a social-permitted user pulls an AI description/caption for a
+    file they can't otherwise see:
+      - ephemeral composer uploads (social_uploads/*) - unguessable keys the
+        user just created through the authenticated upload route: allowed;
+      - a task-file-backed key: allowed only if the user can view that task;
+      - a client-asset key: allowed (client brand pages are already readable
+        by any signed-in user);
+      - an unknown key: denied.
+    """
+    if not object_key:
+        return False
+    if object_key.startswith("social_uploads/"):
+        return True
+    tf = TaskFile.query.filter_by(object_key=object_key).first()
+    if tf is not None:
+        return _ai_can_view_task(tf.task)
+    if ClientAsset.query.filter_by(object_key=object_key).first() is not None:
+        return True
+    return False
+
+
 @social_bp.route("/api/ai/caption", methods=["POST"])
 @login_required
 @limiter.limit("30 per hour")
@@ -2616,11 +2654,19 @@ def ai_caption_api():
     media_keys = _csv(request.form.get("media_keys"))
 
     task = Task.query.get(task_id) if task_id else None
+    # The brief comes from the task, so a user must be allowed to see it.
+    if task is not None and not _ai_can_view_task(task):
+        return jsonify(error="You can't use that task."), 403
+
     client = None
     if client_id:
         client = Client.query.get(client_id)
     elif task is not None:
         client = getattr(task, "client", None)
+
+    # Only feed media the user is allowed to see; drop the rest (caption still
+    # works on the brief). Bounded count so one call can't read many objects.
+    media_keys = [k for k in media_keys if _ai_media_allowed(k)][:_AI_MAX_CAPTION_MEDIA]
 
     brief = ""
     if task is not None:
@@ -2654,6 +2700,10 @@ def ai_alt_text_api():
     object_key = (request.form.get("object_key") or "").strip()
     if not object_key:
         return jsonify(error="No image selected."), 400
+    # Alt-text describes the image, so gate the object strictly (see
+    # _ai_media_allowed) - never describe a file the user can't see.
+    if not _ai_media_allowed(object_key):
+        return jsonify(error="You can't use that item."), 403
     try:
         alt = ai_service.generate_alt_text(object_key)
     except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response

@@ -1,0 +1,149 @@
+{% extends "base_app.html" %}
+
+{% block title %}AI Settings | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% block content %}
+        <div class="page-header">
+            <div>
+                <h1>AI Settings</h1>
+                <p>Choose which AI model drafts captions and checks media. Changes apply instantly — no restart.</p>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {# --- Status banner --- #}
+        {% if simulation %}
+        <div class="alert info">
+            <strong>Simulation mode.</strong> AI runs on scripted sample output — no real provider is called and no key is needed. Set a provider API key in the server environment to go live.
+        </div>
+        {% elif not enabled_now %}
+        <div class="alert warning">
+            <strong>AI is paused.</strong> Turn it back on with the toggle below.
+        </div>
+        {% endif %}
+
+        {# --- Provider key status --- #}
+        <div class="ai-keys">
+            <span class="ai-keys-label">Provider keys</span>
+            {% for p in catalog %}
+            <span class="ai-key-chip {{ 'ok' if p.has_key else 'missing' }}">
+                <i class="fa-solid {{ 'fa-circle-check' if p.has_key else 'fa-circle' }}"></i>
+                {{ p.label }} — {{ 'configured' if p.has_key else 'no key' }}
+            </span>
+            {% endfor %}
+            <p class="form-hint">Keys are set in the server environment (<code>.env</code>), never here. A provider without a key can be selected but won't run until its key is added.</p>
+        </div>
+
+        <div class="form-card">
+            <form method="POST">
+
+                <label class="ai-toggle">
+                    <input type="checkbox" name="enabled" {{ 'checked' if row.enabled }}>
+                    <span><strong>Enable AI assist</strong> — the master switch for captions, alt-text and media checks across the app.</span>
+                </label>
+
+                <hr class="ai-sep">
+
+                {# --- Captions & alt-text --- #}
+                <div class="ai-task">
+                    <h3>Captions &amp; alt-text</h3>
+                    <p class="form-hint">Used by the “Generate caption” and “Alt-text” buttons in Social Studio. A cheap, fast model is ideal here.</p>
+                    <div class="ai-task-grid">
+                        <label>Provider
+                            <select name="caption_provider" data-ai-provider="caption">
+                                <option value="">Default ({{ config.AI_CAPTION_PROVIDER }})</option>
+                                {% for p in catalog %}
+                                <option value="{{ p.key }}" {{ 'selected' if row.caption_provider == p.key }}>{{ p.label }}{{ '' if p.has_key else ' — no key' }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>Model
+                            <input type="text" name="caption_model" list="capModels"
+                                value="{{ row.caption_model or '' }}"
+                                placeholder="Default ({{ config.AI_CAPTION_MODEL }})">
+                            <datalist id="capModels"></datalist>
+                        </label>
+                    </div>
+                    <p class="ai-effective">Currently using <strong>{{ effective.caption[0] }}</strong> · <code>{{ effective.caption[1] }}</code></p>
+                </div>
+
+                <hr class="ai-sep">
+
+                {# --- Media QA --- #}
+                <div class="ai-task">
+                    <h3>Media QA</h3>
+                    <p class="form-hint">Used by the “Check media” button on submitted deliverables. A stronger model catches more (typos, off-brand, wrong specs).</p>
+                    <div class="ai-task-grid">
+                        <label>Provider
+                            <select name="qa_provider" data-ai-provider="qa">
+                                <option value="">Default ({{ config.AI_QA_PROVIDER }})</option>
+                                {% for p in catalog %}
+                                <option value="{{ p.key }}" {{ 'selected' if row.qa_provider == p.key }}>{{ p.label }}{{ '' if p.has_key else ' — no key' }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>Model
+                            <input type="text" name="qa_model" list="qaModels"
+                                value="{{ row.qa_model or '' }}"
+                                placeholder="Default ({{ config.AI_QA_MODEL }})">
+                            <datalist id="qaModels"></datalist>
+                        </label>
+                    </div>
+                    <p class="ai-effective">Currently using <strong>{{ effective.qa[0] }}</strong> · <code>{{ effective.qa[1] }}</code></p>
+                </div>
+
+                <button type="submit">Save AI settings</button>
+            </form>
+        </div>
+
+        <script id="aiCatalog" type="application/json">{{ catalog|tojson }}</script>
+        <script>
+        (function () {
+            var catalog = {};
+            try { catalog = JSON.parse(document.getElementById("aiCatalog").textContent); }
+            catch (e) { return; }
+            var byKey = {};
+            catalog.forEach(function (p) { byKey[p.key] = p; });
+
+            function fill(listId, models) {
+                var dl = document.getElementById(listId);
+                if (!dl) return;
+                dl.innerHTML = "";
+                (models || []).forEach(function (m) {
+                    var o = document.createElement("option");
+                    o.value = m;
+                    dl.appendChild(o);
+                });
+            }
+            function modelsFor(providerKey, task) {
+                // Fall back to every provider's suggestions when "Default".
+                if (providerKey && byKey[providerKey]) {
+                    return byKey[providerKey][task === "qa" ? "qa_models" : "caption_models"];
+                }
+                var all = [];
+                catalog.forEach(function (p) {
+                    all = all.concat(p[task === "qa" ? "qa_models" : "caption_models"]);
+                });
+                return all;
+            }
+            function wire(selectName, listId, task) {
+                var sel = document.querySelector('select[name="' + selectName + '"]');
+                if (!sel) return;
+                function refresh() { fill(listId, modelsFor(sel.value, task)); }
+                sel.addEventListener("change", refresh);
+                refresh();
+            }
+            wire("caption_provider", "capModels", "caption");
+            wire("qa_provider", "qaModels", "qa");
+        })();
+        </script>
+{% endblock %}

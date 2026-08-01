@@ -36,5 +36,6 @@ requests==2.34.2
 # simulation mode, so it stays inert until AI is switched on. A range, not an
 # exact pin, because it is not exercised by CI (tests run the simulator) and a
 # stale exact pin would only break a real install - bump + pin when you enable
-# AI for real. Add `openai` / `anthropic` here only if AI_PROVIDER switches.
+# AI for real. Add `anthropic` here too if you switch a task to Claude.
 google-genai>=1.0,<2
+openai>=1.40,<2

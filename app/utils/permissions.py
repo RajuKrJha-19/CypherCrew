@@ -449,6 +449,19 @@ def can_manage_users(user):
     return _is_management(user) or has_permission(user, "manage_users")
 
 
+def can_manage_ai(user):
+    """True for anyone allowed to open the AI-settings screen (pick the
+    provider + model each task uses, toggle AI on/off).
+
+    Org-wide configuration, so it is management-only (owner/admin) - the same
+    tier that connects integrations. API keys are never edited here; they stay
+    in the server environment.
+    """
+    if user is None:
+        return False
+    return _is_management(user)
+
+
 def can_manage_permissions(user):
     """True for anyone allowed to open the permissions screen.
 

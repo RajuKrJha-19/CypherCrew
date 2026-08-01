@@ -67,10 +67,11 @@ class AIProvider(ABC):
 
     key: str = "base"
 
-    def __init__(self, *, caption_model=None, qa_model=None, api_key=None,
+    def __init__(self, *, model=None, api_key=None,
                  max_tokens=1024, timeout_s=30):
-        self.caption_model = caption_model
-        self.qa_model = qa_model
+        # A provider instance is built per task (get_provider(task_kind)), so it
+        # carries the single model resolved for that task.
+        self.model = model
         self.api_key = api_key
         self.max_tokens = max_tokens
         self.timeout_s = timeout_s

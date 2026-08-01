@@ -394,12 +394,15 @@ def _purge_test_rows():
         # belongs here - a missed one surfaces as a teardown-only
         # ForeignKeyViolation, which is a confusing way to find out.
         from app.models import (
-            AttendanceSettings, ContentVersion, Notification, SocialAccount,
-            SocialAuditLog, SocialPost, SocialPostTarget, TeamChannel,
-            TeamMessage, ZohoConnection,
+            AISettings, AttendanceSettings, ContentVersion, Notification,
+            SocialAccount, SocialAuditLog, SocialPost, SocialPostTarget,
+            TeamChannel, TeamMessage, ZohoConnection,
         )
         for model, columns in (
             (SocialAuditLog, ("actor_id",)),
+            # AI settings is a single org-wide row; detach its editor FK so a
+            # test admin who saved settings can still be deleted.
+            (AISettings, ("updated_by_id",)),
             (SocialPost, ("created_by_id", "approved_by_id")),
             (SocialPostTarget, ("story_link_done_by_id",)),
             (SocialAccount, ("connected_by_id",)),

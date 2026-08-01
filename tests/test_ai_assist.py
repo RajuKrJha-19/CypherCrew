@@ -148,3 +148,34 @@ def test_alt_text_route_requires_a_key(client, login, make_user):
     login(user)
     r = client.post("/social/api/ai/alt-text", data={})
     assert r.status_code == 400
+
+
+# -- Object-level authorization (IDOR guard) --------------------------------
+
+def test_caption_route_forbidden_for_an_unviewable_task(
+        client, login, make_user, make_task):
+    owner = make_user("video_editor")                    # the assignee
+    task = make_task(owner)
+    outsider = make_user("employee", permissions=["manage_social"])
+    login(outsider)                                      # can_use_social, not a viewer
+    r = client.post("/social/api/ai/caption", data={"task_id": task.id})
+    assert r.status_code == 403
+
+
+def test_alt_text_allows_an_ephemeral_upload_key(client, login, make_user):
+    user = make_user("employee", permissions=["manage_social"])
+    login(user)
+    r = client.post("/social/api/ai/alt-text",
+                    data={"object_key": "social_uploads/abc123_poster.png"})
+    assert r.status_code == 200          # allowed; unreadable in tests -> ""
+    assert r.get_json()["alt_text"] == ""
+
+
+def test_alt_text_forbidden_for_an_unviewable_task_file(
+        client, login, make_user, make_task_file):
+    tf = make_task_file(mime_type="image/png", filename="poster.png")
+    outsider = make_user("employee", permissions=["manage_social"])
+    login(outsider)
+    r = client.post("/social/api/ai/alt-text",
+                    data={"object_key": tf.object_key})
+    assert r.status_code == 403

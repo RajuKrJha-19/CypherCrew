@@ -377,9 +377,14 @@ class Config:
     # / Claude. Default Gemini: cheapest capable vision + a real free tier.
     AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").lower()
 
-    # Per-task model ids (env-overridable - set the CURRENT id for your
-    # provider; these are sensible defaults, not pinned guarantees). Captions
-    # and alt-text use the cheap/fast tier; media QA uses the stronger tier.
+    # Per-task provider + model. Captions/alt-text can run on a different
+    # backend from media QA (e.g. cheap Gemini Flash for captions, a stronger
+    # model for QA). These are the DEFAULTS; the admin AI-settings screen can
+    # override them at runtime without a restart (env stays the fallback). Set
+    # the CURRENT model id for your provider - these are sensible defaults, not
+    # pinned guarantees. Provider falls back to AI_PROVIDER when unset.
+    AI_CAPTION_PROVIDER = os.getenv("AI_CAPTION_PROVIDER", AI_PROVIDER).lower()
+    AI_QA_PROVIDER = os.getenv("AI_QA_PROVIDER", AI_PROVIDER).lower()
     AI_CAPTION_MODEL = os.getenv("AI_CAPTION_MODEL", "gemini-2.5-flash")
     AI_QA_MODEL = os.getenv("AI_QA_MODEL", "gemini-2.5-pro")
 

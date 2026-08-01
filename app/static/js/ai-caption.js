@@ -42,10 +42,12 @@
         }
         if (cap) { cap.value = text; fire(cap); }
 
+        // Per-platform overrides are optional hand-tuning; only fill the empty
+        // ones so a user's customised text is never silently clobbered.
         var per = data.per_platform || {};
         Object.keys(per).forEach(function (pf) {
             var el = document.querySelector('textarea[name="caption_' + pf + '"]');
-            if (el) { el.value = per[pf]; fire(el); }
+            if (el && !el.value.trim()) { el.value = per[pf]; fire(el); }
         });
 
         var fc = document.getElementById("firstComment");

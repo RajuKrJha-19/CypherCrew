@@ -255,6 +255,14 @@ def create_app():
             from app.attendance.worker import start_attendance_worker
             start_attendance_worker(app)
 
+    # AI Assist admin screen. Registered ONLY behind AI_ENABLED, same contract
+    # as the others: with it off the settings screen 404s and the sidebar link
+    # never renders. The AI caption/QA routes themselves live on the social /
+    # tasks blueprints and self-gate on is_enabled().
+    if app.config.get("AI_ENABLED"):
+        from app.routes.ai_settings import ai_settings_bp
+        app.register_blueprint(ai_settings_bp)
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()
@@ -266,7 +274,7 @@ def create_app():
         can_manage_permissions, can_manage_leaves, can_manage_holidays,
         can_manage_meetings, can_publish, can_review, access_fingerprint,
         can_view_client_stats,
-        can_manage_attendance,
+        can_manage_attendance, can_manage_ai,
     )
     from app.utils import roles as roles_module
     from app.utils.social_platforms import PLATFORM_ICONS, PLATFORM_LABELS
@@ -348,6 +356,7 @@ def create_app():
         # "May operate the attendance integration" - gates the Attendance
         # admin link and the per-user check-in source control.
         can_manage_attendance=can_manage_attendance,
+        can_manage_ai=can_manage_ai,
         can_publish=can_publish,
         can_review=can_review,
         # Digest of the signed-in user's role + granted codes. Feeds the
@@ -389,6 +398,22 @@ def create_app():
     )
 
     app.jinja_env.filters["linkify"] = linkify_text
+
+    # Whether AI assist is available right now (env master AND the admin soft
+    # toggle), exposed to every template so the AI buttons/screens show or hide
+    # together. Cached on `g` per request; fail-closed to False so a DB hiccup
+    # never breaks a page render. is_enabled() itself skips the DB when the env
+    # master is off, so a page pays nothing when AI is disabled at the server.
+    @app.context_processor
+    def _inject_ai_enabled():
+        from flask import g
+        if not hasattr(g, "_ai_enabled"):
+            try:
+                from app.ai import settings as ai_settings
+                g._ai_enabled = ai_settings.is_enabled()
+            except Exception:  # noqa: BLE001
+                g._ai_enabled = False
+        return {"ai_enabled": g._ai_enabled}
 
     from app.utils.mentions import highlight_mentions
     app.jinja_env.filters["mentions"] = highlight_mentions

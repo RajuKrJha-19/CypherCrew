@@ -940,6 +940,18 @@ Submission Files
                                             Download
                                         </a>
 
+                                        {% if ai_enabled %}
+                                        <button type="button"
+                                            class="task-file-btn task-file-aicheck-btn cmp-ai"
+                                            data-ai-check
+                                            data-ai-check-url="{{ url_for('tasks.ai_check_file', file_id=file.id) }}"
+                                            data-target="#ai-findings-{{ file.id }}"
+                                            title="Advisory AI check against the brief and brand guidelines">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                            Check media
+                                        </button>
+                                        {% endif %}
+
                                         {% if can_manage_tasks or file.uploaded_by_id == current_user.id %}
                                         <form method="POST" action="{{ url_for(
                             'tasks.delete_task_file',
@@ -953,6 +965,10 @@ Submission Files
                                         {% endif %}
 
                                     </div>
+
+                                    {% if ai_enabled %}
+                                    <div class="task-file-aicheck" id="ai-findings-{{ file.id }}" hidden></div>
+                                    {% endif %}
 
                                 </article>
 
@@ -2283,6 +2299,9 @@ Submission Files
     #}
     <script src="{{ asset_url('js/upload-popup.js') }}"></script>
         <script src="{{ asset_url('js/status-change.js') }}"></script>
+        {% if ai_enabled %}
+        <script src="{{ asset_url('js/ai-media-check.js') }}" defer></script>
+        {% endif %}
         <script>
 
             const STEPPER_FROM = {{ task.status|tojson }};

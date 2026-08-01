@@ -84,7 +84,7 @@ class GeminiProvider(AIProvider):
 
     def generate_caption(self, ctx):
         system, user = prompts.caption_prompt(ctx)
-        raw = self._generate(self.caption_model, system, user, ctx.media,
+        raw = self._generate(self.model, system, user, ctx.media,
                              as_json=True)
         try:
             data = json.loads(_strip_json(raw))
@@ -103,14 +103,14 @@ class GeminiProvider(AIProvider):
 
     def generate_alt_text(self, image):
         system, user = prompts.alt_text_prompt(image)
-        raw = self._generate(self.caption_model, system, user, [image],
+        raw = self._generate(self.model, system, user, [image],
                              as_json=False)
         return raw.strip()[:125]
 
     def check_media(self, ctx):
         media = list(ctx.media) + list(ctx.guidelines)
         system, user = prompts.media_check_prompt(ctx)
-        raw = self._generate(self.qa_model, system, user, media, as_json=True)
+        raw = self._generate(self.model, system, user, media, as_json=True)
         try:
             data = json.loads(_strip_json(raw))
         except (ValueError, TypeError) as exc:

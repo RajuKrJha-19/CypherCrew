@@ -26,7 +26,7 @@ from sqlalchemy import or_, cast, String
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
     Task,
     Client,
@@ -40,8 +40,8 @@ from app.models import (
     TaskTransferRequest
 )
 from app.utils.permissions import (
-    can_assign_tasks, can_publish, can_use_social, can_view_all_tasks,
-    has_permission,
+    can_assign_tasks, can_publish, can_review, can_use_social,
+    can_view_all_tasks, has_permission,
 )
 from app.utils import roles
 from app.utils.notifications import create_notification
@@ -4689,6 +4689,47 @@ def preview_task_file(file_id):
     return redirect(
         preview_url
     )
+
+
+@tasks_bp.route("/files/<int:file_id>/ai-check", methods=["POST"])
+@login_required
+@limiter.limit("60 per hour")
+def ai_check_file(file_id):
+    """Advisory AI QA pass on a submitted deliverable, on demand. Checks the
+    file against the brief and the client's brand knowledge base and returns a
+    checklist of findings - never blocks anything. Reviewers or the assignee,
+    on a task they can see."""
+    from app.ai import settings as ai_settings
+    if not ai_settings.is_enabled():
+        return jsonify(error="AI assist is not available."), 503
+
+    task_file = TaskFile.query.get_or_404(file_id)
+    task = task_file.task
+
+    if not (can_view_task(task)
+            and (can_review(current_user)
+                 or task.assigned_to_id == current_user.id)):
+        return jsonify(error="You can't check this file."), 403
+
+    from app.ai import service as ai_service
+    from app.ai.errors import AIAuth, AIDisabled, AITransient
+
+    try:
+        result = ai_service.check_media(
+            task_file, created_by_id=current_user.id)
+    except AIDisabled:
+        return jsonify(error="AI assist is not available."), 503
+    except AITransient:
+        return jsonify(error="The AI service is busy — try again shortly."), 503
+    except AIAuth:
+        current_app.logger.error("[ai] provider auth failed")
+        return jsonify(error="AI is misconfigured — contact an admin."), 502
+    except Exception:  # noqa: BLE001 - never surface internals / keys
+        current_app.logger.exception("[ai] media check failed")
+        return jsonify(error="Couldn't check that file — please try again."), 502
+    return jsonify(**result)
+
+
 @tasks_bp.route("/files/<int:file_id>/download")
 @login_required
 def download_task_file(file_id):
