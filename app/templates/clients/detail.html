@@ -34,6 +34,11 @@
             </div>
 
             <div class="top-actions">
+                {% if can_manage %}
+                <a href="{{ url_for('clients.edit_client', client_id=client.id) }}" class="btn btn-secondary">
+                    <i class="fa-solid fa-pen"></i> Edit
+                </a>
+                {% endif %}
                 {% if can_manage and not client.parent %}
                 <a href="{{ url_for('clients.add_client', parent_id=client.id) }}" class="btn">
                     <i class="fa-solid fa-plus"></i> Add Sub-client

@@ -1,0 +1,84 @@
+{% extends "base_app.html" %}
+
+{% block title %}Edit {{ client.client_name }} | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% block content %}
+        <div class="page-header">
+            <div>
+                <h1>Edit Client</h1>
+                <p>Update {{ client.client_name }}'s details, manager and status</p>
+            </div>
+            <div class="top-actions">
+                <a href="{{ url_for('clients.client_detail', client_id=client.id) }}" class="btn btn-secondary">Back</a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="form-card">
+            <form method="POST">
+
+                <label>Client Name</label>
+                <input type="text" name="client_name" value="{{ client.client_name }}" required>
+
+                <div class="form-group">
+                    <label>Short Code</label>
+                    <p class="form-hint">Used in uploaded file names. Leave blank to use the client name's initials.</p>
+                    <input type="text" name="short_code" value="{{ client.short_code or '' }}" placeholder="e.g. VMC" maxlength="12">
+                </div>
+
+                <label>Company Name</label>
+                <input type="text" name="company_name" value="{{ client.company_name or '' }}">
+
+                <label>Phone</label>
+                <input type="text" name="phone" value="{{ client.phone or '' }}">
+
+                <label>Email</label>
+                <input type="email" name="email" value="{{ client.email or '' }}">
+
+                <label>Industry</label>
+                <input type="text" name="industry" value="{{ client.industry or '' }}">
+
+                <label>Assigned Manager</label>
+                <select name="assigned_manager_id">
+                    <option value="">Select Manager</option>
+                    {% set manager_ids = managers | map(attribute='id') | list %}
+                    {% for manager in managers %}
+                    <option value="{{ manager.id }}" {% if client.assigned_manager_id == manager.id %}selected{% endif %}>{{ manager.name }}</option>
+                    {% endfor %}
+                    {# Preserve a current assignee who isn't in the manager set. #}
+                    {% if client.assigned_manager and client.assigned_manager_id not in manager_ids %}
+                    <option value="{{ client.assigned_manager_id }}" selected>{{ client.assigned_manager.name }} (current)</option>
+                    {% endif %}
+                </select>
+
+                {% if client.parent_client_id and client.parent %}
+                <p class="form-hint" style="margin-top:12px">
+                    Sub-client of <strong>{{ client.parent.client_name }}</strong>.
+                    Re-parenting is done by recreating the client, to keep the
+                    one-level structure intact.
+                </p>
+                {% endif %}
+
+                <label>Status</label>
+                <select name="status">
+                    <option value="active" {% if client.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if client.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+                <small class="field-hint">Inactive archives the client: it drops
+                    out of the active lists and its brand assets stop being
+                    readable, but its tasks and history are kept.</small>
+
+                <button type="submit">Save changes</button>
+
+            </form>
+        </div>
+{% endblock %}

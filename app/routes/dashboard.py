@@ -757,22 +757,24 @@ def build_overview():
 
     total_tasks = Task.query.filter(not_void).count()
 
+    # "Completed" means *delivered* (Published), matching the card's link to
+    # ?status=Published. employee_completed is also True for Core/Client Review,
+    # so counting it inflated the number AND double-counted the same tasks under
+    # "Needs Review". completed_at is stamped on the Published transition (and
+    # cleared on rework out of it), so it is the right throughput timestamp.
     completed_tasks = Task.query.filter(
-        not_void,
-        Task.employee_completed == True
+        Task.status == task_status.PUBLISHED
     ).count()
 
     this_month_completed = Task.query.filter(
-        not_void,
-        Task.employee_completed == True,
-        db.func.date(Task.employee_completed_at) >= current_month_start
+        Task.status == task_status.PUBLISHED,
+        db.func.date(Task.completed_at) >= current_month_start
     ).count()
 
     last_month_completed = Task.query.filter(
-        not_void,
-        Task.employee_completed == True,
-        db.func.date(Task.employee_completed_at) >= last_month_start,
-        db.func.date(Task.employee_completed_at) < current_month_start
+        Task.status == task_status.PUBLISHED,
+        db.func.date(Task.completed_at) >= last_month_start,
+        db.func.date(Task.completed_at) < current_month_start
     ).count()
 
     completed_growth = get_growth_data(

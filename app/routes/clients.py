@@ -217,6 +217,64 @@ def add_client():
     )
 
 
+@clients_bp.route("/<int:client_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_client(client_id):
+    """Edit a client's details, owning manager, and active/inactive status.
+
+    This is what makes the active/inactive filter and the inactive-asset read
+    guard mean something: a client could previously only be made inactive AT
+    creation. Parent re-parenting is deliberately excluded so the one-level,
+    no-cycles sub-client invariant can't be broken from here.
+    """
+    if not can_manage_clients(current_user):
+        return redirect(url_for("dashboard.index"))
+
+    client = Client.query.get_or_404(client_id)
+
+    # Only client-manager-tier users are offered (mirrors the list filter); the
+    # current assignee is preserved even if they fall outside that set.
+    managers = User.query.filter(
+        User.status == "active",
+        User.role.in_(roles.CLIENT_MANAGER_ROLES),
+    ).order_by(User.name.asc()).all()
+
+    if request.method == "POST":
+        client_name = (request.form.get("client_name") or "").strip()
+        if not client_name:
+            flash("Client name is required.", "error")
+            return redirect(url_for("clients.edit_client", client_id=client.id))
+
+        status = request.form.get("status")
+        if status not in ("active", "inactive"):
+            status = client.status or "active"
+
+        manager_id = (request.form.get("assigned_manager_id") or "").strip()
+        if manager_id:
+            try:
+                manager_id = int(manager_id)
+            except (TypeError, ValueError):
+                manager_id = None
+        else:
+            manager_id = None
+
+        client.client_name = client_name
+        client.short_code = (request.form.get("short_code") or "").strip() or None
+        client.company_name = (request.form.get("company_name") or "").strip() or None
+        client.phone = (request.form.get("phone") or "").strip() or None
+        client.email = (request.form.get("email") or "").strip() or None
+        client.industry = (request.form.get("industry") or "").strip() or None
+        client.assigned_manager_id = manager_id
+        client.status = status
+        db.session.commit()
+
+        flash("Client updated." + (" It is now inactive."
+              if status == "inactive" else ""), "success")
+        return redirect(url_for("clients.client_detail", client_id=client.id))
+
+    return render_template("clients/edit.html", client=client, managers=managers)
+
+
 @clients_bp.route("/<int:client_id>")
 @login_required
 def client_detail(client_id):
