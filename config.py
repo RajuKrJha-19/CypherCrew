@@ -401,7 +401,9 @@ class Config:
     # timeout, and a hard cap on how large a media file we send to the model
     # (protects cost + latency; oversized media is skipped with a clear note).
     AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "1024"))
-    AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "30"))
+    # Vision calls (caption/QA with an image) can take longer than plain text,
+    # so give the provider room; still well under the gunicorn worker timeout.
+    AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "60"))
     AI_MEDIA_MAX_MB = int(os.getenv("AI_MEDIA_MAX_MB", "10"))
 
     # Simulation mode: the AI layer returns scripted captions/alt-text/findings

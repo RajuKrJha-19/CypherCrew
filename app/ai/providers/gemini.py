@@ -41,8 +41,15 @@ class GeminiProvider(AIProvider):
     def _client(self):
         if not self.api_key:
             raise AIAuth("No Gemini API key configured.")
-        genai, _ = _genai()
-        return genai.Client(api_key=self.api_key)
+        genai, types = _genai()
+        # Apply our timeout (ms) so a slow vision call can't hang a worker.
+        # Guarded: if this SDK build doesn't accept http_options, fall back to
+        # a plain client rather than breaking generation.
+        try:
+            http = types.HttpOptions(timeout=int(self.timeout_s * 1000))
+            return genai.Client(api_key=self.api_key, http_options=http)
+        except Exception:  # noqa: BLE001
+            return genai.Client(api_key=self.api_key)
 
     def _parts(self, types, user_text, media):
         parts = [types.Part.from_text(text=user_text)]

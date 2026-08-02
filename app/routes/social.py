@@ -2587,17 +2587,23 @@ def _ai_guard(feature=None):
 
 
 def _ai_error_response(exc):
-    """Map a typed AI error to a clean JSON response. Never echoes a key."""
+    """Map a typed AI error to a clean JSON response. The typed AIError messages
+    are provider-status only (never a key), so we surface the SPECIFIC reason -
+    e.g. "Gemini request failed (404)" - straight to the user. A generic error
+    tells nobody what to fix; a specific one is diagnosable from the UI without
+    server access. The message is also logged. Only the unknown-exception path
+    stays generic (its text could carry internals)."""
     from app.ai.errors import AIAuth, AIDisabled, AIPermanent, AITransient
+    reason = str(exc).strip()
     if isinstance(exc, AIDisabled):
         return jsonify(error="AI assist is not available."), 503
-    if isinstance(exc, AITransient):
-        return jsonify(error="The AI service is busy — try again in a moment."), 503
-    if isinstance(exc, AIAuth):
-        current_app.logger.error("[ai] provider auth failed")
-        return jsonify(error="AI is misconfigured — contact an admin."), 502
-    if isinstance(exc, AIPermanent):
-        return jsonify(error="Couldn't generate that — please try again."), 502
+    if isinstance(exc, (AITransient, AIAuth, AIPermanent)):
+        current_app.logger.warning("[ai] generation failed: %s", reason)
+        code = 503 if isinstance(exc, AITransient) else 502
+        prefix = ("The AI service is busy" if isinstance(exc, AITransient)
+                  else "AI sign-in/key problem" if isinstance(exc, AIAuth)
+                  else "AI couldn't generate that")
+        return jsonify(error=f"{prefix} — {reason}" if reason else prefix), code
     current_app.logger.exception("[ai] unexpected failure")
     return jsonify(error="Something went wrong with AI assist."), 500
 
