@@ -24,6 +24,15 @@ PROVIDERS = [
         "caption_models": ["gpt-5-mini", "gpt-4.1-mini"],
         "qa_models": ["gpt-5", "gpt-5-mini"],
     },
+    {
+        "key": "claude",
+        "label": "Anthropic Claude",
+        "key_config": "ANTHROPIC_API_KEY",
+        # Sonnet = the quality sweet spot for on-brand writing + careful QA;
+        # Haiku is the cheap high-volume option; Opus for the hardest checks.
+        "caption_models": ["claude-sonnet-5", "claude-haiku-4-5"],
+        "qa_models": ["claude-sonnet-5", "claude-opus-5"],
+    },
 ]
 _BY_KEY = {p["key"]: p for p in PROVIDERS}
 

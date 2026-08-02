@@ -220,3 +220,38 @@ def test_openai_adapter_import_safe_and_keyless_raises_auth():
     prov = OpenAIProvider(model="gpt-5-mini", api_key=None)
     with pytest.raises(AIAuth):
         prov.generate_caption(CaptionContext(brief="hi", platforms=["twitter"]))
+
+
+# -- Claude adapter: selectable, import-safe, keyless fails cleanly ---------
+
+def test_claude_is_a_selectable_provider(app):
+    assert "claude" in ai_settings.VALID_PROVIDERS
+    with app.test_request_context():
+        keys = {p["key"] for p in ai_settings.catalog_for_ui()}
+        assert "claude" in keys
+
+
+def test_claude_adapter_import_safe_and_keyless_raises_auth():
+    from app.ai.base import CaptionContext, ReplyContext
+    from app.ai.errors import AIAuth
+    from app.ai.providers.claude import ClaudeProvider
+
+    prov = ClaudeProvider(model="claude-sonnet-5", api_key=None)
+    # Keyless must raise AIAuth before any network/SDK import.
+    with pytest.raises(AIAuth):
+        prov.generate_caption(CaptionContext(brief="hi", platforms=["twitter"]))
+    with pytest.raises(AIAuth):
+        prov.generate_reply(ReplyContext(review_text="Great!", rating=5))
+
+
+def test_claude_resolves_own_model_when_provider_overridden(app):
+    # Provider switched to Claude, model blank -> Claude's own first model,
+    # never the (Gemini) env default.
+    with app.app_context():
+        db.session.add(AISettings(caption_provider="claude"))
+        db.session.commit()
+    with app.test_request_context():
+        provider, model = ai_settings.resolve("caption")
+        assert provider == "claude"
+        assert model == "claude-sonnet-5"
+        assert model != app.config["AI_CAPTION_MODEL"]

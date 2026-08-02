@@ -41,6 +41,9 @@ def get_provider(task_kind="caption"):
     if provider_key == "openai":
         from app.ai.providers.openai import OpenAIProvider
         return OpenAIProvider(model=model, api_key=api_key, **common)
+    if provider_key == "claude":
+        from app.ai.providers.claude import ClaudeProvider
+        return ClaudeProvider(model=model, api_key=api_key, **common)
 
-    # A claude/llama adapter would slot in here once written.
+    # A llama-via-Groq adapter would slot in here once written.
     raise AIDisabled(f"AI provider '{provider_key}' is not available.")
