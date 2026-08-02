@@ -113,6 +113,90 @@ def test_feature_enabled_individual_switch(app):
         assert states["caption"] is True and states["qa"] is False
 
 
+# -- control panel: caption prefs / performance / auto-reply guardrails -----
+
+def test_caption_prefs_defaults_and_override(app):
+    with app.test_request_context():
+        assert ai_settings.caption_prefs() == {
+            "tone": None, "variations": 2, "hashtags": True}
+    with app.app_context():
+        db.session.add(AISettings(caption_tone="Punchy", caption_variations=1,
+                                  caption_hashtags=False))
+        db.session.commit()
+    with app.test_request_context():
+        p = ai_settings.caption_prefs()
+        assert p["tone"] == "punchy" and p["variations"] == 1
+        assert p["hashtags"] is False
+
+
+def test_caption_prompt_respects_variations_and_hashtags():
+    from app.ai import prompts
+    from app.ai.base import CaptionContext
+    sys_off, _ = prompts.caption_prompt(CaptionContext(
+        brief="x", variations=0, hashtags=False))
+    assert "'variations' must be an empty array" in sys_off
+    assert "must be an empty array - do NOT add any hashtags" in sys_off
+    sys_on, _ = prompts.caption_prompt(CaptionContext(
+        brief="x", variations=3, hashtags=True))
+    assert "3 alternative full captions" in sys_on
+
+
+def test_autoreply_config_env_fallback_then_db_override(app):
+    with app.test_request_context():
+        app.config["GBP_AUTOREPLY_ENABLED"] = True
+        try:
+            c = ai_settings.autoreply_config()
+        finally:
+            app.config["GBP_AUTOREPLY_ENABLED"] = False
+        assert c["enabled"] is True and c["min_rating"] == 4
+    with app.app_context():
+        db.session.add(AISettings(gbp_autoreply_enabled=True, gbp_min_rating=5,
+                                  gbp_blocklist="refund, legal"))
+        db.session.commit()
+    with app.test_request_context():
+        c = ai_settings.autoreply_config()
+        assert c["enabled"] is True and c["min_rating"] == 5
+        assert "refund" in c["blocklist"] and "legal" in c["blocklist"]
+
+
+def test_save_persists_caption_and_performance(client, login, make_user, app):
+    login(make_user("admin"))
+    client.post("/admin/ai/", data={
+        "enabled": "on", "caption_tone": "festive", "caption_variations": "3",
+        "caption_hashtags": "on", "image_max_dim": "1024", "media_max_mb": "8"})
+    with app.app_context():
+        row = AISettings.query.first()
+        assert row.caption_tone == "festive" and row.caption_variations == 3
+        assert row.caption_hashtags is True
+        assert row.image_max_dim == 1024 and row.media_max_mb == 8
+
+
+def test_save_clamps_and_enforces_floors(client, login, make_user, app):
+    login(make_user("admin"))
+    client.post("/admin/ai/", data={
+        "enabled": "on", "caption_variations": "9",     # -> clamped to 3
+        "gbp_min_rating": "1",                          # -> floored to 3
+        "gbp_blocklist": "refund", "gbp_autoreply_enabled": "on"})
+    with app.app_context():
+        row = AISettings.query.first()
+        assert row.caption_variations == 3
+        assert row.gbp_min_rating == 3
+
+
+def test_autosend_refused_without_blocklist(client, login, make_user, app):
+    login(make_user("admin"))
+    app.config["GBP_AUTOREPLY_BLOCKLIST"] = ""          # no env net either
+    try:
+        r = client.post("/admin/ai/", data={
+            "enabled": "on", "gbp_autoreply_enabled": "on",
+            "gbp_blocklist": ""}, follow_redirects=True)
+    finally:
+        app.config["GBP_AUTOREPLY_BLOCKLIST"] = "refund"
+    with app.app_context():
+        assert AISettings.query.first().gbp_autoreply_enabled is False
+    assert b"blocklist" in r.data.lower()
+
+
 def test_key_present_reflects_config(app):
     with app.test_request_context():
         app.config["GEMINI_API_KEY"] = "test-key"

@@ -79,7 +79,8 @@ def _shrink_image(data, mime_type):
     original bytes unchanged. Returns (data, mime_type)."""
     if not mime_type or not mime_type.startswith("image/") or mime_type == "image/gif":
         return data, mime_type
-    max_dim = int(current_app.config.get("AI_IMAGE_MAX_DIM", 1568) or 0)
+    from app.ai import settings as ai_settings
+    max_dim = ai_settings.image_max_dim()          # admin-editable, env fallback
     if max_dim <= 0:
         return data, mime_type
     try:
@@ -103,7 +104,8 @@ def _read_bytes(object_key):
     every failure (no storage, unreadable, oversized) returns None."""
     if not object_key:
         return None
-    max_bytes = int(current_app.config.get("AI_MEDIA_MAX_MB", 10)) * 1024 * 1024
+    from app.ai import settings as ai_settings
+    max_bytes = ai_settings.media_max_mb() * 1024 * 1024
     try:
         from app.storage.storage_service import StorageService
         data = StorageService().read_bytes(object_key)
@@ -123,7 +125,8 @@ def _load_media(items, allowed=_IMAGE_MIMES):
     if not wanted:
         return []
 
-    max_bytes = int(current_app.config.get("AI_MEDIA_MAX_MB", 10)) * 1024 * 1024
+    from app.ai import settings as ai_settings
+    max_bytes = ai_settings.media_max_mb() * 1024 * 1024
     try:
         from app.storage.storage_service import StorageService
         storage = StorageService()
@@ -161,14 +164,18 @@ def generate_caption(*, brief="", industry=None, brand_voice=None,
                      brand_notes=None, facts=None, tone=None,
                      platforms=None, media=None, actor_id=None, client_id=None):
     """media: iterable of (object_key, label). Returns a plain dict."""
+    from app.ai import settings as ai_settings
     provider = get_provider("caption")
+    prefs = ai_settings.caption_prefs()
     ctx = CaptionContext(
         brief=brief or "",
         industry=industry,
         brand_voice=brand_voice,
         brand_notes=brand_notes,
         facts=facts or None,
-        tone=tone or None,
+        tone=(tone or prefs["tone"]),          # explicit tone wins; else default
+        variations=prefs["variations"],
+        hashtags=prefs["hashtags"],
         platforms=list(platforms or []),
         caption_limits=caption_limits(platforms or []),
         media=_load_media(media or []),

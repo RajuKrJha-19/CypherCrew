@@ -28,6 +28,8 @@ class CaptionContext:
     brand_notes: str | None = None      # do's / don'ts / guideline notes
     facts: str | None = None            # structured Client Brain (accurate names/offers/contacts)
     tone: str | None = None             # optional tone override (e.g. "punchy")
+    variations: int = 2                 # how many alternative captions (0-3)
+    hashtags: bool = True               # append relevant hashtags?
     platforms: list[str] = field(default_factory=list)
     caption_limits: dict = field(default_factory=dict)   # platform -> max chars
     media: list[MediaInput] = field(default_factory=list)

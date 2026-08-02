@@ -25,6 +25,22 @@ def _guard():
         abort(403)
 
 
+# Tones the caption UI offers (kept in sync with the composer's allow-list).
+_TONES = {"professional", "punchy", "friendly", "premium", "festive"}
+
+
+def _int_in(raw, default, lo, hi, allow_zero=False):
+    """Parse an int and clamp it to [lo, hi]; default on junk. allow_zero keeps
+    an explicit 0 (used as 'off')."""
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if allow_zero and v == 0:
+        return 0
+    return max(lo, min(hi, v))
+
+
 def _get_or_create():
     row = AISettings.query.first()
     if row is None:
@@ -70,8 +86,43 @@ def index():
         except (TypeError, ValueError):
             budget = 0.0
         row.monthly_budget_usd = max(0.0, budget)
+
+        # -- Caption behaviour --
+        tone = (request.form.get("caption_tone") or "").strip().lower()
+        row.caption_tone = tone if tone in _TONES else None
+        row.caption_variations = _int_in(request.form.get("caption_variations"), 2, 0, 3)
+        row.caption_hashtags = bool(request.form.get("caption_hashtags"))
+
+        # -- Image / performance --
+        row.image_max_dim = _int_in(request.form.get("image_max_dim"),
+                                    1568, 512, 4096, allow_zero=True)
+        row.media_max_mb = _int_in(request.form.get("media_max_mb"), 10, 1, 50)
+
+        # -- Review auto-reply guardrails (hard safety floors enforced) --
+        block = (request.form.get("gbp_blocklist") or "").strip()
+        row.gbp_min_rating = _int_in(request.form.get("gbp_min_rating"), 4, 3, 5)
+        row.gbp_max_len = _int_in(request.form.get("gbp_max_len"), 200, 20, 1000)
+        row.gbp_max_per_run = _int_in(request.form.get("gbp_max_per_run"), 10, 1, 100)
+        row.gbp_blocklist = block or None
+        want_auto = bool(request.form.get("gbp_autoreply_enabled"))
+        # Never enable unattended public auto-send without a blocklist net.
+        eff_block = block or (current_app.config.get("GBP_AUTOREPLY_BLOCKLIST") or "")
+        if want_auto and not eff_block.strip():
+            want_auto = False
+            flash("Auto-reply needs a blocklist first (safety) — add words, "
+                  "then turn it on.", "warning")
+        row.gbp_autoreply_enabled = want_auto
+
         row.updated_by_id = current_user.id
         db.session.commit()
+
+        # Audit trail for the unattended-public-reply guardrails.
+        current_app.logger.info(
+            "[ai-settings] review auto-reply saved by user=%s: enabled=%s "
+            "min_rating=%s max_len=%s per_run=%s blocklist_words=%s",
+            current_user.id, row.gbp_autoreply_enabled, row.gbp_min_rating,
+            row.gbp_max_len, row.gbp_max_per_run,
+            len([w for w in (row.gbp_blocklist or "").split(",") if w.strip()]))
 
         # Warn (don't block) on a model that isn't catalogued for its provider:
         # a typo would otherwise fail only later, at call time, with a 404.
@@ -96,19 +147,14 @@ def index():
     # so they stay the source of truth) - surfaced so an admin can SEE at a
     # glance whether unattended public replies are on, and on what guardrails.
     reviews_on = bool(cfg.get("GBP_REVIEWS_ENABLED"))
-    autoreply = {
-        "reviews_on": reviews_on,
-        "global_on": bool(cfg.get("GBP_AUTOREPLY_ENABLED")),
-        "min_rating": cfg.get("GBP_AUTOREPLY_MIN_RATING", 4),
-        "max_len": cfg.get("GBP_AUTOREPLY_MAX_TEXT_LEN", 200),
-        "max_per_run": cfg.get("GBP_AUTOREPLY_MAX_PER_RUN", 10),
-        "blocklist": [w.strip() for w in
-                      (cfg.get("GBP_AUTOREPLY_BLOCKLIST") or "").split(",")
-                      if w.strip()],
-    }
+    # Effective guardrails (row value, else env) - used to prefill the editable
+    # fields and show the env-fallback blocklist as a placeholder.
+    autoreply = ai_settings.autoreply_config()
+    autoreply["env_blocklist"] = cfg.get("GBP_AUTOREPLY_BLOCKLIST", "") or ""
     return render_template(
         "ai_settings/index.html",
         row=row,
+        tones=sorted(_TONES),
         features=ai_settings.FEATURES,
         # Raw stored per-feature values for the checkboxes (independent of the
         # master, so pausing everything doesn't erase the per-feature prefs).

@@ -101,33 +101,36 @@ def skip(review, user):
 
 # -- guarded auto-reply -----------------------------------------------------
 
-def _blocklist():
-    raw = current_app.config.get("GBP_AUTOREPLY_BLOCKLIST", "") or ""
-    return [w.strip().lower() for w in raw.split(",") if w.strip()]
+def _autoreply_cfg():
+    """Effective guardrails - admin-editable (AISettings) with env fallback."""
+    from app.ai import settings as ai_settings
+    return ai_settings.autoreply_config()
 
 
-def is_auto_safe(review):
+def is_auto_safe(review, cfg=None):
     """May this review be auto-replied without a human? Conservative by design.
     The AI review-reply feature on, global switch on, client opted in, high
     rating, short/no text, and no blocklisted word. Anything failing -> the
-    human queue."""
+    human queue. `cfg` is the resolved guardrail dict (autoreply_config); passed
+    in by the run loop so it isn't re-read per review."""
     from app.ai import settings as ai_settings
-    cfg = current_app.config
+    if cfg is None:
+        cfg = _autoreply_cfg()
     # If an admin has turned the review-reply feature off, nothing auto-posts.
     if not ai_settings.feature_enabled("reply"):
         return False
-    if not cfg.get("GBP_AUTOREPLY_ENABLED"):
+    if not cfg["enabled"]:
         return False
     client = _client_of(review)
     if client is None or not getattr(client, "gmb_autoreply", False):
         return False
-    if (review.rating or 0) < cfg.get("GBP_AUTOREPLY_MIN_RATING", 4):
+    if (review.rating or 0) < cfg["min_rating"]:
         return False
     text = review.comment or ""
-    if len(text) > cfg.get("GBP_AUTOREPLY_MAX_TEXT_LEN", 200):
+    if len(text) > cfg["max_len"]:
         return False
     low = text.lower()
-    if any(word in low for word in _blocklist()):
+    if any(word in low for word in cfg["blocklist"]):
         return False
     return True
 
@@ -149,7 +152,8 @@ def auto_reply_run(account):
     if not ai_usage.within_budget():
         return {"auto_replied": 0, "skipped": "over budget"}
 
-    cap = current_app.config.get("GBP_AUTOREPLY_MAX_PER_RUN", 10)
+    guards = _autoreply_cfg()                       # resolved once per run
+    cap = guards["max_per_run"]
     pending = (GoogleReview.query
                .filter_by(account_id=account.id, reply_status="pending")
                .order_by(GoogleReview.id.asc()).all())
@@ -157,7 +161,7 @@ def auto_reply_run(account):
     for review in pending:
         if sent >= cap:
             break
-        if not is_auto_safe(review):
+        if not is_auto_safe(review, cfg=guards):
             continue
         text = (_draft_text(review) or "").strip()
         # Guards on the GENERATED reply (it posts publicly, unattended): never
@@ -167,7 +171,7 @@ def auto_reply_run(account):
         if not text or len(text) > _AUTO_REPLY_MAX_CHARS:
             continue
         low_reply = text.lower()
-        if any(word in low_reply for word in _blocklist()):
+        if any(word in low_reply for word in guards["blocklist"]):
             continue
         get_source().post_reply(review.account, review.external_id, text)
         review.reply_text = text

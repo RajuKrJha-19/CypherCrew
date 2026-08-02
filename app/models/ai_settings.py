@@ -52,6 +52,36 @@ class AISettings(db.Model):
     monthly_budget_usd = db.Column(db.Float, nullable=False, default=0.0,
                                    server_default="0")
 
+    # -- Caption behaviour (workflow tuning) --------------------------------
+    caption_tone = db.Column(db.String(20))            # None/"" = auto tone
+    caption_variations = db.Column(db.Integer, nullable=False, default=2,
+                                   server_default="2")   # 0-3 alt captions
+    caption_hashtags = db.Column(db.Boolean, nullable=False, default=True,
+                                 server_default=db.true())
+
+    # -- Image / performance ------------------------------------------------
+    #: Longest edge (px) an image is downscaled to for the AI call only. 0 =
+    #: off. Original published creative is never touched.
+    image_max_dim = db.Column(db.Integer, nullable=False, default=1568,
+                              server_default="1568")
+    #: Largest media file (MB) fed to a call.
+    media_max_mb = db.Column(db.Integer, nullable=False, default=10,
+                             server_default="10")
+
+    # -- Google review auto-reply guardrails (admin-editable; env is the
+    #: fallback default when a column is left at its shipped value). Every knob
+    #: here decides whether an UNATTENDED public reply may post, so the route
+    #: layer enforces hard floors (rating >= 3, a non-empty blocklist).
+    gbp_autoreply_enabled = db.Column(db.Boolean, nullable=False, default=False,
+                                      server_default=db.false())
+    gbp_min_rating = db.Column(db.Integer, nullable=False, default=4,
+                               server_default="4")
+    gbp_max_len = db.Column(db.Integer, nullable=False, default=200,
+                            server_default="200")
+    gbp_max_per_run = db.Column(db.Integer, nullable=False, default=10,
+                                server_default="10")
+    gbp_blocklist = db.Column(db.Text)                 # None = env fallback
+
     updated_by_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True)
     updated_at = db.Column(

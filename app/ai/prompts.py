@@ -22,6 +22,14 @@ def caption_prompt(ctx):
     """(system, user) for a per-platform caption draft with alternatives."""
     tone = (ctx.tone or "").strip()
     tone_line = (f" Write in a {tone} tone." if tone else "")
+    n_var = max(0, min(3, int(getattr(ctx, "variations", 2))))
+    want_tags = bool(getattr(ctx, "hashtags", True))
+    var_line = (f"'variations' are {n_var} alternative full captions taking "
+                "different angles/hooks."
+                if n_var else "'variations' must be an empty array.")
+    tag_line = ("hashtags are without the leading # and relevant, not spammy."
+                if want_tags else
+                "'hashtags' must be an empty array - do NOT add any hashtags.")
     system = (
         "You are a senior social media copywriter at a marketing agency. "
         "Write a scroll-stopping, on-brand caption for the post described "
@@ -33,10 +41,9 @@ def caption_prompt(ctx):
         "Return ONLY minified JSON of the form "
         '{"caption": str, "per_platform": {"<platform>": str}, '
         '"hashtags": [str], "first_comment": str, "variations": [str]}. '
-        "'caption' is your best version; 'variations' are 2 alternative full "
-        "captions taking different angles/hooks. Keep every per_platform "
-        "caption within its character limit. hashtags are without the leading "
-        "# and relevant, not spammy. first_comment may be empty."
+        "'caption' is your best version; " + var_line + " Keep every "
+        "per_platform caption within its character limit. " + tag_line
+        + " first_comment may be empty."
     )
     brand = _brand_block(ctx)
     limits = ", ".join(

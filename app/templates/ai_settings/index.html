@@ -127,6 +127,29 @@
                         </label>
                     </div>
                     <p class="ai-effective">Currently using <strong>{{ effective.caption[0] }}</strong> · <code>{{ effective.caption[1] }}</code></p>
+
+                    {# Caption behaviour (workflow tuning) #}
+                    <div class="ai-task-grid" style="margin-top:12px;">
+                        <label>Default tone
+                            <select name="caption_tone">
+                                <option value="">Auto</option>
+                                {% for t in tones %}
+                                <option value="{{ t }}" {{ 'selected' if row.caption_tone == t }}>{{ t|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>Alternative captions
+                            <select name="caption_variations">
+                                {% for n in [0, 1, 2, 3] %}
+                                <option value="{{ n }}" {{ 'selected' if (row.caption_variations if row.caption_variations is not none else 2) == n }}>{{ n }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                    </div>
+                    <label class="ai-toggle" style="margin-top:10px;">
+                        <input type="checkbox" name="caption_hashtags" {{ 'checked' if row.caption_hashtags }}>
+                        <span>Append relevant hashtags to captions</span>
+                    </label>
                 </div>
 
                 <hr class="ai-sep">
@@ -181,35 +204,57 @@
                 </div>
                 {% endif %}
 
+                {% if reviews_on %}
+                <hr class="ai-sep">
+
+                {# --- Review auto-reply guardrails (editable) --- #}
+                <div class="ai-task ai-autoreply">
+                    <h3>Google review auto-reply <span class="ai-task-tag">unattended · public</span></h3>
+                    <p class="form-hint">When on, a reply auto-posts <strong>only</strong> if it clears every guardrail below <em>and</em> the client is opted in on their profile. Negative reviews and anything unsure always wait for a human.</p>
+                    <label class="ai-toggle" style="margin-top:4px;">
+                        <input type="checkbox" name="gbp_autoreply_enabled" {{ 'checked' if autoreply.enabled }}>
+                        <span><strong>Enable guarded auto-send</strong> — requires a blocklist below.</span>
+                    </label>
+                    <div class="ai-task-grid" style="margin-top:12px;">
+                        <label>Minimum rating (★)
+                            <input type="number" name="gbp_min_rating" min="3" max="5" value="{{ autoreply.min_rating }}">
+                        </label>
+                        <label>Max review length (chars)
+                            <input type="number" name="gbp_max_len" min="20" max="1000" value="{{ autoreply.max_len }}">
+                        </label>
+                        <label>Max per run
+                            <input type="number" name="gbp_max_per_run" min="1" max="100" value="{{ autoreply.max_per_run }}">
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-top:10px;">
+                        <label>Blocklist words (comma-separated)</label>
+                        <p class="form-hint">Skips a review <strong>or its drafted reply</strong> if it contains any of these. Mandatory to enable auto-send.</p>
+                        <input type="text" name="gbp_blocklist" value="{{ row.gbp_blocklist or '' }}" placeholder="{{ autoreply.env_blocklist }}">
+                    </div>
+                    <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Hard floors: rating never below 3, blocklist mandatory, budget cap always respected. Per-client opt-in is on each client's edit screen. Changes are audit-logged.</p>
+                </div>
+                {% endif %}
+
+                <hr class="ai-sep">
+
+                {# --- Performance & cost --- #}
+                <div class="ai-task">
+                    <h3>Performance &amp; cost</h3>
+                    <p class="form-hint">Big images are downscaled for the AI call only — the <strong>published creative is never touched</strong>. Smaller = cheaper + faster + fewer rate-limit hits.</p>
+                    <div class="ai-task-grid">
+                        <label>Image max size (px, longest edge)
+                            <input type="number" name="image_max_dim" min="0" max="4096" step="1" value="{{ row.image_max_dim if row.image_max_dim is not none else 1568 }}">
+                        </label>
+                        <label>Max media file (MB)
+                            <input type="number" name="media_max_mb" min="1" max="50" step="1" value="{{ row.media_max_mb if row.media_max_mb is not none else 10 }}">
+                        </label>
+                    </div>
+                    <p class="form-hint">1568px is a good default (keeps text/logos legible for QA). 0 = never downscale.</p>
+                </div>
+
                 <button type="submit">Save AI settings</button>
             </form>
         </div>
-
-        {% if reviews_on %}
-        {# --- Auto-reply safety (read-only; env-owned source of truth) --- #}
-        <div class="form-card ai-autoreply">
-            <div class="ai-ar-head">
-                <h3>Google review auto-reply</h3>
-                <span class="ai-ar-state {{ 'on' if autoreply.global_on else 'off' }}">
-                    <i class="fa-solid {{ 'fa-circle-check' if autoreply.global_on else 'fa-circle-pause' }}"></i>
-                    {{ 'ON — safe reviews auto-post' if autoreply.global_on else 'OFF — every reply waits for approval' }}
-                </span>
-            </div>
-            <p class="form-hint">
-                Even when ON, a reply auto-posts <strong>only</strong> when it clears every guardrail below <em>and</em> the client is individually opted in on their profile. Anything else — and every negative review — stays in the human queue.
-            </p>
-            <div class="ai-ar-guards">
-                <span class="ai-ar-guard"><i class="fa-solid fa-star"></i> Minimum rating <strong>{{ autoreply.min_rating }}★</strong></span>
-                <span class="ai-ar-guard"><i class="fa-solid fa-text-width"></i> Review text ≤ <strong>{{ autoreply.max_len }}</strong> chars</span>
-                <span class="ai-ar-guard"><i class="fa-solid fa-gauge-high"></i> Max <strong>{{ autoreply.max_per_run }}</strong> per run</span>
-                <span class="ai-ar-guard"><i class="fa-solid fa-shield-halved"></i> Budget cap respected</span>
-            </div>
-            {% if autoreply.blocklist %}
-            <p class="form-hint ai-ar-block"><i class="fa-solid fa-ban"></i> Skipped if the review <em>or the drafted reply</em> contains: {% for w in autoreply.blocklist %}<span class="ai-ar-word">{{ w }}</span>{% endfor %}</p>
-            {% endif %}
-            <p class="form-hint">These safety limits are set in the server environment (<code>.env</code>) so they can't be loosened by accident from the dashboard. Per-client opt-in lives on each <strong>client's edit screen</strong>.</p>
-        </div>
-        {% endif %}
 
         <script id="aiCatalog" type="application/json">{{ catalog|tojson }}</script>
         <script>

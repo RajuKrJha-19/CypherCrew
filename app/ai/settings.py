@@ -152,6 +152,66 @@ def resolve(task_kind):
     return provider, model
 
 
+def caption_prefs():
+    """Workflow prefs for caption generation: tone, how many alternatives, and
+    whether to append hashtags. DB row first, sane defaults otherwise."""
+    row = get_settings()
+    tone = (getattr(row, "caption_tone", None) or "").strip().lower() or None
+    variations = getattr(row, "caption_variations", None)
+    variations = 2 if variations is None else max(0, min(3, int(variations)))
+    hashtags = getattr(row, "caption_hashtags", None)
+    return {"tone": tone,
+            "variations": variations,
+            "hashtags": True if hashtags is None else bool(hashtags)}
+
+
+def image_max_dim():
+    """Longest-edge px images are downscaled to for the AI call (0 = off).
+    DB override, else the env default."""
+    row = get_settings()
+    val = getattr(row, "image_max_dim", None)
+    if val is None:
+        val = current_app.config.get("AI_IMAGE_MAX_DIM", 1568)
+    return max(0, int(val or 0))
+
+
+def media_max_mb():
+    row = get_settings()
+    val = getattr(row, "media_max_mb", None)
+    if val is None:
+        val = current_app.config.get("AI_MEDIA_MAX_MB", 10)
+    return max(1, int(val or 10))
+
+
+def autoreply_config():
+    """Effective Google-review auto-reply guardrails: the admin-editable
+    AISettings values, each falling back to its env default when the row is
+    absent. Read by is_auto_safe / auto_reply_run so the dashboard controls
+    real behaviour."""
+    cfg = current_app.config
+    row = get_settings()
+
+    def pick(attr, env_key, default):
+        val = getattr(row, attr, None) if row is not None else None
+        return val if val is not None else cfg.get(env_key, default)
+
+    raw_block = (getattr(row, "gbp_blocklist", None) if row is not None else None)
+    if not raw_block:
+        raw_block = cfg.get("GBP_AUTOREPLY_BLOCKLIST", "") or ""
+    blocklist = [w.strip().lower() for w in raw_block.split(",") if w.strip()]
+
+    enabled = (bool(getattr(row, "gbp_autoreply_enabled", False))
+               if row is not None and getattr(row, "gbp_autoreply_enabled", None) is not None
+               else bool(cfg.get("GBP_AUTOREPLY_ENABLED")))
+    return {
+        "enabled": enabled,
+        "min_rating": int(pick("gbp_min_rating", "GBP_AUTOREPLY_MIN_RATING", 4) or 4),
+        "max_len": int(pick("gbp_max_len", "GBP_AUTOREPLY_MAX_TEXT_LEN", 200) or 200),
+        "max_per_run": int(pick("gbp_max_per_run", "GBP_AUTOREPLY_MAX_PER_RUN", 10) or 10),
+        "blocklist": blocklist,
+    }
+
+
 def is_known_model(provider_key, task_kind, model):
     """Is `model` one of `provider_key`'s catalogued models for this task? Used
     only to WARN on the settings screen (never to block) - a brand-new model

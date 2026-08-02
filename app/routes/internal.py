@@ -155,7 +155,8 @@ def run_reviews_auto_reply():
     _social_guard()
     if not current_app.config.get("GBP_REVIEWS_ENABLED"):
         return jsonify(success=True, skipped="reviews disabled")
-    if not current_app.config.get("GBP_AUTOREPLY_ENABLED"):
+    from app.ai import settings as ai_settings
+    if not ai_settings.autoreply_config()["enabled"]:
         return jsonify(success=True, skipped="auto-reply disabled")
     from app.models import SocialAccount
     from app.social.reviews import service as reviews_service
