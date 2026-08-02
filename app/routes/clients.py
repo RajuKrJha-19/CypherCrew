@@ -273,6 +273,9 @@ def edit_client(client_id):
             request.form.get("brand_voice") or "").strip() or None
         client.brand_guidelines_notes = (
             request.form.get("brand_guidelines_notes") or "").strip() or None
+        # Structured Client Brain (AI knowledgebase / fact-check source).
+        from app.ai import client_brain
+        client.brand_brain = client_brain.from_form(request.form)
         client.assigned_manager_id = manager_id
         client.status = status
         db.session.commit()
@@ -281,7 +284,11 @@ def edit_client(client_id):
               if status == "inactive" else ""), "success")
         return redirect(url_for("clients.client_detail", client_id=client.id))
 
-    return render_template("clients/edit.html", client=client, managers=managers)
+    from app.ai import client_brain
+    return render_template(
+        "clients/edit.html", client=client, managers=managers,
+        brain_sections=client_brain.SECTIONS,
+        brain=client.brand_brain or {})
 
 
 @clients_bp.route("/<int:client_id>")

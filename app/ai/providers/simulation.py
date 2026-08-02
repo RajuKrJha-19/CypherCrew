@@ -56,12 +56,21 @@ class SimulationProvider(AIProvider):
         return f"{label}: a clear, descriptive view (simulated alt-text)."[:125]
 
     def check_media(self, ctx):
-        # Clean by default; a sentinel in the brief lets a test drive the
-        # findings path without a real model.
-        text = f"{ctx.brief or ''} {ctx.deliverable or ''}".lower()
+        # Clean by default; sentinels in the brief/facts let a test drive the
+        # warning + fact-error paths without a real model.
+        text = f"{ctx.brief or ''} {ctx.deliverable or ''} {ctx.facts or ''}".lower()
+        findings = []
+        if "simfact" in text:
+            findings.append(Finding(
+                severity="error", category="fact",
+                message="Simulated: the phone number on the creative does not "
+                        "match the official one."))
         if "simwarn" in text:
-            return [Finding(severity="warning", category="brief",
-                            message="Simulated: deliverable may not match the "
-                                    "brief - please double-check.")]
+            findings.append(Finding(
+                severity="warning", category="brief",
+                message="Simulated: deliverable may not match the brief - "
+                        "please double-check."))
+        if findings:
+            return findings
         return [Finding(severity="info", category="general",
                         message="Simulated check: no issues detected.")]

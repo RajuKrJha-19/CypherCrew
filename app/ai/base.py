@@ -57,6 +57,9 @@ class MediaCheckContext:
     deliverable: str | None = None
     brand_voice: str | None = None
     brand_notes: str | None = None
+    #: The structured Client Brain (official phone/website/offer/disclaimer...)
+    #: the fact-checker verifies the creative against. Empty = skip fact-check.
+    facts: str | None = None
     guidelines: list[MediaInput] = field(default_factory=list)  # brand docs
     specs: dict = field(default_factory=dict)   # intended platform media specs
     media: list[MediaInput] = field(default_factory=list)

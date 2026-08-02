@@ -84,6 +84,22 @@
                         placeholder="Do: terracotta accent, serif headings.&#10;Don't: stock photos, discount language, competitor names.">{{ client.brand_guidelines_notes or '' }}</textarea>
                 </div>
 
+                <details class="client-brain">
+                    <summary><i class="fa-solid fa-brain"></i> Client Brain — structured knowledgebase{% if client.brand_brain %} <span class="cb-filled">· in use</span>{% endif %}</summary>
+                    <p class="form-hint">
+                        The facts the AI checks a creative against — right phone,
+                        website, offer, required disclaimer, do's &amp; don'ts.
+                        Fill what's relevant; leave the rest blank.
+                    </p>
+                    {% for key, label, hint, ai in brain_sections %}
+                    <div class="form-group cb-field">
+                        <label>{{ label }}{% if not ai %} <span class="cb-noai">(not sent to AI)</span>{% endif %}</label>
+                        <p class="form-hint">{{ hint }}</p>
+                        <textarea name="bb_{{ key }}" rows="2">{{ brain.get(key, '') }}</textarea>
+                    </div>
+                    {% endfor %}
+                </details>
+
                 {% if client.parent_client_id and client.parent %}
                 <p class="form-hint" style="margin-top:12px">
                     Sub-client of <strong>{{ client.parent.client_name }}</strong>.

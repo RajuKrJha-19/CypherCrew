@@ -60,18 +60,30 @@ def alt_text_prompt(image):
 
 
 def media_check_prompt(ctx):
-    """(system, user) for the Phase-2 media QA pass (structured findings)."""
+    """(system, user) for the media QA + fact-check pass (structured findings).
+
+    The model reads the text inside the creative itself (no separate OCR), so
+    it can verify phone/website/email/offer against the Client Brain facts and
+    flag missing mandatory elements.
+    """
     system = (
         "You are a meticulous creative QA reviewer at a marketing agency. "
-        "Compare the attached deliverable against the brief and the brand "
-        "guidelines, and flag concrete problems a human reviewer should see: "
-        "content not matching the brief, brand-guideline violations "
-        "(colours, logo usage, tone), visible spelling/typo errors in the "
-        "graphic, text too close to the edge (safe-area), and mismatch with "
-        "the intended output spec. Do not invent issues; if it looks clean, "
-        "say so. Return ONLY minified JSON: "
+        "Review the attached deliverable on two fronts. "
+        "(1) QUALITY: content vs the brief, brand-guideline violations "
+        "(colours, logo usage, tone), visible spelling/typo/grammar errors, "
+        "text too close to the edge (safe-area), weak CTA visibility, and "
+        "mismatch with the intended spec. "
+        "(2) FACTS: read the text shown IN the creative and check it against "
+        "the CLIENT FACTS below - flag any phone number, email, website, "
+        "offer, price, date, product or campaign that does NOT match the "
+        "official facts, and flag any REQUIRED element that is missing "
+        "(mandatory disclaimer, a CTA, contact details). Only fact-check "
+        "against facts that are actually provided; never invent a rule. "
+        "If it looks clean, say so. Return ONLY minified JSON: "
         '{"findings": [{"severity": "info|warning|error", '
-        '"category": "brief|brand|text|spec|safe_area", "message": str}]}.'
+        '"category": "brief|brand|text|spec|safe_area|fact", "message": str}]}. '
+        "Use category \"fact\" and severity \"error\" for a wrong or missing "
+        "phone/website/email/offer/disclaimer."
     )
     brand = _brand_block(ctx)
     specs = json.dumps(ctx.specs) if ctx.specs else "(none provided)"
@@ -79,6 +91,8 @@ def media_check_prompt(ctx):
         f"BRIEF:\n{ctx.brief or '(no brief)'}\n\n"
         f"DELIVERABLE TYPE: {ctx.deliverable or '(unspecified)'}\n\n"
         + (f"BRAND:\n{brand}\n\n" if brand else "")
+        + (f"CLIENT FACTS (verify the creative against these):\n{ctx.facts}\n\n"
+           if getattr(ctx, "facts", None) else "")
         + f"INTENDED OUTPUT SPEC: {specs}\n\n"
         "Review the attached deliverable and list findings."
     )

@@ -1,4 +1,7 @@
 from datetime import datetime
+
+from sqlalchemy.dialects.postgresql import JSONB
+
 from app.extensions import db
 
 
@@ -51,6 +54,15 @@ class Client(db.Model):
 
     brand_guidelines_notes = db.Column(
         db.Text
+    )
+
+    #: "Client Brain" - the structured knowledgebase the AI fact-checker reads
+    #: to verify a creative (official phones/emails/websites, offers, required
+    #: disclaimers, do's/don'ts ...). A JSONB dict of {section_key: multiline
+    #: text}; sections are defined in app/ai/client_brain.py so new ones can be
+    #: added with no migration. Empty/absent = the checker skips fact-checking.
+    brand_brain = db.Column(
+        JSONB
     )
 
     assigned_manager_id = db.Column(

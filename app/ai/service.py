@@ -198,6 +198,7 @@ def check_media(task_file, created_by_id=None):
         deliverable = getattr(d, "deliverable_name", None)
 
     guidelines = []
+    facts = ""
     if client is not None:
         docs = (ClientAsset.query
                 .filter_by(client_id=client.id, category="document")
@@ -205,12 +206,15 @@ def check_media(task_file, created_by_id=None):
         guidelines = _load_media(
             [(a.object_key, a.original_filename) for a in docs],
             allowed={"application/pdf"})
+        from app.ai import client_brain
+        facts = client_brain.facts_text(client)
 
     ctx = MediaCheckContext(
         brief=brief,
         deliverable=deliverable,
         brand_voice=getattr(client, "brand_voice", None),
         brand_notes=getattr(client, "brand_guidelines_notes", None),
+        facts=facts or None,
         guidelines=guidelines,
         media=media,
     )
