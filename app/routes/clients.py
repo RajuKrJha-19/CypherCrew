@@ -276,6 +276,7 @@ def edit_client(client_id):
         # Structured Client Brain (AI knowledgebase / fact-check source).
         from app.ai import client_brain
         client.brand_brain = client_brain.from_form(request.form)
+        client.brand_offers = client_brain.offers_from_form(request.form)
         # Guarded auto-reply opt-in for this client's Google reviews.
         client.gmb_autoreply = bool(request.form.get("gmb_autoreply"))
         client.comment_autoreply = bool(request.form.get("comment_autoreply"))
@@ -291,7 +292,9 @@ def edit_client(client_id):
     return render_template(
         "clients/edit.html", client=client, managers=managers,
         brain_sections=client_brain.SECTIONS,
-        brain=client.brand_brain or {})
+        brain=client.brand_brain or {},
+        offers=client_brain.offers_display(client),
+        max_offers=client_brain.MAX_OFFERS)
 
 
 @clients_bp.route("/<int:client_id>")

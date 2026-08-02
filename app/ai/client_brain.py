@@ -52,15 +52,92 @@ def from_form(form):
     return brain or None
 
 
-def facts_text(client):
+def facts_text(client, today=None):
     """A compact, labelled block of the AI-visible Client Brain sections, for
-    the fact-checker + caption prompts. Empty when there's nothing to say."""
+    the fact-checker + caption/reply prompts. Empty when there's nothing to say.
+
+    Structured offers are appended, but ONLY those valid today - an expired
+    offer is filtered out here so it can never reach a prompt and be promoted by
+    mistake, even though it stays stored on the client."""
     brain = getattr(client, "brand_brain", None) or {}
-    if not isinstance(brain, dict):
-        return ""
     parts = []
-    for key, label in _AI_SECTIONS:
-        value = (brain.get(key) or "").strip()
-        if value:
-            parts.append(f"{label}:\n{value}")
+    if isinstance(brain, dict):
+        for key, label in _AI_SECTIONS:
+            value = (brain.get(key) or "").strip()
+            if value:
+                parts.append(f"{label}:\n{value}")
+
+    offers = valid_offers(client, today=today)
+    if offers:
+        lines = []
+        for o in offers:
+            line = o["text"]
+            if o["until"]:
+                line += f" (valid until {o['until']})"
+            lines.append(f"- {line}")
+        parts.append(
+            "Current offers (these are valid TODAY - do NOT mention any offer "
+            "or promotion not listed here, and never imply one that has "
+            "ended):\n" + "\n".join(lines))
     return "\n\n".join(parts)
+
+
+# -- structured, time-limited offers ----------------------------------------
+
+MAX_OFFERS = 6
+
+
+def _today_iso(today=None):
+    from datetime import date
+    return (today or date.today()).isoformat()
+
+
+def offers_from_form(form):
+    """Build the brand_offers list from an edit-client POST (rows of
+    offer_text_i / offer_until_i). Empty rows dropped; None when all empty."""
+    out = []
+    for i in range(MAX_OFFERS):
+        text = (form.get(f"offer_text_{i}") or "").strip()
+        if not text:
+            continue
+        until = (form.get(f"offer_until_{i}") or "").strip() or None
+        out.append({"text": text[:300], "until": until})
+    return out or None
+
+
+def valid_offers(client, today=None):
+    """Offers valid TODAY: no end date, or an end date on/after today. Expired
+    ones are excluded (ISO dates compare chronologically as strings)."""
+    offers = getattr(client, "brand_offers", None) or []
+    if not isinstance(offers, list):
+        return []
+    t = _today_iso(today)
+    out = []
+    for o in offers:
+        if not isinstance(o, dict):
+            continue
+        text = (o.get("text") or "").strip()
+        if not text:
+            continue
+        until = (o.get("until") or "").strip() or None
+        if until and until < t:              # ended before today -> hidden
+            continue
+        out.append({"text": text, "until": until})
+    return out
+
+
+def offers_display(client, today=None):
+    """Every stored offer with an `expired` flag, for the edit screen (so the
+    team can see and refresh a lapsed offer)."""
+    offers = getattr(client, "brand_offers", None) or []
+    if not isinstance(offers, list):
+        return []
+    t = _today_iso(today)
+    rows = []
+    for o in offers:
+        if not isinstance(o, dict):
+            continue
+        until = (o.get("until") or "").strip() or None
+        rows.append({"text": o.get("text") or "", "until": until,
+                     "expired": bool(until and until < t)})
+    return rows

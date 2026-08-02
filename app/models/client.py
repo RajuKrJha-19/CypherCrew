@@ -65,6 +65,14 @@ class Client(db.Model):
         JSONB
     )
 
+    #: Structured time-limited offers: a list of {"text": str, "until":
+    #: "YYYY-MM-DD" | None}. The AI only ever sees offers valid TODAY (an
+    #: expired one is filtered out before it reaches a prompt), so a stale offer
+    #: can never be promoted by mistake even if it's still stored here.
+    brand_offers = db.Column(
+        JSONB
+    )
+
     #: Opt-in for guarded auto-reply to this client's Google reviews. Off by
     #: default; even when on, only safe reviews (high rating, short, no
     #: blocklisted words) auto-send, and the global GBP_AUTOREPLY_ENABLED

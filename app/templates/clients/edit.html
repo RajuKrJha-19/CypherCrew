@@ -98,6 +98,21 @@
                         <textarea name="bb_{{ key }}" rows="2">{{ brain.get(key, '') }}</textarea>
                     </div>
                     {% endfor %}
+
+                    {# Structured time-limited offers: each with a valid-until
+                       date so the AI auto-stops mentioning it after it ends. #}
+                    <div class="form-group cb-field">
+                        <label>Time-limited offers <span class="cb-noai" style="font-weight:400;">(auto-hidden from the AI after the end date)</span></label>
+                        <p class="form-hint">Add each offer and its <strong>valid-until date</strong>. After that date the AI automatically stops mentioning it — so a stale offer is never promoted by mistake. Leave the date blank for an always-on offer.</p>
+                        {% for i in range(max_offers) %}
+                        {% set o = offers[i] if i < offers|length else none %}
+                        <div class="cb-offer-row">
+                            <input type="text" name="offer_text_{{ i }}" value="{{ o.text if o else '' }}" placeholder="e.g. Diwali 20% off celebration boxes">
+                            <input type="date" name="offer_until_{{ i }}" value="{{ o.until if o and o.until else '' }}" aria-label="Valid until">
+                            {% if o and o.expired %}<span class="cb-offer-expired" title="Ended — the AI already stopped mentioning it">expired</span>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
                 </details>
 
                 {% if config.GBP_REVIEWS_ENABLED %}

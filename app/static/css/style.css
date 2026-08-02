@@ -18221,6 +18221,13 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .client-brain .cb-filled{ color:#1a7f37; font-weight:600; font-size:12px; }
 .client-brain .cb-noai{ color:var(--color-text-subtle); font-weight:400; font-size:11px; }
 .client-brain .cb-field{ margin-top:10px; }
+.cb-offer-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.cb-offer-row input[type="text"]{ flex:1 1 auto; }
+.cb-offer-row input[type="date"]{ flex:0 0 auto; width:150px; }
+.cb-offer-expired{ flex:0 0 auto; font-size:11px; font-weight:650; color:#b3261e;
+    background:rgba(179,38,30,.08); border:1px solid rgba(179,38,30,.25);
+    border-radius:var(--radius-full); padding:2px 8px; }
+@media (max-width:560px){ .cb-offer-row{ flex-wrap:wrap; } .cb-offer-row input[type="date"]{ width:100%; } }
 
 .cmp-overrides{ margin-top:12px; border:1px dashed var(--color-border); border-radius:var(--radius-md);
     overflow:hidden; }
