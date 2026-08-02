@@ -115,9 +115,10 @@ def _load_media(items, allowed=_IMAGE_MIMES):
 # -- public API -------------------------------------------------------------
 
 def _log_usage(provider, feature, actor_id, client_id, status="ok"):
-    """Record what a provider call cost (best-effort; never raises)."""
+    """Record what a provider call cost (best-effort; never raises). Returns the
+    usage row id (so a caller can later record whether the output was kept)."""
     from app.ai import usage
-    usage.record(
+    return usage.record(
         feature=feature, provider=provider.key,
         model=(getattr(provider, "model", None) or provider.key),
         input_tokens=provider.usage.get("input_tokens", 0),
@@ -146,13 +147,14 @@ def generate_caption(*, brief="", industry=None, brand_voice=None,
     except Exception:
         _log_usage(provider, "caption", actor_id, client_id, status="error")
         raise
-    _log_usage(provider, "caption", actor_id, client_id)
+    usage_id = _log_usage(provider, "caption", actor_id, client_id)
     return {
         "caption": result.caption,
         "per_platform": result.per_platform,
         "hashtags": result.hashtags,
         "first_comment": result.first_comment,
         "variations": result.variations,
+        "ai_usage_id": usage_id,
     }
 
 

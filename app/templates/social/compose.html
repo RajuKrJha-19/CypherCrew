@@ -1324,6 +1324,8 @@
 <script>
     window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
     window.AI_ALT_URL = "{{ url_for('social.ai_alt_text_api') }}";
+    // usage_id=0 is a placeholder the script swaps for the real id.
+    window.AI_USAGE_OUTCOME_URL = "{{ url_for('social.ai_usage_outcome', usage_id=0) }}";
 </script>
 <script src="{{ asset_url('js/ai-caption.js') }}" defer></script>
 {% endif %}

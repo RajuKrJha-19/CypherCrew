@@ -2735,6 +2735,25 @@ def ai_alt_text_api():
     return jsonify(alt_text=alt)
 
 
+@social_bp.route("/api/ai/usage/<int:usage_id>/outcome", methods=["POST"])
+@login_required
+@limiter.limit("300 per hour")
+def ai_usage_outcome(usage_id):
+    """Record whether an AI draft was kept ('used') or thrown away
+    ('discarded') - the keep-rate ROI signal. Best-effort + idempotent: only
+    the row's own creator, only a known value, never overwrites. Deliberately
+    NOT gated on the AI feature flag: a report may land just after AI is
+    toggled off, and losing the signal would skew the very metric that decides
+    the feature's fate."""
+    _guard()
+    outcome = (request.form.get("outcome") or "").strip().lower()
+    if outcome not in ("used", "discarded"):
+        return jsonify(error="bad outcome"), 400
+    from app.ai import usage as ai_usage
+    ai_usage.set_outcome(usage_id, outcome, actor_id=current_user.id)
+    return jsonify(ok=True)
+
+
 @social_bp.route("/api/hashtag-sets", methods=["POST"])
 @login_required
 def create_hashtag_set():

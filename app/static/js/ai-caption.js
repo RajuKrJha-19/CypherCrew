@@ -16,9 +16,26 @@
     window.__aiCaptionInit = true;
 
     var lastVariations = [];
+    // The AIUsage row for the latest generation that hasn't yet been resolved
+    // (saved => "used", or superseded by a re-generate => "discarded"). This is
+    // the keep-rate ROI signal; it is best-effort and never blocks the user.
+    var pendingUsageId = null;
 
     function toast(msg, type) {
         if (typeof window.showToast === "function") window.showToast(msg, type);
+    }
+
+    function reportOutcome(id, outcome) {
+        if (!id || !window.AI_USAGE_OUTCOME_URL) return;
+        var url = window.AI_USAGE_OUTCOME_URL.replace("/0/", "/" + id + "/");
+        try {
+            fetch(url, {
+                method: "POST", credentials: "same-origin",
+                headers: { "X-Requested-With": "fetch" },
+                body: new URLSearchParams({ outcome: outcome }),
+                keepalive: true,          // survive the page navigation on save
+            });
+        } catch (e) { /* a metric must never disrupt the user */ }
     }
     function fire(el) {
         el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -58,6 +75,13 @@
         }
         var flag = document.getElementById("aiAssisted");
         if (flag) flag.value = "1";
+
+        // Keep-rate: a fresh generation supersedes any prior un-saved one.
+        var newId = data.ai_usage_id || null;
+        if (pendingUsageId && pendingUsageId !== newId) {
+            reportOutcome(pendingUsageId, "discarded");
+        }
+        pendingUsageId = newId;
 
         renderVariations(data.variations || []);
     }
@@ -164,6 +188,17 @@
                    : "No empty alt-text fields to fill.",
             filled ? "success" : "error");
     }
+
+    // Saving the compose form with a pending AI generation = the draft was
+    // kept. Delegated so it survives Turbo; fires before Turbo submits.
+    document.addEventListener("submit", function (event) {
+        if (!pendingUsageId || !event.target) return;
+        var cap = document.getElementById("captionInput");
+        if (cap && event.target.contains && event.target.contains(cap)) {
+            reportOutcome(pendingUsageId, "used");
+            pendingUsageId = null;
+        }
+    });
 
     document.addEventListener("click", function (event) {
         if (!event.target.closest) return;

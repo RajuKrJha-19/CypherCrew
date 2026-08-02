@@ -37,6 +37,11 @@ class AIUsage(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default="ok")  # ok|error
 
+    #: Did the human keep this AI output? used | discarded | NULL (no signal
+    #: yet / not applicable). Drives the keep-rate on the AI Usage screen - the
+    #: real ROI signal alongside cost: cheap AND ignored = kill the feature.
+    outcome = db.Column(db.String(16), nullable=True)
+
     # For the admin table only (small, paged list). No backrefs - a user/client
     # doesn't need a collection of usage rows hanging off it.
     user = db.relationship("User")

@@ -18,24 +18,59 @@ def _month_start(now=None):
 
 def record(*, feature, provider, model, input_tokens=0, output_tokens=0,
            status="ok", actor_id=None, client_id=None):
-    """Write one AIUsage row. Swallows every error (best-effort)."""
+    """Write one AIUsage row. Swallows every error (best-effort). Returns the
+    new row's id (so a caller can later record its outcome), or None."""
     try:
         from app.extensions import db
         from app.models import AIUsage
-        db.session.add(AIUsage(
+        row = AIUsage(
             feature=feature, provider=provider, model=model,
             input_tokens=int(input_tokens or 0),
             output_tokens=int(output_tokens or 0),
             est_cost_usd=pricing.estimate(model, input_tokens, output_tokens),
             status=status, user_id=actor_id, client_id=client_id,
-        ))
+        )
+        db.session.add(row)
         db.session.commit()
+        return row.id
     except Exception:  # noqa: BLE001 - logging must never break the feature
         try:
             from app.extensions import db
             db.session.rollback()
         except Exception:  # noqa: BLE001
             pass
+        return None
+
+
+_VALID_OUTCOMES = {"used", "discarded"}
+
+
+def set_outcome(usage_id, outcome, actor_id=None):
+    """Record whether the human kept an AI output. Best-effort and defensive:
+    only a known value, only the row's own creator, and only once (never
+    overwrites an existing outcome). Returns True iff it set anything."""
+    if outcome not in _VALID_OUTCOMES:
+        return False
+    try:
+        from app.extensions import db
+        from app.models import AIUsage
+        row = AIUsage.query.get(usage_id)
+        if row is None or row.outcome is not None:
+            return False
+        # A row tied to a user may only be resolved by that user.
+        if (actor_id is not None and row.user_id is not None
+                and row.user_id != actor_id):
+            return False
+        row.outcome = outcome
+        db.session.commit()
+        return True
+    except Exception:  # noqa: BLE001 - a metric must never break a workflow
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return False
 
 
 def month_total_usd():
@@ -95,11 +130,23 @@ def month_summary(recent=25):
         .order_by(db.func.sum(AIUsage.est_cost_usd).desc())
         .limit(8).all())
 
+    # Keep-rate per feature: of the drafts that got a signal, how many were
+    # kept. cost + keep-rate together = the real ROI read.
+    keep = {}
+    for feat, outcome, n in (
+            db.session.query(AIUsage.feature, AIUsage.outcome, db.func.count())
+            .filter(AIUsage.created_at >= start, AIUsage.outcome.isnot(None))
+            .group_by(AIUsage.feature, AIUsage.outcome).all()):
+        bucket = keep.setdefault(feat, {"used": 0, "discarded": 0})
+        if outcome in bucket:
+            bucket[outcome] = int(n)
+
     return {
         "total": month_total_usd(),
         "budget": budget_usd(),
         "calls": base.count(),
         "by_feature": by_feature,
         "by_client": client_rows,
+        "keep": keep,
         "recent": base.order_by(AIUsage.created_at.desc()).limit(recent).all(),
     }

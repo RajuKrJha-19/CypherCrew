@@ -42,6 +42,20 @@
                 {% endfor %}
             </div>
             <div class="ai-usage-card">
+                <span class="au-label" title="Of the drafts with a signal, how many the team kept. Cheap + ignored = kill the feature.">Keep-rate</span>
+                {% set ns = namespace(any=false) %}
+                {% for feat, k in (summary.keep or {}).items() %}
+                {% set total = k.used + k.discarded %}
+                {% if total %}
+                {% set ns.any = true %}
+                <span class="au-row"><span>{{ FEATURE_LABEL.get(feat, feat) }}</span><span>{{ k.used }}/{{ total }} · {{ (k.used / total * 100)|round|int }}%</span></span>
+                {% endif %}
+                {% endfor %}
+                {% if not ns.any %}
+                <span class="au-sub">no keep/discard signal yet</span>
+                {% endif %}
+            </div>
+            <div class="ai-usage-card">
                 <span class="au-label">Top clients</span>
                 {% for name, cost in summary.by_client %}
                 <span class="au-row"><span>{{ name }}</span><span>${{ '%.2f'|format(cost) }}</span></span>
