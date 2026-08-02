@@ -4,11 +4,10 @@ Imported lazily (only when AI is on, not simulating, and AI_PROVIDER=gemini),
 so the dependency is inert otherwise and this module is import-safe even when
 google-genai is not installed. Vision is inline image/PDF bytes.
 """
-import json
-
 from app.ai import prompts
 from app.ai.base import AIProvider, CaptionResult, Finding
 from app.ai.errors import AIAuth, AIPermanent, AITransient
+from app.ai.parsing import extract_json, strip_fences
 
 
 def _genai():
@@ -21,16 +20,6 @@ def _genai():
             "google-genai is not installed; run pip install -r requirements.txt"
         ) from exc
     return genai, types
-
-
-def _strip_json(text):
-    """Model JSON, tolerant of ```json fences."""
-    t = (text or "").strip()
-    if t.startswith("```"):
-        t = t.split("\n", 1)[-1]
-        if t.endswith("```"):
-            t = t.rsplit("```", 1)[0]
-    return t.strip()
 
 
 class GeminiProvider(AIProvider):
@@ -97,10 +86,17 @@ class GeminiProvider(AIProvider):
         system, user = prompts.caption_prompt(ctx)
         raw = self._generate(self.model, system, user, ctx.media,
                              as_json=True)
-        try:
-            data = json.loads(_strip_json(raw))
-        except (ValueError, TypeError) as exc:
-            raise AIPermanent("Gemini returned an unreadable caption.") from exc
+        data = extract_json(raw)
+        if data is None:
+            # Not JSON. If the model still gave us caption text, use it as-is
+            # (a valid caption, just unwrapped); only a truly empty reply is an
+            # error - and that stays VISIBLE, not silently swallowed.
+            text = strip_fences(raw)
+            if text:
+                return CaptionResult(caption=text)
+            raise AIPermanent(
+                "Gemini returned an empty caption (it may have hit the token "
+                "limit) - try again or a different model.")
         hashtags = [h.lstrip("#") for h in (data.get("hashtags") or [])
                     if isinstance(h, str)]
         per = {k: v for k, v in (data.get("per_platform") or {}).items()
@@ -130,10 +126,14 @@ class GeminiProvider(AIProvider):
         media = list(ctx.media) + list(ctx.references) + list(ctx.guidelines)
         system, user = prompts.media_check_prompt(ctx)
         raw = self._generate(self.model, system, user, media, as_json=True)
-        try:
-            data = json.loads(_strip_json(raw))
-        except (ValueError, TypeError) as exc:
-            raise AIPermanent("Gemini returned unreadable findings.") from exc
+        data = extract_json(raw)
+        if data is None:
+            # QA is advisory - a garbled/empty reply becomes a visible "review
+            # manually" note rather than a hard failure.
+            return [Finding(
+                severity="info", category="spec",
+                message="Automated QA couldn't read the AI response — please "
+                        "review this file manually.")]
         out = []
         for f in (data.get("findings") or []):
             if not isinstance(f, dict):

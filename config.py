@@ -400,7 +400,9 @@ class Config:
     # Output ceiling per AI call (a caption/checklist is small), request
     # timeout, and a hard cap on how large a media file we send to the model
     # (protects cost + latency; oversized media is skipped with a clear note).
-    AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "1024"))
+    # Headroom so a "thinking" model (Gemini 3.x etc.) doesn't spend the whole
+    # budget reasoning and truncate the JSON body -> "unreadable" responses.
+    AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "2048"))
     # Vision calls (caption/QA with an image) can take longer than plain text,
     # so give the provider room; still well under the gunicorn worker timeout.
     AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "60"))
