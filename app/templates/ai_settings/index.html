@@ -80,8 +80,22 @@
 
                 <label class="ai-toggle">
                     <input type="checkbox" name="enabled" {{ 'checked' if row.enabled }}>
-                    <span><strong>Enable AI assist</strong> — the master switch for every AI feature across the app.</span>
+                    <span><strong>Enable AI assist</strong> — master switch. Off = every AI feature below is off across the whole app, whatever their individual switches say.</span>
                 </label>
+
+                <div class="ai-features {{ 'is-muted' if not row.enabled }}">
+                    <span class="ai-features-label">AI features</span>
+                    <p class="form-hint">Turn any single feature on or off. A feature that's off disappears from its screen (its button hides) and its route refuses. All on by default.</p>
+                    {% for f in features %}
+                    <label class="ai-feature-toggle">
+                        <input type="checkbox" name="feature_{{ f.key }}" {{ 'checked' if feature_checked.get(f.key) }}>
+                        <span><strong>{{ f.label }}</strong><span class="ai-feature-hint">{{ f.hint }}</span></span>
+                    </label>
+                    {% endfor %}
+                    {% if not row.enabled %}
+                    <p class="form-hint ai-features-note"><i class="fa-solid fa-circle-info"></i> The master switch is off, so all of these are currently paused — your choices here are saved and take effect when you turn it back on.</p>
+                    {% endif %}
+                </div>
 
                 <div class="form-group" style="margin-top:14px; max-width:280px;">
                     <label>Monthly budget (USD)</label>
@@ -238,6 +252,16 @@
             wire("caption_provider", "capModels", "caption");
             wire("qa_provider", "qaModels", "qa");
             wire("reply_provider", "replyModels", "reply");
+
+            // Master switch visually mutes the per-feature block (never disables
+            // the checkboxes - disabled ones wouldn't POST, wiping the prefs).
+            var master = document.querySelector('input[name="enabled"]');
+            var featureBox = document.querySelector(".ai-features");
+            if (master && featureBox) {
+                master.addEventListener("change", function () {
+                    featureBox.classList.toggle("is-muted", !master.checked);
+                });
+            }
         })();
         </script>
 {% endblock %}

@@ -46,6 +46,49 @@ def is_enabled():
     return True if row is None else bool(row.enabled)
 
 
+# The individually toggleable AI features. `key` is the AISettings column stem
+# (<key>_enabled) and the value shown on the admin screen; `label` + `hint`
+# drive that screen. Order = display order.
+FEATURES = [
+    {"key": "caption", "label": "Captions & alt-text",
+     "hint": "The “Generate caption” and “Alt-text” buttons in Social Studio, "
+             "and the “AI draft” button in Engage share this model — but each "
+             "has its own switch."},
+    {"key": "qa", "label": "Media QA",
+     "hint": "The “Check media” button on submitted deliverables."},
+    {"key": "reply", "label": "Review replies",
+     "hint": "Drafting and auto-reply for Google Business reviews."},
+    {"key": "comment", "label": "Comment replies",
+     "hint": "The “AI draft” button in the Engage comment inbox."},
+]
+FEATURE_KEYS = {f["key"] for f in FEATURES}
+
+
+def feature_enabled(feature):
+    """Is a specific AI feature usable right now? The global master
+    (is_enabled) ANDed with that feature's own soft toggle. Unknown feature or
+    no settings row -> falls back to the master alone (default on)."""
+    if not is_enabled():
+        return False
+    if feature not in FEATURE_KEYS:
+        return True
+    row = get_settings()
+    if row is None:
+        return True
+    return bool(getattr(row, f"{feature}_enabled", True))
+
+
+def feature_states():
+    """{feature_key: bool} for every feature, for the template layer so a
+    disabled feature's buttons disappear. All False when the master is off."""
+    if not is_enabled():
+        return {f["key"]: False for f in FEATURES}
+    row = get_settings()
+    return {f["key"]: (True if row is None
+                       else bool(getattr(row, f"{f['key']}_enabled", True)))
+            for f in FEATURES}
+
+
 def resolve(task_kind):
     """(provider_key, model) for a task ('qa', 'reply', or caption/alt-text).
     DB override first, then the AI_* env defaults.

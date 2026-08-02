@@ -86,6 +86,33 @@ def test_is_enabled_soft_toggle(app):
         assert ai_settings.is_enabled() is False          # admin paused it
 
 
+def test_feature_enabled_defaults_on(app):
+    with app.test_request_context():
+        for f in ("caption", "qa", "reply", "comment"):
+            assert ai_settings.feature_enabled(f) is True
+
+
+def test_feature_enabled_master_off_disables_every_feature(app):
+    with app.app_context():
+        db.session.add(AISettings(enabled=False))
+        db.session.commit()
+    with app.test_request_context():
+        for f in ("caption", "qa", "reply", "comment"):
+            assert ai_settings.feature_enabled(f) is False
+
+
+def test_feature_enabled_individual_switch(app):
+    # Master on, but Media QA turned off individually.
+    with app.app_context():
+        db.session.add(AISettings(enabled=True, qa_enabled=False))
+        db.session.commit()
+    with app.test_request_context():
+        assert ai_settings.feature_enabled("caption") is True
+        assert ai_settings.feature_enabled("qa") is False
+        states = ai_settings.feature_states()
+        assert states["caption"] is True and states["qa"] is False
+
+
 def test_key_present_reflects_config(app):
     with app.test_request_context():
         app.config["GEMINI_API_KEY"] = "test-key"
@@ -128,6 +155,34 @@ def test_settings_save_persists_choices(client, login, make_user, app):
         assert row.qa_provider == "gemini"
         assert row.reply_provider == "openai"
         assert row.reply_model == "gpt-5"
+
+
+def test_settings_save_persists_feature_toggles(client, login, make_user, app):
+    login(make_user("admin"))
+    # Check master + caption + reply; leave qa + comment unchecked (= off).
+    r = client.post("/admin/ai/", data={
+        "enabled": "on", "feature_caption": "on", "feature_reply": "on",
+    }, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        row = AISettings.query.first()
+        assert row.caption_enabled is True
+        assert row.reply_enabled is True
+        assert row.qa_enabled is False           # unchecked -> off
+        assert row.comment_enabled is False
+
+
+def test_caption_feature_off_blocks_the_route(
+        client, login, make_user, make_task, app):
+    # Master ON, captions turned off individually -> the caption route refuses.
+    user = make_user("employee", permissions=["manage_social"])
+    task = make_task(user)
+    with app.app_context():
+        db.session.add(AISettings(enabled=True, caption_enabled=False))
+        db.session.commit()
+    login(user)
+    r = client.post("/social/api/ai/caption", data={"task_id": task.id})
+    assert r.status_code == 503
 
 
 def test_settings_save_rejects_unknown_provider(client, login, make_user, app):

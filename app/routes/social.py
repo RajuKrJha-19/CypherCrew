@@ -2574,10 +2574,15 @@ def mentions_api():
 # Both routes return a DRAFT the user edits before saving - never auto-publish.
 # ---------------------------------------------------------------------------
 
-def _ai_guard():
+def _ai_guard(feature=None):
     _guard()
     from app.ai import settings as ai_settings
-    if not ai_settings.is_enabled():
+    # Master off -> 503. A specific feature off (with master on) -> also 503,
+    # so the route refuses exactly when its button is hidden.
+    if feature is not None:
+        if not ai_settings.feature_enabled(feature):
+            abort(503)
+    elif not ai_settings.is_enabled():
         abort(503)
 
 
@@ -2649,7 +2654,7 @@ def ai_caption_api():
     """Draft an on-brand, per-platform caption from the task brief + attached
     media + the client's brand knowledge base. Returns a draft the composer
     drops into the editable fields."""
-    _ai_guard()
+    _ai_guard("caption")
     from app.ai import service as ai_service, usage as ai_usage
     if not ai_usage.within_budget():
         return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
@@ -2711,7 +2716,7 @@ def ai_caption_api():
 @limiter.limit("120 per hour")
 def ai_alt_text_api():
     """One accessible alt-text line for a single attached image."""
-    _ai_guard()
+    _ai_guard("caption")
     from app.ai import service as ai_service, usage as ai_usage
     if not ai_usage.within_budget():
         return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
@@ -3047,7 +3052,7 @@ def engage_ai_draft(comment_id):
     """Draft an on-brand reply to a comment for the human to edit + post.
     Draft-only (never auto-posts). Same permission as replying to the comment;
     gated on AI being enabled + within the monthly budget."""
-    _ai_guard()
+    _ai_guard("comment")
     from app.ai import service as ai_service, usage as ai_usage
     from app.models import SocialComment
     if not ai_usage.within_budget():

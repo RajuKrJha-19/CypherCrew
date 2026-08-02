@@ -38,7 +38,7 @@ def _review_or_404(review_id):
 
 def _ai_ready():
     from app.ai import settings as ai_settings, usage as ai_usage
-    return ai_settings.is_enabled() and ai_usage.within_budget()
+    return ai_settings.feature_enabled("reply") and ai_usage.within_budget()
 
 
 @reviews_bp.route("/")

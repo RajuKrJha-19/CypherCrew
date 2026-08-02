@@ -4700,7 +4700,7 @@ def ai_check_file(file_id):
     checklist of findings - never blocks anything. Reviewers or the assignee,
     on a task they can see."""
     from app.ai import settings as ai_settings, usage as ai_usage
-    if not ai_settings.is_enabled():
+    if not ai_settings.feature_enabled("qa"):
         return jsonify(error="AI assist is not available."), 503
     if not ai_usage.within_budget():
         return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503

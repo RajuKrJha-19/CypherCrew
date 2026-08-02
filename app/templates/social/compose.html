@@ -100,7 +100,7 @@
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
-                    {% if ai_enabled %}
+                    {% if ai_enabled and ai_features.caption %}
                     <select class="cmp-set-select" id="aiTone" aria-label="Caption tone">
                         <option value="">Auto tone</option>
                         <option value="professional">Professional</option>
@@ -117,7 +117,7 @@
                     {% endif %}
                 </div>
 
-                {% if ai_enabled %}
+                {% if ai_enabled and ai_features.caption %}
                 {# AI alternative captions - click one to use it. #}
                 <div class="cmp-ai-variations" id="aiVariations" hidden></div>
                 {% endif %}
@@ -1320,7 +1320,7 @@
 })();
 </script>
 {% endif %}
-{% if ai_enabled %}
+{% if ai_enabled and ai_features.caption %}
 <script>
     window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
     window.AI_ALT_URL = "{{ url_for('social.ai_alt_text_api') }}";

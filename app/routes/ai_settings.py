@@ -42,6 +42,10 @@ def index():
 
     if request.method == "POST":
         row.enabled = bool(request.form.get("enabled"))
+        # Per-feature switches. A checkbox absent from the POST = off.
+        for feat in ai_settings.FEATURES:
+            setattr(row, f"{feat['key']}_enabled",
+                    bool(request.form.get(f"feature_{feat['key']}")))
 
         cap_provider = (request.form.get("caption_provider") or "").strip().lower()
         qa_provider = (request.form.get("qa_provider") or "").strip().lower()
@@ -94,6 +98,11 @@ def index():
     return render_template(
         "ai_settings/index.html",
         row=row,
+        features=ai_settings.FEATURES,
+        # Raw stored per-feature values for the checkboxes (independent of the
+        # master, so pausing everything doesn't erase the per-feature prefs).
+        feature_checked={f["key"]: bool(getattr(row, f"{f['key']}_enabled", True))
+                         for f in ai_settings.FEATURES},
         catalog=ai_settings.catalog_for_ui(),
         effective={"caption": (cap_provider, cap_model),
                    "qa": (qa_provider, qa_model),

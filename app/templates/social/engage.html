@@ -199,7 +199,7 @@
                     <span class="engage-hint t-subtle t-sm">
                         <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send</span>
                     <span class="engage-composer-btns">
-                        {% if ai_enabled %}
+                        {% if ai_enabled and ai_features.comment %}
                         <button type="button" class="btn btn-secondary engage-ai-btn"
                                 data-draft-url="{{ url_for('social.engage_ai_draft', comment_id=selected.id) }}"
                                 title="Draft an on-brand reply with AI — you edit before sending">

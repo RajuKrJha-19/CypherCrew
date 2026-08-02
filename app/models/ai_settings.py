@@ -18,8 +18,23 @@ class AISettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     #: Soft switch, ANDed with the AI_ENABLED env master. Lets an admin pause
-    #: AI without touching the server config; env stays the hard kill-switch.
+    #: ALL AI without touching the server config; env stays the hard
+    #: kill-switch. When off, every AI feature is off regardless of the
+    #: per-feature toggles below.
     enabled = db.Column(db.Boolean, nullable=False, default=True)
+
+    #: Per-feature soft switches, each ANDed with `enabled`. Default on, so
+    #: nothing changes until an admin turns a specific feature off. Gate both
+    #: the live routes AND the buttons in the UI, so a disabled feature simply
+    #: disappears. See app/ai/settings.feature_enabled().
+    caption_enabled = db.Column(db.Boolean, nullable=False, default=True,
+                                server_default=db.true())   # captions + alt-text
+    qa_enabled = db.Column(db.Boolean, nullable=False, default=True,
+                           server_default=db.true())        # media QA
+    reply_enabled = db.Column(db.Boolean, nullable=False, default=True,
+                              server_default=db.true())      # Google review replies
+    comment_enabled = db.Column(db.Boolean, nullable=False, default=True,
+                                server_default=db.true())    # Engage comment replies
 
     caption_provider = db.Column(db.String(30))
     caption_model = db.Column(db.String(120))

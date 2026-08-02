@@ -940,7 +940,7 @@ Submission Files
                                             Download
                                         </a>
 
-                                        {% if ai_enabled %}
+                                        {% if ai_enabled and ai_features.qa %}
                                         <button type="button"
                                             class="task-file-btn task-file-aicheck-btn cmp-ai"
                                             data-ai-check
@@ -966,7 +966,7 @@ Submission Files
 
                                     </div>
 
-                                    {% if ai_enabled %}
+                                    {% if ai_enabled and ai_features.qa %}
                                     <div class="task-file-aicheck" id="ai-findings-{{ file.id }}" hidden></div>
                                     {% endif %}
 
@@ -2299,7 +2299,7 @@ Submission Files
     #}
     <script src="{{ asset_url('js/upload-popup.js') }}"></script>
         <script src="{{ asset_url('js/status-change.js') }}"></script>
-        {% if ai_enabled %}
+        {% if ai_enabled and ai_features.qa %}
         <script src="{{ asset_url('js/ai-media-check.js') }}" defer></script>
         {% endif %}
         <script>

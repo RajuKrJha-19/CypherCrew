@@ -108,9 +108,14 @@ def _blocklist():
 
 def is_auto_safe(review):
     """May this review be auto-replied without a human? Conservative by design.
-    Global switch on, client opted in, high rating, short/no text, and no
-    blocklisted word. Anything failing -> the human queue."""
+    The AI review-reply feature on, global switch on, client opted in, high
+    rating, short/no text, and no blocklisted word. Anything failing -> the
+    human queue."""
+    from app.ai import settings as ai_settings
     cfg = current_app.config
+    # If an admin has turned the review-reply feature off, nothing auto-posts.
+    if not ai_settings.feature_enabled("reply"):
+        return False
     if not cfg.get("GBP_AUTOREPLY_ENABLED"):
         return False
     client = _client_of(review)

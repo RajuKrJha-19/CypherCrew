@@ -102,3 +102,23 @@ def test_ai_draft_blocked_when_ai_soft_disabled(session, client, login,
         with app.app_context():
             AISettings.query.delete()
             db.session.commit()
+
+
+def test_ai_draft_blocked_when_comment_feature_off(session, client, login,
+                                                   make_user, make_target, app):
+    # Master ON, but the Comment-replies feature turned off individually.
+    from app.models import AISettings
+    _, _, target = make_target()
+    comment = _comment(session, target)
+    with app.app_context():
+        AISettings.query.delete()
+        db.session.add(AISettings(enabled=True, comment_enabled=False))
+        db.session.commit()
+    login(make_user("employee", permissions=["manage_social"]))
+    try:
+        assert client.post(
+            f"/social/engage/{comment.id}/ai-draft").status_code == 503
+    finally:
+        with app.app_context():
+            AISettings.query.delete()
+            db.session.commit()

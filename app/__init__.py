@@ -417,9 +417,16 @@ def create_app():
             try:
                 from app.ai import settings as ai_settings
                 g._ai_enabled = ai_settings.is_enabled()
+                # Per-feature switches, so a disabled feature's buttons vanish.
+                # Only queried when the master is on (else all False, no DB).
+                g._ai_features = (ai_settings.feature_states() if g._ai_enabled
+                                  else {})
             except Exception:  # noqa: BLE001
                 g._ai_enabled = False
-        return {"ai_enabled": g._ai_enabled}
+                g._ai_features = {}
+        # .get on a plain dict in templates: a missing key reads as falsey, so
+        # an unknown feature is treated as off (fail-closed).
+        return {"ai_enabled": g._ai_enabled, "ai_features": g._ai_features}
 
     from app.utils.mentions import highlight_mentions
     app.jinja_env.filters["mentions"] = highlight_mentions
