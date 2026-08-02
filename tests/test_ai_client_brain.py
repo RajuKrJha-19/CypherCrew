@@ -38,6 +38,17 @@ def test_facts_text_empty_without_brain():
     assert client_brain.facts_text(_C()) == ""
 
 
+def test_visual_identity_is_an_ai_fed_section():
+    keys = {k for (k, _l, _h, _ai) in client_brain.SECTIONS}
+    assert "visual_identity" in keys
+
+    class _C:
+        brand_brain = {"visual_identity": "2026 logo with tagline; old logo "
+                                          "without tagline is outdated"}
+    text = client_brain.facts_text(_C())
+    assert "outdated" in text                      # fed to the checker
+
+
 # -- fact-checker uses the brain --------------------------------------------
 
 def test_check_media_flags_a_fact_error_from_the_brain(

@@ -158,13 +158,25 @@ def media_check_prompt(ctx):
         '{"findings": [{"severity": "info|warning|error", '
         '"category": "brief|brand|text|spec|safe_area|fact", "message": str}]}. '
         "Use category \"fact\" and severity \"error\" for a wrong or missing "
-        "phone/website/email/offer/disclaimer."
+        "phone/website/email/offer/disclaimer. "
+        "(3) LOGO / VISUAL IDENTITY: if OFFICIAL brand reference image(s) are "
+        "attached, treat them as the source of truth for the logo and visual "
+        "identity. Compare the deliverable's logo against them and flag "
+        "(category \"brand\") a logo that is the wrong mark, recoloured, "
+        "distorted/stretched, low-quality, mis-placed, or an OUTDATED version "
+        "per the CLIENT FACTS. Be honest about uncertainty: if you cannot tell "
+        "whether it is the current version, say so as an \"info\" note rather "
+        "than a false \"error\" - subtle logo-version differences need a human."
     )
     brand = _brand_block(ctx)
     specs = json.dumps(ctx.specs) if ctx.specs else "(none provided)"
+    has_refs = bool(getattr(ctx, "references", None))
     user = (
         f"BRIEF:\n{ctx.brief or '(no brief)'}\n\n"
         f"DELIVERABLE TYPE: {ctx.deliverable or '(unspecified)'}\n\n"
+        + ("IMAGES: the FIRST attached image is the deliverable under review; "
+           "any image(s) after it are the OFFICIAL brand reference (the correct "
+           "current logo) to compare against.\n\n" if has_refs else "")
         + (f"BRAND:\n{brand}\n\n" if brand else "")
         + (f"CLIENT FACTS (verify the creative against these):\n{ctx.facts}\n\n"
            if getattr(ctx, "facts", None) else "")

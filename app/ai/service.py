@@ -37,6 +37,8 @@ _IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _QA_MIMES = _IMAGE_MIMES | {"application/pdf"}
 # At most this many brand-guideline docs are fed to a QA call (cost bound).
 _MAX_GUIDELINES = 2
+# At most this many official-logo reference images per QA call (cost bound).
+_MAX_LOGO_REFS = 2
 
 # Fallback caption limits when the social provider registry isn't reachable
 # (e.g. the engine is off). The real values come from provider Capabilities.
@@ -293,6 +295,7 @@ def check_media(task_file, created_by_id=None):
         deliverable = getattr(d, "deliverable_name", None)
 
     guidelines = []
+    references = []
     facts = ""
     if client is not None:
         docs = (ClientAsset.query
@@ -301,6 +304,14 @@ def check_media(task_file, created_by_id=None):
         guidelines = _load_media(
             [(a.object_key, a.original_filename) for a in docs],
             allowed={"application/pdf"})
+        # The client's official logo image(s) - the correct-logo reference the
+        # checker compares the deliverable against (wrong / altered / outdated).
+        logos = (ClientAsset.query
+                 .filter_by(client_id=client.id, category="logo")
+                 .limit(_MAX_LOGO_REFS).all())
+        references = _load_media(
+            [(a.object_key, "official logo") for a in logos],
+            allowed=_IMAGE_MIMES)
         from app.ai import client_brain
         facts = client_brain.facts_text(client)
 
@@ -311,6 +322,7 @@ def check_media(task_file, created_by_id=None):
         brand_notes=getattr(client, "brand_guidelines_notes", None),
         facts=facts or None,
         guidelines=guidelines,
+        references=references,
         media=media,
     )
     client_id = getattr(client, "id", None)

@@ -124,7 +124,7 @@ class OpenAIProvider(AIProvider):
         return raw.strip()
 
     def check_media(self, ctx):
-        media = list(ctx.media) + list(ctx.guidelines)
+        media = list(ctx.media) + list(ctx.references) + list(ctx.guidelines)
         system, user = prompts.media_check_prompt(ctx)
         raw = self._generate(system, user, media, as_json=True)
         try:

@@ -81,6 +81,10 @@ class MediaCheckContext:
     #: the fact-checker verifies the creative against. Empty = skip fact-check.
     facts: str | None = None
     guidelines: list[MediaInput] = field(default_factory=list)  # brand docs
+    #: Official brand reference images (the CORRECT current logo etc.) the
+    #: checker compares the deliverable against, so a wrong/altered/outdated
+    #: logo can be flagged. Sent after the deliverable, before the guidelines.
+    references: list[MediaInput] = field(default_factory=list)
     specs: dict = field(default_factory=dict)   # intended platform media specs
     media: list[MediaInput] = field(default_factory=list)
 

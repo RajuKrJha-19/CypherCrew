@@ -8,6 +8,28 @@ from app.extensions import db
 from app.models import AICheck, Task
 
 
+# -- logo / visual-identity reference in the QA prompt ----------------------
+
+def test_media_prompt_adds_logo_check_when_reference_present():
+    from app.ai import prompts
+    from app.ai.base import MediaCheckContext, MediaInput
+    ctx = MediaCheckContext(
+        brief="Diwali poster",
+        references=[MediaInput(data=b"x", mime_type="image/png",
+                               label="official logo")])
+    system, user = prompts.media_check_prompt(ctx)
+    assert "LOGO" in system and "reference" in system.lower()
+    # The model is told which image is the deliverable vs the reference.
+    assert "FIRST attached image is the deliverable" in user
+
+
+def test_media_prompt_has_no_image_order_note_without_reference():
+    from app.ai import prompts
+    from app.ai.base import MediaCheckContext
+    _system, user = prompts.media_check_prompt(MediaCheckContext(brief="x"))
+    assert "FIRST attached image is the deliverable" not in user
+
+
 def test_check_media_unreadable_file_is_clean_info_and_persisted(
         app, make_task_file):
     tf = make_task_file(mime_type="image/png", filename="poster.png")

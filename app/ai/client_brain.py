@@ -22,6 +22,10 @@ SECTIONS = [
      "Current offers, prices, campaign names and their validity dates.", True),
     ("products_services", "Products / services / courses",
      "What this client actually sells — so a wrong course/product is caught.", True),
+    ("visual_identity", "Visual identity / logo",
+     "Which logo is current (colour, tagline, version) and what's outdated — so the "
+     "checker can flag a wrong or old logo. Also upload the correct file under the "
+     "client's Logo assets so the AI can compare against it.", True),
     ("dos", "Do's",
      "Things every creative/caption should do.", True),
     ("donts", "Don'ts",
