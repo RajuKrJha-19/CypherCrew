@@ -56,6 +56,26 @@ def test_resolve_provider_override_uses_that_providers_model(app):
         assert model != app.config["AI_CAPTION_MODEL"]
 
 
+def test_resolve_reply_falls_back_to_caption_defaults(app):
+    # No override -> review replies ride the caption model (short text, cheap).
+    with app.test_request_context():
+        assert ai_settings.resolve("reply") == (
+            app.config["AI_CAPTION_PROVIDER"], app.config["AI_CAPTION_MODEL"])
+
+
+def test_resolve_reply_uses_own_override_independent_of_caption(app):
+    # Replies post publicly - an admin can put them on a different model without
+    # touching captions.
+    with app.app_context():
+        db.session.add(AISettings(
+            caption_provider="gemini", caption_model="gemini-2.5-flash",
+            reply_provider="openai", reply_model="gpt-5"))
+        db.session.commit()
+    with app.test_request_context():
+        assert ai_settings.resolve("caption") == ("gemini", "gemini-2.5-flash")
+        assert ai_settings.resolve("reply") == ("openai", "gpt-5")
+
+
 def test_is_enabled_soft_toggle(app):
     with app.test_request_context():
         assert ai_settings.is_enabled() is True          # env on, no row
@@ -97,6 +117,7 @@ def test_settings_save_persists_choices(client, login, make_user, app):
         "enabled": "on",
         "caption_provider": "openai", "caption_model": "gpt-5-mini",
         "qa_provider": "gemini", "qa_model": "gemini-2.5-pro",
+        "reply_provider": "openai", "reply_model": "gpt-5",
     }, follow_redirects=False)
     assert r.status_code in (302, 303)
     with app.app_context():
@@ -105,6 +126,8 @@ def test_settings_save_persists_choices(client, login, make_user, app):
         assert row.caption_provider == "openai"
         assert row.caption_model == "gpt-5-mini"
         assert row.qa_provider == "gemini"
+        assert row.reply_provider == "openai"
+        assert row.reply_model == "gpt-5"
 
 
 def test_settings_save_rejects_unknown_provider(client, login, make_user, app):

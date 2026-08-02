@@ -25,6 +25,11 @@ class AISettings(db.Model):
     caption_model = db.Column(db.String(120))
     qa_provider = db.Column(db.String(30))
     qa_model = db.Column(db.String(120))
+    #: Google review replies. Left blank they ride the caption model (short,
+    #: cheap text) - but replies post PUBLICLY, so an admin can pick a stronger
+    #: model here without affecting captions.
+    reply_provider = db.Column(db.String(30))
+    reply_model = db.Column(db.String(120))
 
     #: Soft monthly spend cap in USD. 0 / null = no cap. When the month's
     #: estimated AI cost reaches this, the live routes refuse with a clear

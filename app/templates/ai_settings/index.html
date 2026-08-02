@@ -7,8 +7,8 @@
 {% block content %}
         <div class="page-header">
             <div>
-                <h1>AI Settings</h1>
-                <p>Choose which AI model drafts captions and checks media. Changes apply instantly — no restart.</p>
+                <h1>AI Suite</h1>
+                <p>Pick which AI model powers each feature, set a spend cap, and see what's live. Changes apply instantly — no restart.</p>
             </div>
             <div class="top-actions">
                 <a href="{{ url_for('ai_settings.usage') }}" class="btn btn-secondary"><i class="fa-solid fa-chart-line"></i> AI Usage</a>
@@ -33,13 +33,35 @@
         {# --- Status banner --- #}
         {% if simulation %}
         <div class="alert info">
-            <strong>Simulation mode.</strong> AI runs on scripted sample output — no real provider is called and no key is needed. Set a provider API key in the server environment to go live.
+            <strong>Simulation mode.</strong> AI runs on scripted sample output — no real provider is called and no key is needed. Add a provider API key in the server environment to go live.
         </div>
         {% elif not enabled_now %}
         <div class="alert warning">
-            <strong>AI is paused.</strong> Turn it back on with the toggle below.
+            <strong>AI is paused.</strong> Turn it back on with the master switch below.
         </div>
         {% endif %}
+
+        {# --- What the AI Suite does (plain-language map) --- #}
+        <div class="ai-map">
+            <span class="ai-map-title">What the AI Suite does</span>
+            <div class="ai-map-grid">
+                <div class="ai-map-item">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <div><strong>Captions &amp; alt-text</strong><span>Drafts on-brand captions and image alt-text in Social Studio. You edit before posting.</span></div>
+                </div>
+                <div class="ai-map-item">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i>
+                    <div><strong>Media QA</strong><span>Checks submitted deliverables for typos, off-brand, wrong specs — advisory, never blocks.</span></div>
+                </div>
+                {% if reviews_on %}
+                <div class="ai-map-item">
+                    <i class="fa-solid fa-reply"></i>
+                    <div><strong>Review replies</strong><span>Drafts replies to Google reviews. Sent only after approval — or auto-sent for safe reviews if you enable it.</span></div>
+                </div>
+                {% endif %}
+            </div>
+            <p class="form-hint">Every AI output is a <strong>draft a person can edit</strong>; nothing publishes on its own except guarded auto-replies (below).</p>
+        </div>
 
         {# --- Provider key status --- #}
         <div class="ai-keys">
@@ -58,7 +80,7 @@
 
                 <label class="ai-toggle">
                     <input type="checkbox" name="enabled" {{ 'checked' if row.enabled }}>
-                    <span><strong>Enable AI assist</strong> — the master switch for captions, alt-text and media checks across the app.</span>
+                    <span><strong>Enable AI assist</strong> — the master switch for every AI feature across the app.</span>
                 </label>
 
                 <div class="form-group" style="margin-top:14px; max-width:280px;">
@@ -118,9 +140,62 @@
                     <p class="ai-effective">Currently using <strong>{{ effective.qa[0] }}</strong> · <code>{{ effective.qa[1] }}</code></p>
                 </div>
 
+                {% if reviews_on %}
+                <hr class="ai-sep">
+
+                {# --- Review replies (Google Business) --- #}
+                <div class="ai-task">
+                    <h3>Review replies <span class="ai-task-tag">Google Business</span></h3>
+                    <p class="form-hint">Used to draft replies to Google reviews. These post <strong>publicly</strong>, so you can put them on a stronger model than captions. Leave blank to reuse the Captions model.</p>
+                    <div class="ai-task-grid">
+                        <label>Provider
+                            <select name="reply_provider" data-ai-provider="reply">
+                                <option value="">Same as Captions ({{ effective.caption[0] }})</option>
+                                {% for p in catalog %}
+                                <option value="{{ p.key }}" {{ 'selected' if row.reply_provider == p.key }}>{{ p.label }}{{ '' if p.has_key else ' — no key' }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>Model
+                            <input type="text" name="reply_model" list="replyModels"
+                                value="{{ row.reply_model or '' }}"
+                                placeholder="Same as Captions ({{ effective.caption[1] }})">
+                            <datalist id="replyModels"></datalist>
+                        </label>
+                    </div>
+                    <p class="ai-effective">Currently using <strong>{{ effective.reply[0] }}</strong> · <code>{{ effective.reply[1] }}</code></p>
+                </div>
+                {% endif %}
+
                 <button type="submit">Save AI settings</button>
             </form>
         </div>
+
+        {% if reviews_on %}
+        {# --- Auto-reply safety (read-only; env-owned source of truth) --- #}
+        <div class="form-card ai-autoreply">
+            <div class="ai-ar-head">
+                <h3>Google review auto-reply</h3>
+                <span class="ai-ar-state {{ 'on' if autoreply.global_on else 'off' }}">
+                    <i class="fa-solid {{ 'fa-circle-check' if autoreply.global_on else 'fa-circle-pause' }}"></i>
+                    {{ 'ON — safe reviews auto-post' if autoreply.global_on else 'OFF — every reply waits for approval' }}
+                </span>
+            </div>
+            <p class="form-hint">
+                Even when ON, a reply auto-posts <strong>only</strong> when it clears every guardrail below <em>and</em> the client is individually opted in on their profile. Anything else — and every negative review — stays in the human queue.
+            </p>
+            <div class="ai-ar-guards">
+                <span class="ai-ar-guard"><i class="fa-solid fa-star"></i> Minimum rating <strong>{{ autoreply.min_rating }}★</strong></span>
+                <span class="ai-ar-guard"><i class="fa-solid fa-text-width"></i> Review text ≤ <strong>{{ autoreply.max_len }}</strong> chars</span>
+                <span class="ai-ar-guard"><i class="fa-solid fa-gauge-high"></i> Max <strong>{{ autoreply.max_per_run }}</strong> per run</span>
+                <span class="ai-ar-guard"><i class="fa-solid fa-shield-halved"></i> Budget cap respected</span>
+            </div>
+            {% if autoreply.blocklist %}
+            <p class="form-hint ai-ar-block"><i class="fa-solid fa-ban"></i> Skipped if the review <em>or the drafted reply</em> contains: {% for w in autoreply.blocklist %}<span class="ai-ar-word">{{ w }}</span>{% endfor %}</p>
+            {% endif %}
+            <p class="form-hint">These safety limits are set in the server environment (<code>.env</code>) so they can't be loosened by accident from the dashboard. Per-client opt-in lives on each <strong>client's edit screen</strong>.</p>
+        </div>
+        {% endif %}
 
         <script id="aiCatalog" type="application/json">{{ catalog|tojson }}</script>
         <script>
@@ -130,6 +205,8 @@
             catch (e) { return; }
             var byKey = {};
             catalog.forEach(function (p) { byKey[p.key] = p; });
+
+            var LIST_KEY = { caption: "caption_models", qa: "qa_models", reply: "reply_models" };
 
             function fill(listId, models) {
                 var dl = document.getElementById(listId);
@@ -142,14 +219,13 @@
                 });
             }
             function modelsFor(providerKey, task) {
+                var key = LIST_KEY[task] || "caption_models";
                 // Fall back to every provider's suggestions when "Default".
                 if (providerKey && byKey[providerKey]) {
-                    return byKey[providerKey][task === "qa" ? "qa_models" : "caption_models"];
+                    return byKey[providerKey][key];
                 }
                 var all = [];
-                catalog.forEach(function (p) {
-                    all = all.concat(p[task === "qa" ? "qa_models" : "caption_models"]);
-                });
+                catalog.forEach(function (p) { all = all.concat(p[key]); });
                 return all;
             }
             function wire(selectName, listId, task) {
@@ -161,6 +237,7 @@
             }
             wire("caption_provider", "capModels", "caption");
             wire("qa_provider", "qaModels", "qa");
+            wire("reply_provider", "replyModels", "reply");
         })();
         </script>
 {% endblock %}

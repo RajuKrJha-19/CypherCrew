@@ -45,6 +45,7 @@ def index():
 
         cap_provider = (request.form.get("caption_provider") or "").strip().lower()
         qa_provider = (request.form.get("qa_provider") or "").strip().lower()
+        reply_provider = (request.form.get("reply_provider") or "").strip().lower()
         # Allow-list the provider; anything unknown clears the override (falls
         # back to the env default) rather than storing junk.
         row.caption_provider = (cap_provider
@@ -53,8 +54,12 @@ def index():
         row.qa_provider = (qa_provider
                            if qa_provider in ai_settings.VALID_PROVIDERS
                            else None)
+        row.reply_provider = (reply_provider
+                              if reply_provider in ai_settings.VALID_PROVIDERS
+                              else None)
         row.caption_model = (request.form.get("caption_model") or "").strip()[:120] or None
         row.qa_model = (request.form.get("qa_model") or "").strip()[:120] or None
+        row.reply_model = (request.form.get("reply_model") or "").strip()[:120] or None
         # Monthly budget cap (USD). Blank / invalid / negative -> 0 (no cap).
         try:
             budget = float(request.form.get("monthly_budget_usd") or 0)
@@ -68,15 +73,34 @@ def index():
         return redirect(url_for("ai_settings.index"))
 
     from app.ai import usage as ai_usage
+    cfg = current_app.config
     cap_provider, cap_model = ai_settings.resolve("caption")
     qa_provider, qa_model = ai_settings.resolve("qa")
+    reply_provider, reply_model = ai_settings.resolve("reply")
+    # Read-only view of the Google-review auto-reply safety controls (env-owned,
+    # so they stay the source of truth) - surfaced so an admin can SEE at a
+    # glance whether unattended public replies are on, and on what guardrails.
+    reviews_on = bool(cfg.get("GBP_REVIEWS_ENABLED"))
+    autoreply = {
+        "reviews_on": reviews_on,
+        "global_on": bool(cfg.get("GBP_AUTOREPLY_ENABLED")),
+        "min_rating": cfg.get("GBP_AUTOREPLY_MIN_RATING", 4),
+        "max_len": cfg.get("GBP_AUTOREPLY_MAX_TEXT_LEN", 200),
+        "max_per_run": cfg.get("GBP_AUTOREPLY_MAX_PER_RUN", 10),
+        "blocklist": [w.strip() for w in
+                      (cfg.get("GBP_AUTOREPLY_BLOCKLIST") or "").split(",")
+                      if w.strip()],
+    }
     return render_template(
         "ai_settings/index.html",
         row=row,
         catalog=ai_settings.catalog_for_ui(),
         effective={"caption": (cap_provider, cap_model),
-                   "qa": (qa_provider, qa_model)},
-        simulation=bool(current_app.config.get("AI_SIMULATION_MODE")),
+                   "qa": (qa_provider, qa_model),
+                   "reply": (reply_provider, reply_model)},
+        reviews_on=reviews_on,
+        autoreply=autoreply,
+        simulation=bool(cfg.get("AI_SIMULATION_MODE")),
         enabled_now=ai_settings.is_enabled(),
         spend={"total": ai_usage.month_total_usd(),
                "budget": ai_usage.budget_usd()},
