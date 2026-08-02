@@ -170,3 +170,172 @@ def reply(comment, text, actor_id=None):
 def mark_done(comment, done=True):
     comment.status = "done" if done else "open"
     db.session.commit()
+
+
+# -- guarded comment auto-reply ---------------------------------------------
+
+import re
+
+#: A generated auto-reply longer than this is treated as suspect (steered by
+#: the comment, or a runaway) and dropped to the human queue.
+_AUTO_COMMENT_MAX_CHARS = 300
+
+#: Any URL/bare-domain in the comment OR the generated reply -> human. Kills the
+#: "make the bot post a link" prompt-injection / phishing vector on the
+#: unattended public path.
+_LINK_RE = re.compile(
+    r"https?://|www\.|\b[a-z0-9-]+\.(?:com|net|org|in|io|co|ly|me|link|xyz|"
+    r"shop|store|info|biz|app|site|online)\b", re.I)
+
+#: Question intent - ASCII + Unicode question marks, plus common English AND
+#: Hinglish/Hindi question tokens (our audience often omits the "?"). A hit
+#: routes the comment to a human rather than auto-answering it wrong.
+_Q_MARKS = ("?", "？", "؟")
+_Q_TOKENS = {
+    "how", "what", "when", "where", "why", "which", "whom", "much", "cost",
+    "price", "rate", "available", "stock", "delivery", "deliver", "ship",
+    "shipping", "dm", "kaise", "kaisa", "kaha", "kahan", "kitna", "kitne",
+    "kitni", "kab", "kaun", "kaunsa", "konsa", "kidhar", "kimat", "keemat",
+}
+
+
+def _has_link(text):
+    return bool(_LINK_RE.search(text or ""))
+
+
+def _looks_like_question(text):
+    t = text or ""
+    if any(m in t for m in _Q_MARKS):
+        return True
+    return bool(set(re.findall(r"[a-z]+", t.lower())) & _Q_TOKENS)
+
+
+def _comment_client(comment):
+    target = comment.target
+    post = target.post if target else None
+    cid = getattr(post, "client_id", None)
+    if not cid:
+        return None
+    from app.models import Client
+    return Client.query.get(cid)
+
+
+def comment_is_auto_safe(comment, cfg):
+    """May this comment be auto-replied without a human? Conservative by design:
+    global+feature+admin switch on (in `cfg`), client opted in, the comment is
+    not ours and not already handled, it is short, it is NOT a question, and it
+    hits no blocklisted word. Anything failing -> the human queue."""
+    if not cfg["enabled"]:
+        return False
+    if comment.is_ours or comment.replied or comment.status != "open":
+        return False
+    text = (comment.message or "").strip()
+    if not text or len(text) > cfg["max_len"]:
+        return False
+    if _looks_like_question(text):       # a question needs a real answer -> human
+        return False
+    if _has_link(text):                  # link/spam comment -> human
+        return False
+    low = text.lower()
+    if any(w in low for w in cfg["blocklist"]):
+        return False
+    client = _comment_client(comment)
+    if client is None or not getattr(client, "comment_autoreply", False):
+        return False
+    return True
+
+
+def auto_reply_comments_run(client_id=None):
+    """Sync comments, then auto-reply the safe ones (guarded). Per-post cap is a
+    TOTAL across runs (a viral thread can't be flooded), budget-capped, and the
+    GENERATED reply is output-scanned. Returns counts; everything else stays in
+    the human queue."""
+    from app.ai import (client_brain, service as ai_service,
+                        settings as ai_settings, usage as ai_usage)
+
+    sync_comments(client_id)
+    cfg = ai_settings.comment_config()
+    if not cfg["enabled"]:
+        return {"auto_replied": 0, "skipped": "disabled"}
+    if not ai_usage.within_budget():
+        return {"auto_replied": 0, "skipped": "over budget"}
+
+    q = SocialComment.query.filter(SocialComment.is_ours.is_(False),
+                                   SocialComment.replied.is_(False),
+                                   SocialComment.status == "open")
+    if client_id:
+        q = (q.join(SocialPostTarget,
+                    SocialComment.target_id == SocialPostTarget.id)
+              .join(SocialPost,
+                    SocialPost.id == SocialPostTarget.social_post_id)
+              .filter(SocialPost.client_id == client_id))
+    pending = q.order_by(SocialComment.id.asc()).all()
+    if not pending:
+        return {"auto_replied": 0}
+
+    # Per-post cap counts replies ALREADY auto-sent on each post, so the cap is
+    # a lifetime total per post rather than per run.
+    tids = list({c.target_id for c in pending})
+    per_post = dict(
+        db.session.query(SocialComment.target_id, db.func.count())
+        .filter(SocialComment.auto_sent.is_(True),
+                SocialComment.target_id.in_(tids))
+        .group_by(SocialComment.target_id).all())
+
+    sent = 0
+    for c in pending:
+        if not comment_is_auto_safe(c, cfg):
+            continue
+        if per_post.get(c.target_id, 0) >= cfg["max_per_post"]:
+            continue
+        client = _comment_client(c)
+        facts = client_brain.facts_text(client) if client else ""
+        post = c.target.post if c.target else None
+        post_context = "\n".join(p for p in (
+            (post.title if post else None),
+            (c.target.caption if c.target else None)) if p) or None
+        try:
+            text = (ai_service.generate_comment_reply(
+                comment_text=c.message, author=c.author_name,
+                business_name=getattr(client, "client_name", None),
+                brand_voice=getattr(client, "brand_voice", None),
+                brand_notes=getattr(client, "brand_guidelines_notes", None),
+                facts=(facts or None), post_context=post_context,
+                actor_id=None, client_id=getattr(client, "id", None)) or "").strip()
+        except Exception:  # noqa: BLE001 - one bad draft never aborts the run
+            current_app.logger.exception("[engage] auto-reply draft failed")
+            continue
+        # Output guards on the GENERATED public reply: empty, over-long,
+        # blocklisted, or containing a link (injection/phishing) -> human.
+        if not text or len(text) > _AUTO_COMMENT_MAX_CHARS:
+            continue
+        low_reply = text.lower()
+        if any(w in low_reply for w in cfg["blocklist"]) or _has_link(text):
+            continue
+
+        # Atomically CLAIM the comment before posting, so two overlapping cron
+        # runs can't both post to it (the loser's UPDATE matches 0 rows).
+        claimed = (SocialComment.query
+                   .filter_by(id=c.id, replied=False, status="open")
+                   .update({"replied": True, "status": "done"},
+                           synchronize_session=False))
+        db.session.commit()
+        if not claimed:
+            continue                            # another run/human took it
+
+        try:
+            ext = reply(c, text, actor_id=None)  # posts + records via the poster
+        except Exception:  # noqa: BLE001 - one bad post never aborts the run
+            current_app.logger.exception("[engage] auto-reply post failed")
+            ext = None
+        if ext is None:
+            # Nothing confirmed posted -> release the claim back to the queue.
+            c.replied = False
+            c.status = "open"
+            db.session.commit()
+            continue
+        c.auto_sent = True
+        db.session.commit()
+        per_post[c.target_id] = per_post.get(c.target_id, 0) + 1
+        sent += 1
+    return {"auto_replied": sent}

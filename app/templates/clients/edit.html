@@ -116,6 +116,22 @@
                 </div>
                 {% endif %}
 
+                {% if config.ENGAGE_AUTOREPLY_ENABLED %}
+                <div class="form-group">
+                    <label class="cmp-checkline">
+                        <input type="checkbox" name="comment_autoreply" {{ 'checked' if client.comment_autoreply }}>
+                        Auto-reply to this client's <strong>safe</strong> social comments
+                    </label>
+                    <p class="form-hint">
+                        When on, only clearly-safe comments (short, not a
+                        question, no complaint/legal wording) get an automatic
+                        AI reply. Questions, complaints and anything unsure still
+                        wait for a human in Engage. The global auto-reply switch
+                        must also be on.
+                    </p>
+                </div>
+                {% endif %}
+
                 {% if client.parent_client_id and client.parent %}
                 <p class="form-hint" style="margin-top:12px">
                     Sub-client of <strong>{{ client.parent.client_name }}</strong>.

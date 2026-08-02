@@ -278,6 +278,7 @@ def edit_client(client_id):
         client.brand_brain = client_brain.from_form(request.form)
         # Guarded auto-reply opt-in for this client's Google reviews.
         client.gmb_autoreply = bool(request.form.get("gmb_autoreply"))
+        client.comment_autoreply = bool(request.form.get("comment_autoreply"))
         client.assigned_manager_id = manager_id
         client.status = status
         db.session.commit()

@@ -30,6 +30,10 @@ class SocialComment(db.Model):
 
     is_ours = db.Column(db.Boolean, nullable=False, default=False)
     replied = db.Column(db.Boolean, nullable=False, default=False)
+    #: True only on a comment whose reply was auto-sent (guarded auto-reply),
+    #: so the inbox can label it and it is never inferred from other state.
+    auto_sent = db.Column(db.Boolean, nullable=False, default=False,
+                          server_default=db.false())
     # open | done
     status = db.Column(db.String(20), nullable=False, default="open")
 

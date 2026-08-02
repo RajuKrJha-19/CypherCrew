@@ -212,6 +212,23 @@ def autoreply_config():
     }
 
 
+def comment_config():
+    """Effective Engage comment auto-reply guardrails. Off unless ALL of: the
+    env master (ENGAGE_AUTOREPLY_ENABLED), the AI 'comment' feature, and the
+    admin switch are on. Shares the review blocklist as the safety net."""
+    cfg = current_app.config
+    row = get_settings()
+    enabled = (bool(cfg.get("ENGAGE_AUTOREPLY_ENABLED"))
+               and feature_enabled("comment")
+               and bool(getattr(row, "comment_autoreply_enabled", False)))
+    return {
+        "enabled": enabled,
+        "max_len": int(getattr(row, "comment_max_len", None) or 120),
+        "max_per_post": int(getattr(row, "comment_max_per_post", None) or 5),
+        "blocklist": autoreply_config()["blocklist"],
+    }
+
+
 def is_known_model(provider_key, task_kind, model):
     """Is `model` one of `provider_key`'s catalogued models for this task? Used
     only to WARN on the settings screen (never to block) - a brand-new model

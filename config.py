@@ -465,4 +465,15 @@ class Config:
     GBP_AUTOREPLY_BLOCKLIST = os.getenv(
         "GBP_AUTOREPLY_BLOCKLIST",
         "refund,lawyer,legal,sue,court,scam,fraud,complaint,worst,terrible,"
-        "rude,cheat,hospital,doctor,patient,injury,medical,clinic,lawsuit")
+        "rude,cheat,hospital,doctor,patient,injury,medical,clinic,lawsuit,"
+        # complaint / dissatisfaction terms (shared with comment auto-reply)
+        "pathetic,waste,horrible,disappointed,disappointing,delayed,damaged,"
+        "broken,defective,missing,useless,awful,ripoff,garbage,fake,cancel")
+
+    # Engage (social comment) auto-reply. Master feature gate + global kill
+    # switch: even a per-client opt-in does nothing while this is off. Off by
+    # default - comments are public and high-volume, so this is conservative.
+    # The rest of the guardrails (max length, per-post cap) live in AISettings
+    # (admin-editable); the review blocklist is the shared safety net.
+    ENGAGE_AUTOREPLY_ENABLED = (
+        os.getenv("ENGAGE_AUTOREPLY_ENABLED", "False").lower() == "true")

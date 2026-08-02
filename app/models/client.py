@@ -73,6 +73,14 @@ class Client(db.Model):
         db.Boolean, nullable=False, default=False, server_default=db.false()
     )
 
+    #: Opt-in for guarded auto-reply to this client's social-post comments
+    #: (Engage). Same shape as gmb_autoreply: off by default; needs the global
+    #: ENGAGE_AUTOREPLY_ENABLED gate + admin switch on, and only safe/short
+    #: non-question comments auto-send. Everything else -> the human queue.
+    comment_autoreply = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     assigned_manager_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id")

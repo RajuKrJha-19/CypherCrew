@@ -82,6 +82,18 @@ class AISettings(db.Model):
                                 server_default="10")
     gbp_blocklist = db.Column(db.Text)                 # None = env fallback
 
+    # -- Engage (social comment) auto-reply guardrails. Global switch is ANDed
+    #: with the ENGAGE_AUTOREPLY_ENABLED env gate + a per-client opt-in. The
+    #: review blocklist is reused as the shared safety net.
+    comment_autoreply_enabled = db.Column(db.Boolean, nullable=False,
+                                          default=False, server_default=db.false())
+    #: Only comments at or below this length auto-reply (short generic ones).
+    comment_max_len = db.Column(db.Integer, nullable=False, default=120,
+                                server_default="120")
+    #: Cap on auto-replies per post, so a viral thread can't be flooded.
+    comment_max_per_post = db.Column(db.Integer, nullable=False, default=5,
+                                     server_default="5")
+
     updated_by_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True)
     updated_at = db.Column(

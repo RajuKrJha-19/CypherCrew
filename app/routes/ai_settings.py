@@ -113,6 +113,16 @@ def index():
                   "then turn it on.", "warning")
         row.gbp_autoreply_enabled = want_auto
 
+        # -- Engage comment auto-reply guardrails (shares the blocklist net) --
+        row.comment_max_len = _int_in(request.form.get("comment_max_len"), 120, 20, 500)
+        row.comment_max_per_post = _int_in(request.form.get("comment_max_per_post"), 5, 1, 50)
+        c_want = bool(request.form.get("comment_autoreply_enabled"))
+        if c_want and not eff_block.strip():
+            c_want = False
+            flash("Comment auto-reply needs a blocklist too — add words, then "
+                  "turn it on.", "warning")
+        row.comment_autoreply_enabled = c_want
+
         row.updated_by_id = current_user.id
         db.session.commit()
 
@@ -166,6 +176,7 @@ def index():
                    "reply": (reply_provider, reply_model)},
         reviews_on=reviews_on,
         autoreply=autoreply,
+        engage_on=bool(cfg.get("ENGAGE_AUTOREPLY_ENABLED")),
         simulation=bool(cfg.get("AI_SIMULATION_MODE")),
         enabled_now=ai_settings.is_enabled(),
         spend={"total": ai_usage.month_total_usd(),

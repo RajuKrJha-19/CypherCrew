@@ -235,6 +235,29 @@
                 </div>
                 {% endif %}
 
+                {% if engage_on %}
+                <hr class="ai-sep">
+
+                {# --- Engage comment auto-reply guardrails (editable) --- #}
+                <div class="ai-task ai-autoreply">
+                    <h3>Social comment auto-reply <span class="ai-task-tag">unattended · public</span></h3>
+                    <p class="form-hint">Auto-replies only <strong>short, non-question</strong> comments that pass the blocklist, on opted-in clients — a simple on-brand acknowledgment. Questions, complaints and anything unsure wait for a human in Engage. Shares the blocklist above.</p>
+                    <label class="ai-toggle" style="margin-top:4px;">
+                        <input type="checkbox" name="comment_autoreply_enabled" {{ 'checked' if row.comment_autoreply_enabled }}>
+                        <span><strong>Enable guarded comment auto-send</strong> — requires the blocklist above.</span>
+                    </label>
+                    <div class="ai-task-grid" style="margin-top:12px;">
+                        <label>Max comment length (chars)
+                            <input type="number" name="comment_max_len" min="20" max="500" value="{{ row.comment_max_len if row.comment_max_len is not none else 120 }}">
+                        </label>
+                        <label>Max auto-replies per post
+                            <input type="number" name="comment_max_per_post" min="1" max="50" value="{{ row.comment_max_per_post if row.comment_max_per_post is not none else 5 }}">
+                        </label>
+                    </div>
+                    <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Questions (any “?”) always go to a human; the generated reply is scanned too; budget cap + per-post cap always apply.</p>
+                </div>
+                {% endif %}
+
                 <hr class="ai-sep">
 
                 {# --- Performance & cost --- #}

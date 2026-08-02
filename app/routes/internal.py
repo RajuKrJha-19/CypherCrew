@@ -170,6 +170,25 @@ def run_reviews_auto_reply():
     return jsonify(success=True, auto_replied=total)
 
 
+@internal_bp.route("/engage/auto-reply/run", methods=["POST"])
+@csrf.exempt
+def run_engage_auto_reply():
+    """Cron entry point: sync social comments and auto-reply the safe ones
+    (guarded). No-op unless ENGAGE_AUTOREPLY_ENABLED is on; the deeper feature/
+    admin/per-client gates are re-checked inside the run. Reuses the social
+    worker token + engine gate."""
+    _social_guard()
+    if not current_app.config.get("ENGAGE_AUTOREPLY_ENABLED"):
+        return jsonify(success=True, skipped="engage auto-reply disabled")
+    from app.social.services import engage as engage_svc
+    try:
+        out = engage_svc.auto_reply_comments_run()
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage] auto-reply run failed")
+        return jsonify(success=False, auto_replied=0)
+    return jsonify(success=True, **out)
+
+
 @internal_bp.route("/social/tokens/refresh", methods=["POST"])
 @csrf.exempt
 def run_social_token_refresh():
