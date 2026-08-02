@@ -40,3 +40,6 @@ requests==2.34.2
 google-genai>=1.0,<2
 openai>=1.40,<2
 anthropic>=0.40,<1
+# Downscales oversized images for the AI vision call ONLY (the throwaway copy
+# sent to the model - never the stored original). Cuts vision tokens/latency.
+Pillow>=10,<12

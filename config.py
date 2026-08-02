@@ -407,6 +407,11 @@ class Config:
     # so give the provider room; still well under the gunicorn worker timeout.
     AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "60"))
     AI_MEDIA_MAX_MB = int(os.getenv("AI_MEDIA_MAX_MB", "10"))
+    # Images larger than this (longest edge, px) are downscaled BEFORE being
+    # sent to the model - only the throwaway AI copy, never the stored original
+    # that gets published. 1568 keeps text/logos legible for QA while cutting
+    # vision tokens, latency and rate-limit pressure on big creatives. 0 = off.
+    AI_IMAGE_MAX_DIM = int(os.getenv("AI_IMAGE_MAX_DIM", "1568"))
 
     # Simulation mode: the AI layer returns scripted captions/alt-text/findings
     # instead of calling a real provider, so the whole flow is exercisable on

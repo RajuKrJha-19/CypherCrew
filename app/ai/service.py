@@ -69,6 +69,35 @@ def caption_limits(platforms):
     return {k: v for k, v in limits.items() if v}
 
 
+def _shrink_image(data, mime_type):
+    """Downscale an oversized image for the AI vision call ONLY. This never
+    touches the stored original that gets published - it shrinks the throwaway
+    copy sent to the model, cutting vision tokens, latency and rate-limit
+    pressure on big creatives. Only images past the configured longest edge are
+    touched (standard 1080px creatives pass through untouched, so quality is
+    preserved). Best-effort: any failure (or Pillow absent) returns the
+    original bytes unchanged. Returns (data, mime_type)."""
+    if not mime_type or not mime_type.startswith("image/") or mime_type == "image/gif":
+        return data, mime_type
+    max_dim = int(current_app.config.get("AI_IMAGE_MAX_DIM", 1568) or 0)
+    if max_dim <= 0:
+        return data, mime_type
+    try:
+        from io import BytesIO
+        from PIL import Image
+        img = Image.open(BytesIO(data))
+        if max(img.size) <= max_dim:
+            return data, mime_type               # already small enough
+        img = img.convert("RGB")
+        img.thumbnail((max_dim, max_dim))        # keeps aspect ratio, downscale only
+        buf = BytesIO()
+        # Quality 88 keeps text/logos legible for QA while shrinking a lot.
+        img.save(buf, format="JPEG", quality=88)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:  # noqa: BLE001 - a resize must never break generation
+        return data, mime_type
+
+
 def _read_bytes(object_key):
     """Raw bytes for an object within the size cap, or None. Best-effort:
     every failure (no storage, unreadable, oversized) returns None."""
@@ -109,8 +138,8 @@ def _load_media(items, allowed=_IMAGE_MIMES):
             continue
         if not data or len(data) > max_bytes:
             continue
-        out.append(MediaInput(data=data, mime_type=_mime_for(object_key),
-                             label=label))
+        sdata, smime = _shrink_image(data, _mime_for(object_key))
+        out.append(MediaInput(data=sdata, mime_type=smime, label=label))
     return out
 
 
@@ -285,6 +314,7 @@ def check_media(task_file, created_by_id=None):
             severity="info", category="spec",
             message="Couldn't read this file for automated QA — review it "
                     "manually.")])
+    data, mime = _shrink_image(data, mime)
     media = [MediaInput(data=data, mime_type=mime, label=label)]
 
     brief = "\n".join(p for p in (getattr(task, "title", None),
