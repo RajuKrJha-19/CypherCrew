@@ -179,6 +179,33 @@ def generate_reply(*, review_text="", rating=None, reviewer=None,
     return reply
 
 
+def generate_comment_reply(*, comment_text="", author=None, business_name=None,
+                           brand_voice=None, brand_notes=None, facts=None,
+                           post_context=None, actor_id=None, client_id=None):
+    """Draft an on-brand reply to a comment on a published social post. Uses
+    the caption (general text) tier - comments are short, lightweight text -
+    and returns the reply string. Draft-only: the human edits and posts it."""
+    from app.ai.base import ReplyContext
+    provider = get_provider("caption")
+    ctx = ReplyContext(
+        kind="comment",
+        review_text=comment_text or "",
+        reviewer=author,
+        business_name=business_name,
+        brand_voice=brand_voice,
+        brand_notes=brand_notes,
+        facts=facts or None,
+        post_context=post_context or None,
+    )
+    try:
+        reply = provider.generate_reply(ctx)
+    except Exception:
+        _log_usage(provider, "comment", actor_id, client_id, status="error")
+        raise
+    _log_usage(provider, "comment", actor_id, client_id)
+    return reply
+
+
 # -- Media QA (Phase 2) ------------------------------------------------------
 
 _SEVERITY_RANK = {"info": 0, "warning": 1, "error": 2}

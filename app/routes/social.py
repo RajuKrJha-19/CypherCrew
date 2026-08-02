@@ -3040,6 +3040,55 @@ def engage_reply(comment_id):
     return redirect(_engage_back(comment.id))
 
 
+@social_bp.route("/engage/<int:comment_id>/ai-draft", methods=["POST"])
+@login_required
+@limiter.limit("60 per hour")
+def engage_ai_draft(comment_id):
+    """Draft an on-brand reply to a comment for the human to edit + post.
+    Draft-only (never auto-posts). Same permission as replying to the comment;
+    gated on AI being enabled + within the monthly budget."""
+    _ai_guard()
+    from app.ai import service as ai_service, usage as ai_usage
+    from app.models import SocialComment
+    if not ai_usage.within_budget():
+        return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
+
+    comment = SocialComment.query.get_or_404(comment_id)
+    if not (comment.message or "").strip():
+        return jsonify(error="This comment has no text to reply to."), 400
+
+    target = comment.target
+    post = target.post if target else None
+    client = Client.query.get(post.client_id) if post and post.client_id else None
+
+    facts = None
+    if client is not None:
+        from app.ai import client_brain
+        facts = client_brain.facts_text(client) or None
+
+    # What the post is about, so the reply is on-topic. The caption/title is
+    # already visible to any social user, so no extra exposure here.
+    post_context = "\n".join(p for p in (
+        (post.title if post else None),
+        (target.caption if target else None)) if p) or None
+
+    try:
+        reply = ai_service.generate_comment_reply(
+            comment_text=comment.message,
+            author=comment.author_name,
+            business_name=getattr(client, "client_name", None),
+            brand_voice=getattr(client, "brand_voice", None),
+            brand_notes=getattr(client, "brand_guidelines_notes", None),
+            facts=facts,
+            post_context=post_context,
+            actor_id=current_user.id,
+            client_id=getattr(client, "id", None),
+        )
+    except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
+        return _ai_error_response(exc)
+    return jsonify(reply=reply)
+
+
 @social_bp.route("/engage/<int:comment_id>/done", methods=["POST"])
 @login_required
 def engage_done(comment_id):

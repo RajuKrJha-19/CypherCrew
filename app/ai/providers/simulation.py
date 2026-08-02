@@ -61,6 +61,9 @@ class SimulationProvider(AIProvider):
 
     def generate_reply(self, ctx):
         who = (ctx.reviewer or "there").split()[0]
+        if getattr(ctx, "kind", "review") == "comment":
+            return (f"Hi {who}, thanks for reaching out! Please DM us and "
+                    "we'll help you right away. (simulated)")
         if (ctx.rating or 0) <= 3:
             return (f"Hi {who}, we're sorry your experience fell short. "
                     "Please reach out so we can make it right. (simulated)")

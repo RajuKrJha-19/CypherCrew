@@ -67,7 +67,14 @@ def alt_text_prompt(image):
 
 
 def reply_prompt(ctx):
-    """(system, user) for a reply to a Google review. Returns plain text."""
+    """(system, user) for a public reply. Returns plain text.
+
+    Branches on ctx.kind: 'comment' (a comment on a published post - usually a
+    question or reaction) vs 'review' (rated Google feedback). Comments need a
+    helpful, answer-the-question tone; reviews need a gracious/empathetic one.
+    """
+    if getattr(ctx, "kind", "review") == "comment":
+        return _comment_reply_prompt(ctx)
     system = (
         "You write short, warm, professional replies to Google reviews on "
         "behalf of a business, for its social media agency. Rules: thank the "
@@ -90,6 +97,38 @@ def reply_prompt(ctx):
         f"\"{ctx.review_text or '(no text - a star rating only)'}\"\n\n"
         + (f"BRAND:\n{brand}\n\n" if brand else "")
         + (f"CLIENT FACTS:\n{ctx.facts}\n\n" if getattr(ctx, "facts", None) else "")
+        + "Write the reply now."
+    )
+    return system, user
+
+
+def _comment_reply_prompt(ctx):
+    """(system, user) for a reply to a comment on a published social post."""
+    system = (
+        "You reply to comments on a brand's social media posts, on behalf of "
+        "the brand, for its marketing agency. Comments are usually questions, "
+        "compliments, or reactions. Rules: be warm, helpful and human, never "
+        "templated; address the commenter by first name when given; keep it to "
+        "1-2 short sentences suited to social media. If it is a question, "
+        "answer it using the CLIENT FACTS (hours, price, offer, location, "
+        "contact); if the answer is NOT in those facts, do NOT invent it - "
+        "instead invite them to DM or contact the business. Thank people for "
+        "compliments. For a complaint, be empathetic and take it to DM; NEVER "
+        "argue, admit legal fault, or share/ask for private details in public. "
+        "Obey the brand voice and any compliance notes. Return ONLY the reply "
+        "text - no quotes, no preamble, no hashtags unless natural, no JSON."
+    )
+    brand = _brand_block(ctx)
+    biz = f" for {ctx.business_name}" if getattr(ctx, "business_name", None) else ""
+    user = (
+        f"Draft a reply{biz} to this comment"
+        + (f" from {ctx.reviewer}" if ctx.reviewer else "") + ":\n"
+        f"\"{ctx.review_text or '(no text)'}\"\n\n"
+        + (f"THE POST IT IS ON:\n{ctx.post_context}\n\n"
+           if getattr(ctx, "post_context", None) else "")
+        + (f"BRAND:\n{brand}\n\n" if brand else "")
+        + (f"CLIENT FACTS (use to answer; do not contradict or invent):\n{ctx.facts}\n\n"
+           if getattr(ctx, "facts", None) else "")
         + "Write the reply now."
     )
     return system, user

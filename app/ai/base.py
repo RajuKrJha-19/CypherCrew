@@ -56,14 +56,19 @@ class Finding:
 
 @dataclass
 class ReplyContext:
-    """Context for drafting a reply to a Google review."""
-    review_text: str = ""
-    rating: int | None = None
-    reviewer: str | None = None
+    """Context for drafting a public reply - to a Google review ('review') or
+    to a comment on a published social post ('comment'). The two read
+    differently: reviews are rated feedback, comments are usually questions or
+    reactions on a specific post, so the prompt adapts on `kind`."""
+    review_text: str = ""               # the review OR comment text to reply to
+    rating: int | None = None           # reviews only
+    reviewer: str | None = None         # reviewer / commenter name
     business_name: str | None = None
     brand_voice: str | None = None
     brand_notes: str | None = None
     facts: str | None = None            # Client Brain: FAQs, compliance, do's/don'ts
+    kind: str = "review"                # "review" | "comment"
+    post_context: str | None = None     # comments: what the post is about
 
 
 @dataclass

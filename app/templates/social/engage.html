@@ -198,8 +198,16 @@
                 <div class="engage-composer-actions">
                     <span class="engage-hint t-subtle t-sm">
                         <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send</span>
-                    <button type="submit" class="btn">
-                        <i class="fa-solid fa-paper-plane"></i> Reply</button>
+                    <span class="engage-composer-btns">
+                        {% if ai_enabled %}
+                        <button type="button" class="btn btn-secondary engage-ai-btn"
+                                data-draft-url="{{ url_for('social.engage_ai_draft', comment_id=selected.id) }}"
+                                title="Draft an on-brand reply with AI — you edit before sending">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> AI draft</button>
+                        {% endif %}
+                        <button type="submit" class="btn">
+                            <i class="fa-solid fa-paper-plane"></i> Reply</button>
+                    </span>
                 </div>
             </form>
 
@@ -297,6 +305,45 @@
         if (selected && selected.scrollIntoView) {
             selected.scrollIntoView({ block: "nearest" });
         }
+
+        // "AI draft" — POST for an on-brand draft and drop it into the reply
+        // box for the human to edit and send (never auto-posts). CSRF is added
+        // by csrf.js. Delegated so it survives Turbo body swaps.
+        function toast(msg, type) {
+            if (typeof window.showToast === "function") window.showToast(msg, type);
+        }
+        async function aiDraft(btn) {
+            const box = document.querySelector('.engage-composer textarea[name="message"]');
+            if (!box) return;
+            if (box.value.trim() &&
+                !window.confirm("Replace what's in the reply box with an AI draft?")) {
+                return;
+            }
+            btn.classList.add("is-loading");
+            btn.disabled = true;
+            try {
+                const r = await fetch(btn.getAttribute("data-draft-url"), {
+                    method: "POST", credentials: "same-origin",
+                    headers: { "X-Requested-With": "fetch" },
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok) { toast(data.error || "Couldn't draft a reply.", "error"); return; }
+                box.value = data.reply || "";
+                box.dispatchEvent(new Event("input", { bubbles: true }));
+                box.focus();
+                toast("Draft ready — review and edit before sending.", "success");
+            } catch (e) {
+                toast("Network error — please try again.", "error");
+            } finally {
+                btn.classList.remove("is-loading");
+                btn.disabled = false;
+            }
+        }
+        (window.App ? window.App.on.bind(window.App, document)
+                    : document.addEventListener.bind(document))("click", function (event) {
+            const btn = event.target.closest && event.target.closest(".engage-ai-btn");
+            if (btn) { event.preventDefault(); aiDraft(btn); }
+        });
     })();
 </script>
 {% endblock %}

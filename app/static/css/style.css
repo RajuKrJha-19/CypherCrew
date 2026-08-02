@@ -17584,6 +17584,9 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .engage-hint kbd{
     padding:1px 5px; border-radius:4px; font-size:10.5px;
     border:1px solid var(--color-border); background:var(--color-surface-muted); }
+.engage-composer-btns{ display:flex; align-items:center; gap:8px; }
+.engage-ai-btn.is-loading{ opacity:.7; pointer-events:none; }
+.engage-ai-btn.is-loading i{ animation:cmp-ai-spin .8s linear infinite; }
 
 /* One column on a narrow screen: the list first, then the conversation,
    each at its natural height rather than two half-height scrollers. */
