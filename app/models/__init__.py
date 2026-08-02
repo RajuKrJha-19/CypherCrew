@@ -23,6 +23,7 @@ from app.models.task_feedback import TaskFeedback
 from app.models.ai_check import AICheck
 from app.models.ai_settings import AISettings
 from app.models.ai_usage import AIUsage
+from app.models.google_review import GoogleReview
 from app.models.notification import Notification
 
 from app.models.task_activity import TaskActivity

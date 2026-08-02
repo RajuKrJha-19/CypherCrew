@@ -55,6 +55,18 @@ class Finding:
 
 
 @dataclass
+class ReplyContext:
+    """Context for drafting a reply to a Google review."""
+    review_text: str = ""
+    rating: int | None = None
+    reviewer: str | None = None
+    business_name: str | None = None
+    brand_voice: str | None = None
+    brand_notes: str | None = None
+    facts: str | None = None            # Client Brain: FAQs, compliance, do's/don'ts
+
+
+@dataclass
 class MediaCheckContext:
     brief: str = ""
     deliverable: str | None = None
@@ -100,3 +112,7 @@ class AIProvider(ABC):
     @abstractmethod
     def check_media(self, ctx: MediaCheckContext) -> list[Finding]:
         """Advisory findings on a submitted deliverable (Phase 2)."""
+
+    @abstractmethod
+    def generate_reply(self, ctx: ReplyContext) -> str:
+        """A short, on-brand reply to a Google review."""

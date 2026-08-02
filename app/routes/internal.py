@@ -145,6 +145,30 @@ def run_social_analytics():
     return jsonify(success=True, **analytics.sync_recent())
 
 
+@internal_bp.route("/reviews/auto-reply/run", methods=["POST"])
+@csrf.exempt
+def run_reviews_auto_reply():
+    """Cron entry point: sync each GBP location's reviews and auto-reply the
+    safe ones (guarded). No-op unless GBP_REVIEWS_ENABLED + GBP_AUTOREPLY_ENABLED
+    are both on. Reuses the social worker token, so _social_guard() also
+    requires SOCIAL_ENGINE_ENABLED (GBP accounts connect through that engine)."""
+    _social_guard()
+    if not current_app.config.get("GBP_REVIEWS_ENABLED"):
+        return jsonify(success=True, skipped="reviews disabled")
+    if not current_app.config.get("GBP_AUTOREPLY_ENABLED"):
+        return jsonify(success=True, skipped="auto-reply disabled")
+    from app.models import SocialAccount
+    from app.social.reviews import service as reviews_service
+    total = 0
+    for account in SocialAccount.query.filter_by(platform="google_business").all():
+        try:
+            total += reviews_service.auto_reply_run(account).get("auto_replied", 0)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception(
+                "[reviews] auto-reply failed for account %s", account.id)
+    return jsonify(success=True, auto_replied=total)
+
+
 @internal_bp.route("/social/tokens/refresh", methods=["POST"])
 @csrf.exempt
 def run_social_token_refresh():

@@ -65,6 +65,14 @@ class Client(db.Model):
         JSONB
     )
 
+    #: Opt-in for guarded auto-reply to this client's Google reviews. Off by
+    #: default; even when on, only safe reviews (high rating, short, no
+    #: blocklisted words) auto-send, and the global GBP_AUTOREPLY_ENABLED
+    #: kill-switch must also be on. Everything else goes to the human queue.
+    gmb_autoreply = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     assigned_manager_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id")

@@ -263,6 +263,12 @@ def create_app():
         from app.routes.ai_settings import ai_settings_bp
         app.register_blueprint(ai_settings_bp)
 
+    # Google review reply inbox. Registered ONLY behind GBP_REVIEWS_ENABLED, so
+    # with it off /reviews 404s and the sidebar link never renders.
+    if app.config.get("GBP_REVIEWS_ENABLED"):
+        from app.routes.reviews import reviews_bp
+        app.register_blueprint(reviews_bp)
+
     with app.app_context():
         if app.config.get("AUTO_SEED", True):
             seed_database()

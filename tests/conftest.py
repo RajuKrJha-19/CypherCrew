@@ -51,6 +51,11 @@ os.environ.setdefault("ATTENDANCE_INPROCESS_WORKER", "false")
 # clarity and so an ambient key in a dev .env can't flip it on).
 os.environ.setdefault("AI_ENABLED", "true")
 os.environ.setdefault("AI_SIMULATION_MODE", "true")
+# Google review reply inbox. On (in simulation) so its blueprint registers and
+# the routes are reachable. Auto-reply's own switch stays OFF - tests that
+# exercise auto-reply flip it on via app.config explicitly.
+os.environ.setdefault("GBP_REVIEWS_ENABLED", "true")
+os.environ.setdefault("GBP_REVIEWS_SIMULATION_MODE", "true")
 
 import pytest  # noqa: E402
 
@@ -143,10 +148,10 @@ def _social_models():
         PublishResult, PublishJob, SocialMediaAsset, SocialAnalyticsSnapshot,
         PlatformRateBudget, SocialAuditLog, ContentVersion, SocialPostTarget,
         SocialPost, SocialOAuthState, SocialAccount, SocialComment,
-        SocialPostingSlot, DataDeletionRequest,
+        SocialPostingSlot, DataDeletionRequest, GoogleReview,
     )
     return [
-        PublishResult, PublishJob, SocialComment, SocialMediaAsset,
+        PublishResult, PublishJob, SocialComment, GoogleReview, SocialMediaAsset,
         SocialAnalyticsSnapshot, PlatformRateBudget, SocialAuditLog,
         ContentVersion, SocialPostTarget, SocialPost, SocialOAuthState,
         SocialPostingSlot, SocialAccount, DataDeletionRequest,

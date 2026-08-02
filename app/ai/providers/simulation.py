@@ -59,6 +59,14 @@ class SimulationProvider(AIProvider):
         label = (image.label or "the attached image").strip()
         return f"{label}: a clear, descriptive view (simulated alt-text)."[:125]
 
+    def generate_reply(self, ctx):
+        who = (ctx.reviewer or "there").split()[0]
+        if (ctx.rating or 0) <= 3:
+            return (f"Hi {who}, we're sorry your experience fell short. "
+                    "Please reach out so we can make it right. (simulated)")
+        return (f"Thank you so much, {who} — we really appreciate the kind "
+                "words and hope to see you again! (simulated)")
+
     def check_media(self, ctx):
         # Clean by default; sentinels in the brief/facts let a test drive the
         # warning + fact-error paths without a real model.

@@ -114,6 +114,11 @@ class GeminiProvider(AIProvider):
                              as_json=False)
         return raw.strip()[:125]
 
+    def generate_reply(self, ctx):
+        system, user = prompts.reply_prompt(ctx)
+        raw = self._generate(self.model, system, user, [], as_json=False)
+        return raw.strip()
+
     def check_media(self, ctx):
         media = list(ctx.media) + list(ctx.guidelines)
         system, user = prompts.media_check_prompt(ctx)

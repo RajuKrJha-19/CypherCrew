@@ -100,6 +100,22 @@
                     {% endfor %}
                 </details>
 
+                {% if config.GBP_REVIEWS_ENABLED %}
+                <div class="form-group">
+                    <label class="cmp-checkline">
+                        <input type="checkbox" name="gmb_autoreply" {{ 'checked' if client.gmb_autoreply }}>
+                        Auto-reply to this client's <strong>safe</strong> Google reviews
+                    </label>
+                    <p class="form-hint">
+                        When on, only clearly-safe reviews (high rating, short or
+                        no text, no complaint/legal/health wording) get an
+                        automatic AI reply. Everything else — and every negative
+                        review — still waits for a human in the Reviews inbox.
+                        The global auto-reply switch must also be on.
+                    </p>
+                </div>
+                {% endif %}
+
                 {% if client.parent_client_id and client.parent %}
                 <p class="form-hint" style="margin-top:12px">
                     Sub-client of <strong>{{ client.parent.client_name }}</strong>.

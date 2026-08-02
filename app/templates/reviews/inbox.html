@@ -1,0 +1,80 @@
+{% extends "base_app.html" %}
+
+{% block title %}Review Replies | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% set STATUS = {"pending": ("To reply", "pending"), "drafted": ("Draft ready", "drafted"), "posted": ("Replied", "posted"), "skipped": ("Skipped", "skipped")} %}
+
+{% block content %}
+        <div class="page-header">
+            <div>
+                <h1>Review Replies</h1>
+                <p>Google reviews across your connected locations. AI drafts an on-brand reply; you approve and post.</p>
+            </div>
+            <div class="top-actions">
+                <form method="POST" action="{{ url_for('reviews.sync') }}">
+                    <button type="submit" class="btn"><i class="fa-solid fa-rotate"></i> Sync reviews</button>
+                </form>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+        {% endfor %}{% endif %}
+        {% endwith %}
+
+        {% if not accounts %}
+        <div class="alert info">No Google Business locations are connected yet. Connect a Google Business Profile in Social Studio, then sync.</div>
+        {% elif not reviews %}
+        <div class="alert info">No reviews synced yet — hit <strong>Sync reviews</strong> to pull the latest.</div>
+        {% endif %}
+
+        <div class="rev-list">
+            {% for r in reviews %}
+            <article class="rev-card rev-{{ r.reply_status }}">
+                <div class="rev-head">
+                    <div class="rev-stars" aria-label="{{ r.rating }} stars">
+                        {% for i in range(5) %}<i class="fa-{{ 'solid' if r.rating and i < r.rating else 'regular' }} fa-star"></i>{% endfor %}
+                    </div>
+                    <strong class="rev-who">{{ r.reviewer_name or 'Anonymous' }}</strong>
+                    {% if r.account %}<span class="rev-loc">· {{ r.account.display_name }}</span>{% endif %}
+                    {% set label, cls = STATUS.get(r.reply_status, (r.reply_status, 'pending')) %}
+                    <span class="rev-badge rev-badge-{{ cls }}">{{ label }}</span>
+                    {% if r.auto_sent and r.reply_status == 'posted' %}
+                    <span class="rev-badge rev-badge-auto">auto</span>
+                    {% endif %}
+                </div>
+
+                {% if r.comment %}<p class="rev-text">{{ r.comment }}</p>{% else %}<p class="rev-text rev-empty">(star rating only — no text)</p>{% endif %}
+
+                {% if r.reply_status == 'posted' %}
+                <div class="rev-reply-posted">
+                    <span class="rev-reply-label"><i class="fa-solid fa-reply"></i> Your reply</span>
+                    <p>{{ r.reply_text }}</p>
+                </div>
+                {% elif r.reply_status == 'skipped' %}
+                <p class="rev-skipped">Skipped — no reply.</p>
+                {% else %}
+                <form method="POST" action="{{ url_for('reviews.reply', review_id=r.id) }}" class="rev-reply-form" data-review-id="{{ r.id }}">
+                    <textarea name="reply_text" rows="3" class="rev-reply-input" placeholder="Write a reply, or use AI draft…">{{ r.reply_text or '' }}</textarea>
+                    <div class="rev-actions">
+                        {% if ai_ready %}
+                        <button type="button" class="btn btn-secondary rev-ai-btn cmp-ai"
+                            data-draft-url="{{ url_for('reviews.draft', review_id=r.id) }}"
+                            data-target="{{ r.id }}"><i class="fa-solid fa-wand-magic-sparkles"></i> AI draft</button>
+                        {% endif %}
+                        <button type="submit" class="btn">Post reply</button>
+                        <button type="submit" class="btn btn-secondary" formaction="{{ url_for('reviews.skip', review_id=r.id) }}">Skip</button>
+                    </div>
+                </form>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+
+        {% if ai_ready %}
+        <script src="{{ asset_url('js/reviews.js') }}" defer></script>
+        {% endif %}
+{% endblock %}

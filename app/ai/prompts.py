@@ -66,6 +66,35 @@ def alt_text_prompt(image):
     return system, user
 
 
+def reply_prompt(ctx):
+    """(system, user) for a reply to a Google review. Returns plain text."""
+    system = (
+        "You write short, warm, professional replies to Google reviews on "
+        "behalf of a business, for its social media agency. Rules: thank the "
+        "reviewer by name when given; sound human and specific, not templated; "
+        "keep it 1-3 sentences. For a positive review, be gracious and invite "
+        "them back. For a critical review, be genuinely empathetic, apologize "
+        "for the experience, and offer to make it right offline (ask them to "
+        "reach out) - but NEVER admit legal fault, NEVER share or ask for "
+        "private/personal details in public, and NEVER dispute or argue. "
+        "Use the CLIENT FACTS for accurate info (hours, offers, contact) and "
+        "obey the brand voice and any compliance notes. Do not invent facts. "
+        "Return ONLY the reply text - no quotes, no preamble, no JSON."
+    )
+    brand = _brand_block(ctx)
+    biz = f" for {ctx.business_name}" if getattr(ctx, "business_name", None) else ""
+    stars = f"{ctx.rating}-star " if ctx.rating else ""
+    user = (
+        f"Draft a reply{biz} to this {stars}review"
+        + (f" from {ctx.reviewer}" if ctx.reviewer else "") + ":\n"
+        f"\"{ctx.review_text or '(no text - a star rating only)'}\"\n\n"
+        + (f"BRAND:\n{brand}\n\n" if brand else "")
+        + (f"CLIENT FACTS:\n{ctx.facts}\n\n" if getattr(ctx, "facts", None) else "")
+        + "Write the reply now."
+    )
+    return system, user
+
+
 def media_check_prompt(ctx):
     """(system, user) for the media QA + fact-check pass (structured findings).
 

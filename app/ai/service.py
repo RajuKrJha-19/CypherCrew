@@ -155,6 +155,30 @@ def generate_alt_text(object_key, label=None, actor_id=None):
     return alt
 
 
+def generate_reply(*, review_text="", rating=None, reviewer=None,
+                   business_name=None, brand_voice=None, brand_notes=None,
+                   facts=None, actor_id=None, client_id=None):
+    """Draft an on-brand reply to a Google review. Returns the reply string."""
+    from app.ai.base import ReplyContext
+    provider = get_provider("reply")
+    ctx = ReplyContext(
+        review_text=review_text or "",
+        rating=rating,
+        reviewer=reviewer,
+        business_name=business_name,
+        brand_voice=brand_voice,
+        brand_notes=brand_notes,
+        facts=facts or None,
+    )
+    try:
+        reply = provider.generate_reply(ctx)
+    except Exception:
+        _log_usage(provider, "reply", actor_id, client_id, status="error")
+        raise
+    _log_usage(provider, "reply", actor_id, client_id)
+    return reply
+
+
 # -- Media QA (Phase 2) ------------------------------------------------------
 
 _SEVERITY_RANK = {"info": 0, "warning": 1, "error": 2}

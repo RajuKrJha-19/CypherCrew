@@ -415,3 +415,42 @@ class Config:
             or os.getenv("ANTHROPIC_API_KEY")
         )
     )
+
+    # ------------------------------------------------------------------
+    # Google Business Profile - Reviews (AI reply inbox + guarded auto-reply)
+    # ------------------------------------------------------------------
+    # Master flag, same contract as the other modules: OFF by default. With it
+    # off no reviews route is registered and nothing syncs.
+    GBP_REVIEWS_ENABLED = (
+        os.getenv("GBP_REVIEWS_ENABLED", "False").lower() == "true")
+
+    # Simulation: reviews come from a local scripted source and replies are
+    # accepted into it (no real API), so the whole inbox + auto-reply flow is
+    # testable now. Flip to false ONCE the Business Profile Reviews API is
+    # enabled for the Google app and the real client is wired - separate from
+    # the post-publishing access, so it is NOT auto-derived from GOOGLE_CLIENT_ID.
+    GBP_REVIEWS_SIMULATION_MODE = (
+        os.getenv("GBP_REVIEWS_SIMULATION_MODE", "True").lower() == "true")
+
+    # Auto-reply is a SEPARATE, opt-in switch on top of the reply inbox, and a
+    # global kill-switch: even a per-client toggle does nothing while this is
+    # off. Off by default - public review replies are reputation-critical.
+    GBP_AUTOREPLY_ENABLED = (
+        os.getenv("GBP_AUTOREPLY_ENABLED", "False").lower() == "true")
+
+    # Guardrails for what may be auto-replied (everything else -> human queue):
+    # only high ratings, only short/no-text reviews, never if the text hits the
+    # blocklist, and a hard per-run cap so a sync can't fire a flood.
+    GBP_AUTOREPLY_MIN_RATING = int(
+        os.getenv("GBP_AUTOREPLY_MIN_RATING", "4"))
+    GBP_AUTOREPLY_MAX_TEXT_LEN = int(
+        os.getenv("GBP_AUTOREPLY_MAX_TEXT_LEN", "200"))
+    GBP_AUTOREPLY_MAX_PER_RUN = int(
+        os.getenv("GBP_AUTOREPLY_MAX_PER_RUN", "10"))
+    # Comma-separated words that force a review to the human queue - complaints,
+    # legal, and health/compliance-sensitive terms that must never be answered
+    # by an unattended bot.
+    GBP_AUTOREPLY_BLOCKLIST = os.getenv(
+        "GBP_AUTOREPLY_BLOCKLIST",
+        "refund,lawyer,legal,sue,court,scam,fraud,complaint,worst,terrible,"
+        "rude,cheat,hospital,doctor,patient,injury,medical,clinic,lawsuit")

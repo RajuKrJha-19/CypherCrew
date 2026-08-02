@@ -18114,6 +18114,33 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .ai-effective code{ font-size:11.5px; }
 @media (max-width:640px){ .ai-task-grid{ grid-template-columns:1fr; } }
 
+/* Google review reply inbox. */
+.rev-list{ display:flex; flex-direction:column; gap:12px; }
+.rev-card{ border:1px solid var(--color-border); border-left:3px solid var(--color-border);
+    border-radius:var(--radius-md); padding:14px 16px; background:var(--color-surface); }
+.rev-card.rev-pending{ border-left-color:var(--color-primary); }
+.rev-card.rev-posted{ border-left-color:#1a7f37; }
+.rev-card.rev-skipped{ border-left-color:var(--color-border-strong,var(--color-border)); opacity:.85; }
+.rev-head{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.rev-stars{ color:#e6a817; font-size:12px; letter-spacing:1px; }
+.rev-who{ font-size:13.5px; }
+.rev-loc{ font-size:12px; color:var(--color-text-subtle); }
+.rev-badge{ margin-left:auto; font-size:10.5px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.03em; padding:3px 8px; border-radius:var(--radius-full); }
+.rev-badge-pending{ background:var(--color-primary-soft); color:var(--color-primary); }
+.rev-badge-drafted{ background:rgba(230,168,23,.15); color:#8a6100; }
+.rev-badge-posted{ background:rgba(26,127,55,.12); color:#1a7f37; }
+.rev-badge-skipped{ background:var(--color-surface-muted); color:var(--color-text-subtle); }
+.rev-badge-auto{ margin-left:0; background:var(--color-surface-muted); color:var(--color-text-subtle); }
+.rev-text{ margin:8px 0 10px; font-size:13.5px; line-height:1.55; color:var(--color-text); }
+.rev-text.rev-empty{ color:var(--color-text-subtle); font-style:italic; }
+.rev-reply-input{ width:100%; }
+.rev-actions{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+.rev-reply-posted{ background:var(--color-surface-muted); border-radius:var(--radius-md); padding:10px 12px; }
+.rev-reply-label{ font-size:11px; font-weight:650; color:var(--color-text-subtle); }
+.rev-reply-posted p{ margin:4px 0 0; font-size:13px; line-height:1.5; }
+.rev-skipped{ font-size:12.5px; color:var(--color-text-subtle); font-style:italic; margin:6px 0 0; }
+
 /* AI Usage screen. */
 .ai-usage-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
     gap:14px; margin:0 0 18px; }
