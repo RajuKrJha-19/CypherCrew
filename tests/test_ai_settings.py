@@ -232,7 +232,7 @@ def test_known_model_does_not_warn(client, login, make_user):
     login(make_user("admin"))
     r = client.post("/admin/ai/", data={
         "enabled": "on",
-        "caption_provider": "gemini", "caption_model": "gemini-2.5-flash",
+        "caption_provider": "gemini", "caption_model": "gemini-flash-latest",
     }, follow_redirects=True)
     assert b"known list" not in r.data
 

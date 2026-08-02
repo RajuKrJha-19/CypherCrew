@@ -385,8 +385,11 @@ class Config:
     # pinned guarantees. Provider falls back to AI_PROVIDER when unset.
     AI_CAPTION_PROVIDER = os.getenv("AI_CAPTION_PROVIDER", AI_PROVIDER).lower()
     AI_QA_PROVIDER = os.getenv("AI_QA_PROVIDER", AI_PROVIDER).lower()
-    AI_CAPTION_MODEL = os.getenv("AI_CAPTION_MODEL", "gemini-2.5-flash")
-    AI_QA_MODEL = os.getenv("AI_QA_MODEL", "gemini-2.5-pro")
+    # "-latest" aliases track the current model, so a Google deprecation (e.g.
+    # gemini-2.5-* being retired) never 404s a fresh deploy. Override per-task
+    # from the admin AI screen or these env vars for a pinned/stronger model.
+    AI_CAPTION_MODEL = os.getenv("AI_CAPTION_MODEL", "gemini-flash-latest")
+    AI_QA_MODEL = os.getenv("AI_QA_MODEL", "gemini-pro-latest")
 
     # Provider API keys. Only the one for AI_PROVIDER is needed. Like every
     # other secret here they are read at call time and NEVER logged.

@@ -14,8 +14,11 @@ PROVIDERS = [
         "key": "gemini",
         "label": "Google Gemini",
         "key_config": "GEMINI_API_KEY",
-        "caption_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
-        "qa_models": ["gemini-2.5-pro", "gemini-2.5-flash"],
+        # "-latest" aliases auto-track the current model (survive Google's model
+        # retirements); concrete ids are there when you want to pin one.
+        "caption_models": ["gemini-flash-latest", "gemini-flash-lite-latest",
+                           "gemini-3.5-flash"],
+        "qa_models": ["gemini-pro-latest", "gemini-flash-latest"],
     },
     {
         "key": "openai",
