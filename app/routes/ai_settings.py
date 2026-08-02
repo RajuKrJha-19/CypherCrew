@@ -73,6 +73,17 @@ def index():
         row.updated_by_id = current_user.id
         db.session.commit()
 
+        # Warn (don't block) on a model that isn't catalogued for its provider:
+        # a typo would otherwise fail only later, at call time, with a 404.
+        for task, prov in (("caption", row.caption_provider),
+                           ("qa", row.qa_provider),
+                           ("reply", row.reply_provider)):
+            model = getattr(row, f"{task}_model", None)
+            if prov and model and not ai_settings.is_known_model(prov, task, model):
+                flash(f"Heads up: “{model}” isn’t in our known list for "
+                      f"{prov} — it’ll be used as-is, so double-check the "
+                      "spelling.", "warning")
+
         flash("AI settings saved.", "success")
         return redirect(url_for("ai_settings.index"))
 

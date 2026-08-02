@@ -6,13 +6,29 @@ AI request; unreadable or oversized media is skipped, and generation still
 proceeds on the brief + brand text alone.
 """
 import mimetypes
+import time
 
 from flask import current_app
 
 from app.ai.base import (
     CaptionContext, Finding, MediaCheckContext, MediaInput,
 )
+from app.ai.errors import AITransient
 from app.ai.registry import get_provider
+
+# One bounded retry on a transient failure (rate limit / 5xx). These calls are
+# human-triggered and low-volume, so a single short backoff is plenty. We do
+# NOT fall back to another provider on failure - that would double both the
+# cost and the failure surface for a tool where the user can just click again.
+_RETRY_BACKOFF_S = 0.75
+
+
+def _invoke(call):
+    try:
+        return call()
+    except AITransient:
+        time.sleep(_RETRY_BACKOFF_S)
+        return call()
 
 # Vision inputs we send for captions/alt-text. Video is intentionally excluded
 # (heavy + not needed to caption from the brief). Media QA also accepts PDFs
@@ -126,7 +142,7 @@ def generate_caption(*, brief="", industry=None, brand_voice=None,
         media=_load_media(media or []),
     )
     try:
-        result = provider.generate_caption(ctx)
+        result = _invoke(lambda: provider.generate_caption(ctx))
     except Exception:
         _log_usage(provider, "caption", actor_id, client_id, status="error")
         raise
@@ -147,7 +163,7 @@ def generate_alt_text(object_key, label=None, actor_id=None):
     if not images:
         return ""
     try:
-        alt = provider.generate_alt_text(images[0])
+        alt = _invoke(lambda: provider.generate_alt_text(images[0]))
     except Exception:
         _log_usage(provider, "alt_text", actor_id, None, status="error")
         raise
@@ -171,7 +187,7 @@ def generate_reply(*, review_text="", rating=None, reviewer=None,
         facts=facts or None,
     )
     try:
-        reply = provider.generate_reply(ctx)
+        reply = _invoke(lambda: provider.generate_reply(ctx))
     except Exception:
         _log_usage(provider, "reply", actor_id, client_id, status="error")
         raise
@@ -198,7 +214,7 @@ def generate_comment_reply(*, comment_text="", author=None, business_name=None,
         post_context=post_context or None,
     )
     try:
-        reply = provider.generate_reply(ctx)
+        reply = _invoke(lambda: provider.generate_reply(ctx))
     except Exception:
         _log_usage(provider, "comment", actor_id, client_id, status="error")
         raise
@@ -297,7 +313,7 @@ def check_media(task_file, created_by_id=None):
     )
     client_id = getattr(client, "id", None)
     try:
-        findings = provider.check_media(ctx)
+        findings = _invoke(lambda: provider.check_media(ctx))
     except Exception:
         _log_usage(provider, "media_qa", created_by_id, client_id, status="error")
         raise

@@ -149,6 +149,18 @@ def resolve(task_kind):
     return provider, model
 
 
+def is_known_model(provider_key, task_kind, model):
+    """Is `model` one of `provider_key`'s catalogued models for this task? Used
+    only to WARN on the settings screen (never to block) - a brand-new model
+    the admin types on purpose is fine, but a typo that would 404 at call time
+    gets flagged. Blank model / unknown provider -> treated as known (no warn)."""
+    entry = _BY_KEY.get(provider_key)
+    if not entry or not model:
+        return True
+    key = "qa_models" if task_kind == "qa" else "caption_models"
+    return model in entry.get(key, [])
+
+
 def key_present(provider_key):
     """Is the API key for this provider configured (in the environment)?"""
     entry = _BY_KEY.get(provider_key)

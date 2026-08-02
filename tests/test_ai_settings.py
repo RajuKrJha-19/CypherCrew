@@ -185,6 +185,58 @@ def test_caption_feature_off_blocks_the_route(
     assert r.status_code == 503
 
 
+def test_invoke_retries_once_on_transient(monkeypatch):
+    from app.ai import service
+    from app.ai.errors import AITransient
+    monkeypatch.setattr(service.time, "sleep", lambda s: None)   # no real delay
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise AITransient("busy")
+        return "ok"
+
+    assert service._invoke(flaky) == "ok"
+    assert calls["n"] == 2                                       # retried once
+
+
+def test_invoke_gives_up_after_one_retry(monkeypatch):
+    from app.ai import service
+    from app.ai.errors import AITransient
+    monkeypatch.setattr(service.time, "sleep", lambda s: None)
+    calls = {"n": 0}
+
+    def always():
+        calls["n"] += 1
+        raise AITransient("still busy")
+
+    with pytest.raises(AITransient):
+        service._invoke(always)
+    assert calls["n"] == 2                                       # tried twice, no more
+
+
+def test_unknown_model_warns_but_still_saves(client, login, make_user, app):
+    login(make_user("admin"))
+    r = client.post("/admin/ai/", data={
+        "enabled": "on",
+        "caption_provider": "gemini", "caption_model": "gemini-typo-9",
+    }, follow_redirects=True)
+    assert b"isn" in r.data and b"known list" in r.data          # warning shown
+    with app.app_context():
+        row = AISettings.query.first()
+        assert row.caption_model == "gemini-typo-9"             # saved anyway
+
+
+def test_known_model_does_not_warn(client, login, make_user):
+    login(make_user("admin"))
+    r = client.post("/admin/ai/", data={
+        "enabled": "on",
+        "caption_provider": "gemini", "caption_model": "gemini-2.5-flash",
+    }, follow_redirects=True)
+    assert b"known list" not in r.data
+
+
 def test_settings_save_rejects_unknown_provider(client, login, make_user, app):
     login(make_user("admin"))
     client.post("/admin/ai/", data={
