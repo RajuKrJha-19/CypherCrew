@@ -55,12 +55,19 @@ def index():
                            else None)
         row.caption_model = (request.form.get("caption_model") or "").strip()[:120] or None
         row.qa_model = (request.form.get("qa_model") or "").strip()[:120] or None
+        # Monthly budget cap (USD). Blank / invalid / negative -> 0 (no cap).
+        try:
+            budget = float(request.form.get("monthly_budget_usd") or 0)
+        except (TypeError, ValueError):
+            budget = 0.0
+        row.monthly_budget_usd = max(0.0, budget)
         row.updated_by_id = current_user.id
         db.session.commit()
 
         flash("AI settings saved.", "success")
         return redirect(url_for("ai_settings.index"))
 
+    from app.ai import usage as ai_usage
     cap_provider, cap_model = ai_settings.resolve("caption")
     qa_provider, qa_model = ai_settings.resolve("qa")
     return render_template(
@@ -71,4 +78,15 @@ def index():
                    "qa": (qa_provider, qa_model)},
         simulation=bool(current_app.config.get("AI_SIMULATION_MODE")),
         enabled_now=ai_settings.is_enabled(),
+        spend={"total": ai_usage.month_total_usd(),
+               "budget": ai_usage.budget_usd()},
     )
+
+
+@ai_settings_bp.route("/usage")
+@login_required
+def usage():
+    _guard()
+    from app.ai import usage as ai_usage
+    return render_template("ai_settings/usage.html",
+                           summary=ai_usage.month_summary())

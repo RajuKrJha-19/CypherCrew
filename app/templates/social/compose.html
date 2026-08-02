@@ -101,13 +101,26 @@
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
                     {% if ai_enabled %}
+                    <select class="cmp-set-select" id="aiTone" aria-label="Caption tone">
+                        <option value="">Auto tone</option>
+                        <option value="professional">Professional</option>
+                        <option value="punchy">Punchy</option>
+                        <option value="friendly">Friendly</option>
+                        <option value="premium">Premium</option>
+                        <option value="festive">Festive</option>
+                    </select>
                     <button type="button" class="cmp-linkbtn cmp-ai" id="aiGenBtn"
-                        title="Draft an on-brand caption from the task brief, selected media and the client's brand voice"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate caption</button>
+                        title="Draft an on-brand caption from the task brief, selected media and the client's brand knowledge"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate caption</button>
                     <button type="button" class="cmp-linkbtn cmp-ai" id="aiAltBtn"
                         title="Fill empty alt-text on the selected images"><i class="fa-solid fa-wand-magic-sparkles"></i> Alt-text for images</button>
                     <input type="hidden" name="ai_assisted" id="aiAssisted" value="">
                     {% endif %}
                 </div>
+
+                {% if ai_enabled %}
+                {# AI alternative captions - click one to use it. #}
+                <div class="cmp-ai-variations" id="aiVariations" hidden></div>
+                {% endif %}
 
                 {# per-platform overrides — caption + first comment #}
                 {% if platforms_present %}

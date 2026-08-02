@@ -26,6 +26,8 @@ class CaptionContext:
     industry: str | None = None
     brand_voice: str | None = None
     brand_notes: str | None = None      # do's / don'ts / guideline notes
+    facts: str | None = None            # structured Client Brain (accurate names/offers/contacts)
+    tone: str | None = None             # optional tone override (e.g. "punchy")
     platforms: list[str] = field(default_factory=list)
     caption_limits: dict = field(default_factory=dict)   # platform -> max chars
     media: list[MediaInput] = field(default_factory=list)
@@ -33,10 +35,11 @@ class CaptionContext:
 
 @dataclass
 class CaptionResult:
-    caption: str = ""                   # the shared base caption
+    caption: str = ""                   # the primary caption
     per_platform: dict = field(default_factory=dict)     # platform -> caption
     hashtags: list[str] = field(default_factory=list)
     first_comment: str = ""
+    variations: list[str] = field(default_factory=list)  # alternative captions
 
 
 @dataclass
@@ -78,6 +81,13 @@ class AIProvider(ABC):
         self.api_key = api_key
         self.max_tokens = max_tokens
         self.timeout_s = timeout_s
+        # Token usage accumulated across this instance's calls, read by the
+        # service after an operation to log spend. Simulation leaves it at 0.
+        self.usage = {"input_tokens": 0, "output_tokens": 0}
+
+    def _add_usage(self, input_tokens, output_tokens):
+        self.usage["input_tokens"] += int(input_tokens or 0)
+        self.usage["output_tokens"] += int(output_tokens or 0)
 
     @abstractmethod
     def generate_caption(self, ctx: CaptionContext) -> CaptionResult:

@@ -19,19 +19,24 @@ def _brand_block(ctx):
 
 
 def caption_prompt(ctx):
-    """(system, user) for a per-platform caption draft."""
+    """(system, user) for a per-platform caption draft with alternatives."""
+    tone = (ctx.tone or "").strip()
+    tone_line = (f" Write in a {tone} tone." if tone else "")
     system = (
         "You are a senior social media copywriter at a marketing agency. "
         "Write a scroll-stopping, on-brand caption for the post described "
         "below, using the attached media as the visual it accompanies. "
-        "Honor the brand voice exactly. Be concise and native to each "
-        "platform; do not invent facts not supported by the brief or media. "
+        "Honor the brand voice exactly." + tone_line + " Be concise and "
+        "native to each platform. Use the CLIENT FACTS for accurate names, "
+        "offers, prices and contact details; do NOT state any fact not "
+        "supported by the brief, the media, or those facts. "
         "Return ONLY minified JSON of the form "
         '{"caption": str, "per_platform": {"<platform>": str}, '
-        '"hashtags": [str], "first_comment": str}. '
-        "Keep every per_platform caption within its character limit. "
-        "hashtags are without the leading # and relevant, not spammy. "
-        "first_comment may be empty."
+        '"hashtags": [str], "first_comment": str, "variations": [str]}. '
+        "'caption' is your best version; 'variations' are 2 alternative full "
+        "captions taking different angles/hooks. Keep every per_platform "
+        "caption within its character limit. hashtags are without the leading "
+        "# and relevant, not spammy. first_comment may be empty."
     )
     brand = _brand_block(ctx)
     limits = ", ".join(
@@ -41,6 +46,8 @@ def caption_prompt(ctx):
     user = (
         f"BRIEF:\n{ctx.brief or '(no brief provided)'}\n\n"
         + (f"BRAND:\n{brand}\n\n" if brand else "")
+        + (f"CLIENT FACTS (use for accuracy, do not contradict):\n{ctx.facts}\n\n"
+           if getattr(ctx, "facts", None) else "")
         + f"TARGET PLATFORMS AND CAPTION LIMITS: {limits}\n\n"
         "Draft the caption now."
     )

@@ -10,7 +10,17 @@
                 <h1>AI Settings</h1>
                 <p>Choose which AI model drafts captions and checks media. Changes apply instantly — no restart.</p>
             </div>
+            <div class="top-actions">
+                <a href="{{ url_for('ai_settings.usage') }}" class="btn btn-secondary"><i class="fa-solid fa-chart-line"></i> AI Usage</a>
+            </div>
         </div>
+
+        {% if spend.budget and spend.budget > 0 %}
+        <div class="alert {{ 'warning' if spend.total >= spend.budget else 'info' }}">
+            This month's estimated AI spend: <strong>${{ '%.2f'|format(spend.total) }}</strong> of your <strong>${{ '%.2f'|format(spend.budget) }}</strong> cap.
+            {% if spend.total >= spend.budget %} AI is paused until next month or a higher cap.{% endif %}
+        </div>
+        {% endif %}
 
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -50,6 +60,13 @@
                     <input type="checkbox" name="enabled" {{ 'checked' if row.enabled }}>
                     <span><strong>Enable AI assist</strong> — the master switch for captions, alt-text and media checks across the app.</span>
                 </label>
+
+                <div class="form-group" style="margin-top:14px; max-width:280px;">
+                    <label>Monthly budget (USD)</label>
+                    <p class="form-hint">A soft cap on estimated AI spend per month. <strong>0 = no cap.</strong> AI pauses with a clear message when reached.</p>
+                    <input type="number" name="monthly_budget_usd" min="0" step="1"
+                        value="{{ '%g'|format(row.monthly_budget_usd or 0) }}" placeholder="0">
+                </div>
 
                 <hr class="ai-sep">
 

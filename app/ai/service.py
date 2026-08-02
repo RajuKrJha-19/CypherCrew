@@ -98,8 +98,20 @@ def _load_media(items, allowed=_IMAGE_MIMES):
 
 # -- public API -------------------------------------------------------------
 
+def _log_usage(provider, feature, actor_id, client_id, status="ok"):
+    """Record what a provider call cost (best-effort; never raises)."""
+    from app.ai import usage
+    usage.record(
+        feature=feature, provider=provider.key,
+        model=(getattr(provider, "model", None) or provider.key),
+        input_tokens=provider.usage.get("input_tokens", 0),
+        output_tokens=provider.usage.get("output_tokens", 0),
+        status=status, actor_id=actor_id, client_id=client_id)
+
+
 def generate_caption(*, brief="", industry=None, brand_voice=None,
-                     brand_notes=None, platforms=None, media=None):
+                     brand_notes=None, facts=None, tone=None,
+                     platforms=None, media=None, actor_id=None, client_id=None):
     """media: iterable of (object_key, label). Returns a plain dict."""
     provider = get_provider("caption")
     ctx = CaptionContext(
@@ -107,26 +119,40 @@ def generate_caption(*, brief="", industry=None, brand_voice=None,
         industry=industry,
         brand_voice=brand_voice,
         brand_notes=brand_notes,
+        facts=facts or None,
+        tone=tone or None,
         platforms=list(platforms or []),
         caption_limits=caption_limits(platforms or []),
         media=_load_media(media or []),
     )
-    result = provider.generate_caption(ctx)
+    try:
+        result = provider.generate_caption(ctx)
+    except Exception:
+        _log_usage(provider, "caption", actor_id, client_id, status="error")
+        raise
+    _log_usage(provider, "caption", actor_id, client_id)
     return {
         "caption": result.caption,
         "per_platform": result.per_platform,
         "hashtags": result.hashtags,
         "first_comment": result.first_comment,
+        "variations": result.variations,
     }
 
 
-def generate_alt_text(object_key, label=None):
+def generate_alt_text(object_key, label=None, actor_id=None):
     """One alt-text line for a single image object, or "" if it can't be read."""
     provider = get_provider("caption")
     images = _load_media([(object_key, label)])
     if not images:
         return ""
-    return provider.generate_alt_text(images[0])
+    try:
+        alt = provider.generate_alt_text(images[0])
+    except Exception:
+        _log_usage(provider, "alt_text", actor_id, None, status="error")
+        raise
+    _log_usage(provider, "alt_text", actor_id, None)
+    return alt
 
 
 # -- Media QA (Phase 2) ------------------------------------------------------
@@ -218,5 +244,11 @@ def check_media(task_file, created_by_id=None):
         guidelines=guidelines,
         media=media,
     )
-    findings = provider.check_media(ctx)
+    client_id = getattr(client, "id", None)
+    try:
+        findings = provider.check_media(ctx)
+    except Exception:
+        _log_usage(provider, "media_qa", created_by_id, client_id, status="error")
+        raise
+    _log_usage(provider, "media_qa", created_by_id, client_id)
     return _persist_check(task_file, provider, created_by_id, findings)

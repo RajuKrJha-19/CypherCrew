@@ -66,6 +66,10 @@ class GeminiProvider(AIProvider):
             )
         except Exception as exc:  # noqa: BLE001 - normalized to typed errors
             raise self._map_error(exc)
+        meta = getattr(resp, "usage_metadata", None)
+        if meta is not None:
+            self._add_usage(getattr(meta, "prompt_token_count", 0),
+                           getattr(meta, "candidates_token_count", 0))
         return resp.text or ""
 
     @staticmethod
@@ -94,11 +98,14 @@ class GeminiProvider(AIProvider):
                     if isinstance(h, str)]
         per = {k: v for k, v in (data.get("per_platform") or {}).items()
                if isinstance(v, str)}
+        variations = [v for v in (data.get("variations") or [])
+                      if isinstance(v, str) and v.strip()]
         return CaptionResult(
             caption=str(data.get("caption") or ""),
             per_platform=per,
             hashtags=hashtags,
             first_comment=str(data.get("first_comment") or ""),
+            variations=variations,
         )
 
     def generate_alt_text(self, image):

@@ -1,0 +1,84 @@
+{% extends "base_app.html" %}
+
+{% block title %}AI Usage | CypherCrew{% endblock %}
+
+{% block body_class %}ds-screen{% endblock %}
+
+{% set FEATURE_LABEL = {"caption": "Captions", "alt_text": "Alt-text", "media_qa": "Media QA"} %}
+
+{% block content %}
+        <div class="page-header">
+            <div>
+                <h1>AI Usage</h1>
+                <p>Estimated AI spend this month. Costs are approximate (per-model estimates), for a directional view — not a bill.</p>
+            </div>
+            <div class="top-actions">
+                <a href="{{ url_for('ai_settings.index') }}" class="btn btn-secondary"><i class="fa-solid fa-gear"></i> AI Settings</a>
+            </div>
+        </div>
+
+        {# --- Headline: spend vs cap --- #}
+        <div class="ai-usage-cards">
+            <div class="ai-usage-card">
+                <span class="au-label">This month (est.)</span>
+                <strong class="au-value">${{ '%.2f'|format(summary.total) }}</strong>
+                {% if summary.budget and summary.budget > 0 %}
+                <span class="au-sub">of ${{ '%.2f'|format(summary.budget) }} cap</span>
+                <div class="au-bar"><span style="width: {{ [100, (summary.total / summary.budget * 100)]|min if summary.budget else 0 }}%"></span></div>
+                {% else %}
+                <span class="au-sub">no monthly cap set</span>
+                {% endif %}
+            </div>
+            <div class="ai-usage-card">
+                <span class="au-label">Calls this month</span>
+                <strong class="au-value">{{ summary.calls }}</strong>
+            </div>
+            <div class="ai-usage-card">
+                <span class="au-label">By feature</span>
+                {% for feat, cost in summary.by_feature.items() %}
+                <span class="au-row"><span>{{ FEATURE_LABEL.get(feat, feat) }}</span><span>${{ '%.2f'|format(cost) }}</span></span>
+                {% else %}
+                <span class="au-sub">no usage yet</span>
+                {% endfor %}
+            </div>
+            <div class="ai-usage-card">
+                <span class="au-label">Top clients</span>
+                {% for name, cost in summary.by_client %}
+                <span class="au-row"><span>{{ name }}</span><span>${{ '%.2f'|format(cost) }}</span></span>
+                {% else %}
+                <span class="au-sub">no client-linked usage yet</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# --- Recent calls --- #}
+        <div class="form-card">
+            <h3 style="margin-top:0;">Recent activity</h3>
+            {% if summary.recent %}
+            <div style="overflow-x:auto;">
+            <table class="ai-usage-table">
+                <thead><tr>
+                    <th>When</th><th>Feature</th><th>Model</th>
+                    <th>By</th><th>Client</th><th>Tokens</th><th>Est. cost</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for u in summary.recent %}
+                <tr>
+                    <td>{{ u.created_at | ist }}</td>
+                    <td>{{ FEATURE_LABEL.get(u.feature, u.feature) }}</td>
+                    <td>{{ u.model }}</td>
+                    <td>{{ u.user.name if u.user else '—' }}</td>
+                    <td>{{ u.client.client_name if u.client else '—' }}</td>
+                    <td>{{ (u.input_tokens or 0) + (u.output_tokens or 0) }}</td>
+                    <td>${{ '%.4f'|format(u.est_cost_usd or 0) }}</td>
+                    <td>{% if u.status != 'ok' %}<span class="au-err">error</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <p class="form-hint">No AI calls recorded this month yet.</p>
+            {% endif %}
+        </div>
+{% endblock %}

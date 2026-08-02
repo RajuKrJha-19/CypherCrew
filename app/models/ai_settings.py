@@ -26,6 +26,12 @@ class AISettings(db.Model):
     qa_provider = db.Column(db.String(30))
     qa_model = db.Column(db.String(120))
 
+    #: Soft monthly spend cap in USD. 0 / null = no cap. When the month's
+    #: estimated AI cost reaches this, the live routes refuse with a clear
+    #: message until the next month or the cap is raised.
+    monthly_budget_usd = db.Column(db.Float, nullable=False, default=0.0,
+                                   server_default="0")
+
     updated_by_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True)
     updated_at = db.Column(

@@ -2605,6 +2605,10 @@ def _csv(value):
 # so a caller can't force reading an unbounded number of objects into memory.
 _AI_MAX_CAPTION_MEDIA = 10
 
+# The only tones the composer offers; anything else is ignored (auto) so the
+# tone field can't be used to smuggle instructions into the prompt.
+_AI_TONES = {"professional", "punchy", "friendly", "premium", "festive"}
+
 
 def _ai_can_view_task(task):
     """Task visibility, reusing the tasks blueprint's own rule (lazy import to
@@ -2646,12 +2650,16 @@ def ai_caption_api():
     media + the client's brand knowledge base. Returns a draft the composer
     drops into the editable fields."""
     _ai_guard()
-    from app.ai import service as ai_service
+    from app.ai import service as ai_service, usage as ai_usage
+    if not ai_usage.within_budget():
+        return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
 
     task_id = request.form.get("task_id", type=int)
     client_id = request.form.get("client_id", type=int)
     platforms = _csv(request.form.get("platforms"))
     media_keys = _csv(request.form.get("media_keys"))
+    tone = (request.form.get("tone") or "").strip().lower()
+    tone = tone if tone in _AI_TONES else None
 
     task = Task.query.get(task_id) if task_id else None
     # The brief comes from the task, so a user must be allowed to see it.
@@ -2675,14 +2683,23 @@ def ai_caption_api():
     if not brief and not media_keys:
         return jsonify(error="Add a brief (link a task) or some media first."), 400
 
+    facts = None
+    if client is not None:
+        from app.ai import client_brain
+        facts = client_brain.facts_text(client) or None
+
     try:
         result = ai_service.generate_caption(
             brief=brief,
             industry=getattr(client, "industry", None),
             brand_voice=getattr(client, "brand_voice", None),
             brand_notes=getattr(client, "brand_guidelines_notes", None),
+            facts=facts,
+            tone=tone,
             platforms=platforms,
             media=[(k, None) for k in media_keys],
+            actor_id=current_user.id,
+            client_id=getattr(client, "id", None),
         )
     except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
         return _ai_error_response(exc)
@@ -2695,7 +2712,9 @@ def ai_caption_api():
 def ai_alt_text_api():
     """One accessible alt-text line for a single attached image."""
     _ai_guard()
-    from app.ai import service as ai_service
+    from app.ai import service as ai_service, usage as ai_usage
+    if not ai_usage.within_budget():
+        return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
 
     object_key = (request.form.get("object_key") or "").strip()
     if not object_key:
@@ -2705,7 +2724,7 @@ def ai_alt_text_api():
     if not _ai_media_allowed(object_key):
         return jsonify(error="You can't use that item."), 403
     try:
-        alt = ai_service.generate_alt_text(object_key)
+        alt = ai_service.generate_alt_text(object_key, actor_id=current_user.id)
     except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
         return _ai_error_response(exc)
     return jsonify(alt_text=alt)

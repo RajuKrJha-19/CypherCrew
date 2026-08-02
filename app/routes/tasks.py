@@ -4699,9 +4699,11 @@ def ai_check_file(file_id):
     file against the brief and the client's brand knowledge base and returns a
     checklist of findings - never blocks anything. Reviewers or the assignee,
     on a task they can see."""
-    from app.ai import settings as ai_settings
+    from app.ai import settings as ai_settings, usage as ai_usage
     if not ai_settings.is_enabled():
         return jsonify(error="AI assist is not available."), 503
+    if not ai_usage.within_budget():
+        return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
 
     task_file = TaskFile.query.get_or_404(file_id)
     task = task_file.task

@@ -75,6 +75,10 @@ class OpenAIProvider(AIProvider):
             raise AITransient("OpenAI connection failed") from exc
         except Exception as exc:  # noqa: BLE001
             raise AIPermanent("OpenAI request failed") from exc
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            self._add_usage(getattr(usage, "input_tokens", 0),
+                           getattr(usage, "output_tokens", 0))
         return getattr(resp, "output_text", "") or ""
 
     @staticmethod
@@ -99,11 +103,14 @@ class OpenAIProvider(AIProvider):
                     if isinstance(h, str)]
         per = {k: v for k, v in (data.get("per_platform") or {}).items()
                if isinstance(v, str)}
+        variations = [v for v in (data.get("variations") or [])
+                      if isinstance(v, str) and v.strip()]
         return CaptionResult(
             caption=str(data.get("caption") or ""),
             per_platform=per,
             hashtags=hashtags,
             first_comment=str(data.get("first_comment") or ""),
+            variations=variations,
         )
 
     def generate_alt_text(self, image):

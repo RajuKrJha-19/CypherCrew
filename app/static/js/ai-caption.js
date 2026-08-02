@@ -15,6 +15,8 @@
     if (window.__aiCaptionInit) return;
     window.__aiCaptionInit = true;
 
+    var lastVariations = [];
+
     function toast(msg, type) {
         if (typeof window.showToast === "function") window.showToast(msg, type);
     }
@@ -56,6 +58,31 @@
         }
         var flag = document.getElementById("aiAssisted");
         if (flag) flag.value = "1";
+
+        renderVariations(data.variations || []);
+    }
+
+    // Alternative captions rendered as clickable cards; click one to swap it
+    // into the main caption. Text via textContent (untrusted model output).
+    function renderVariations(list) {
+        var box = document.getElementById("aiVariations");
+        if (!box) return;
+        lastVariations = list;
+        box.innerHTML = "";
+        if (!list.length) { box.hidden = true; return; }
+        var head = document.createElement("div");
+        head.className = "cmp-ai-var-head";
+        head.textContent = "Other options — click to use:";
+        box.appendChild(head);
+        list.forEach(function (text, i) {
+            var card = document.createElement("button");
+            card.type = "button";
+            card.className = "cmp-ai-var";
+            card.setAttribute("data-ai-variation", String(i));
+            card.textContent = text;
+            box.appendChild(card);
+        });
+        box.hidden = false;
     }
 
     async function onGenerate(btn) {
@@ -87,6 +114,8 @@
             if (clientId) body.set("client_id", clientId);
             body.set("platforms", platforms.join(","));
             body.set("media_keys", mediaKeys.join(","));
+            var toneEl = document.getElementById("aiTone");
+            if (toneEl && toneEl.value) body.set("tone", toneEl.value);
             var r = await fetch(window.AI_CAPTION_URL, {
                 method: "POST", credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }, body: body,
@@ -137,9 +166,29 @@
     }
 
     document.addEventListener("click", function (event) {
-        var gen = event.target.closest && event.target.closest("#aiGenBtn");
+        if (!event.target.closest) return;
+        var gen = event.target.closest("#aiGenBtn");
         if (gen) { event.preventDefault(); onGenerate(gen); return; }
-        var alt = event.target.closest && event.target.closest("#aiAltBtn");
-        if (alt) { event.preventDefault(); onAltText(alt); }
+        var alt = event.target.closest("#aiAltBtn");
+        if (alt) { event.preventDefault(); onAltText(alt); return; }
+        var vary = event.target.closest("[data-ai-variation]");
+        if (vary) {
+            event.preventDefault();
+            var idx = parseInt(vary.getAttribute("data-ai-variation"), 10);
+            var cap = document.getElementById("captionInput");
+            if (cap && lastVariations[idx] != null) {
+                cap.value = lastVariations[idx];
+                fire(cap);
+            }
+            var flag = document.getElementById("aiAssisted");
+            if (flag) flag.value = "1";
+            var box = document.getElementById("aiVariations");
+            if (box) {
+                box.querySelectorAll(".cmp-ai-var").forEach(function (c) {
+                    c.classList.remove("sel");
+                });
+            }
+            vary.classList.add("sel");
+        }
     });
 })();

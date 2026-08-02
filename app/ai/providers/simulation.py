@@ -33,10 +33,11 @@ class SimulationProvider(AIProvider):
         brief = (ctx.brief or "").strip()
         headline = (brief.splitlines()[0].strip() if brief
                     else "Your latest update")[:200]
-        # A voice hint keeps the simulated output visibly brand-aware so a
-        # tester can confirm the brand field is flowing through.
+        # Voice + tone hints keep the simulated output visibly brand/tone-aware,
+        # so a tester (and the tests) can confirm those fields flow through.
         voice = f" — {ctx.brand_voice.strip()}" if ctx.brand_voice else ""
-        caption = f"{headline}{voice}".strip()
+        tone = f" [{ctx.tone.strip()}]" if getattr(ctx, "tone", None) else ""
+        caption = f"{headline}{voice}{tone}".strip()
 
         tags = _keywords(f"{brief} {ctx.industry or ''}")
         per_platform = {}
@@ -44,11 +45,14 @@ class SimulationProvider(AIProvider):
             limit = ctx.caption_limits.get(p)
             per_platform[p] = caption[:limit] if limit else caption
 
+        variations = [f"{caption} (take 2)", f"{caption} (take 3)"]
+
         return CaptionResult(
             caption=caption,
             per_platform=per_platform,
             hashtags=tags,
             first_comment="",
+            variations=variations,
         )
 
     def generate_alt_text(self, image):

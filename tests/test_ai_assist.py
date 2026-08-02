@@ -90,6 +90,17 @@ def ai_generate_caption(app):
     )
 
 
+def test_caption_prompt_injects_facts_tone_and_asks_for_variations():
+    from app.ai import prompts
+    from app.ai.base import CaptionContext
+    system, user = prompts.caption_prompt(CaptionContext(
+        brief="Launch", facts="Official phone: 91234", tone="punchy",
+        platforms=["twitter"], caption_limits={"twitter": 280}))
+    assert "91234" in user                      # Client Brain facts injected
+    assert "punchy" in system.lower()           # tone honored
+    assert "variations" in system.lower()       # alternatives requested
+
+
 def test_service_alt_text_empty_when_unreadable(app):
     from app.ai import service as ai_service
     with app.test_request_context():
@@ -112,6 +123,20 @@ def test_caption_route_drafts_from_a_task(client, login, make_user, make_task):
     data = r.get_json()
     assert data["caption"]
     assert "twitter" in data["per_platform"]
+
+
+def test_caption_route_returns_variations_and_honors_tone(
+        client, login, make_user, make_task):
+    user = make_user("employee", permissions=["manage_social"])
+    task = make_task(user)
+    login(user)
+    r = client.post("/social/api/ai/caption",
+                    data={"task_id": task.id, "platforms": "twitter",
+                          "tone": "punchy"})
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["variations"]                    # alternative captions offered
+    assert "[punchy]" in data["caption"]         # tone flowed through (sim marker)
 
 
 def test_caption_route_needs_a_brief_or_media(client, login, make_user):
