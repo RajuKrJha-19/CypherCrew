@@ -290,14 +290,24 @@ def permission_catalog(app):
     yield
 
 
-def _delete_children_of(table, ids):
+def _delete_children_of(table, ids, _walked=None):
     """Delete every row in every table holding a foreign key to
-    `table`.`id` with one of these ids."""
+    `table`.`id` with one of these ids, and whatever in turn hangs off those
+    rows.
+
+    One level deep was not enough. A task with a Social Studio post on it has
+    social_post_targets pointing at that post, so deleting the post alone
+    trips the target's foreign key and wedges the whole purge. Each
+    (table, column) edge is walked once, which keeps a self-referencing or
+    circular foreign key from recursing forever; the DELETE itself always
+    runs.
+    """
     from sqlalchemy import inspect, text
 
     if not ids:
         return
 
+    _walked = _walked if _walked is not None else set()
     inspector = inspect(_db.engine)
     id_list = ", ".join(str(int(i)) for i in ids)
 
@@ -306,6 +316,20 @@ def _delete_children_of(table, ids):
             if fk.get("referred_table") != table:
                 continue
             for column in fk.get("constrained_columns", []):
+                edge = (other, column)
+                # Recurse only into tables keyed by a plain `id` - an
+                # association table without one has nothing pointing at it.
+                has_id = any(c["name"] == "id"
+                             for c in inspector.get_columns(other))
+                if edge not in _walked and has_id:
+                    _walked.add(edge)
+                    child_ids = [
+                        row[0] for row in _db.session.execute(text(
+                            f"SELECT id FROM {other} "
+                            f"WHERE {column} IN ({id_list})"
+                        ))
+                    ]
+                    _delete_children_of(other, child_ids, _walked)
                 _db.session.execute(text(
                     f"DELETE FROM {other} WHERE {column} IN ({id_list})"
                 ))
