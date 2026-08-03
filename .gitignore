@@ -6,6 +6,11 @@ env/
 .venv/
 .env
 .env.bak
+# Any .env variant - a dated/suffixed backup carries the same live secrets as
+# .env itself (DB password, SOCIAL_TOKEN_KEY), and ".env.bak" alone did not
+# cover ".env.bak-2026" or ".env.local".
+.env.*
+!.env.example
 instance/
 *.db
 *.sqlite
