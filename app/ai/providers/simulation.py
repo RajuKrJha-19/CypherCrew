@@ -70,6 +70,23 @@ class SimulationProvider(AIProvider):
         return (f"Thank you so much, {who} — we really appreciate the kind "
                 "words and hope to see you again! (simulated)")
 
+    def rewrite_caption(self, ctx):
+        # Deterministic, action-aware transform so the compose flow and the
+        # tests exercise each chip without a real model. Visibly reflects the
+        # action; always non-empty for a non-empty input.
+        text = (ctx.text or "").strip()
+        action = (ctx.action or "rephrase").strip().lower()
+        if action == "shorten":
+            return (text[:80].rstrip() or text)
+        if action == "expand":
+            return f"{text} Learn more and get in touch today. (simulated)"
+        if action == "emojis":
+            return f"✨ {text} 🚀"
+        if action == "grammar":
+            return text  # "already clean" in the simulator
+        # rephrase / formal / casual — tag the tone so tests can see it flowed.
+        return f"[{action}] {text}"
+
     def check_media(self, ctx):
         # Clean by default; sentinels in the brief/facts let a test drive the
         # warning + fact-error paths without a real model.

@@ -61,6 +61,57 @@ def caption_prompt(ctx):
     return system, user
 
 
+# The quick-transform actions the composer's Rewrite toolbar offers. Single
+# source of truth: the route validates against these keys and the prompt maps
+# each to its instruction, so the two can never drift.
+_REWRITE_ACTIONS = {
+    "shorten": "Make it noticeably shorter and punchier while keeping the core "
+               "message and any offer/CTA.",
+    "expand": "Make it a bit longer and richer - add helpful detail or a "
+              "stronger hook - without padding or repetition.",
+    "rephrase": "Rephrase it with a fresh angle and different wording; keep the "
+                "same meaning, length and any offer/CTA.",
+    "formal": "Rewrite it in a more polished, professional tone.",
+    "casual": "Rewrite it in a warmer, more casual and conversational tone.",
+    "emojis": "Add a few tasteful, relevant emojis to lift it; do not overdo it "
+              "and do not change the wording otherwise.",
+    "grammar": "Fix any spelling, grammar and punctuation mistakes and tighten "
+               "awkward phrasing. Do NOT otherwise rewrite or change the tone.",
+}
+
+
+def rewrite_prompt(ctx):
+    """(system, user) for a one-click transform of an existing caption. Plain
+    text in, plain text out - the model returns ONLY the rewritten caption."""
+    instruction = _REWRITE_ACTIONS.get(ctx.action, _REWRITE_ACTIONS["rephrase"])
+    tone = (ctx.tone or "").strip()
+    tone_line = (f" Keep a {tone} tone." if tone else "")
+    system = (
+        "You are a senior social media copywriter at a marketing agency editing "
+        "an existing caption. Apply EXACTLY this change and nothing else: "
+        + instruction + " Honor the brand voice." + tone_line + " Keep every "
+        "stated fact accurate - do NOT invent, add or change any name, offer, "
+        "price, date or contact detail not present in the caption or the CLIENT "
+        "FACTS. Stay within the platform character limits. "
+        "Return ONLY the rewritten caption text - no preamble, no quotes, no "
+        "explanation, no JSON."
+    )
+    brand = _brand_block(ctx)
+    limits = ", ".join(
+        f"{p}: {ctx.caption_limits.get(p, 'no limit')} chars"
+        for p in (ctx.platforms or [])
+    ) or "no specific platforms"
+    user = (
+        f"CAPTION TO REWRITE:\n{ctx.text}\n\n"
+        + (f"BRAND:\n{brand}\n\n" if brand else "")
+        + (f"CLIENT FACTS (keep accurate, do not contradict):\n{ctx.facts}\n\n"
+           if getattr(ctx, "facts", None) else "")
+        + f"TARGET PLATFORMS AND CAPTION LIMITS: {limits}\n\n"
+        "Rewrite the caption now."
+    )
+    return system, user
+
+
 def alt_text_prompt(image):
     system = (
         "You write concise, accurate image alt-text for accessibility. "

@@ -115,6 +115,22 @@ class ReplyContext:
 
 
 @dataclass
+class RewriteContext:
+    """Context for a quick-transform of an EXISTING caption (Shorten, Expand,
+    Rephrase, More formal/casual, Add emojis, Fix grammar). Text in -> text
+    out, like ReplyContext: the model edits `text` per `action`, kept on-brand
+    and within the platform limits. No media - the caption is already written."""
+    text: str = ""                      # the caption to rewrite
+    action: str = ""                    # one of prompts._REWRITE_ACTIONS
+    brand_voice: str | None = None
+    brand_notes: str | None = None
+    facts: str | None = None            # Client Brain: keep stated facts accurate
+    tone: str | None = None
+    platforms: list[str] = field(default_factory=list)
+    caption_limits: dict = field(default_factory=dict)   # platform -> max chars
+
+
+@dataclass
 class MediaCheckContext:
     brief: str = ""
     deliverable: str | None = None
@@ -168,3 +184,7 @@ class AIProvider(ABC):
     @abstractmethod
     def generate_reply(self, ctx: ReplyContext) -> str:
         """A short, on-brand reply to a Google review."""
+
+    @abstractmethod
+    def rewrite_caption(self, ctx: RewriteContext) -> str:
+        """Rewrite an existing caption per ctx.action; return only the new text."""

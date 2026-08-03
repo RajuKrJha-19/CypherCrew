@@ -118,6 +118,22 @@
                 </div>
 
                 {% if ai_enabled and ai_features.caption %}
+                {# One-click AI edits of whatever is in the caption box. #}
+                <div class="cmp-ai-rewrite" id="aiRewrite">
+                    <span class="cmp-ai-rewrite-label">Rewrite:</span>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="shorten">Shorten</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="expand">Expand</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="rephrase">Rephrase</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="formal">More formal</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="casual">More casual</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="emojis">Add emojis</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" data-ai-rewrite="grammar">Fix grammar</button>
+                    <button type="button" class="cmp-linkbtn cmp-ai" id="aiRegenBtn"
+                        title="Draft a fresh caption from scratch (replaces the current one)"><i class="fa-solid fa-rotate"></i> Regenerate</button>
+                </div>
+                {% endif %}
+
+                {% if ai_enabled and ai_features.caption %}
                 {# AI alternative captions - click one to use it. #}
                 <div class="cmp-ai-variations" id="aiVariations" hidden></div>
                 {% endif %}
@@ -1323,6 +1339,7 @@
 {% if ai_enabled and ai_features.caption %}
 <script>
     window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
+    window.AI_REWRITE_URL = "{{ url_for('social.ai_caption_rewrite_api') }}";
     window.AI_ALT_URL = "{{ url_for('social.ai_alt_text_api') }}";
     // usage_id=0 is a placeholder the script swaps for the real id.
     window.AI_USAGE_OUTCOME_URL = "{{ url_for('social.ai_usage_outcome', usage_id=0) }}";

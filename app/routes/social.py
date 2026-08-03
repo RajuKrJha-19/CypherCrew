@@ -2628,6 +2628,10 @@ _AI_MAX_CAPTION_MEDIA = 10
 # tone field can't be used to smuggle instructions into the prompt.
 _AI_TONES = {"professional", "punchy", "friendly", "premium", "festive"}
 
+# Longest caption we'll rewrite in one call (bounds cost/abuse). Well above any
+# real platform caption a person edits by hand (IG 2200, LinkedIn 3000).
+_AI_MAX_REWRITE_CHARS = 8000
+
 
 def _ai_can_view_task(task):
     """Task visibility, reusing the tasks blueprint's own rule (lazy import to
@@ -2717,6 +2721,64 @@ def ai_caption_api():
             tone=tone,
             platforms=platforms,
             media=[(k, None) for k in media_keys],
+            actor_id=current_user.id,
+            client_id=getattr(client, "id", None),
+        )
+    except Exception as exc:  # noqa: BLE001 - mapped to a typed JSON response
+        return _ai_error_response(exc)
+    return jsonify(**result)
+
+
+@social_bp.route("/api/ai/caption/rewrite", methods=["POST"])
+@login_required
+@limiter.limit("60 per hour")
+def ai_caption_rewrite_api():
+    """One-click transform of the caption already in the box (Shorten, Expand,
+    Rephrase, More formal/casual, Add emojis, Fix grammar). Text in, text out -
+    works on an AI draft or a hand-written caption. Shares the caption feature
+    flag, budget and keep-rate signal."""
+    _ai_guard("caption")
+    from app.ai import service as ai_service, usage as ai_usage
+    from app.ai.prompts import _REWRITE_ACTIONS
+    if not ai_usage.within_budget():
+        return jsonify(error="Monthly AI budget reached — raise it in AI Settings."), 503
+
+    text = (request.form.get("text") or "").strip()
+    action = (request.form.get("action") or "").strip().lower()
+    if not text:
+        return jsonify(error="Write or generate a caption first."), 400
+    if len(text) > _AI_MAX_REWRITE_CHARS:
+        return jsonify(error="That caption is too long to rewrite."), 400
+    if action not in _REWRITE_ACTIONS:
+        return jsonify(error="Unknown rewrite action."), 400
+
+    task_id = request.form.get("task_id", type=int)
+    client_id = request.form.get("client_id", type=int)
+    platforms = _csv(request.form.get("platforms"))
+
+    task = Task.query.get(task_id) if task_id else None
+    if task is not None and not _ai_can_view_task(task):
+        return jsonify(error="You can't use that task."), 403
+
+    client = None
+    if client_id:
+        client = Client.query.get(client_id)
+    elif task is not None:
+        client = getattr(task, "client", None)
+
+    facts = None
+    if client is not None:
+        from app.ai import client_brain
+        facts = client_brain.facts_text(client) or None
+
+    try:
+        result = ai_service.rewrite_caption(
+            text=text,
+            action=action,
+            brand_voice=getattr(client, "brand_voice", None),
+            brand_notes=getattr(client, "brand_guidelines_notes", None),
+            facts=facts,
+            platforms=platforms,
             actor_id=current_user.id,
             client_id=getattr(client, "id", None),
         )

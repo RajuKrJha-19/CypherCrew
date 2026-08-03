@@ -1,8 +1,11 @@
 /* AI Assist for the Social Studio composer.
  *
- * Two on-demand actions, both producing a DRAFT the user edits before saving:
- *   #aiGenBtn  - draft an on-brand, per-platform caption from the task brief +
- *                selected media + the client's brand knowledge base.
+ * On-demand actions, all producing a DRAFT the user edits before saving:
+ *   #aiGenBtn / #aiRegenBtn  - draft an on-brand, per-platform caption from the
+ *                task brief + selected media + the client's brand knowledge base.
+ *   [data-ai-rewrite]  - one-click transform of the caption already in the box
+ *                (Shorten / Expand / Rephrase / formal / casual / emojis /
+ *                grammar), so the AI edits an AI OR hand-written caption.
  *   #aiAltBtn  - fill empty alt-text on the selected images.
  *
  * CSRF is added automatically by csrf.js. Listeners are delegated on document
@@ -111,14 +114,8 @@
 
     async function onGenerate(btn) {
         var cap = document.getElementById("captionInput");
-        var taskEl = document.querySelector('input[name="task_id"]');
-        var clientEl = document.getElementById("clientSelect");
-        var taskId = (taskEl && taskEl.value) || "";
-        var clientId = (clientEl && clientEl.value) || "";
-        var platforms = uniq(Array.prototype.slice.call(
-            document.querySelectorAll('input[name="account_ids"]:checked'))
-            .map(function (c) { return c.dataset.platform; })
-            .filter(Boolean));
+        var ctx = captionContext();
+        var taskId = ctx.taskId, clientId = ctx.clientId, platforms = ctx.platforms;
         var mediaKeys = selectedMedia()
             .map(function (c) { return c.dataset.key; }).filter(Boolean);
 
@@ -148,6 +145,65 @@
             if (!r.ok) { toast(data.error || "Couldn't generate a caption.", "error"); return; }
             applyCaption(data);
             toast("Caption drafted — review and edit before publishing.", "success");
+        } catch (e) {
+            toast("Network error — please try again.", "error");
+        } finally {
+            busy(btn, false);
+        }
+    }
+
+    // Task / client / platforms currently selected in the composer - the
+    // context both Generate and Rewrite send so output stays on-brand and
+    // within each platform's limit.
+    function captionContext() {
+        var taskEl = document.querySelector('input[name="task_id"]');
+        var clientEl = document.getElementById("clientSelect");
+        return {
+            taskId: (taskEl && taskEl.value) || "",
+            clientId: (clientEl && clientEl.value) || "",
+            platforms: uniq(Array.prototype.slice.call(
+                document.querySelectorAll('input[name="account_ids"]:checked'))
+                .map(function (c) { return c.dataset.platform; })
+                .filter(Boolean)),
+        };
+    }
+
+    // One-click transform of whatever is already in the caption box (works on
+    // an AI draft OR a hand-written caption). On failure the caption is left
+    // untouched - we never silently keep the old text as if it succeeded.
+    async function onRewrite(btn, action) {
+        var cap = document.getElementById("captionInput");
+        var text = (cap && cap.value.trim()) || "";
+        if (!text) { toast("Write or generate a caption first.", "error"); return; }
+
+        var ctx = captionContext();
+        busy(btn, true);
+        try {
+            var body = new URLSearchParams();
+            body.set("text", cap.value);
+            body.set("action", action);
+            if (ctx.taskId) body.set("task_id", ctx.taskId);
+            if (ctx.clientId) body.set("client_id", ctx.clientId);
+            body.set("platforms", ctx.platforms.join(","));
+            var r = await fetch(window.AI_REWRITE_URL, {
+                method: "POST", credentials: "same-origin",
+                headers: { "X-Requested-With": "fetch" }, body: body,
+            });
+            var data = await r.json().catch(function () { return {}; });
+            if (!r.ok || !data.caption) {
+                toast(data.error || "Couldn't rewrite the caption.", "error");
+                return;
+            }
+            cap.value = data.caption; fire(cap);
+            var flag = document.getElementById("aiAssisted");
+            if (flag) flag.value = "1";
+            // Keep-rate: a rewrite supersedes any prior un-saved draft.
+            var newId = data.ai_usage_id || null;
+            if (pendingUsageId && pendingUsageId !== newId) {
+                reportOutcome(pendingUsageId, "discarded");
+            }
+            pendingUsageId = newId;
+            toast("Caption updated — review before publishing.", "success");
         } catch (e) {
             toast("Network error — please try again.", "error");
         } finally {
@@ -206,6 +262,14 @@
         if (gen) { event.preventDefault(); onGenerate(gen); return; }
         var alt = event.target.closest("#aiAltBtn");
         if (alt) { event.preventDefault(); onAltText(alt); return; }
+        var regen = event.target.closest("#aiRegenBtn");
+        if (regen) { event.preventDefault(); onGenerate(regen); return; }
+        var rw = event.target.closest("[data-ai-rewrite]");
+        if (rw) {
+            event.preventDefault();
+            onRewrite(rw, rw.getAttribute("data-ai-rewrite"));
+            return;
+        }
         var vary = event.target.closest("[data-ai-variation]");
         if (vary) {
             event.preventDefault();

@@ -121,6 +121,16 @@ class ClaudeProvider(AIProvider):
         raw = self._generate(system, user, [], as_json=False)
         return raw.strip()
 
+    def rewrite_caption(self, ctx):
+        system, user = prompts.rewrite_prompt(ctx)
+        raw = self._generate(system, user, [], as_json=False)
+        text = strip_fences(raw).strip()
+        if not text:
+            raise AIPermanent(
+                "Claude returned an empty rewrite — try again or a different "
+                "model.")
+        return text
+
     def check_media(self, ctx):
         media = list(ctx.media) + list(ctx.references) + list(ctx.guidelines)
         system, user = prompts.media_check_prompt(ctx)

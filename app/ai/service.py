@@ -196,6 +196,37 @@ def generate_caption(*, brief="", industry=None, brand_voice=None,
     }
 
 
+def rewrite_caption(*, text, action, brand_voice=None, brand_notes=None,
+                    facts=None, tone=None, platforms=None, actor_id=None,
+                    client_id=None):
+    """One-click transform of an EXISTING caption (Shorten/Expand/Rephrase/
+    formal/casual/emojis/grammar). Uses the caption tier. Returns a plain dict
+    {caption, ai_usage_id}. Raises (visibly) if the model returns nothing - the
+    caller keeps the original caption on screen; we never silently swap in the
+    old text as if the rewrite succeeded."""
+    from app.ai import settings as ai_settings
+    from app.ai.base import RewriteContext
+    provider = get_provider("caption")
+    prefs = ai_settings.caption_prefs()
+    ctx = RewriteContext(
+        text=text or "",
+        action=action or "",
+        brand_voice=brand_voice,
+        brand_notes=brand_notes,
+        facts=facts or None,
+        tone=(tone or prefs["tone"]),
+        platforms=list(platforms or []),
+        caption_limits=caption_limits(platforms or []),
+    )
+    try:
+        result = _invoke(lambda: provider.rewrite_caption(ctx))
+    except Exception:
+        _log_usage(provider, "caption", actor_id, client_id, status="error")
+        raise
+    usage_id = _log_usage(provider, "caption", actor_id, client_id)
+    return {"caption": result, "ai_usage_id": usage_id}
+
+
 def generate_alt_text(object_key, label=None, actor_id=None):
     """One alt-text line for a single image object, or "" if it can't be read."""
     provider = get_provider("caption")
