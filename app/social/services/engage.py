@@ -44,22 +44,26 @@ def sync_comments(client_id=None):
     re-sync never duplicates.
     """
     report = {"checked": 0, "new": 0, "skipped": 0, "failed": 0,
-              "errors": []}
+              "errors": [], "by_reason": {}}
 
-    def fail(target, reason):
+    def fail(target, category, reason):
         # Name the channel and the post, not just the raw platform id. A
         # bare "Object with ID '1213..._1220...' does not exist" tells the
         # person reading it nothing they can act on; "Hope+ IVF — 'Diwali
-        # offer'" tells them exactly which connection to look at.
+        # offer'" tells them exactly which connection to look at. The full
+        # per-post detail goes to `errors` + the log; the user-facing screen
+        # gets the compact, grouped `by_reason` counts (see failure_summary).
         post = target.post
         where = target.account.display_name if target.account else target.platform
         what = (post.title if post and post.title else None) \
             or (target.caption or "")[:40] or f"post {target.id}"
         report["failed"] += 1
         report["errors"].append(f"{where} — “{what}”: {reason}")
+        report["by_reason"][category] = report["by_reason"].get(category, 0) + 1
         current_app.logger.warning(
-            "engage sync failed target=%s platform=%s account=%s: %s",
-            target.id, target.platform, target.social_account_id, reason)
+            "engage sync failed target=%s platform=%s account=%s reason=%s: %s",
+            target.id, target.platform, target.social_account_id,
+            category, reason)
 
     for target in _published_targets(client_id):
         provider = get_provider(target.platform)
@@ -72,7 +76,7 @@ def sync_comments(client_id=None):
             report["skipped"] += 1
             continue
         if target.account is None:
-            fail(target, "the channel is no longer connected")
+            fail(target, "auth", "the channel is no longer connected")
             continue
 
         report["checked"] += 1
@@ -80,7 +84,8 @@ def sync_comments(client_id=None):
             token = AccountManager.access_token(target.account)
             comments = provider.list_comments(target.external_post_id, token)
         except Exception as exc:  # noqa: BLE001 - reported, not hidden
-            fail(target, _reason(provider, exc))
+            category, reason = _classify(provider, exc)
+            fail(target, category, reason)
             continue
         for c in comments:
             ext = c.get("external_id")
@@ -117,12 +122,34 @@ def sync_comments(client_id=None):
     return report
 
 
-def _reason(provider, exc):
-    """A short, human reason a post could not be read.
+# Graph "object does not exist / unsupported get request" (code 100, often
+# subcode 33; 803 = deleted). The post is gone, too old, or its type simply
+# doesn't expose a comments edge - expected on any account with history, and
+# nothing the user can DO about it. So it must never reach the screen as a raw
+# Graph dump with the object id; it's counted as "no longer available".
+_GONE_CODES = {100, 803}
+_GONE_HINTS = ("does not exist", "unsupported get request",
+               "does not support this operation", "cannot be loaded")
 
-    Mapped through the provider so a permissions problem reads as one
-    rather than as a raw Graph error code - "reconnect the channel" is
-    something a person can act on.
+#: The failure buckets sync produces, in the order the summary lists them
+#: (most-actionable first), each mapped to plain, non-technical language.
+#: Phrased without a verb so "<n> <phrase>" reads correctly for 1 or many.
+_FAILURE_PHRASES = {
+    "auth": "on a channel that needs reconnecting",
+    "rate_limit": "rate-limited (try again shortly)",
+    "unavailable": "no longer available on the platform",
+    "refused": "refused by the platform",
+}
+
+
+def _classify(provider, exc):
+    """(category, human_reason) for a post we couldn't read.
+
+    The category groups the failure so the screen can show a compact count
+    instead of a wall of per-post errors; the reason is plain, actionable
+    language with NO raw Graph text and NO object ids. Mapped through the
+    provider so a permissions problem reads as "reconnect the channel" - which
+    a person can act on - rather than a bare error code.
     """
     from app.social.errors import AuthError, RateLimitError
 
@@ -132,11 +159,35 @@ def _reason(provider, exc):
         mapped = exc
 
     if isinstance(mapped, AuthError):
-        return ("the channel needs reconnecting - it is missing permission "
-                "to read comments")
+        return ("auth", "the channel needs reconnecting — it is missing "
+                        "permission to read comments")
     if isinstance(mapped, RateLimitError):
-        return "the platform is rate-limiting us; try again shortly"
-    return str(mapped)[:200] or "the platform refused the request"
+        return ("rate_limit", "the platform is rate-limiting us; try again "
+                              "shortly")
+    code = getattr(mapped, "code", None)
+    text = str(getattr(mapped, "message", "") or mapped).lower()
+    if code in _GONE_CODES or any(h in text for h in _GONE_HINTS):
+        return ("unavailable", "the post is no longer available on the "
+                              "platform (deleted, too old, or it does not "
+                              "support reading comments)")
+    return ("refused", "the platform refused the request")
+
+
+def failure_summary(report):
+    """A compact, grouped one-liner for the sync report's failures, e.g.
+    "5 are no longer available on the platform, 1 need the channel reconnected".
+    The per-post detail stays in report["errors"] and the log; the screen shows
+    this. Empty string when nothing failed."""
+    by_reason = report.get("by_reason") or {}
+    bits = []
+    for cat, phrase in _FAILURE_PHRASES.items():        # known, ordered
+        n = by_reason.get(cat)
+        if n:
+            bits.append(f"{n} {phrase}")
+    for cat, n in by_reason.items():                    # any future category
+        if cat not in _FAILURE_PHRASES and n:
+            bits.append(f"{n} could not be read ({cat})")
+    return ", ".join(bits)
 
 
 def reply(comment, text, actor_id=None):

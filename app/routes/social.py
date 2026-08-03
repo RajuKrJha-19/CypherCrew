@@ -3089,10 +3089,17 @@ def engage_sync():
     # "All caught up" is only honest when we actually managed to look.
     # A run where every request was refused used to say exactly that.
     if report["failed"]:
+        # Compact, grouped summary — never the raw Graph errors, which leak
+        # object ids and read as a scary red wall. The full per-post detail is
+        # in the server log. A channel that needs reconnecting is actionable
+        # ("warning"); posts merely gone from the platform are expected and get
+        # a calm "info" tone. Still fully surfaced with counts + reasons, not
+        # hidden.
+        summary = engage_svc.failure_summary(report)
+        tone = "warning" if "auth" in report["by_reason"] else "info"
         flash(
-            f"Checked {report['checked']} post(s), {report['failed']} could "
-            "not be read: " + "; ".join(report["errors"]) + ".",
-            "error")
+            f"Checked {report['checked']} post(s) — {report['failed']} "
+            f"couldn't be read: {summary}.", tone)
     if report["new"]:
         flash(f"Fetched {report['new']} new comment(s) from the platforms.",
               "success")
