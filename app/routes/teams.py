@@ -351,8 +351,8 @@ def channel_mute(channel_id):
     channels_service.set_muted(channel, current_user, muted)
 
     flash("Channel muted." if muted else "Channel unmuted.", "success")
-    return redirect(request.referrer
-                    or url_for("teams.channel", channel_id=channel.id))
+    from app.utils.redirects import safe_referrer
+    return redirect(safe_referrer("teams.channel", channel_id=channel.id))
 
 
 @teams_bp.route("/c/<int:channel_id>/leave", methods=["POST"])

@@ -46,7 +46,7 @@ def create_app():
 
     @app.errorhandler(RequestEntityTooLarge)
     def _upload_too_large(error):
-        from flask import flash, jsonify, redirect, request, url_for
+        from flask import flash, jsonify, redirect, request
 
         limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
         message = (
@@ -63,7 +63,8 @@ def create_app():
             return jsonify(error="too_large", message=message), 413
 
         flash(message, "error")
-        return redirect(request.referrer or url_for("dashboard.index"))
+        from app.utils.redirects import safe_referrer
+        return redirect(safe_referrer())
 
     # Branded error pages. They extend the minimal base.html (not the app
     # shell) and touch no database, so they render safely even when the
@@ -88,7 +89,7 @@ def create_app():
 
     @app.errorhandler(CSRFError)
     def _csrf_error(error):
-        from flask import flash, jsonify, redirect, request, url_for
+        from flask import flash, jsonify, redirect, request
 
         message = (
             "Your session timed out or the page was open too long. "
@@ -105,7 +106,10 @@ def create_app():
             return jsonify(error="csrf", message=message), 400
 
         flash(message, "error")
-        return redirect(request.referrer or url_for("dashboard.index"))
+        # A cross-origin form post is exactly how this handler is reached, so
+        # the referrer here is the least trustworthy one in the app.
+        from app.utils.redirects import safe_referrer
+        return redirect(safe_referrer())
 
     # Friendly response when a throttle trips: the login form gets a flash
     # + redirect (not a bare 429 page); anything else gets JSON.

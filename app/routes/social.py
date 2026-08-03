@@ -1505,7 +1505,8 @@ def process_queue():
     else:
         flash("Nothing was due. Anything scheduled for later goes out "
               "automatically at its time.", "info")
-    return redirect(request.referrer or url_for("social.queue"))
+    from app.utils.redirects import safe_referrer
+    return redirect(safe_referrer("social.queue"))
 
 
 # ======================================================================
