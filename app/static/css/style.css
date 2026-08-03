@@ -17115,8 +17115,12 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .pf-icon.linkedin{ color:var(--sp-linkedin); background:var(--sp-linkedin-soft); }
 .pf-icon.google_business{ color:var(--sp-google_business); background:var(--sp-google_business-soft); }
 .pf-icon.x{ color:var(--sp-x); background:var(--sp-x-soft); }
-.history-task-id{ font-weight:700; font-size:12.5px; color:var(--color-primary,#4f46e5); text-decoration:none; }
-.history-task-id:hover{ text-decoration:underline; }
+/* The originating task's code, shown on Published, Posts and the Queue board
+   so a post is traceable back to its task from any of the three. */
+.history-task-id,
+.task-id-link{ font-weight:700; font-size:12.5px; color:var(--color-primary,#4f46e5); text-decoration:none; }
+.history-task-id:hover,
+.task-id-link:hover{ text-decoration:underline; }
 .history-row-actions{ display:inline-flex; align-items:center; gap:6px; justify-content:flex-end; }
 /* Native <details> dropdown for per-platform delete - no JS needed. */
 .row-menu{ position:relative; }
@@ -17661,6 +17665,9 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .queue-card{ background:var(--color-surface); border:1px solid var(--color-border);
     border-radius:var(--radius-md); padding:11px 12px; display:flex; flex-direction:column; gap:8px; }
 .queue-card .qc-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+/* The task code sits directly above the post title and belongs with it, so the
+   card's 8px row gap is pulled back in between the two. */
+.queue-card .qc-task{ font-size:11px; margin-bottom:-5px; }
 .queue-card .qc-title{ font-size:12px; font-weight:600; color:var(--color-text);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .queue-card .qc-err{ font-size:11px; color:var(--color-danger); line-height:1.45;

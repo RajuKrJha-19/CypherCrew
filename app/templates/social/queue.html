@@ -9,6 +9,16 @@
         {% if t %}<span class="pf-chip {{ t.platform }}"><i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>{% endif %}
         <span class="sp-pill {{ 'danger' if job.state in ['failed','dead'] else ('' if job.state in ['succeeded','queued'] else 'info') }}">{{ job.state|replace('_',' ') }}</span>
     </div>
+    {# The originating task, same as the Posts and Published lists - a job on
+       this board is usually chased back to its task, so the code is on the
+       card rather than a click away. #}
+    <div class="qc-task">
+        {% if t and t.post and t.post.task_id %}
+        <a href="{{ url_for('tasks.task_detail', task_id=t.post.task_id) }}" data-turbo="false" class="task-id-link" title="Open the originating CypherCrew task">{% if t.post.task and t.post.task.task_code %}#{{ t.post.task.task_code }}{% else %}Task{% endif %}</a>
+        {% elif t and t.post %}
+        <span class="t-subtle" title="Composed directly in Social Studio — not from a CypherCrew task">Direct</span>
+        {% endif %}
+    </div>
     <div class="qc-title">
         {% if t and t.post %}<a class="qc-title-link" href="{{ url_for('social.post_detail', post_id=t.social_post_id) }}">{{ t.post.title or 'Untitled post' }}</a>
         {% else %}Job #{{ job.id }}{% endif %}

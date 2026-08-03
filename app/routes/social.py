@@ -942,11 +942,14 @@ def queue():
 
     from sqlalchemy.orm import joinedload
     cid = _client_arg()
-    # Eager-load target + post (avoids an N+1 across up to 400 jobs) and push
-    # the client filter into the query so LIMIT applies to the client's jobs,
-    # not the global 400 newest.
+    # Eager-load target + post + task (avoids an N+1 across up to 400 jobs -
+    # every card renders the originating task's code) and push the client
+    # filter into the query so LIMIT applies to the client's jobs, not the
+    # global 400 newest.
     query = PublishJob.query.options(
-        joinedload(PublishJob.target).joinedload(SocialPostTarget.post))
+        joinedload(PublishJob.target)
+        .joinedload(SocialPostTarget.post)
+        .joinedload(SocialPost.task))
     if cid:
         query = (
             query.join(SocialPostTarget,
@@ -1531,7 +1534,11 @@ def drafts():
         else q.filter(SocialPost.status.in_(allowed))
     if campaign_f:
         q = q.filter(SocialPost.campaign == campaign_f)
-    posts = q.order_by(SocialPost.updated_at.desc()).limit(200).all()
+    # Eager-load the originating task - the list shows its code on every row,
+    # which would otherwise be an N+1 across up to 200 posts.
+    from sqlalchemy.orm import joinedload
+    posts = (q.options(joinedload(SocialPost.task))
+             .order_by(SocialPost.updated_at.desc()).limit(200).all())
     return render_template("social/drafts.html", posts=posts,
                            status_f=status_f, statuses=allowed,
                            campaign_f=campaign_f,

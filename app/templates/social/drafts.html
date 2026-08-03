@@ -56,6 +56,7 @@
             <thead>
                 <tr>
                     <th class="tight"></th>
+                    <th style="width:90px;">Task ID</th>
                     <th>Title</th>
                     <th>Client</th>
                     <th>Campaign</th>
@@ -70,6 +71,13 @@
                 {% for p in posts %}
                 <tr>
                     <td class="tight"><input type="checkbox" name="post_ids" value="{{ p.id }}" class="studio-check" aria-label="Select {{ p.title or 'post' }}"></td>
+                    <td>
+                        {% if p.task_id %}
+                        <a href="{{ url_for('tasks.task_detail', task_id=p.task_id) }}" data-turbo="false" class="task-id-link" title="Open the originating CypherCrew task">{% if p.task and p.task.task_code %}#{{ p.task.task_code }}{% else %}Task{% endif %}</a>
+                        {% else %}
+                        <span class="t-subtle" title="Composed directly in Social Studio — not from a CypherCrew task">Direct</span>
+                        {% endif %}
+                    </td>
                     <td><a href="{{ url_for('social.post_detail', post_id=p.id) }}">{{ p.title or 'Untitled post' }}</a></td>
                     <td>{{ p.client.client_name if p.client else '—' }}</td>
                     <td class="t-sm">{% if p.campaign %}<span class="sp-pill muted">{{ p.campaign }}</span>{% else %}<span class="t-muted">—</span>{% endif %}</td>

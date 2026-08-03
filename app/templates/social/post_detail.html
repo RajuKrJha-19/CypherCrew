@@ -12,7 +12,7 @@
             {% if post.client %}<span><i class="fa-solid fa-user-tie t-subtle"></i> {{ post.client.client_name }}</span>{% endif %}
             {% if post.campaign %}<span class="sp-pill muted"><i class="fa-solid fa-bullhorn t-subtle"></i> {{ post.campaign }}</span>{% endif %}
             {% if post.created_by %}<span class="t-muted t-sm">by {{ post.created_by.name }}</span>{% endif %}
-            {% if post.task_id and post.task %}<a href="{{ url_for('tasks.task_detail', task_id=post.task_id) }}" data-turbo="false" class="sp-pill info as-link"><i class="fa-solid fa-diagram-project"></i> {{ post.task.title[:40] }}</a>{% endif %}
+            {% if post.task_id and post.task %}<a href="{{ url_for('tasks.task_detail', task_id=post.task_id) }}" data-turbo="false" class="sp-pill info as-link"><i class="fa-solid fa-diagram-project"></i> {% if post.task.task_code %}#{{ post.task.task_code }} · {% endif %}{{ post.task.title[:40] }}</a>{% endif %}
         </p>
     </div>
     <div class="top-actions">
