@@ -313,6 +313,13 @@ def auto_reply_comments_run(client_id=None):
         if any(w in low_reply for w in cfg["blocklist"]) or _has_link(text):
             continue
 
+        # Nothing to post WITH (channel disconnected, platform unsupported) ->
+        # leave it in the human queue. Checked BEFORE the claim so a comment
+        # nobody can answer is never silently consumed by one.
+        if not (get_provider(c.platform) and c.target
+                and c.target.account is not None):
+            continue
+
         # Atomically CLAIM the comment before posting, so two overlapping cron
         # runs can't both post to it (the loser's UPDATE matches 0 rows).
         claimed = (SocialComment.query
@@ -324,16 +331,21 @@ def auto_reply_comments_run(client_id=None):
             continue                            # another run/human took it
 
         try:
-            ext = reply(c, text, actor_id=None)  # posts + records via the poster
+            reply(c, text, actor_id=None)       # posts + records via the poster
         except Exception:  # noqa: BLE001 - one bad post never aborts the run
+            # The claim is deliberately NOT released. The platform may already
+            # have taken the reply - the failure can just as easily come from
+            # reading the response or writing our own record after the POST -
+            # and re-posting it on every later run is an unbounded public
+            # duplicate. One auto-reply that never goes out is the cheaper
+            # failure, so this fails closed and stays loud in the log.
             current_app.logger.exception("[engage] auto-reply post failed")
-            ext = None
-        if ext is None:
-            # Nothing confirmed posted -> release the claim back to the queue.
-            c.replied = False
-            c.status = "open"
-            db.session.commit()
             continue
+
+        # The platform accepted it. `reply()` returns the new comment's id, but
+        # a success whose body carries no id is still a reply that is now live:
+        # treating that as "not posted" is what used to release the claim and
+        # post it again on the next run, past the per-post cap.
         c.auto_sent = True
         db.session.commit()
         per_post[c.target_id] = per_post.get(c.target_id, 0) + 1

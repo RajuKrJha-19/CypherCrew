@@ -173,7 +173,31 @@ def auto_reply_run(account):
         low_reply = text.lower()
         if any(word in low_reply for word in guards["blocklist"]):
             continue
-        get_source().post_reply(review.account, review.external_id, text)
+
+        # Atomically CLAIM the review before posting, so two overlapping cron
+        # runs can't both reply to it - the loser's UPDATE matches 0 rows.
+        # Drafting is a slow model call, so both runs really can reach here
+        # with the same review in hand. The claim comes after the output
+        # guards: a draft that fails them belongs in the human queue, not
+        # marked posted.
+        claimed = (GoogleReview.query
+                   .filter_by(id=review.id, reply_status="pending")
+                   .update({"reply_status": "posted"},
+                           synchronize_session=False))
+        db.session.commit()
+        if not claimed:
+            continue                           # another run/human took it
+
+        try:
+            get_source().post_reply(review.account, review.external_id, text)
+        except Exception:  # noqa: BLE001 - one bad post never aborts the run
+            # Not released, for the same reason as the comment path: Google
+            # may already hold the reply, and re-posting it every run is a
+            # public duplicate on the client's listing.
+            current_app.logger.exception(
+                "[reviews] auto-reply post failed for review %s", review.id)
+            continue
+
         review.reply_text = text
         review.reply_ai_generated = True
         review.auto_sent = True

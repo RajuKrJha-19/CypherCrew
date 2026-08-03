@@ -44,12 +44,53 @@ class CaptionResult:
     variations: list[str] = field(default_factory=list)  # alternative captions
 
 
+#: The only severities the rest of the app understands. `service._worst()`
+#: ranks them to decide clean vs flagged, and the UI picks an icon per value.
+SEVERITIES = ("info", "warning", "error")
+
+#: Words models reach for instead of our three. Every provider asks for
+#: "info|warning|error" in its prompt, but they do not all comply - "Error",
+#: "critical" and "minor" all turn up - and an unmapped value used to rank as
+#: info, so a creative with a wrong phone number was recorded and shown as
+#: CLEAN. Mapped here, once, for every backend.
+_SEVERITY_ALIASES = {
+    "critical": "error", "high": "error", "severe": "error",
+    "major": "error", "blocker": "error", "fail": "error", "failure": "error",
+    "medium": "warning", "moderate": "warning", "warn": "warning",
+    "caution": "warning",
+    "low": "info", "minor": "info", "note": "info", "notice": "info",
+    "suggestion": "info", "nit": "info", "ok": "info", "pass": "info",
+}
+
+
+def normalise_severity(raw):
+    """One of SEVERITIES. Case/whitespace-insensitive, with the common
+    synonyms mapped.
+
+    An unrecognised value becomes "warning", NOT "info": the model chose to
+    raise a finding, so the one outcome that must never happen is it being
+    ranked below the clean/flagged threshold and disappearing. Only a blank
+    severity (the field was absent) is treated as advisory.
+    """
+    value = str(raw or "").strip().lower()
+    if not value:
+        return "info"
+    if value in SEVERITIES:
+        return value
+    return _SEVERITY_ALIASES.get(value, "warning")
+
+
 @dataclass
 class Finding:
     """One media-QA observation. Advisory only - never blocks a workflow."""
     severity: str = "info"              # info | warning | error
     category: str = "general"           # brief | brand | text | spec | safe_area
     message: str = ""
+
+    def __post_init__(self):
+        # Providers build these straight from model output, so normalise at
+        # the one place every backend goes through.
+        self.severity = normalise_severity(self.severity)
 
     def as_dict(self):
         return {"severity": self.severity, "category": self.category,

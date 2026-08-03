@@ -57,9 +57,14 @@ def set_outcome(usage_id, outcome, actor_id=None):
         row = AIUsage.query.get(usage_id)
         if row is None or row.outcome is not None:
             return False
-        # A row tied to a user may only be resolved by that user.
-        if (actor_id is not None and row.user_id is not None
-                and row.user_id != actor_id):
+        # A request carrying an actor (every route call does) may only resolve
+        # that actor's OWN row. The previous check also let an actor through
+        # when the row had no user at all, which meant any signed-in social
+        # user could set the outcome on an unattended auto-reply's row - ids
+        # are sequential, so they are trivially enumerable - and skew the very
+        # keep-rate the metric exists to report. actor_id=None stays
+        # unrestricted: that is the internal/trusted caller.
+        if actor_id is not None and row.user_id != actor_id:
             return False
         row.outcome = outcome
         db.session.commit()
