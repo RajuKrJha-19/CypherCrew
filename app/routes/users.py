@@ -159,7 +159,17 @@ def user_performance(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    if not may_administer(user):
+    # Your own page is always readable once you can reach this route at all.
+    # may_administer() is the *administration* fence: strictly downward
+    # (rank(actor) < rank(target)), so it refuses a peer AND yourself. That is
+    # exactly right for the edit form it was written for - nobody should reset
+    # a peer's password or promote themselves - and wrong here, because reading
+    # your own figures carries none of the escalation risk it exists to stop.
+    # Reusing it meant an admin could open every one of their reports'
+    # performance pages but not their own, and the Performance button on their
+    # own profile bounced them with "your own team". Only the owner got through,
+    # and only because is_owner() short-circuits above the rank check.
+    if not (user.id == current_user.id or may_administer(user)):
         flash("You can only view performance for your own team.", "error")
         return redirect(url_for("users.list_users"))
 
