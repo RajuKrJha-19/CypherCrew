@@ -18283,6 +18283,58 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-asset input.cmp-alt::placeholder{ color:var(--color-text-subtle); }
 .cmp-asset input.cmp-alt:focus{ outline:none; background:var(--color-surface-sunken); }
 
+/* Crop / reframe button on an image asset (mirrors the check, top-left). */
+.cmp-crop-btn{ position:absolute; top:6px; left:6px; width:22px; height:22px; z-index:2;
+    border:0; border-radius:50%; background:rgba(15,23,42,.72); color:#fff; cursor:pointer;
+    display:grid; place-items:center; font-size:11px; opacity:0; transform:scale(.85);
+    transition:opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.cmp-asset:hover .cmp-crop-btn, .cmp-crop-btn:focus-visible{ opacity:1; transform:scale(1); }
+.cmp-crop-btn:hover{ background:var(--color-primary); }
+
+/* ---- Image crop / reframe overlay (media-cropper.js) ---- */
+.mc-overlay{ position:fixed; inset:0; z-index:1200; background:rgba(2,6,23,.6);
+    display:grid; place-items:center; padding:16px; }
+.mc-dialog{ background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-lg, 0 20px 60px rgba(0,0,0,.4));
+    width:min(640px, 96vw); max-height:94vh; overflow:auto; display:flex; flex-direction:column; }
+.mc-head{ display:flex; align-items:center; gap:12px; padding:12px 14px;
+    border-bottom:1px solid var(--color-border); }
+.mc-title{ font-weight:650; font-size:13.5px; color:var(--color-text); }
+.mc-presets{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+.mc-chip{ border:1px solid var(--color-border); background:var(--color-surface); cursor:pointer;
+    color:var(--color-text-muted); font-size:11.5px; font-weight:600; padding:4px 9px;
+    border-radius:999px; }
+.mc-chip:hover{ border-color:var(--color-border-strong); color:var(--color-text); }
+.mc-chip.on{ border-color:var(--color-primary); background:var(--color-primary-soft); color:var(--color-primary); }
+.mc-x{ border:0; background:transparent; color:var(--color-text-muted); font-size:20px; line-height:1;
+    cursor:pointer; padding:0 2px; }
+.mc-x:hover{ color:var(--color-text); }
+.mc-stagewrap{ display:grid; place-items:center; padding:18px; background:var(--color-surface-sunken); }
+.mc-stage{ position:relative; touch-action:none; user-select:none; }
+.mc-img{ display:block; pointer-events:none; }
+.mc-sel{ position:absolute; box-sizing:border-box; border:2px solid #fff;
+    box-shadow:0 0 0 9999px rgba(2,6,23,.5); cursor:move; }
+.mc-h{ position:absolute; width:12px; height:12px; background:#fff; border:1px solid var(--color-primary);
+    border-radius:2px; }
+.mc-h[data-h="nw"]{ top:-6px; left:-6px; cursor:nwse-resize; }
+.mc-h[data-h="ne"]{ top:-6px; right:-6px; cursor:nesw-resize; }
+.mc-h[data-h="sw"]{ bottom:-6px; left:-6px; cursor:nesw-resize; }
+.mc-h[data-h="se"]{ bottom:-6px; right:-6px; cursor:nwse-resize; }
+.mc-h[data-h="n"]{ top:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+.mc-h[data-h="s"]{ bottom:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+.mc-h[data-h="w"]{ left:-6px; top:calc(50% - 6px); cursor:ew-resize; }
+.mc-h[data-h="e"]{ right:-6px; top:calc(50% - 6px); cursor:ew-resize; }
+.mc-foot{ display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 14px; border-top:1px solid var(--color-border); }
+.mc-hint{ font-size:11.5px; color:var(--color-text-subtle); }
+.mc-actions{ display:flex; gap:8px; }
+.mc-btn{ border:1px solid var(--color-border); background:var(--color-surface); cursor:pointer;
+    color:var(--color-text); font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:var(--radius-md); }
+.mc-cancel:hover{ border-color:var(--color-border-strong); }
+.mc-apply{ border-color:var(--color-primary); background:var(--color-primary); color:#fff; }
+.mc-apply:hover{ filter:brightness(1.05); }
+.mc-apply:disabled{ opacity:.6; cursor:default; }
+
 /* Play overlay on a video poster thumbnail */
 .cmp-asset-thumb{ position:relative; }
 .cmp-asset-thumb .pp-play{ position:absolute; inset:0; display:grid; place-items:center;

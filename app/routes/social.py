@@ -2550,6 +2550,67 @@ def upload_media():
                    is_image=mime.startswith("image"), url=url)
 
 
+@social_bp.route("/api/media/crop", methods=["POST"])
+@login_required
+def crop_media_api():
+    """Reframe an image to a chosen aspect. The client sends the source
+    object_key + a normalised rectangle (x,y,w,h in 0..1); we cut the pixels
+    server-side (no cross-origin canvas / no R2 CORS needed) and store the
+    result as a FRESH social_uploads/ object - never overwriting the original,
+    which other posts may share. Returns the same {object_key, mime, url} shape
+    the composer's upload path already consumes."""
+    _guard()
+    import mimetypes
+    from uuid import uuid4
+    from app.social.media import crop as media_crop, pipeline
+    from app.storage.storage_service import StorageService, StorageServiceError
+
+    object_key = (request.form.get("object_key") or "").strip()
+    guessed = (mimetypes.guess_type(object_key)[0] or "").lower()
+    if not object_key or not guessed.startswith("image"):
+        return jsonify(error="That item can't be cropped."), 400
+    # IDOR guard: only crop a file the user can actually see (same rule as AI).
+    if not _media_visible(object_key):
+        return jsonify(error="You can't use that item."), 403
+
+    def _f(name):
+        try:
+            return float(request.form.get(name))
+        except (TypeError, ValueError):
+            return None
+    x, y, w, h = _f("x"), _f("y"), _f("w"), _f("h")
+    if None in (x, y, w, h):
+        return jsonify(error="Invalid crop area."), 400
+
+    try:
+        data = StorageService().read_bytes(object_key)
+    except Exception:  # noqa: BLE001
+        data = None
+    if not data:
+        return jsonify(error="Couldn't read that image."), 400
+
+    try:
+        out, mime = media_crop.crop_image(data, x=x, y=y, w=w, h=h)
+    except media_crop.CropError:
+        return jsonify(error="That image couldn't be cropped."), 400
+
+    new_key = f"social_uploads/{uuid4().hex}_crop.jpg"
+    try:
+        StorageService().put_bytes(data=out, object_key=new_key,
+                                   content_type=mime)
+    except (StorageServiceError, Exception):  # noqa: BLE001
+        current_app.logger.exception("[social-crop] store failed")
+        return jsonify(error="Crop failed — please try again."), 500
+
+    url = None
+    try:
+        url = pipeline.presigned_url(new_key)
+    except Exception:  # noqa: BLE001
+        url = None
+    return jsonify(object_key=new_key, mime=mime, is_image=True,
+                   filename="cropped", url=url)
+
+
 @social_bp.route("/api/mentions")
 @login_required
 def mentions_api():
@@ -2642,10 +2703,10 @@ def _ai_can_view_task(task):
     return can_view_task(task)
 
 
-def _ai_media_allowed(object_key):
-    """May the current user feed this storage object to the AI? Prevents an
-    IDOR where a social-permitted user pulls an AI description/caption for a
-    file they can't otherwise see:
+def _media_visible(object_key):
+    """May the current user act on this storage object (feed it to the AI,
+    crop it)? Prevents an IDOR where a social-permitted user reaches a file
+    they can't otherwise see:
       - ephemeral composer uploads (social_uploads/*) - unguessable keys the
         user just created through the authenticated upload route: allowed;
       - a task-file-backed key: allowed only if the user can view that task;
@@ -2663,6 +2724,10 @@ def _ai_media_allowed(object_key):
     if ClientAsset.query.filter_by(object_key=object_key).first() is not None:
         return True
     return False
+
+
+#: Back-compat alias: the AI caption/alt routes call this name.
+_ai_media_allowed = _media_visible
 
 
 @social_bp.route("/api/ai/caption", methods=["POST"])

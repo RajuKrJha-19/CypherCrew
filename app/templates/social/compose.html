@@ -174,6 +174,7 @@
                         <span class="cmp-asset-thumb">{% if a.is_image and a.url %}<img src="{{ a.url }}" loading="lazy" alt="">{% elif a.mime.startswith('video') and a.object_key %}<img src="{{ url_for('social.media_poster', key=a.object_key) }}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><i class="fa-regular fa-file-video" style="display:none"></i>{% else %}<i class="fa-regular fa-file"></i>{% endif %}</span>
                         <span class="cmp-asset-name">{{ a.filename }}</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                        {% if a.is_image %}<button type="button" class="cmp-crop-btn" data-crop title="Crop / reframe for platforms"><i class="fa-solid fa-crop-simple"></i></button>{% endif %}
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text for {{ a.filename }}" data-altkey="task_file_ids|{{ a.id }}">
                     </label>
                     {% endfor %}
@@ -197,6 +198,7 @@
                         <span class="cmp-asset-thumb">{% if u.is_image and u.url %}<img src="{{ u.url }}" loading="lazy" alt="">{% elif u.mime.startswith('video') and u.object_key %}<img src="{{ url_for('social.media_poster', key=u.object_key) }}" loading="lazy" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><i class="fa-regular fa-file-video" style="display:none"></i>{% else %}<i class="fa-regular fa-file-video"></i>{% endif %}</span>
                         <span class="cmp-asset-name">uploaded</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
+                        {% if u.is_image %}<button type="button" class="cmp-crop-btn" data-crop title="Crop / reframe for platforms"><i class="fa-solid fa-crop-simple"></i></button>{% endif %}
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|{{ u.object_key }}::{{ u.mime }}">
                     </label>
                     {% endfor %}
@@ -1282,9 +1284,11 @@
         const thumb=(d.is_image&&d.url)?'<img src="'+d.url+'" alt="">'
             :(poster?'<img src="'+poster+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\';"><i class="fa-regular fa-file-video" style="display:none"></i>'
             :'<i class="fa-regular fa-file-video"></i>');
+        var cropBtn=(d.is_image)?'<button type="button" class="cmp-crop-btn" data-crop title="Crop / reframe for platforms"><i class="fa-solid fa-crop-simple"></i></button>':'';
         lab.innerHTML='<input type="checkbox" name="upload_media" value="'+d.object_key+'::'+d.mime+'" data-url="'+(d.url||"")+'" data-mime="'+(d.mime||"")+'" data-key="'+d.object_key+'" checked>'
             +'<span class="ord"></span><span class="cmp-asset-thumb">'+thumb+'</span>'
             +'<span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
+            +cropBtn
             +'<input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|'+d.object_key+'::'+d.mime+'">';
         uploadGrid.appendChild(lab);
         const cb=lab.querySelector('input[type="checkbox"]');
@@ -1312,6 +1316,48 @@
     // wire server-rendered uploaded items (edit mode)
     if(uploadGrid) uploadGrid.querySelectorAll('input[name="upload_media"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
 
+    // ---- Image crop / reframe ----
+    // The initial crop aspect = what the first selected platform displays this
+    // post type at (e.g. IG image 1:1, story 9:16) - the same number the
+    // safe-area overlay warns about; the user can pick any preset in the tool.
+    function composerTargetAspect(){
+        var pt=postType(), pfs=selectedPlatforms();
+        for(var i=0;i<pfs.length;i++){
+            var spec = caps[pfs[i]] && caps[pfs[i]].media_specs ? caps[pfs[i]].media_specs[pt] : null;
+            if(spec && spec.display_aspect) return spec.display_aspect;
+        }
+        return null;
+    }
+    document.addEventListener("click", function(ev){
+        var btn = ev.target.closest ? ev.target.closest("[data-crop]") : null;
+        if(!btn) return;
+        ev.preventDefault(); ev.stopPropagation();       // never toggle the checkbox
+        if(!window.MediaCropper || !window.MEDIA_CROP_URL) return;
+        var asset = btn.closest(".cmp-asset");
+        var cb = asset && asset.querySelector('input[type="checkbox"]');
+        if(!cb || !cb.dataset.url){
+            (window.showToast||alert)("Preview isn't ready yet — try again in a moment.");
+            return;
+        }
+        var altEl = asset.querySelector(".cmp-alt");
+        window.MediaCropper.open({
+            imageUrl: cb.dataset.url,
+            objectKey: cb.dataset.key,
+            aspect: composerTargetAspect(),
+            onApplied: function(d){
+                addUploaded(d);                          // appends a checked upload
+                var lab = uploadGrid.lastElementChild;
+                if(lab && altEl && altEl.value){
+                    var na = lab.querySelector(".cmp-alt"); if(na) na.value = altEl.value;
+                }
+                // Deselect the original so the reframed copy is what publishes.
+                if(cb.checked){ cb.checked = false; mediaChanged(cb); }
+                if(window.showToast) window.showToast("Reframed image added — original deselected.", "success");
+            },
+            onError: function(msg){ if(window.showToast) window.showToast(msg, "error"); else alert(msg); }
+        });
+    });
+
     // Per-channel schedule only applies when scheduling for later; on
     // "publish as soon as approved" the shared time is moot and the per-channel
     // rows are hidden so nobody sets a time that will be ignored.
@@ -1336,6 +1382,8 @@
 })();
 </script>
 {% endif %}
+<script>window.MEDIA_CROP_URL = "{{ url_for('social.crop_media_api') }}";</script>
+<script src="{{ asset_url('js/media-cropper.js') }}" defer></script>
 {% if ai_enabled and ai_features.caption %}
 <script>
     window.AI_CAPTION_URL = "{{ url_for('social.ai_caption_api') }}";
