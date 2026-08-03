@@ -1,0 +1,50 @@
+{% extends "base_studio.html" %}
+{% block title %}Grid planner · Social Studio | CypherCrew{% endblock %}
+
+{% set STATUS_TONE = {'published':'success','partially_published':'success','approved':'info','scheduled':'warning','publishing':'info'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Grid planner</h1>
+        <p>How the Instagram feed comes together — published and upcoming posts, newest first. Keep the aesthetic consistent before anything ships.</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> New post</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert {{ category }}">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{% if cells %}
+<div class="grid-legend">
+    <span><i class="fa-solid fa-circle" style="color:var(--color-success)"></i> Published</span>
+    <span><i class="fa-solid fa-circle" style="color:var(--color-warning)"></i> Scheduled / upcoming</span>
+    <span class="t-subtle">Newest first · Instagram only</span>
+</div>
+<div class="ig-grid">
+    {% for c in cells %}
+    <a class="ig-cell {{ 'is-upcoming' if c.status not in ['published','partially_published'] }}"
+       href="{{ url_for('social.post_detail', post_id=c.post_id) }}"
+       title="{{ c.status.replace('_',' ')|capitalize }}{% if c.when %} · {{ c.when.strftime('%d %b %H:%M') }}{% endif %}">
+        {% if c.thumb %}<img src="{{ c.thumb }}" loading="lazy" alt="">
+        {% else %}<span class="ig-cell-empty"><i class="fa-regular fa-image"></i></span>{% endif %}
+        {% if c.is_video or c.post_type in ['reel','video'] %}<span class="ig-cell-badge tr"><i class="fa-solid fa-play"></i></span>{% endif %}
+        {% if c.post_type == 'carousel' %}<span class="ig-cell-badge tr"><i class="fa-solid fa-clone"></i></span>{% endif %}
+        <span class="ig-cell-status sp-pill {{ STATUS_TONE.get(c.status,'muted') }}">{{ c.status.replace('_',' ') }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="social-card empty-state">
+    <i class="fa-solid fa-table-cells-large"></i>
+    <h3>No Instagram posts yet</h3>
+    <p>Once this client has Instagram posts scheduled or published, the feed grid appears here.</p>
+    <a href="{{ url_for('social.compose', client=selected_client_id) }}" class="btn"><i class="fa-solid fa-pen-to-square"></i> Create a post</a>
+</div>
+{% endif %}
+{% endblock %}

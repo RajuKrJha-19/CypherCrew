@@ -100,6 +100,7 @@
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
+                    <button type="button" class="cmp-linkbtn" id="tagsToFc" title="Move the caption's #hashtags into the first comment (keeps the caption clean)"><i class="fa-solid fa-turn-down"></i> #tags → first comment</button>
                     {% if ai_enabled and ai_features.caption %}
                     <select class="cmp-set-select" id="aiTone" aria-label="Caption tone">
                         <option value="">Auto tone</option>
@@ -387,10 +388,12 @@
                     <span class="cmp-label">Schedule <small>Times are IST</small></span>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="schedule" checked> Schedule for later</label>
                     <input type="datetime-local" name="schedule" id="scheduleInput" aria-label="Scheduled date and time (IST)" value="{{ schedule_value }}">
+                    <p class="cmp-hint-inline cmp-besttime" id="bestTimeHint" hidden></p>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="queue"> Add to the posting queue</label>
                     <p class="cmp-hint-inline" id="queueHint" hidden><i class="fa-solid fa-layer-group"></i> Each channel fills its next open slot from its posting schedule (set in Settings). A per-channel time overrides its slot.</p>
                     <label class="cmp-radio"><input type="radio" name="publish_mode" value="now"> Publish as soon as approved</label>
                 </div>
+                <div class="cmp-checklist" id="composerChecklist" hidden></div>
                 <div class="cmp-submit-row">
                     <button type="submit" class="btn btn-secondary">
                         <i class="fa-solid fa-floppy-disk"></i> {{ 'Save changes' if post else 'Save draft' }}
@@ -455,8 +458,79 @@
         // override chips and the preview counter.
         captionCount.textContent = `${caption.value.length}`;
         renderPreview();
+        refreshChecklist();
     }
     caption.addEventListener("input", updateCaption);
+
+    // ---- Quick-win composer helpers (fold/hashtags/checklist/best-time) ----
+    function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    // Per-network caption fold points (where the feed shows "… more").
+    const CAPTION_FOLD = {instagram:125, facebook:477, linkedin:210, x:280, youtube:100, google_business:150};
+    function renderCaptionPreview(pf, text){
+        const fold = CAPTION_FOLD[pf] || 200, truncated = text.length > fold;
+        let html = escapeHtml(truncated ? text.slice(0, fold) : text)
+            .replace(/(^|\s)([#@][\wÀ-ſ]+)/g, '$1<span class="pp-tag">$2</span>');
+        if(truncated) html += '<span class="pp-more">… more</span>';
+        return html;
+    }
+    // Move #hashtags out of the caption into the first comment (IG best practice).
+    const HASHTAG_RE = /#[\wÀ-ſ]+/g;
+    function moveHashtagsToFirstComment(){
+        const tags = caption.value.match(HASHTAG_RE) || [];
+        if(!tags.length){ (window.showToast||window.alert)("No #hashtags in the caption to move."); return; }
+        caption.value = caption.value.replace(HASHTAG_RE, "")
+            .replace(/[ \t]{2,}/g," ").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+        const fc = $("firstComment"), block = tags.join(" ");
+        fc.value = fc.value.trim() ? (fc.value.trim() + "\n" + block) : block;
+        updateCaption(); fc.dispatchEvent(new Event("input",{bubbles:true}));
+        if(window.showToast) window.showToast("Moved "+tags.length+" hashtag(s) to the first comment.","success");
+    }
+    // Advisory pre-publish checklist (never blocks): IG 30-tag cap, missing alt.
+    function refreshChecklist(){
+        const box=$("composerChecklist"); if(!box) return;
+        const items=[], sel=selectedPlatforms();
+        if(sel.indexOf("instagram")>-1){
+            const n=(overrideCaption("instagram").match(HASHTAG_RE)||[]).length;
+            if(n>30) items.push("Instagram allows 30 hashtags — this caption has "+n+".");
+        }
+        let missingAlt=0;
+        selectedMediaInputs().forEach(function(inp){
+            if((inp.dataset.mime||"").indexOf("image")!==0) return;
+            const asset=inp.closest(".cmp-asset"), alt=asset && asset.querySelector(".cmp-alt");
+            if(alt && !alt.value.trim()) missingAlt++;
+        });
+        if(missingAlt) items.push(missingAlt+" image"+(missingAlt>1?"s":"")+" missing alt-text — add it (or use “Alt-text for images”) for accessibility.");
+        if(!items.length){ box.hidden=true; box.innerHTML=""; return; }
+        box.hidden=false;
+        box.innerHTML='<div class="cmp-check-head"><i class="fa-solid fa-circle-info"></i> Before you publish</div>'
+            + items.map(function(t){ return '<div class="cmp-check-item">'+escapeHtml(t)+'</div>'; }).join("");
+    }
+    // Inline best-time hint next to the schedule field.
+    let bestTimeValue=null;
+    function refreshBestTime(){
+        const hint=$("bestTimeHint"); if(!hint) return;
+        if(scheduleMode()!=="schedule"){ hint.hidden=true; return; }
+        const ids=accountsChecked().map(c=>c.value).filter(Boolean);
+        if(!ids.length){ hint.hidden=true; return; }
+        fetch("{{ url_for('social.best_time_api') }}?account_ids="+encodeURIComponent(ids.join(",")))
+          .then(r=>r.json()).then(function(d){
+              if(!d || !d.value){ hint.hidden=true; return; }
+              bestTimeValue=d.value; hint.hidden=false;
+              hint.innerHTML='<i class="fa-solid fa-clock"></i> Suggested time: <b>'+escapeHtml(d.label||"")+'</b>'
+                +(d.channel?(' <span class="t-subtle">('+escapeHtml(d.channel)+')</span>'):'')
+                +' — <a href="#" id="applyBestTime">use it</a>';
+          }).catch(function(){ hint.hidden=true; });
+    }
+    const _tagsBtn=$("tagsToFc"); if(_tagsBtn) _tagsBtn.addEventListener("click", moveHashtagsToFirstComment);
+    document.addEventListener("click", function(ev){
+        var a=ev.target.closest ? ev.target.closest("#applyBestTime") : null;
+        if(!a) return; ev.preventDefault();
+        if(bestTimeValue){ const s=$("scheduleInput"); if(s){ s.value=bestTimeValue; s.dispatchEvent(new Event("change",{bubbles:true})); } }
+    });
+    // Keep the checklist honest as the user edits alt-text.
+    document.addEventListener("input", function(ev){
+        if(ev.target && ev.target.classList && ev.target.classList.contains("cmp-alt")) refreshChecklist();
+    });
 
     // post type
     $("postTypes").addEventListener("change", function(){
@@ -534,6 +608,7 @@
         refreshPreviewTabs();
         refreshStory();
         refreshTypeWarn(); updateCaption();
+        refreshBestTime();
     }
 
     // "Also share to Story" — applies to any selected channel whose
@@ -798,7 +873,7 @@
         $("ppName").textContent = acct?acct.dataset.name:(PP_NAME[pf]||"Your account");
         $("ppSub").textContent = PP_SUB[pf]||"Just now";
         const text=overrideCaption(pf).trim(); const cap=$("ppCaption");
-        if(text)cap.textContent=text; else cap.innerHTML='<span class="ph">Your caption preview…</span>';
+        if(text)cap.innerHTML=renderCaptionPreview(pf, text); else cap.innerHTML='<span class="ph">Your caption preview…</span>';
         const ppCount=$("ppCount");
         if(ppCount){ const c=caps[pf], max=c&&c.max_caption_chars; ppCount.textContent = max?`${text.length} / ${max}`:""; ppCount.classList.toggle("over", max&&text.length>max); }
         const media=$("ppMedia"); let cls="pp-media";
@@ -1188,6 +1263,7 @@
             document.querySelectorAll(MEDIA_SEL).forEach(o=>{ if(o!==inp)o.checked=false; });
         }
         refreshMediaSelection();
+        refreshChecklist();
     }
     // Client safety: only show channels bound to the selected client (or
     // agency-wide, unbound). Mismatched channels are hidden + unchecked so
@@ -1372,13 +1448,14 @@
         document.querySelectorAll('.cmp-override-sched').forEach(el=>{ el.style.display = now ? "none" : ""; });
         const qh=$("queueHint"); if(qh) qh.hidden = !queue;
     }
-    document.querySelectorAll('input[name="publish_mode"]').forEach(r=>r.addEventListener("change", refreshScheduleMode));
+    document.querySelectorAll('input[name="publish_mode"]').forEach(r=>r.addEventListener("change", function(){ refreshScheduleMode(); refreshBestTime(); }));
 
     // init
     filterAccountsByClient();
     refreshAccounts(); applyType();
     refreshScheduleMode();
     renderPreview();
+    refreshChecklist(); refreshBestTime();
 })();
 </script>
 {% endif %}

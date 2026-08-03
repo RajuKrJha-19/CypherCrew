@@ -2611,6 +2611,38 @@ def crop_media_api():
                    filename="cropped", url=url)
 
 
+@social_bp.route("/api/best-time", methods=["GET"])
+@login_required
+def best_time_api():
+    """Inline 'best time to post' hint for the composer: the earliest open
+    posting slot across the selected channels (their configured cadence, or
+    sensible defaults). Returns an IST value the schedule field can apply."""
+    _guard()
+    from app.social.services import queue_slots
+    from app.utils.timezone import IST_OFFSET
+
+    best, best_acct = None, None
+    for raw in _csv(request.args.get("account_ids")):
+        try:
+            aid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        slot = queue_slots.next_open_slot(aid)      # naive UTC, or None
+        if slot and (best is None or slot < best):
+            best, best_acct = slot, aid
+    if best is None:
+        return jsonify(value=None)
+
+    ist = best + IST_OFFSET
+    acct = SocialAccount.query.get(best_acct) if best_acct else None
+    # Build the 12-hour label by hand - %-I / %l aren't portable (Windows).
+    hour12 = ist.hour % 12 or 12
+    ampm = "AM" if ist.hour < 12 else "PM"
+    label = ist.strftime("%a %d %b, ") + f"{hour12}:{ist.minute:02d} {ampm}"
+    return jsonify(value=ist.strftime("%Y-%m-%dT%H:%M"), label=label,
+                   channel=getattr(acct, "display_name", None))
+
+
 @social_bp.route("/api/mentions")
 @login_required
 def mentions_api():
@@ -3045,6 +3077,61 @@ def history():
     cid = _client_arg()
     rows = _published_post_rows(cid)
     return render_template("social/history.html", rows=rows)
+
+
+def _grid_cells(client_id, limit=60):
+    """Instagram feed planner: the client's IG targets (published + upcoming),
+    newest first, each as a cell with a thumbnail + status + link. Read-only -
+    a visual aesthetic overview of the feed, not a re-orderer (you can't reorder
+    already-published posts on Instagram)."""
+    from app.social.media import pipeline
+
+    q = SocialPostTarget.query.filter(
+        SocialPostTarget.platform == "instagram",
+        SocialPostTarget.status.in_(
+            ["published", "publishing", "scheduled", "approved"]))
+    if client_id:
+        q = (q.join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
+              .filter(SocialPost.client_id == client_id))
+    targets = q.all()
+    # Newest first by the time it went / will go live (fall back to created).
+    targets.sort(key=lambda t: (t.scheduled_for or t.created_at), reverse=True)
+
+    cells = []
+    for t in targets[:limit]:
+        thumb, is_video = None, False
+        for m in t.media:
+            if not m.object_key:
+                continue
+            if (m.mime_type or "").startswith("image"):
+                try:
+                    thumb = pipeline.presigned_url(m.object_key)
+                except Exception:  # noqa: BLE001
+                    thumb = None
+                break
+            if (m.mime_type or "").startswith("video") and thumb is None:
+                thumb = url_for("social.media_poster", key=m.object_key)
+                is_video = True
+        cells.append({
+            "post_id": t.social_post_id,
+            "status": t.status,
+            "when": t.scheduled_for or t.created_at,
+            "permalink": t.permalink,
+            "thumb": thumb,
+            "is_video": is_video,
+            "post_type": t.post_type,
+        })
+    return cells
+
+
+@social_bp.route("/grid")
+@login_required
+def grid():
+    """A visual Instagram feed planner - see the client's grid come together
+    (published + scheduled) so the aesthetic stays consistent."""
+    _guard()
+    cid = _client_arg()
+    return render_template("social/grid.html", cells=_grid_cells(cid))
 
 
 # ======================================================================

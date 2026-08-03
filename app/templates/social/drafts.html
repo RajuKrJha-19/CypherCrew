@@ -94,6 +94,7 @@
                     <td>
                         <div class="row-actions">
                             <a href="{{ url_for('social.post_detail', post_id=p.id) }}" class="row-action"><i class="fa-solid fa-eye"></i> Open</a>
+                            <button type="button" class="row-action" data-duplicate-url="{{ url_for('social.duplicate_post', post_id=p.id) }}" title="Copy into a new editable draft"><i class="fa-solid fa-copy"></i> Duplicate</button>
                         </div>
                     </td>
                 </tr>
@@ -109,6 +110,19 @@
     var all = document.getElementById("selectAll");
     if (all) all.addEventListener("change", function(){
         document.querySelectorAll('#draftsBulk input[name="post_ids"]').forEach(function(c){ c.checked = all.checked; });
+    });
+    // Duplicate a row into a new draft. duplicate_post is POST (CSRF-guarded)
+    // and redirects into the composer; a synthetic form with the csrf token
+    // (which the bulk form's own submit can't carry to a different action).
+    document.addEventListener("click", function(ev){
+        var b = ev.target.closest ? ev.target.closest("[data-duplicate-url]") : null;
+        if(!b) return;
+        ev.preventDefault();
+        var f = document.createElement("form");
+        f.method = "POST"; f.action = b.getAttribute("data-duplicate-url");
+        var m = document.querySelector('meta[name="csrf-token"]');
+        if(m){ var i=document.createElement("input"); i.type="hidden"; i.name="csrf_token"; i.value=m.getAttribute("content"); f.appendChild(i); }
+        document.body.appendChild(f); f.submit();
     });
 })();
 </script>
