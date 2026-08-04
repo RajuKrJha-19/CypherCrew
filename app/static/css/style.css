@@ -17789,6 +17789,20 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 @media(max-width:1180px){ .composer-3col .composer-side-rail{ position:static; } }
 .cmp-section{ display:flex; flex-direction:column; gap:7px; }
 .cmp-section + .cmp-section{ margin-top:18px; }
+
+/* Step-group headers (Content / Media) — organise the long form into a clear
+   top-to-bottom flow with consistent rhythm. */
+.cmp-group-head{ display:flex; align-items:center; gap:9px; margin:26px 0 14px;
+    padding-bottom:9px; border-bottom:1px solid var(--color-border);
+    font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--color-text-subtle); }
+.cmp-group-head:first-child{ margin-top:0; }
+.cmp-group-num{ display:inline-grid; place-items:center; width:20px; height:20px; flex:none;
+    border-radius:50%; background:var(--color-primary-soft); color:var(--color-primary);
+    font-size:11px; font-weight:700; }
+/* The header already provides the separation, so the section right after it
+   should not add the usual 18px on top. */
+.cmp-group-head + .cmp-section{ margin-top:0; }
 /* The composer's first section sits under a field pair, not under another
    section, so it needs the same gap - this is what six copies of
    style="margin-top:16px" were doing. */

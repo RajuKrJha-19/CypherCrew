@@ -65,6 +65,8 @@
                     <label class="cmp-checkline"><input type="checkbox" name="add_utm" id="addUtm"> Add UTM tags to links <small>attributes clicks in the client’s analytics</small></label></label>
             </div>
 
+            <div class="cmp-group-head"><span class="cmp-group-num">1</span> Content</div>
+
             {# --- Post type --- #}
             <div class="cmp-section">
                 <span class="cmp-label">Post type</span>
@@ -163,6 +165,8 @@
                 <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" data-emoji-field placeholder="e.g. #hashtags or a link — kept out of the caption, posted as the first comment">{{ first_comment }}</textarea>
                 <span class="cmp-hint-inline" id="fcHint"></span>
             </div>
+
+            <div class="cmp-group-head"><span class="cmp-group-num">2</span> Media</div>
 
             {# --- Media: task deliverables (if from a task) --- #}
             {% if task_assets %}
@@ -370,7 +374,7 @@
         </div>
 
         <div class="social-card">
-            <div class="social-card-head"><h3><i class="fa-solid fa-sliders"></i> Publishing</h3></div>
+            <div class="social-card-head"><h3><i class="fa-solid fa-paper-plane"></i> Channels &amp; schedule</h3></div>
             <div class="social-card-body">
                 <div class="cmp-section">
                     <span class="cmp-label">Publish to <small id="accountCount"></small></span>
