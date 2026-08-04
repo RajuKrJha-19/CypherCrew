@@ -74,14 +74,15 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Brand do's &amp; don'ts / guideline notes &mdash; AI assist</label>
+                    <label>Writing-style rules &mdash; AI assist</label>
                     <p class="form-hint">
-                        Rules the AI should respect when drafting captions and,
-                        later, checking submitted media — colours, logo usage,
-                        words to avoid, claims to never make.
+                        <em>How</em> captions should be written — structure, length,
+                        CTA, hashtag placement, formatting. Facts, offers and
+                        compliance do's/don'ts belong in the Client Brain below, not
+                        here — keep this to style so the two don't overlap.
                     </p>
                     <textarea name="brand_guidelines_notes" rows="4"
-                        placeholder="Do: terracotta accent, serif headings.&#10;Don't: stock photos, discount language, competitor names.">{{ client.brand_guidelines_notes or '' }}</textarea>
+                        placeholder="Do: hook in the first line; end with one clear CTA; hashtags in the first comment.&#10;Don't: ALL-CAPS, emoji overload, clichés, competitor names.">{{ client.brand_guidelines_notes or '' }}</textarea>
                 </div>
 
                 <details class="client-brain">
