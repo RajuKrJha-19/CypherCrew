@@ -644,9 +644,16 @@ def accounts():
     accts = AccountManager.list_accounts(include_revoked=False)
     studio_clients = _studio_clients()
     groups = _grouped_accounts(accts)
+    # Ad accounts (Engage ad-comment ingestion) are not publishable channels, so
+    # they're hidden from `accts`; surface them separately here to map -> client.
+    ad_accounts = [a for a in AccountManager.list_accounts(
+        include_revoked=False, include_ad_accounts=True)
+        if a.account_type == "ad_account"]
     return render_template(
         "social/accounts.html",
         groups=groups,
+        ad_accounts=ad_accounts,
+        ads_enabled=bool(current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED")),
         # The page renders from these: one section per client, the channels
         # that serve them inside. `groups` stays for the empty-state check.
         client_sections=_channels_by_client(groups, studio_clients),
@@ -678,7 +685,8 @@ def set_account_client(account_id):
     account.client_id = client_id or None
     # An Instagram account belongs to the same brand as its parent Page -
     # keep any linked IG accounts in sync so they can't drift to another client.
-    if account.platform == "facebook":
+    # (Ad accounts have no linked IG, so skip the sweep for them.)
+    if account.platform == "facebook" and account.account_type != "ad_account":
         page_id = (account.meta or {}).get("page_id") or account.external_id
         for ig in SocialAccount.query.filter_by(platform="instagram").all():
             if (ig.meta or {}).get("page_id") == page_id:

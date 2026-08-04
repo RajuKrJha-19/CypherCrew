@@ -17,7 +17,8 @@ from app.social.tokens.vault import get_vault
 class AccountManager:
 
     @staticmethod
-    def list_accounts(client_id=None, platform=None, include_revoked=False):
+    def list_accounts(client_id=None, platform=None, include_revoked=False,
+                      include_ad_accounts=False):
         q = SocialAccount.query
         if client_id is not None:
             q = q.filter(SocialAccount.client_id == client_id)
@@ -25,6 +26,12 @@ class AccountManager:
             q = q.filter(SocialAccount.platform == platform)
         if not include_revoked:
             q = q.filter(SocialAccount.status != "revoked")
+        # Ad accounts are NOT publishable channels - they exist only to pull ad
+        # comments into Engage. Excluded everywhere by default so they never
+        # appear as a publish target in the composer; the Channels screen opts
+        # in to show + map them.
+        if not include_ad_accounts:
+            q = q.filter(SocialAccount.account_type != "ad_account")
         return q.order_by(SocialAccount.platform, SocialAccount.display_name).all()
 
     @staticmethod

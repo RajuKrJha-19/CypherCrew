@@ -155,6 +155,29 @@ class MetaFacebookProvider(MetaBaseProvider):
                 )
             except Exception:  # noqa: BLE001 - logging must never break connect
                 pass
+
+        # Ad accounts, for pulling ad/boosted-post comments into Engage. Gated +
+        # best-effort: a missing ads_read grant or ANY error must never break
+        # the Page connect above. Stored with the USER token (which carries
+        # ads_read); an admin maps each to a client on the Channels screen. Not
+        # a publishable channel - list_accounts hides account_type="ad_account".
+        try:
+            from flask import current_app
+            if current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED"):
+                ad_resp = self.graph().get(
+                    "me/adaccounts", token=token,
+                    params={"fields": "id,name", "limit": 50})
+                for acc in (ad_resp.get("data") or []):
+                    acc_id = acc.get("id")
+                    if acc_id:
+                        accounts.append(AccountInfo(
+                            external_id=acc_id,
+                            display_name=acc.get("name") or acc_id,
+                            account_type="ad_account",
+                            access_token=token,
+                            meta={"ad_account_id": acc_id}))
+        except Exception:  # noqa: BLE001 - never break Page connect
+            pass
         return accounts
 
     # -- Validation --------------------------------------------------------

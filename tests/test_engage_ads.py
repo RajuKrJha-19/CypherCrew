@@ -150,3 +150,59 @@ def test_ad_post_excluded_from_history(session):
     rows = _published_post_rows(c.id)
     sources = {row["post"].source for row in rows}
     assert "ad" not in sources and "studio" in sources
+
+
+# -- ad accounts are not publishable channels (composer safety) -------------
+
+def test_ad_accounts_hidden_from_publishable_list(session):
+    from app.social.services.accounts import AccountManager
+
+    c = _client(session)
+    _account(session, "facebook", "PAGEZ", c.id)
+    _account(session, "facebook", "act_Z", c.id, account_type="ad_account")
+
+    publishable = AccountManager.list_accounts()
+    assert not any(a.account_type == "ad_account" for a in publishable)
+    everything = AccountManager.list_accounts(include_ad_accounts=True)
+    assert any(a.account_type == "ad_account" for a in everything)
+
+
+# -- OAuth discovery of ad accounts (gated + best-effort) -------------------
+
+class _DiscoveryGraph:
+    def get(self, path, token=None, params=None):
+        if path == "me/accounts":
+            return {"data": [{"id": "P1", "name": "Page",
+                              "access_token": "pt", "tasks": []}], "paging": {}}
+        if path == "me/adaccounts":
+            return {"data": [{"id": "act_9", "name": "Ads"}]}
+        return {"data": []}
+
+
+def _fb_provider(monkeypatch):
+    from app.social.providers.meta_facebook import MetaFacebookProvider
+    p = MetaFacebookProvider()
+    monkeypatch.setattr(p, "graph", lambda: _DiscoveryGraph())
+    return p
+
+
+def test_discovery_finds_ad_accounts_when_enabled(app, monkeypatch):
+    p = _fb_provider(monkeypatch)
+    with app.app_context():
+        app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = True
+        try:
+            accts = p.list_publishable_accounts("usertoken")
+        finally:
+            app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = False
+    types = {a.account_type for a in accts}
+    assert "page" in types and "ad_account" in types
+    ad = next(a for a in accts if a.account_type == "ad_account")
+    # Stored with the USER token (carries ads_read), keyed by act_<id>.
+    assert ad.external_id == "act_9" and ad.access_token == "usertoken"
+
+
+def test_discovery_skips_ad_accounts_when_disabled(app, monkeypatch):
+    p = _fb_provider(monkeypatch)
+    with app.app_context():                    # flag off by default
+        accts = p.list_publishable_accounts("usertoken")
+    assert not any(a.account_type == "ad_account" for a in accts)

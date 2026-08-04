@@ -173,6 +173,42 @@
 {% endfor %}
 {% endif %}
 
+{# ---- Ad accounts (Engage ad-comment ingestion) ---- #}
+{% if ads_enabled or ad_accounts %}
+<div class="social-card" id="ad-accounts">
+    <div class="social-card-head">
+        <h2><i class="fa-solid fa-bullhorn"></i> Ad accounts <small class="t-subtle">· for Engage ad comments</small></h2>
+    </div>
+    <div class="social-card-body">
+        <p class="form-hint">Map an ad account to a client to pull comments on its ads / boosted posts into Engage’s <strong>Ad comments</strong> tab. These are not publishing channels — you can’t compose to them.</p>
+        {% if ad_accounts %}
+        <div class="table-card studio-table">
+            <table>
+                <thead><tr><th>Ad account</th><th style="width:220px;">Client</th></tr></thead>
+                <tbody>
+                {% for a in ad_accounts %}
+                <tr>
+                    <td><i class="fa-solid fa-bullhorn t-subtle"></i> {{ a.display_name }} <small class="t-subtle">{{ a.external_id }}</small></td>
+                    <td>
+                        <form method="POST" action="{{ url_for('social.set_account_client', account_id=a.id) }}" data-turbo="false">
+                            <select name="client_id" onchange="this.form.requestSubmit()" aria-label="Assign this ad account to a client">
+                                <option value="">— Unmapped —</option>
+                                {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if a.client_id == c.id }}>{{ c.client_name }}</option>{% endfor %}
+                            </select>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="t-subtle">No ad accounts discovered yet. Reconnect a Facebook channel (with the ads permission granted) to discover them.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# ---- Connect a channel ---- #}
 <div class="social-card" id="connect">
     <div class="social-card-head">
