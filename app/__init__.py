@@ -190,6 +190,11 @@ def create_app():
         app.register_blueprint(social_bp)
         app.register_blueprint(oauth_bp)
 
+        # Inbound Meta comment webhooks (real-time, push instead of polling).
+        # Signature-verified; dormant unless META_WEBHOOK_ENABLED.
+        from app.routes.webhooks import webhooks_bp
+        app.register_blueprint(webhooks_bp)
+
         # Local Graph API emulator - lets the real Meta provider be exercised
         # end-to-end without a real Meta app. Dev/test only.
         if app.config.get("META_EMULATOR"):

@@ -6,7 +6,7 @@ are posted back to the platform and stored (is_ours=True) so a thread reads
 end-to-end. Best-effort throughout: one unreachable post never aborts a sync.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from flask import current_app
@@ -128,6 +128,46 @@ def sync_comments(client_id=None):
 
     db.session.commit()
     return report
+
+
+def ingest_comment_event(platform, external_post_id, *, external_id,
+                         author_id=None, author_name=None, message=None,
+                         parent_external_id=None, created_time=None):
+    """Materialise ONE comment pushed by a Meta webhook (no polling).
+
+    Finds the tracked target by external_post_id and returns None if we don't
+    track that post (a comment on something not published/discovered here).
+    Dedupes by (platform, external_id) - a re-delivered webhook is a no-op.
+    is_ours is set the same way as the bulk sync (author == our page/IG id), so
+    a reply we typed natively never gets auto-answered. Returns (comment,
+    created) - created=False for a duplicate."""
+    target = (SocialPostTarget.query
+              .filter_by(platform=platform, external_post_id=external_post_id)
+              .first())
+    if target is None:
+        return None, False
+    existing = SocialComment.query.filter_by(
+        platform=platform, external_id=external_id).first()
+    if existing is not None:
+        existing.fetched_at = datetime.utcnow()
+        db.session.commit()
+        return existing, False
+    own_id = str(getattr(target.account, "external_id", "") or "")
+    comment = SocialComment(
+        target_id=target.id, platform=platform, external_id=external_id,
+        parent_external_id=parent_external_id, author_name=author_name,
+        author_id=author_id, message=message, created_time=created_time,
+        is_ours=bool(own_id and str(author_id or "") == own_id),
+        status="open", fetched_at=datetime.utcnow())
+    try:
+        with db.session.begin_nested():          # same anti-collision guard as sync
+            db.session.add(comment)
+            db.session.flush()
+    except IntegrityError:
+        return (SocialComment.query.filter_by(
+            platform=platform, external_id=external_id).first()), False
+    db.session.commit()
+    return comment, True
 
 
 # Graph "object does not exist / unsupported get request" (code 100, often
@@ -279,14 +319,41 @@ def _comment_client(comment):
     return Client.query.get(cid)
 
 
+def _recent_enough(comment):
+    """Only comments from the last ENGAGE_AUTO_MAX_AGE_DAYS days may be acted on
+    automatically, so switching auto-reply/auto-mod on never machine-guns a
+    backlog of months-old comments — it starts from recent ones and then keeps
+    up with new ones (which arrive fresh via the webhook). 0 = no age limit.
+
+    Judged by the platform's own timestamp (the comment's real age); when that's
+    absent or unparseable, fall back to when we first saw it."""
+    days = current_app.config.get("ENGAGE_AUTO_MAX_AGE_DAYS", 3)
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        days = 3
+    if days <= 0:
+        return True
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    raw = (comment.created_time or "").strip()
+    if raw:
+        try:                                    # "2026-08-05T12:00:00+0000"
+            return datetime.strptime(raw[:19], "%Y-%m-%dT%H:%M:%S") >= cutoff
+        except ValueError:
+            pass
+    return (comment.fetched_at or datetime.utcnow()) >= cutoff
+
+
 def comment_is_auto_safe(comment, cfg):
     """May this comment be auto-replied without a human? Conservative by design:
     global+feature+admin switch on (in `cfg`), client opted in, the comment is
-    not ours and not already handled, it is short, it is NOT a question, and it
-    hits no blocklisted word. Anything failing -> the human queue."""
+    not ours and not already handled, it is recent, it is short, it is NOT a
+    question, and it hits no blocklisted word. Anything failing -> human queue."""
     if not cfg["enabled"]:
         return False
     if comment.is_ours or comment.replied or comment.status != "open":
+        return False
+    if not _recent_enough(comment):      # never auto-reply an old backlog comment
         return False
     text = (comment.message or "").strip()
     if not text or len(text) > cfg["max_len"]:
@@ -305,14 +372,21 @@ def comment_is_auto_safe(comment, cfg):
 
 
 def auto_reply_comments_run(client_id=None):
-    """Sync comments, then auto-reply the safe ones (guarded). Per-post cap is a
-    TOTAL across runs (a viral thread can't be flooded), budget-capped, and the
-    GENERATED reply is output-scanned. Returns counts; everything else stays in
-    the human queue."""
+    """Sync comments, then auto-reply the safe ones (guarded). For the cron/
+    manual path."""
+    sync_comments(client_id)
+    return auto_reply_scan(client_id)
+
+
+def auto_reply_scan(client_id=None):
+    """Auto-reply the safe ALREADY-fetched comments (guarded), WITHOUT a sync.
+    The webhook path calls this straight after ingesting a single comment, so a
+    real-time reply costs no extra polling. Per-post cap is a TOTAL across runs
+    (a viral thread can't be flooded), budget-capped, and the GENERATED reply is
+    output-scanned. Returns counts; everything else stays in the human queue."""
     from app.ai import (client_brain, service as ai_service,
                         settings as ai_settings, usage as ai_usage)
 
-    sync_comments(client_id)
     cfg = ai_settings.comment_config()
     if not cfg["enabled"]:
         return {"auto_replied": 0, "skipped": "disabled"}
@@ -419,6 +493,8 @@ def is_spam(comment, cfg):
     matches the admin spam blocklist, or (if enabled) a link/bare-domain from a
     non-page commenter. Only NEW, not-ours, open comments are candidates."""
     if comment.is_ours or comment.replied or comment.status != "open":
+        return None
+    if not _recent_enough(comment):      # don't bulk-hide an old backlog either
         return None
     text = comment.message or ""
     low = text.lower()

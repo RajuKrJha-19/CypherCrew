@@ -168,6 +168,13 @@ class Config:
     # emulator - only the base URLs differ.
     META_APP_ID = os.getenv("META_APP_ID")
     META_APP_SECRET = os.getenv("META_APP_SECRET")
+    # Real-time comment ingestion via Meta webhooks (Buffer/Hootsuite-style
+    # push instead of polling). VERIFY_TOKEN is the shared secret Meta echoes
+    # during the subscription handshake; ENABLED gates the actual processing
+    # (ingest + guarded auto-reply/auto-mod). Signature uses META_APP_SECRET.
+    META_WEBHOOK_ENABLED = (
+        os.getenv("META_WEBHOOK_ENABLED", "False").lower() == "true")
+    META_WEBHOOK_VERIFY_TOKEN = os.getenv("META_WEBHOOK_VERIFY_TOKEN")
 
     # Server-side media measurement. Optional: with no ffprobe installed
     # the app behaves exactly as it did before, relying on the browser's
@@ -271,6 +278,12 @@ class Config:
     # when SOCIAL_ADS_COMMENTS_ENABLED is on. Default 15 min.
     SOCIAL_ADS_SYNC_INTERVAL = int(
         os.getenv("SOCIAL_ADS_SYNC_INTERVAL", "900"))
+    # Max age (days) of a comment that auto-reply / spam auto-hide may act on.
+    # Guards against machine-gunning a months-old backlog the moment either is
+    # switched on: it starts from recent comments and keeps up with new ones
+    # (which arrive fresh via the webhook). 0 = no age limit. Default 3 days.
+    ENGAGE_AUTO_MAX_AGE_DAYS = int(
+        os.getenv("ENGAGE_AUTO_MAX_AGE_DAYS", "3"))
 
     # ------------------------------------------------------------------
     # Cypher-Teams (chat)
