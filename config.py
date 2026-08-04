@@ -477,3 +477,11 @@ class Config:
     # (admin-editable); the review blocklist is the shared safety net.
     ENGAGE_AUTOREPLY_ENABLED = (
         os.getenv("ENGAGE_AUTOREPLY_ENABLED", "False").lower() == "true")
+
+    # Spam auto-moderation (guarded auto-HIDE of matching comments). Off by
+    # default; the admin switch + a non-empty spam blocklist + a per-client
+    # opt-in are also required (see ai.settings.automod_config).
+    ENGAGE_AUTOMOD_ENABLED = (
+        os.getenv("ENGAGE_AUTOMOD_ENABLED", "False").lower() == "true")
+    #: Optional env fallback for the spam blocklist (the DB value wins).
+    ENGAGE_SPAM_BLOCKLIST = os.getenv("ENGAGE_SPAM_BLOCKLIST", "")

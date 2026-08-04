@@ -24,6 +24,8 @@ class MetaInstagramProvider(MetaBaseProvider):
     connectable = False
     # Instagram replies go to /{comment_id}/replies, not /comments.
     comment_reply_edge = "replies"
+    # Instagram hides a comment with hide=true (Facebook uses is_hidden).
+    comment_hide_field = "hide"
     SCOPES = [
         "instagram_basic",
         "instagram_content_publish",

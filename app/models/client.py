@@ -89,6 +89,12 @@ class Client(db.Model):
         db.Boolean, nullable=False, default=False, server_default=db.false()
     )
 
+    #: Per-client opt-in for spam auto-moderation (guarded auto-hide). ANDed
+    #: with the env gate + admin switch + a non-empty spam blocklist.
+    comment_automod = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     assigned_manager_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id")

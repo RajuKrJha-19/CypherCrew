@@ -123,6 +123,21 @@ def index():
                   "turn it on.", "warning")
         row.comment_autoreply_enabled = c_want
 
+        # -- Spam auto-moderation (auto-HIDE). Its OWN blocklist; won't enable
+        #    without one (same safety as auto-reply). --------------------------
+        spam_block = (request.form.get("spam_blocklist") or "").strip()
+        row.spam_blocklist = spam_block or None
+        row.spam_hide_links = bool(request.form.get("spam_hide_links"))
+        row.automod_max_per_run = _int_in(
+            request.form.get("automod_max_per_run"), 20, 1, 200)
+        m_want = bool(request.form.get("comment_automod_enabled"))
+        eff_spam = spam_block or (current_app.config.get("ENGAGE_SPAM_BLOCKLIST") or "")
+        if m_want and not eff_spam.strip():
+            m_want = False
+            flash("Spam auto-moderation needs a spam blocklist first (safety) — "
+                  "add words, then turn it on.", "warning")
+        row.comment_automod_enabled = m_want
+
         row.updated_by_id = current_user.id
         db.session.commit()
 
@@ -161,6 +176,8 @@ def index():
     # fields and show the env-fallback blocklist as a placeholder.
     autoreply = ai_settings.autoreply_config()
     autoreply["env_blocklist"] = cfg.get("GBP_AUTOREPLY_BLOCKLIST", "") or ""
+    automod = ai_settings.automod_config()
+    automod["env_blocklist"] = cfg.get("ENGAGE_SPAM_BLOCKLIST", "") or ""
     return render_template(
         "ai_settings/index.html",
         row=row,
@@ -176,6 +193,7 @@ def index():
                    "reply": (reply_provider, reply_model)},
         reviews_on=reviews_on,
         autoreply=autoreply,
+        automod=automod,
         engage_on=bool(cfg.get("ENGAGE_AUTOREPLY_ENABLED")),
         simulation=bool(cfg.get("AI_SIMULATION_MODE")),
         enabled_now=ai_settings.is_enabled(),

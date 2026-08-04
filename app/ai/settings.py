@@ -229,6 +229,34 @@ def comment_config():
     }
 
 
+def automod_config():
+    """Effective spam auto-moderation config. Off unless ALL of: the env master
+    (ENGAGE_AUTOMOD_ENABLED), the admin switch, AND a non-empty spam blocklist -
+    the same blocklist-mandatory-to-enable safety the auto-reply path uses. The
+    per-client opt-in (Client.comment_automod) is checked per comment. Has its
+    OWN blocklist, separate from the auto-reply/review one."""
+    cfg = current_app.config
+    row = get_settings()
+
+    raw_block = getattr(row, "spam_blocklist", None) if row is not None else None
+    if not raw_block:
+        raw_block = cfg.get("ENGAGE_SPAM_BLOCKLIST", "") or ""
+    blocklist = [w.strip().lower() for w in raw_block.split(",") if w.strip()]
+
+    admin_on = (bool(getattr(row, "comment_automod_enabled", False))
+                if row is not None else False)
+    hide_links = (bool(getattr(row, "spam_hide_links", True))
+                  if row is not None and getattr(row, "spam_hide_links", None) is not None
+                  else True)
+    return {
+        # blocklist-mandatory: never auto-hide with no explicit spam config.
+        "enabled": bool(cfg.get("ENGAGE_AUTOMOD_ENABLED")) and admin_on and bool(blocklist),
+        "blocklist": blocklist,
+        "hide_links": hide_links,
+        "max_per_run": int(getattr(row, "automod_max_per_run", None) or 20),
+    }
+
+
 def is_known_model(provider_key, task_kind, model):
     """Is `model` one of `provider_key`'s catalogued models for this task? Used
     only to WARN on the settings screen (never to block) - a brand-new model

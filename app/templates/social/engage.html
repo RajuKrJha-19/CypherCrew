@@ -57,6 +57,10 @@
            class="engage-tab {{ 'is-active' if status_f == 'done' }}">
             Done {% if counts.done %}<span class="engage-count">{{ counts.done }}</span>{% endif %}
         </a>
+        <a href="{{ inbox_url(status='removed', c=None) }}"
+           class="engage-tab {{ 'is-active' if status_f == 'removed' }}">
+            Removed {% if counts.removed %}<span class="engage-count">{{ counts.removed }}</span>{% endif %}
+        </a>
     </div>
 
     <form method="GET" class="engage-filters" role="search">
@@ -109,13 +113,21 @@
                     <span class="engage-row-when">{{ c.created_time[:10] if c.created_time else '' }}</span>
                 </span>
                 <span class="engage-row-msg">{{ (c.message or '')[:90] }}</span>
+                {% if c.status == 'removed' %}
+                <span class="engage-removed-tag {{ 'is-auto' if c.removal_kind == 'auto' }}">
+                    {% if c.removal_kind == 'auto' %}<i class="fa-solid fa-robot"></i> Auto · spam{% else %}<i class="fa-solid fa-user-slash"></i> Removed by {{ c.removed_by.name if c.removed_by else 'a teammate' }}{% endif %}
+                    {%- if c.removal_action == 'deleted' %} · deleted{% endif %}
+                </span>
+                {% endif %}
                 <span class="engage-row-post">
                     {% if c.target and c.target.account %}{{ c.target.account.display_name }}{% endif %}
                     {%- if c.target and c.target.post and c.target.post.title %} · {{ c.target.post.title }}{% endif %}
                 </span>
             </span>
 
-            {% if thread or c.replied %}
+            {% if c.status == 'removed' %}
+            <span class="engage-row-flag" title="Removed"><i class="fa-solid fa-eye-slash"></i></span>
+            {% elif thread or c.replied %}
             <span class="engage-row-flag" title="Replied"><i class="fa-solid fa-reply"></i></span>
             {% else %}
             <span class="engage-row-dot" title="Needs a reply"></span>
@@ -184,6 +196,37 @@
         </div>
 
         <div class="engage-composer">
+            {% if selected.status == 'removed' %}
+            {# Removed comment: show how/why it was removed + a Restore if it was
+               only hidden (a deleted one is gone on the platform). #}
+            <div class="engage-removed-panel">
+                <span class="engage-removed-tag lg {{ 'is-auto' if selected.removal_kind == 'auto' }}">
+                    {% if selected.removal_kind == 'auto' %}
+                        <i class="fa-solid fa-robot"></i> Auto-hidden by the spam filter
+                    {% else %}
+                        <i class="fa-solid fa-user-slash"></i>
+                        {{ 'Deleted' if selected.removal_action == 'deleted' else 'Hidden' }}
+                        by {{ selected.removed_by.name if selected.removed_by else 'a teammate' }}
+                    {% endif %}
+                </span>
+                {% if selected.removal_reason and selected.removal_reason != 'manual' %}
+                <span class="t-subtle t-sm">Reason: {{ selected.removal_reason }}</span>
+                {% endif %}
+                {% if selected.removal_action == 'hidden' %}
+                <form method="POST" data-turbo="false"
+                      action="{{ url_for('social.engage_restore', comment_id=selected.id) }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="status" value="{{ status_f }}">
+                    <input type="hidden" name="platform" value="{{ platform_f }}">
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="fa-solid fa-rotate-left"></i> Restore to inbox</button>
+                </form>
+                {% else %}
+                <span class="t-subtle t-sm">Permanently deleted on the platform — can’t be restored.</span>
+                {% endif %}
+            </div>
+            {% else %}
             <form method="POST" data-turbo="false"
                   action="{{ url_for('social.engage_reply', comment_id=selected.id) }}">
                 <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
@@ -211,16 +254,35 @@
                 </div>
             </form>
 
-            <form method="POST" data-turbo="false"
-                  action="{{ url_for('social.engage_done', comment_id=selected.id) }}">
-                <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
-                <input type="hidden" name="status" value="{{ status_f }}">
-                <input type="hidden" name="platform" value="{{ platform_f }}">
-                <input type="hidden" name="q" value="{{ search }}">
-                <button type="submit" class="btn btn-secondary">
-                    <i class="fa-solid {{ 'fa-rotate-left' if status_f == 'done' else 'fa-check' }}"></i>
-                    {{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
-            </form>
+            <div class="engage-mod-row">
+                <form method="POST" data-turbo="false"
+                      action="{{ url_for('social.engage_done', comment_id=selected.id) }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="status" value="{{ status_f }}">
+                    <input type="hidden" name="platform" value="{{ platform_f }}">
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="fa-solid {{ 'fa-rotate-left' if status_f == 'done' else 'fa-check' }}"></i>
+                        {{ 'Reopen' if status_f == 'done' else 'Mark done' }}</button>
+                </form>
+                {# Moderation: Hide (reversible) and Delete (permanent). #}
+                <form method="POST" data-turbo="false"
+                      action="{{ url_for('social.engage_hide', comment_id=selected.id) }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <button type="submit" class="btn btn-secondary"
+                            title="Hide this comment from the public (you can restore it)">
+                        <i class="fa-solid fa-eye-slash"></i> Hide</button>
+                </form>
+                <form method="POST" data-turbo="false"
+                      action="{{ url_for('social.engage_delete', comment_id=selected.id) }}"
+                      onsubmit="return confirm('Permanently delete this comment on the platform? This cannot be undone.');">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <button type="submit" class="btn btn-danger"
+                            title="Permanently delete this comment on the platform">
+                        <i class="fa-solid fa-trash"></i> Delete</button>
+                </form>
+            </div>
+            {% endif %}
         </div>
 
     </div>
@@ -239,6 +301,10 @@
         {% elif status_f == 'done' %}
         <h3>Nothing marked done yet</h3>
         <p>Comments you finish with are filed here.</p>
+        {% elif status_f == 'removed' %}
+        <h3>Nothing removed</h3>
+        <p>Hidden and deleted comments are filed here with who removed them and
+           why — hidden ones can be restored any time.</p>
         {% else %}
         <h3>No open comments</h3>
         <p>Comments on your published posts show up here. Hit

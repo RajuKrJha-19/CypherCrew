@@ -477,6 +477,29 @@ class MetaBaseProvider(SocialProvider):
             data={"message": text})
         return resp.get("id")
 
+    # -- Moderation (hide is reversible; delete is permanent) --------------
+
+    #: Field that hides/unhides a comment. Facebook uses is_hidden, Instagram
+    #: uses hide; both take true/false. Needs the comment-management scope
+    #: (pages_manage_engagement / instagram_manage_comments).
+    comment_hide_field = "is_hidden"
+
+    def set_comment_hidden(self, comment_external_id, token, hidden=True):
+        """Hide (or unhide) a comment on the platform. Reversible."""
+        if not comment_external_id:
+            return False
+        self.graph().post(
+            comment_external_id, token=token,
+            data={self.comment_hide_field: "true" if hidden else "false"})
+        return True
+
+    def delete_comment(self, comment_external_id, token):
+        """Permanently delete a comment on the platform (not reversible)."""
+        if not comment_external_id:
+            return False
+        self.graph().delete(comment_external_id, token=token)
+        return True
+
     # -- Delete / existence -----------------------------------------------
 
     def delete_post(self, external_post_id, token):

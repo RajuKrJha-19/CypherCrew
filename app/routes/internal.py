@@ -189,6 +189,25 @@ def run_engage_auto_reply():
     return jsonify(success=True, **out)
 
 
+@internal_bp.route("/engage/automod/run", methods=["POST"])
+@csrf.exempt
+def run_engage_automod():
+    """Cron entry point: sync social comments and auto-HIDE the spam ones
+    (guarded, reversible). No-op unless ENGAGE_AUTOMOD_ENABLED is on; the admin/
+    per-client/blocklist gates are re-checked inside the run. Reuses the social
+    worker token + engine gate."""
+    _social_guard()
+    if not current_app.config.get("ENGAGE_AUTOMOD_ENABLED"):
+        return jsonify(success=True, skipped="engage auto-mod disabled")
+    from app.social.services import engage as engage_svc
+    try:
+        out = engage_svc.automod_run()
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage] auto-mod run failed")
+        return jsonify(success=False, hidden=0)
+    return jsonify(success=True, **out)
+
+
 @internal_bp.route("/social/tokens/refresh", methods=["POST"])
 @csrf.exempt
 def run_social_token_refresh():

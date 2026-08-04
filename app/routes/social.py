@@ -3219,7 +3219,7 @@ def engage():
     cid = _client_arg()
 
     status_f = request.args.get("status")
-    status_f = status_f if status_f in ("open", "done") else "open"
+    status_f = status_f if status_f in ("open", "done", "removed") else "open"
     platform_f = (request.args.get("platform") or "").strip()
     search = (request.args.get("q") or "").strip()
 
@@ -3238,7 +3238,8 @@ def engage():
         q.options(joinedload(SocialComment.target)
                   .joinedload(SocialPostTarget.account),
                   joinedload(SocialComment.target)
-                  .joinedload(SocialPostTarget.post))
+                  .joinedload(SocialPostTarget.post),
+                  joinedload(SocialComment.removed_by))   # Removed-tab label
         .order_by(SocialComment.created_at.desc())
         .limit(200)
         .all()
@@ -3267,6 +3268,7 @@ def engage():
     counts = {
         "open": base.filter(SocialComment.status == "open").count(),
         "done": base.filter(SocialComment.status == "done").count(),
+        "removed": base.filter(SocialComment.status == "removed").count(),
     }
     # Distinct in SQL, not by loading every comment to read one column off
     # each - this list only exists to populate a filter dropdown.
@@ -3316,6 +3318,13 @@ def engage_sync():
             flash(f"Checked {report['checked']} post(s) — no new comments.",
                   "info")
 
+    # Auto-hide spam among the just-fetched comments (no re-sync). Inert unless
+    # the four-layer gate is on; anything hidden lands in the Removed tab.
+    mod = engage_svc.automod_scan(_client_arg())
+    if mod.get("hidden"):
+        flash(f"Auto-hid {mod['hidden']} spam comment(s) — see the Removed tab.",
+              "info")
+
     return redirect(url_for("social.engage", client=_client_arg()))
 
 
@@ -3347,6 +3356,48 @@ def engage_reply(comment_id):
         flash("Reply posted." if ext else
               "Couldn't post the reply — check the channel connection.",
               "success" if ext else "error")
+    return redirect(_engage_back(comment.id))
+
+
+@social_bp.route("/engage/<int:comment_id>/hide", methods=["POST"])
+@login_required
+def engage_hide(comment_id):
+    """Manually hide a comment (reversible)."""
+    _guard()
+    from app.models import SocialComment
+    comment = SocialComment.query.get_or_404(comment_id)
+    ok = engage_svc.hide(comment, actor_id=current_user.id)
+    flash("Comment hidden — it's in the Removed tab, restore any time." if ok
+          else "Couldn't hide it — check the channel connection.",
+          "success" if ok else "error")
+    return redirect(_engage_back())
+
+
+@social_bp.route("/engage/<int:comment_id>/delete", methods=["POST"])
+@login_required
+def engage_delete(comment_id):
+    """Permanently delete a comment on the platform (not reversible)."""
+    _guard()
+    from app.models import SocialComment
+    comment = SocialComment.query.get_or_404(comment_id)
+    ok = engage_svc.delete(comment, actor_id=current_user.id)
+    flash("Comment deleted on the platform (permanent)." if ok
+          else "Couldn't delete it — check the channel connection.",
+          "success" if ok else "error")
+    return redirect(_engage_back())
+
+
+@social_bp.route("/engage/<int:comment_id>/restore", methods=["POST"])
+@login_required
+def engage_restore(comment_id):
+    """Unhide a previously hidden comment back into the inbox."""
+    _guard()
+    from app.models import SocialComment
+    comment = SocialComment.query.get_or_404(comment_id)
+    ok = engage_svc.restore(comment, actor_id=current_user.id)
+    flash("Comment restored to the inbox." if ok
+          else "Couldn't restore it (a deleted comment can't be restored).",
+          "success" if ok else "error")
     return redirect(_engage_back(comment.id))
 
 

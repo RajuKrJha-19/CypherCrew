@@ -94,6 +94,20 @@ class AISettings(db.Model):
     comment_max_per_post = db.Column(db.Integer, nullable=False, default=5,
                                      server_default="5")
 
+    # -- Spam auto-moderation (hides matching comments). ANDed with the
+    #: ENGAGE_AUTOMOD_ENABLED env gate + a per-client opt-in + a non-empty
+    #: spam blocklist. Its OWN blocklist (separate from the auto-reply one).
+    comment_automod_enabled = db.Column(db.Boolean, nullable=False,
+                                        default=False, server_default=db.false())
+    #: Comma-separated spam keywords/phrases; empty disables auto-hide.
+    spam_blocklist = db.Column(db.Text)
+    #: A comment carrying a link/bare-domain from a non-page author is spam.
+    spam_hide_links = db.Column(db.Boolean, nullable=False,
+                                default=True, server_default=db.true())
+    #: Cap on how many comments one auto-mod run may hide.
+    automod_max_per_run = db.Column(db.Integer, nullable=False, default=20,
+                                    server_default="20")
+
     updated_by_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True)
     updated_at = db.Column(

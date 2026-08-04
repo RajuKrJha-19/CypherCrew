@@ -17592,6 +17592,17 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .engage-ai-btn.is-loading{ opacity:.7; pointer-events:none; }
 .engage-ai-btn.is-loading i{ animation:cmp-ai-spin .8s linear infinite; }
 
+/* Moderation: Hide/Delete row under the composer + Removed-tab labels. */
+.engage-mod-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.engage-removed-tag{ display:inline-flex; align-items:center; gap:5px; align-self:flex-start;
+    font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:999px;
+    background:var(--color-surface-muted); color:var(--color-text-muted); margin:3px 0; }
+.engage-removed-tag.is-auto{ background:var(--color-warning-soft); color:var(--color-warning); }
+.engage-removed-tag.lg{ font-size:12px; padding:4px 11px; }
+.engage-removed-panel{ display:flex; flex-direction:column; align-items:flex-start; gap:8px;
+    padding:12px; border:1px dashed var(--color-border); border-radius:var(--radius-md);
+    background:var(--color-surface-sunken); }
+
 /* One column on a narrow screen: the list first, then the conversation,
    each at its natural height rather than two half-height scrollers. */
 @media (max-width: 900px){

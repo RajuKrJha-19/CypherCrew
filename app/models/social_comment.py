@@ -34,13 +34,28 @@ class SocialComment(db.Model):
     #: so the inbox can label it and it is never inferred from other state.
     auto_sent = db.Column(db.Boolean, nullable=False, default=False,
                           server_default=db.false())
-    # open | done
+    # open | done | removed
     status = db.Column(db.String(20), nullable=False, default="open")
+
+    # -- Moderation (hidden/deleted on the platform) ----------------------
+    # A removed comment leaves Open/Done and shows in the Removed tab.
+    removed_at = db.Column(db.DateTime, nullable=True)
+    #: The user who removed it; NULL means the spam filter did (auto). SET NULL
+    #: on user delete: removing a teammate must never block, and the moderation
+    #: record should survive (as an auto-looking entry) rather than vanish.
+    removed_by_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True)
+    removal_kind = db.Column(db.String(10), nullable=True)      # auto | manual
+    removal_reason = db.Column(db.String(255), nullable=True)   # e.g. "link spam"
+    #: "hidden" is reversible (Restore = unhide); "deleted" is permanent.
+    removal_action = db.Column(db.String(10), nullable=True)    # hidden | deleted
 
     fetched_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     target = db.relationship("SocialPostTarget")
+    removed_by = db.relationship("User", foreign_keys=[removed_by_id])
 
     __table_args__ = (
         db.UniqueConstraint("platform", "external_id",

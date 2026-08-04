@@ -205,6 +205,20 @@ class SimulationProvider(SocialProvider):
             raise PermanentError("Simulated first-comment failure (#simfail)")
         return f"SIM-COMMENT-{external_post_id}"
 
+    # -- Comment moderation (deterministic) -------------------------------
+
+    def set_comment_hidden(self, comment_external_id, token, hidden=True):
+        # A comment id carrying #simfail exercises the platform-failure path
+        # (the service must then revert its claim).
+        if "#simfail" in (comment_external_id or "").lower():
+            raise PermanentError("Simulated hide failure (#simfail)")
+        return True
+
+    def delete_comment(self, comment_external_id, token):
+        if "#simfail" in (comment_external_id or "").lower():
+            raise PermanentError("Simulated delete failure (#simfail)")
+        return True
+
     # -- Analytics (deterministic fakes) ----------------------------------
 
     def fetch_analytics(self, target, token):

@@ -402,3 +402,180 @@ def auto_reply_comments_run(client_id=None):
         per_post[c.target_id] = per_post.get(c.target_id, 0) + 1
         sent += 1
     return {"auto_replied": sent}
+
+
+# -- spam moderation (hide / delete / restore) ------------------------------
+
+def is_spam(comment, cfg):
+    """A short, plain reason this comment is spam, or None. Conservative:
+    matches the admin spam blocklist, or (if enabled) a link/bare-domain from a
+    non-page commenter. Only NEW, not-ours, open comments are candidates."""
+    if comment.is_ours or comment.replied or comment.status != "open":
+        return None
+    text = comment.message or ""
+    low = text.lower()
+    for word in cfg["blocklist"]:
+        if word in low:
+            return f"blocklist: {word}"
+    if cfg["hide_links"] and _has_link(text):
+        return "link spam"
+    return None
+
+
+def _provider_token(comment):
+    """(provider, page_token) to act on a comment, or (None, None) if we can't
+    (channel disconnected / unsupported) - same guard as reply()."""
+    provider = get_provider(comment.platform)
+    if not (provider and comment.target and comment.target.account is not None):
+        return None, None
+    return provider, AccountManager.access_token(comment.target.account)
+
+
+def automod_run(client_id=None):
+    """Sync comments, then auto-HIDE the spam ones. For the cron path."""
+    sync_comments(client_id)
+    return automod_scan(client_id)
+
+
+def automod_scan(client_id=None):
+    """Auto-HIDE spam among the ALREADY-fetched open comments (guarded,
+    reversible). Hide (not delete) so a false positive is recoverable from the
+    Removed tab. Self-gated: returns early unless auto-mod is fully enabled, so
+    the Fetch button can call it after its own sync without a second sync."""
+    from app.ai import settings as ai_settings
+
+    cfg = ai_settings.automod_config()
+    if not cfg["enabled"]:
+        return {"hidden": 0, "skipped": "disabled"}
+
+    q = SocialComment.query.filter(SocialComment.is_ours.is_(False),
+                                   SocialComment.status == "open")
+    if client_id:
+        q = (q.join(SocialPostTarget,
+                    SocialComment.target_id == SocialPostTarget.id)
+              .join(SocialPost,
+                    SocialPost.id == SocialPostTarget.social_post_id)
+              .filter(SocialPost.client_id == client_id))
+    pending = q.order_by(SocialComment.id.asc()).all()
+
+    hidden = 0
+    for c in pending:
+        if hidden >= cfg["max_per_run"]:
+            break
+        client = _comment_client(c)                 # per-client opt-in
+        if client is None or not getattr(client, "comment_automod", False):
+            continue
+        reason = is_spam(c, cfg)
+        if not reason:
+            continue
+        provider, token = _provider_token(c)
+        if not provider:
+            continue
+
+        # Atomically CLAIM (mark removed) BEFORE the platform call, so two
+        # overlapping runs can't both hide it. Revert if the hide fails, so a
+        # transient error leaves it visible for a retry rather than stuck as a
+        # "removed" comment that was never actually hidden.
+        claimed = (SocialComment.query
+                   .filter_by(id=c.id, status="open")
+                   .update({"status": "removed", "removal_kind": "auto",
+                            "removal_action": "hidden", "removal_reason": reason,
+                            "removed_by_id": None,
+                            "removed_at": datetime.utcnow()},
+                           synchronize_session=False))
+        db.session.commit()
+        if not claimed:
+            continue
+
+        try:
+            provider.set_comment_hidden(c.external_id, token, hidden=True)
+        except Exception:  # noqa: BLE001 - one failure never aborts the run
+            SocialComment.query.filter_by(id=c.id).update(
+                {"status": "open", "removal_kind": None, "removal_action": None,
+                 "removal_reason": None, "removed_at": None},
+                synchronize_session=False)
+            db.session.commit()
+            current_app.logger.exception(
+                "[engage] auto-hide failed for comment %s", c.id)
+            continue
+
+        audit.record("comment_hidden", target_id=c.target_id,
+                     post_id=(c.target.social_post_id if c.target else None),
+                     actor_id=None,
+                     detail={"comment_id": c.external_id, "reason": reason,
+                             "auto": True})
+        hidden += 1
+    return {"hidden": hidden}
+
+
+def _record_removal(comment, actor_id, action, reason):
+    comment.status = "removed"
+    comment.removal_kind = "manual"
+    comment.removal_action = action                 # hidden | deleted
+    comment.removal_reason = reason
+    comment.removed_by_id = actor_id
+    comment.removed_at = datetime.utcnow()
+
+
+def hide(comment, actor_id=None):
+    """Manually hide a comment (reversible). Returns True on success."""
+    provider, token = _provider_token(comment)
+    if not provider:
+        return False
+    try:
+        provider.set_comment_hidden(comment.external_id, token, hidden=True)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage] hide failed for %s", comment.id)
+        return False
+    _record_removal(comment, actor_id, "hidden", "manual")
+    audit.record("comment_hidden", target_id=comment.target_id,
+                 post_id=(comment.target.social_post_id if comment.target else None),
+                 actor_id=actor_id,
+                 detail={"comment_id": comment.external_id, "auto": False})
+    db.session.commit()
+    return True
+
+
+def delete(comment, actor_id=None):
+    """Permanently delete a comment on the platform. NOT reversible; we keep the
+    local record (in the Removed tab) for the audit trail."""
+    provider, token = _provider_token(comment)
+    if not provider:
+        return False
+    try:
+        provider.delete_comment(comment.external_id, token)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage] delete failed for %s", comment.id)
+        return False
+    _record_removal(comment, actor_id, "deleted", "manual")
+    audit.record("comment_deleted", target_id=comment.target_id,
+                 post_id=(comment.target.social_post_id if comment.target else None),
+                 actor_id=actor_id, detail={"comment_id": comment.external_id})
+    db.session.commit()
+    return True
+
+
+def restore(comment, actor_id=None):
+    """Unhide a previously HIDDEN comment back into the inbox. A deleted comment
+    can't be restored (it's gone on the platform)."""
+    if comment.removal_action != "hidden":
+        return False
+    provider, token = _provider_token(comment)
+    if not provider:
+        return False
+    try:
+        provider.set_comment_hidden(comment.external_id, token, hidden=False)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage] restore failed for %s", comment.id)
+        return False
+    comment.status = "open"
+    comment.removal_kind = None
+    comment.removal_action = None
+    comment.removal_reason = None
+    comment.removed_by_id = None
+    comment.removed_at = None
+    audit.record("comment_restored", target_id=comment.target_id,
+                 post_id=(comment.target.social_post_id if comment.target else None),
+                 actor_id=actor_id, detail={"comment_id": comment.external_id})
+    db.session.commit()
+    return True

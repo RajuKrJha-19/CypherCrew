@@ -260,6 +260,31 @@
 
                 <hr class="ai-sep">
 
+                {# --- Spam auto-moderation (auto-hide) --- #}
+                <div class="ai-task ai-autoreply">
+                    <h3>Spam auto-moderation <span class="ai-task-tag">unattended · public</span></h3>
+                    <p class="form-hint">Automatically <strong>hides</strong> (never deletes) comments matching the spam list — reversible, so a false positive is one click to <strong>Restore</strong> from Engage → Removed. Opted-in clients only.</p>
+                    <label class="ai-toggle" style="margin-top:4px;">
+                        <input type="checkbox" name="comment_automod_enabled" {{ 'checked' if row.comment_automod_enabled }}>
+                        <span><strong>Enable spam auto-hide</strong> — requires a spam blocklist below.</span>
+                    </label>
+                    <label style="display:block;margin-top:12px;">Spam blocklist <small>(comma-separated words/phrases)</small>
+                        <input type="text" name="spam_blocklist" value="{{ row.spam_blocklist or '' }}" placeholder="{{ automod.env_blocklist or 'e.g. buy followers, promo code, click here' }}">
+                    </label>
+                    <label class="ai-toggle" style="margin-top:10px;">
+                        <input type="checkbox" name="spam_hide_links" {{ 'checked' if automod.hide_links }}>
+                        <span>Also hide comments containing a link / web address (classic spam).</span>
+                    </label>
+                    <div class="ai-task-grid" style="margin-top:12px;">
+                        <label>Max hides per run
+                            <input type="number" name="automod_max_per_run" min="1" max="200" value="{{ row.automod_max_per_run if row.automod_max_per_run is not none else 20 }}">
+                        </label>
+                    </div>
+                    <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Hidden, not deleted — restore any time from Engage → Removed. Per-comment manual Hide / Delete are always available too.</p>
+                </div>
+
+                <hr class="ai-sep">
+
                 {# --- Performance & cost --- #}
                 <div class="ai-task">
                     <h3>Performance &amp; cost</h3>
