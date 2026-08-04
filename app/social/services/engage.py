@@ -510,6 +510,12 @@ def auto_reply_scan(client_id=None):
 
 # -- spam moderation (hide / delete / restore) ------------------------------
 
+def _is_ad_comment(comment):
+    """True for a comment on an ad/boosted post (SocialPost.source == 'ad')."""
+    post = comment.target.post if comment.target else None
+    return bool(post and getattr(post, "source", None) == "ad")
+
+
 def is_spam(comment, cfg):
     """A short, plain reason this comment is spam, or None. Conservative:
     matches the admin spam blocklist, or (if enabled) a link/bare-domain from a
@@ -523,7 +529,11 @@ def is_spam(comment, cfg):
     for word in cfg["blocklist"]:
         if word in low:
             return f"blocklist: {word}"
-    if cfg["hide_links"] and _has_link(text):
+    # The link heuristic is SKIPPED for ad/boosted-post comments: ads attract
+    # link comments from real prospects (sharing a number/profile/WhatsApp) as
+    # well as bots, so auto-hiding every link would bury leads in Removed. The
+    # explicit blocklist above still applies to the ad lane.
+    if cfg["hide_links"] and _has_link(text) and not _is_ad_comment(comment):
         return "link spam"
     return None
 

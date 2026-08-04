@@ -73,6 +73,17 @@ def test_is_spam_matrix(session, make_target):
     assert engage.is_spam(_mk(session, target, "visit bit.ly/x"), _cfg(hide_links=False)) is None
 
 
+def test_ad_comment_is_exempt_from_the_link_heuristic(session, make_target):
+    """On an ad/boosted post a link alone must NOT auto-hide (it would bury a
+    lead), but the explicit blocklist still applies."""
+    client, target = _client_and_target(session, make_target)
+    target.post.source = "ad"
+    session.commit()
+    cfg = _cfg()
+    assert engage.is_spam(_mk(session, target, "interested! wa.me/123"), cfg) is None
+    assert engage.is_spam(_mk(session, target, "buy followers now"), cfg) == "blocklist: followers"
+
+
 # -- automod_config gating --------------------------------------------------
 
 def test_automod_config_off_by_default(app):
