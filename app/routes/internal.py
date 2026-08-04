@@ -226,6 +226,17 @@ def run_engage_ads_sync():
     return jsonify(success=True, **out)
 
 
+@internal_bp.route("/webhooks/subscribe-pages", methods=["POST"])
+@csrf.exempt
+def run_webhook_subscribe_pages():
+    """Backfill: subscribe every connected Facebook Page to the app's webhooks.
+    For pages connected before webhooks were switched on (no reconnect needed).
+    No-op unless META_WEBHOOK_ENABLED. Idempotent."""
+    _social_guard()
+    from app.social.services import webhook_subscribe
+    return jsonify(success=True, **webhook_subscribe.subscribe_all_pages())
+
+
 @internal_bp.route("/social/tokens/refresh", methods=["POST"])
 @csrf.exempt
 def run_social_token_refresh():

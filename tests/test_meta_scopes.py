@@ -94,6 +94,10 @@ APPROVED_BY_APP_REVIEW = {
     # Granted to admins/devs/testers in Development/Testing; part of the App
     # Review submission for public/live use. Keep in step with the dashboard.
     "ads_read",
+    # Subscribe connected Pages to the app's webhooks (subscribed_apps) for
+    # real-time comment ingestion. Granted to admins/devs/testers in
+    # Development/Testing; part of the App Review submission for public use.
+    "pages_manage_metadata",
 }
 
 

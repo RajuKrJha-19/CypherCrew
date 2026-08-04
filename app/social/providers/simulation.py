@@ -223,6 +223,12 @@ class SimulationProvider(SocialProvider):
         # No canned ads by default; tests monkeypatch this to drive discovery.
         return []
 
+    def subscribe_app_to_page(self, page_id, token, fields="feed"):
+        # A page id carrying #simfail exercises the failure path.
+        if "#simfail" in (page_id or "").lower():
+            raise PermanentError("Simulated subscribe failure (#simfail)")
+        return True
+
     # -- Analytics (deterministic fakes) ----------------------------------
 
     def fetch_analytics(self, target, token):

@@ -181,6 +181,15 @@ def callback(platform):
                  platform, total,
                  ", ".join(f"{k}={v}" for k, v in saved.items()) or "none")
 
+        # Auto-wire real-time comments: subscribe the connected Facebook Pages
+        # to the app's webhooks so events flow without hand-running Graph calls.
+        # Best-effort + dormant unless META_WEBHOOK_ENABLED (idempotent).
+        try:
+            from app.social.services import webhook_subscribe
+            webhook_subscribe.subscribe_all_pages()
+        except Exception:  # noqa: BLE001 - never let this break a successful connect
+            log.exception("[oauth:%s] page webhook subscribe failed", platform)
+
         ungranted = (bundle.meta or {}).get("ungranted_scopes") or []
         if ungranted:
             log.warning("[oauth:%s] partial grant - Meta withheld: %s",

@@ -94,6 +94,13 @@ META_UNIFIED_SCOPES = [
     # Review; for public/live use it must be in the App Review submission. The
     # feature stays dormant behind SOCIAL_ADS_COMMENTS_ENABLED regardless.
     "ads_read",
+    # Subscribing each connected Page to the app's webhooks (POST
+    # /{page-id}/subscribed_apps) so real-time comment events are delivered -
+    # app-level field subscriptions alone don't deliver a specific page's
+    # events. Granted to admins/devs/testers in Development/Testing; part of the
+    # App Review submission for public/live use. Only used when
+    # META_WEBHOOK_ENABLED.
+    "pages_manage_metadata",
 ]
 
 
@@ -504,6 +511,20 @@ class MetaBaseProvider(SocialProvider):
         if not comment_external_id:
             return False
         self.graph().delete(comment_external_id, token=token)
+        return True
+
+    # -- Webhooks (per-Page subscription) ---------------------------------
+
+    def subscribe_app_to_page(self, page_id, token, fields="feed"):
+        """Subscribe this app to a Page's webhooks (POST
+        /{page-id}/subscribed_apps) so Meta delivers that page's real-time
+        events. App-level field subscriptions alone don't deliver a specific
+        page's events without this per-page step. Needs a Page token with
+        pages_manage_metadata. Idempotent - Meta upserts the subscription."""
+        if not page_id:
+            return False
+        self.graph().post(f"{page_id}/subscribed_apps", token=token,
+                          data={"subscribed_fields": fields})
         return True
 
     # -- Ads (comment ingestion for ad/boosted posts) ---------------------

@@ -110,7 +110,9 @@ products on the app:
 
 - `instagram_manage_messages` — no messaging code exists.
 - Any `pages_messaging` permission — same reason.
-- `pages_manage_metadata`, `pages_manage_ads`, `ads_management` — unused.
+- `pages_manage_ads`, `ads_management` — unused (we only read ads, via `ads_read`).
+- `pages_manage_metadata` — used to subscribe connected Pages to the app's
+  webhooks (`subscribed_apps`) for real-time comment ingestion.
 - `public_profile` beyond the default — not needed.
 
 ---
