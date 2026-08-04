@@ -151,6 +151,22 @@ def test_answer_questions_switch_and_facts_requirement(session, make_target):
         _mk(session, target, q), _cfg(answer_questions=True)) is False
 
 
+def test_manual_reply_failure_does_not_500(client, login, make_user, session, make_target, monkeypatch):
+    """A manual reply that raises (e.g. disconnected channel) is caught and
+    flashed gracefully — never a 500."""
+    from app.routes import social as social_routes
+    _, _, target = make_target()
+    c = _mk(session, target, "hello")
+
+    def boom(comment, text, actor_id=None):
+        raise RuntimeError("token decrypt failed")
+
+    monkeypatch.setattr(social_routes.engage_svc, "reply", boom)
+    login(make_user("employee", permissions=["manage_social"]))
+    r = client.post(f"/social/engage/{c.id}/reply", data={"message": "hi"})
+    assert r.status_code in (302, 303)          # graceful redirect, not 500
+
+
 def test_run_autoreply_now_route_invokes_scan(client, login, make_user, app, monkeypatch):
     """The 'Run auto-reply now' button POSTs, redirects immediately, and runs
     auto_reply_scan in the BACKGROUND (never inline — that would time out)."""

@@ -170,12 +170,12 @@ def test_manual_hide_then_restore(session, make_target, make_user):
     user = make_user("employee", permissions=["manage_social"])
     c = _mk(session, target, "whatever")
 
-    assert engage.hide(c, actor_id=user.id) is True
+    assert engage.hide(c, actor_id=user.id) == (True, None)
     c = SocialComment.query.get(c.id)
     assert c.status == "removed" and c.removal_kind == "manual"
     assert c.removal_action == "hidden" and c.removed_by_id == user.id
 
-    assert engage.restore(c, actor_id=user.id) is True
+    assert engage.restore(c, actor_id=user.id) == (True, None)
     c = SocialComment.query.get(c.id)
     assert c.status == "open" and c.removal_action is None and c.removed_by_id is None
 
@@ -185,7 +185,8 @@ def test_manual_delete_is_permanent(session, make_target, make_user):
     user = make_user("employee", permissions=["manage_social"])
     c = _mk(session, target, "whatever")
 
-    assert engage.delete(c, actor_id=user.id) is True
+    assert engage.delete(c, actor_id=user.id) == (True, None)
     c = SocialComment.query.get(c.id)
     assert c.status == "removed" and c.removal_action == "deleted"
-    assert engage.restore(c, actor_id=user.id) is False       # can't restore a delete
+    ok, reason = engage.restore(c, actor_id=user.id)          # can't restore a delete
+    assert ok is False and "can't be restored" in reason

@@ -530,11 +530,45 @@ def is_spam(comment, cfg):
 
 def _provider_token(comment):
     """(provider, page_token) to act on a comment, or (None, None) if we can't
-    (channel disconnected / unsupported) - same guard as reply()."""
+    (channel disconnected / unsupported) - same guard as reply().
+
+    access_token can RAISE for a revoked/expired channel (its stored secret was
+    wiped, so decryption fails). That used to bubble out of hide/delete as an
+    uncaught 500; catch it here so the action fails gracefully instead."""
     provider = get_provider(comment.platform)
     if not (provider and comment.target and comment.target.account is not None):
         return None, None
-    return provider, AccountManager.access_token(comment.target.account)
+    try:
+        return provider, AccountManager.access_token(comment.target.account)
+    except Exception:  # noqa: BLE001 - disconnected/expired channel -> can't act
+        current_app.logger.exception(
+            "[engage] token unavailable for comment %s (channel disconnected?)",
+            comment.id)
+        return None, None
+
+
+def _moderation_reason(provider, exc):
+    """A plain, actionable reason an Engage action (reply / hide / delete /
+    restore) was refused — reusing the sync classifier so the message says what
+    to DO, not a raw Graph error."""
+    category, _ = _classify(provider, exc)
+    return {
+        "auth": "the channel is missing the permission needed — reconnect it in "
+                "Channels to refresh its permissions",
+        "rate_limit": "the platform is rate-limiting us — try again shortly",
+        "unavailable": "that comment or post is no longer on the platform",
+    }.get(category,
+          "the platform refused it — the channel may need reconnecting, or this "
+          "comment is on an ad/Instagram post that can't be actioned this way")
+
+
+def classify_failure(comment, exc):
+    """Public: the plain, actionable reason an Engage action on `comment` failed
+    (used by the manual reply route, which catches so a bad reply never 500s)."""
+    return _moderation_reason(get_provider(comment.platform), exc)
+
+
+_NEEDS_RECONNECT = "the channel needs reconnecting — reconnect it in Channels"
 
 
 def automod_run(client_id=None):
@@ -624,56 +658,57 @@ def _record_removal(comment, actor_id, action, reason):
 
 
 def hide(comment, actor_id=None):
-    """Manually hide a comment (reversible). Returns True on success."""
+    """Manually hide a comment (reversible). Returns (ok, reason) - reason is a
+    plain, actionable message when it couldn't be hidden, else None."""
     provider, token = _provider_token(comment)
     if not provider:
-        return False
+        return False, _NEEDS_RECONNECT
     try:
         provider.set_comment_hidden(comment.external_id, token, hidden=True)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         current_app.logger.exception("[engage] hide failed for %s", comment.id)
-        return False
+        return False, _moderation_reason(provider, exc)
     _record_removal(comment, actor_id, "hidden", "manual")
     audit.record("comment_hidden", target_id=comment.target_id,
                  post_id=(comment.target.social_post_id if comment.target else None),
                  actor_id=actor_id,
                  detail={"comment_id": comment.external_id, "auto": False})
     db.session.commit()
-    return True
+    return True, None
 
 
 def delete(comment, actor_id=None):
     """Permanently delete a comment on the platform. NOT reversible; we keep the
-    local record (in the Removed tab) for the audit trail."""
+    local record (in the Removed tab) for the audit trail. Returns (ok, reason)."""
     provider, token = _provider_token(comment)
     if not provider:
-        return False
+        return False, _NEEDS_RECONNECT
     try:
         provider.delete_comment(comment.external_id, token)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         current_app.logger.exception("[engage] delete failed for %s", comment.id)
-        return False
+        return False, _moderation_reason(provider, exc)
     _record_removal(comment, actor_id, "deleted", "manual")
     audit.record("comment_deleted", target_id=comment.target_id,
                  post_id=(comment.target.social_post_id if comment.target else None),
                  actor_id=actor_id, detail={"comment_id": comment.external_id})
     db.session.commit()
-    return True
+    return True, None
 
 
 def restore(comment, actor_id=None):
     """Unhide a previously HIDDEN comment back into the inbox. A deleted comment
-    can't be restored (it's gone on the platform)."""
+    can't be restored (it's gone on the platform). Returns (ok, reason)."""
     if comment.removal_action != "hidden":
-        return False
+        return False, "a deleted comment can't be restored (it's gone on the platform)"
     provider, token = _provider_token(comment)
     if not provider:
-        return False
+        return False, _NEEDS_RECONNECT
     try:
         provider.set_comment_hidden(comment.external_id, token, hidden=False)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         current_app.logger.exception("[engage] restore failed for %s", comment.id)
-        return False
+        return False, _moderation_reason(provider, exc)
     comment.status = "open"
     comment.removal_kind = None
     comment.removal_action = None
@@ -684,4 +719,4 @@ def restore(comment, actor_id=None):
                  post_id=(comment.target.social_post_id if comment.target else None),
                  actor_id=actor_id, detail={"comment_id": comment.external_id})
     db.session.commit()
-    return True
+    return True, None

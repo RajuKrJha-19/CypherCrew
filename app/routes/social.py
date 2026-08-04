@@ -3431,10 +3431,17 @@ def engage_reply(comment_id):
     if not text:
         flash("Write a reply first.", "error")
     else:
-        ext = engage_svc.reply(comment, text, actor_id=current_user.id)
-        flash("Reply posted." if ext else
-              "Couldn't post the reply — check the channel connection.",
-              "success" if ext else "error")
+        try:
+            ext = engage_svc.reply(comment, text, actor_id=current_user.id)
+        except Exception as exc:  # noqa: BLE001 - a failed reply must not 500
+            current_app.logger.exception(
+                "[engage] manual reply failed for %s", comment.id)
+            flash(f"Couldn't post the reply — "
+                  f"{engage_svc.classify_failure(comment, exc)}.", "error")
+        else:
+            flash("Reply posted." if ext else
+                  "Couldn't post the reply — check the channel connection.",
+                  "success" if ext else "error")
     return redirect(_engage_back(comment.id))
 
 
@@ -3445,9 +3452,9 @@ def engage_hide(comment_id):
     _guard()
     from app.models import SocialComment
     comment = SocialComment.query.get_or_404(comment_id)
-    ok = engage_svc.hide(comment, actor_id=current_user.id)
+    ok, reason = engage_svc.hide(comment, actor_id=current_user.id)
     flash("Comment hidden — it's in the Removed tab, restore any time." if ok
-          else "Couldn't hide it — check the channel connection.",
+          else f"Couldn't hide it — {reason}.",
           "success" if ok else "error")
     return redirect(_engage_back())
 
@@ -3459,9 +3466,9 @@ def engage_delete(comment_id):
     _guard()
     from app.models import SocialComment
     comment = SocialComment.query.get_or_404(comment_id)
-    ok = engage_svc.delete(comment, actor_id=current_user.id)
+    ok, reason = engage_svc.delete(comment, actor_id=current_user.id)
     flash("Comment deleted on the platform (permanent)." if ok
-          else "Couldn't delete it — check the channel connection.",
+          else f"Couldn't delete it — {reason}.",
           "success" if ok else "error")
     return redirect(_engage_back())
 
@@ -3473,9 +3480,9 @@ def engage_restore(comment_id):
     _guard()
     from app.models import SocialComment
     comment = SocialComment.query.get_or_404(comment_id)
-    ok = engage_svc.restore(comment, actor_id=current_user.id)
+    ok, reason = engage_svc.restore(comment, actor_id=current_user.id)
     flash("Comment restored to the inbox." if ok
-          else "Couldn't restore it (a deleted comment can't be restored).",
+          else f"Couldn't restore it — {reason}.",
           "success" if ok else "error")
     return redirect(_engage_back(comment.id))
 
