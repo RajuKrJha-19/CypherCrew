@@ -84,6 +84,9 @@ class SimulationProvider(AIProvider):
             return f"✨ {text} 🚀"
         if action == "grammar":
             return text  # "already clean" in the simulator
+        if action == "keywords":
+            kws = ", ".join(_keywords(text, limit=5)) or "keywords, seo, search"
+            return f"{text}\n{kws}"
         # rephrase / formal / casual — tag the tone so tests can see it flowed.
         return f"[{action}] {text}"
 

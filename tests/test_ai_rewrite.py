@@ -57,10 +57,20 @@ def test_rewrite_prompt_carries_action_facts_and_asks_text_only():
     assert "Old caption" in user                # the text to rewrite
 
 
-def test_rewrite_actions_are_the_expected_seven():
+def test_rewrite_actions_are_the_expected_set():
     assert set(_REWRITE_ACTIONS) == {
         "shorten", "expand", "rephrase", "formal",
-        "casual", "emojis", "grammar"}
+        "casual", "emojis", "grammar", "keywords"}
+
+
+def test_keywords_action_appends_a_line_not_replaces(app):
+    from app.ai import service as ai_service
+    with app.test_request_context():
+        out = ai_service.rewrite_caption(
+            text="Admissions open at Sandip University.", action="keywords")
+    # The original caption survives and a keyword line is added below it.
+    assert out["caption"].startswith("Admissions open at Sandip University.")
+    assert "\n" in out["caption"]
 
 
 # --------------------------------------------------------------------------

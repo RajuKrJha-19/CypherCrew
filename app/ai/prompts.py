@@ -77,6 +77,13 @@ _REWRITE_ACTIONS = {
               "and do not change the wording otherwise.",
     "grammar": "Fix any spelling, grammar and punctuation mistakes and tighten "
                "awkward phrasing. Do NOT otherwise rewrite or change the tone.",
+    "keywords": "Keep the caption exactly as-is, then add ONE new line at the "
+                "very bottom with 5-8 relevant, specific SEO keywords people "
+                "might SEARCH for (names, places, topics) - comma-separated, "
+                "plain words, NO '#' hashtags and NO links. These aid search "
+                "discoverability (e.g. Instagram/LinkedIn/YouTube search). "
+                "Example: 'Sandip University, B.Tech admission, Bihar, "
+                "placements, NAAC A+'.",
 }
 
 
