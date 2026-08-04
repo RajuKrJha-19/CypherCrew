@@ -3303,12 +3303,16 @@ def engage():
         p for (p,) in base.with_entities(SocialComment.platform).distinct()
     )
 
+    from app.ai import settings as ai_settings
+    autoreply_on = ai_settings.comment_config()["enabled"]
+
     return render_template(
         "social/engage.html",
         comments=comments, replies=replies, selected=selected,
         status_f=status_f, platform_f=platform_f, search=search,
         source_f=source_f, source_counts=source_counts,
         ads_enabled=bool(current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED")),
+        autoreply_on=autoreply_on,
         counts=counts, platforms=platforms,
         open_total=counts["open"],
     )
@@ -3359,6 +3363,31 @@ def engage_sync():
         flash(f"Auto-hid {mod['hidden']} spam comment(s) — see the Removed tab.",
               "info")
 
+    return redirect(url_for("social.engage", client=_client_arg()))
+
+
+@social_bp.route("/engage/auto-reply", methods=["POST"])
+@login_required
+def engage_autoreply_now():
+    """On-demand: sweep the comments already in the inbox and auto-reply the
+    safe, recent (last ENGAGE_AUTO_MAX_AGE_DAYS days) ones now — so a backlog
+    isn't left waiting for the next new comment or a cron. Scan-only (no
+    re-sync), and self-gated: a no-op unless the four-layer gate + the client's
+    opt-in are on. Questions/complaints/anything unsure always stay for a human."""
+    _guard()
+    out = engage_svc.auto_reply_scan(_client_arg())
+    if out.get("skipped") == "over budget":
+        flash("AI monthly budget reached — auto-reply is paused until it resets "
+              "or the cap is raised.", "warning")
+    elif out.get("skipped"):
+        flash("Auto-reply is off — turn it on in AI Settings and opt this client "
+              "in on their profile first.", "info")
+    elif out.get("auto_replied"):
+        flash(f"Auto-replied {out['auto_replied']} safe comment(s). Questions and "
+              "anything unsure stayed in the queue.", "success")
+    else:
+        flash("No comments were eligible to auto-reply right now (only recent, "
+              "short, non-question, opted-in comments qualify).", "info")
     return redirect(url_for("social.engage", client=_client_arg()))
 
 

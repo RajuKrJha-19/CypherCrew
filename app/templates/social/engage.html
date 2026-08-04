@@ -35,6 +35,12 @@
         <p>{% if selected_client %}Comments on {{ selected_client.client_name }}'s published posts{% else %}Comments across every published post{% endif %} — reply without leaving the Studio</p>
     </div>
     <div class="top-actions">
+        {% if autoreply_on %}
+        <form method="POST" action="{{ url_for('social.engage_autoreply_now') }}" data-turbo="false">
+            <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
+            <button type="submit" class="btn btn-secondary" title="Auto-reply the safe, recent comments already in the inbox now — questions and anything unsure stay for a human"><i class="fa-solid fa-robot"></i> Run auto-reply now</button>
+        </form>
+        {% endif %}
         <form method="POST" action="{{ url_for('social.engage_sync') }}" data-turbo="false">
             <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
             <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Fetch comments</button>

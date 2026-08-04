@@ -151,6 +151,23 @@ def test_answer_questions_switch_and_facts_requirement(session, make_target):
         _mk(session, target, q), _cfg(answer_questions=True)) is False
 
 
+def test_run_autoreply_now_route_invokes_scan(client, login, make_user, monkeypatch):
+    """The 'Run auto-reply now' button POSTs to a route that scans the inbox
+    (no re-sync) and redirects back."""
+    from app.routes import social as social_routes
+    seen = {}
+
+    def fake_scan(client_id=None):
+        seen["called"] = True
+        return {"auto_replied": 2}
+
+    monkeypatch.setattr(social_routes.engage_svc, "auto_reply_scan", fake_scan)
+    login(make_user("employee", permissions=["manage_social"]))
+    r = client.post("/social/engage/auto-reply", data={"client": ""})
+    assert r.status_code in (302, 303)
+    assert seen.get("called") is True
+
+
 def test_comment_config_exposes_answer_questions(app):
     with app.app_context():
         db.session.add(AISettings(enabled=True, comment_enabled=True,
