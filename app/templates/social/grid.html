@@ -2,6 +2,7 @@
 {% block title %}Grid planner · Social Studio | CypherCrew{% endblock %}
 
 {% set STATUS_TONE = {'published':'success','partially_published':'success','approved':'info','scheduled':'warning','publishing':'info'} %}
+{% set movable_count = cells | selectattr('movable') | list | length %}
 
 {% block content %}
 <div class="page-header">
@@ -24,21 +25,37 @@
 <div class="grid-legend">
     <span><i class="fa-solid fa-circle" style="color:var(--color-success)"></i> Published</span>
     <span><i class="fa-solid fa-circle" style="color:var(--color-warning)"></i> Scheduled / upcoming</span>
-    <span class="t-subtle">Newest first · Instagram only</span>
+    <span class="t-subtle">Newest first · Instagram only · times in IST</span>
 </div>
-<div class="ig-grid">
+{% if movable_count %}
+<p class="grid-explainer">
+    <i class="fa-solid fa-arrows-up-down-left-right"></i>
+    Drag the <b>upcoming</b> posts (dashed) to reorder the feed — their scheduled times swap to match, so the cadence stays the same. Published posts (<i class="fa-solid fa-lock"></i>) are live and can’t be moved.
+</p>
+{% endif %}
+<div class="ig-grid" id="igGrid">
     {% for c in cells %}
-    <a class="ig-cell {{ 'is-upcoming' if c.status not in ['published','partially_published'] }}"
+    <a class="ig-cell {{ 'is-movable' if c.movable else 'is-locked' }}"
        href="{{ url_for('social.post_detail', post_id=c.post_id) }}"
-       title="{{ c.status.replace('_',' ')|capitalize }}{% if c.when %} · {{ c.when.strftime('%d %b %H:%M') }}{% endif %}">
+       data-target-id="{{ c.target_id }}"
+       {% if c.movable %}draggable="true"{% endif %}
+       title="{{ c.status.replace('_',' ')|capitalize }}{% if c.when %} · {{ c.when.strftime('%d %b %H:%M') }} IST{% endif %}{% if c.movable %} — drag to reorder{% endif %}">
         {% if c.thumb %}<img src="{{ c.thumb }}" loading="lazy" alt="">
         {% else %}<span class="ig-cell-empty"><i class="fa-regular fa-image"></i></span>{% endif %}
-        {% if c.is_video or c.post_type in ['reel','video'] %}<span class="ig-cell-badge tr"><i class="fa-solid fa-play"></i></span>{% endif %}
-        {% if c.post_type == 'carousel' %}<span class="ig-cell-badge tr"><i class="fa-solid fa-clone"></i></span>{% endif %}
-        <span class="ig-cell-status sp-pill {{ STATUS_TONE.get(c.status,'muted') }}">{{ c.status.replace('_',' ') }}</span>
+        {% if c.is_video or c.post_type in ['reel','video'] %}<span class="ig-cell-badge tr"><i class="fa-solid fa-play"></i></span>
+        {% elif c.post_type == 'carousel' %}<span class="ig-cell-badge tr"><i class="fa-solid fa-clone"></i></span>{% endif %}
+        {% if not c.movable %}<span class="ig-cell-badge tl" title="Published — locked"><i class="fa-solid fa-lock"></i></span>{% endif %}
+        {% if c.movable and c.when %}<span class="ig-cell-when"><i class="fa-solid fa-clock"></i> {{ c.when.strftime('%d %b, %H:%M') }}</span>{% endif %}
     </a>
     {% endfor %}
 </div>
+{% if movable_count %}
+<script>
+    window.GRID_REORDER_URL = "{{ url_for('social.grid_reorder') }}";
+    window.GRID_CLIENT = "{{ selected_client_id or '' }}";
+</script>
+<script src="{{ asset_url('js/grid-planner.js') }}" defer></script>
+{% endif %}
 {% else %}
 <div class="social-card empty-state">
     <i class="fa-solid fa-table-cells-large"></i>

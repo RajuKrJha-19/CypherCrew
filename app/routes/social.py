@@ -3081,10 +3081,11 @@ def history():
 
 def _grid_cells(client_id, limit=60):
     """Instagram feed planner: the client's IG targets (published + upcoming),
-    newest first, each as a cell with a thumbnail + status + link. Read-only -
-    a visual aesthetic overview of the feed, not a re-orderer (you can't reorder
-    already-published posts on Instagram)."""
+    newest first, each as a cell with a thumbnail + status + link. Published
+    posts are read-only (you can't move a live post on Instagram); upcoming ones
+    can be dragged to reorder. Times shown in IST."""
     from app.social.media import pipeline
+    from app.utils.timezone import IST_OFFSET
 
     q = SocialPostTarget.query.filter(
         SocialPostTarget.platform == "instagram",
@@ -3114,14 +3115,48 @@ def _grid_cells(client_id, limit=60):
                 is_video = True
         cells.append({
             "post_id": t.social_post_id,
+            "target_id": t.id,
             "status": t.status,
-            "when": t.scheduled_for or t.created_at,
+            # Only not-yet-published targets can be reordered - you can't move a
+            # post that is already live on Instagram.
+            "movable": t.status in ("scheduled", "approved")
+            and t.scheduled_for is not None,
+            # IST for display (the whole app schedules in IST).
+            "when": (t.scheduled_for or t.created_at) + IST_OFFSET,
             "permalink": t.permalink,
             "thumb": thumb,
             "is_video": is_video,
             "post_type": t.post_type,
         })
     return cells
+
+
+def _reorder_scheduled_targets(order_ids, client_id):
+    """Reassign scheduled times among the given upcoming IG targets to match the
+    requested visual order (newest first). Keeps the SAME set of times - only
+    which post sits in which slot changes - so the feed sequence moves without
+    disturbing the channel's cadence. Published targets are never touched.
+    Returns how many were reordered."""
+    if not order_ids:
+        return 0
+    q = SocialPostTarget.query.filter(
+        SocialPostTarget.id.in_(order_ids),
+        SocialPostTarget.platform == "instagram",
+        SocialPostTarget.status.in_(["scheduled", "approved"]),
+        SocialPostTarget.scheduled_for.isnot(None))
+    if client_id:
+        q = (q.join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
+              .filter(SocialPost.client_id == client_id))
+    by_id = {t.id: t for t in q.all()}
+    ordered = [by_id[i] for i in order_ids if i in by_id]
+    if len(ordered) < 2:
+        return 0
+    # The grid is newest-first, so the first target gets the latest time.
+    times = sorted((t.scheduled_for for t in ordered), reverse=True)
+    for target, when in zip(ordered, times):
+        target.scheduled_for = when
+    db.session.commit()
+    return len(ordered)
 
 
 @social_bp.route("/grid")
@@ -3132,6 +3167,22 @@ def grid():
     _guard()
     cid = _client_arg()
     return render_template("social/grid.html", cells=_grid_cells(cid))
+
+
+@social_bp.route("/grid/reorder", methods=["POST"])
+@login_required
+def grid_reorder():
+    """Persist a new feed order after a drag in the grid planner. Body: `order`
+    = the upcoming targets' ids, newest-first. Only reorders not-yet-published
+    Instagram targets (scoped to the active client)."""
+    _guard()
+    # The grid POSTs its active client in the body; fall back to ?client=.
+    cid = request.form.get("client", type=int)
+    if cid is None:
+        cid = _client_arg()
+    ids = [int(x) for x in _csv(request.form.get("order")) if x.isdigit()]
+    moved = _reorder_scheduled_targets(ids, cid)
+    return jsonify(ok=True, moved=moved)
 
 
 # ======================================================================
