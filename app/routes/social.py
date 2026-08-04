@@ -3318,6 +3318,19 @@ def engage():
 @login_required
 def engage_sync():
     _guard()
+    # Discover ad/boosted posts BEFORE the sync below, so the same "Fetch
+    # comments" click that pulls organic comments also pulls ad-post comments.
+    # Without this, ad comments only ever arrive via the background cron
+    # (/engage/ads-sync/run) and never from the button a human actually presses.
+    # Flag-gated (dormant when off), idempotent, and best-effort — a discovery
+    # failure must never block the organic fetch.
+    if current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED"):
+        try:
+            from app.social.services import engage_ads
+            engage_ads.sync_ad_targets(_client_arg())
+        except Exception:  # noqa: BLE001 - see docstring
+            current_app.logger.exception(
+                "[engage-ads] ad discovery on manual fetch failed")
     report = engage_svc.sync_comments(_client_arg())
 
     # "All caught up" is only honest when we actually managed to look.
