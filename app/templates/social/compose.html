@@ -102,7 +102,6 @@
                         {% for h in hashtag_sets %}<option value="{{ h.hashtags }}">{{ h.name }}</option>{% endfor %}
                     </select>
                     <button type="button" class="cmp-linkbtn" id="saveSet"><i class="fa-solid fa-bookmark"></i> Save #tags as set</button>
-                    <button type="button" class="cmp-linkbtn" id="tagsToFc" title="Move the caption's #hashtags into the first comment (keeps the caption clean)"><i class="fa-solid fa-turn-down"></i> #tags → first comment</button>
                     {% if ai_enabled and ai_features.caption %}
                     <select class="cmp-set-select" id="aiTone" aria-label="Caption tone">
                         <option value="">Auto tone</option>
@@ -162,7 +161,7 @@
             {# --- First comment --- #}
             <div class="cmp-section cmp-first-comment">
                 <span class="cmp-label">First comment <small>Auto-posted right after publish</small></span>
-                <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" data-emoji-field placeholder="e.g. #hashtags or a link — kept out of the caption, posted as the first comment">{{ first_comment }}</textarea>
+                <textarea name="first_comment" id="firstComment" aria-label="First comment" rows="2" data-emoji-field placeholder="e.g. a link, credit, or extra context — auto-posted right after the caption (no hashtags — those go in the caption)">{{ first_comment }}</textarea>
                 <span class="cmp-hint-inline" id="fcHint"></span>
             </div>
 
@@ -480,16 +479,6 @@
     }
     // Move #hashtags out of the caption into the first comment (IG best practice).
     const HASHTAG_RE = /#[\wÀ-ſ]+/g;
-    function moveHashtagsToFirstComment(){
-        const tags = caption.value.match(HASHTAG_RE) || [];
-        if(!tags.length){ (window.showToast||window.alert)("No #hashtags in the caption to move."); return; }
-        caption.value = caption.value.replace(HASHTAG_RE, "")
-            .replace(/[ \t]{2,}/g," ").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
-        const fc = $("firstComment"), block = tags.join(" ");
-        fc.value = fc.value.trim() ? (fc.value.trim() + "\n" + block) : block;
-        updateCaption(); fc.dispatchEvent(new Event("input",{bubbles:true}));
-        if(window.showToast) window.showToast("Moved "+tags.length+" hashtag(s) to the first comment.","success");
-    }
     // Advisory pre-publish checklist (never blocks): IG 30-tag cap, missing alt.
     function refreshChecklist(){
         const box=$("composerChecklist"); if(!box) return;
@@ -526,7 +515,6 @@
                 +' — <a href="#" id="applyBestTime">use it</a>';
           }).catch(function(){ hint.hidden=true; });
     }
-    const _tagsBtn=$("tagsToFc"); if(_tagsBtn) _tagsBtn.addEventListener("click", moveHashtagsToFirstComment);
     document.addEventListener("click", function(ev){
         var a=ev.target.closest ? ev.target.closest("#applyBestTime") : null;
         if(!a) return; ev.preventDefault();

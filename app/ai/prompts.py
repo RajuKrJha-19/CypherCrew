@@ -27,7 +27,9 @@ def caption_prompt(ctx):
     var_line = (f"'variations' are {n_var} alternative full captions taking "
                 "different angles/hooks."
                 if n_var else "'variations' must be an empty array.")
-    tag_line = ("hashtags are without the leading # and relevant, not spammy."
+    tag_line = ("hashtags are without the leading #, relevant, not spammy, and "
+                "AT MOST 5 (fewer is better) - modern best practice on Instagram "
+                "and Facebook is a few focused tags, not a wall of them."
                 if want_tags else
                 "'hashtags' must be an empty array - do NOT add any hashtags.")
     system = (
@@ -43,7 +45,8 @@ def caption_prompt(ctx):
         '"hashtags": [str], "first_comment": str, "variations": [str]}. '
         "'caption' is your best version; " + var_line + " Keep every "
         "per_platform caption within its character limit. " + tag_line
-        + " first_comment may be empty."
+        + " Hashtags belong in the caption, NOT the first comment. first_comment "
+        "may be empty and must contain NO hashtags."
     )
     brand = _brand_block(ctx)
     limits = ", ".join(
