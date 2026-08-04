@@ -87,6 +87,12 @@ def sync_comments(client_id=None):
             category, reason = _classify(provider, exc)
             fail(target, category, reason)
             continue
+        # Our own page/IG account's id. A comment authored by it is OURS - our
+        # first comment, or a reply we typed natively on the platform - even
+        # though we didn't create it through the app. Flagging it is_ours keeps
+        # auto-reply and spam auto-mod from ever acting on our own words (e.g.
+        # auto-hiding a first comment that carries a link).
+        own_id = str(getattr(target.account, "external_id", "") or "")
         for c in comments:
             ext = c.get("external_id")
             if not ext:
@@ -112,7 +118,9 @@ def sync_comments(client_id=None):
                         author_pic=c.get("author_pic"),
                         message=c.get("message"),
                         created_time=c.get("created_time"),
-                        is_ours=False, fetched_at=datetime.utcnow()))
+                        is_ours=bool(own_id and
+                                     str(c.get("author_id") or "") == own_id),
+                        fetched_at=datetime.utcnow()))
                     db.session.flush()
                 report["new"] += 1
             except IntegrityError:

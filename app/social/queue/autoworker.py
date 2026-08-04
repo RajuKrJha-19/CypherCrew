@@ -19,6 +19,8 @@ _started = False
 _lock = threading.Lock()
 #: Wall-clock of the last analytics refresh this process attempted (throttle).
 _last_analytics = 0.0
+#: Wall-clock of the last ad-post discovery this process attempted (throttle).
+_last_ads = 0.0
 
 
 def start_background_worker(app):
@@ -36,9 +38,16 @@ def start_background_worker(app):
     # workers running this is safe.
     analytics_interval = max(300, int(
         app.config.get("SOCIAL_ANALYTICS_INTERVAL", 1800)))
+    # Ad/boosted-post DISCOVERY (the slow Marketing-API listing) on a slow
+    # cadence, so ad targets exist by the time a human presses Fetch WITHOUT an
+    # external cron and WITHOUT blocking the web request. Discovery only reads
+    # ad ids + materialises targets (idempotent); the comments themselves are
+    # read by the normal sync. Dormant unless SOCIAL_ADS_COMMENTS_ENABLED is on.
+    ads_interval = max(300, int(
+        app.config.get("SOCIAL_ADS_SYNC_INTERVAL", 900)))
 
     def _loop():
-        global _last_analytics
+        global _last_analytics, _last_ads
         # Let boot + auto-migrations settle before the first tick.
         time.sleep(8)
         while True:
@@ -53,6 +62,11 @@ def start_background_worker(app):
                         _last_analytics = now
                         from app.social.services import analytics
                         analytics.auto_sync_recent(analytics_interval)
+                    if (app.config.get("SOCIAL_ADS_COMMENTS_ENABLED")
+                            and now - _last_ads >= ads_interval):
+                        _last_ads = now
+                        from app.social.services import engage_ads
+                        engage_ads.sync_ad_targets()
             except Exception:  # noqa: BLE001 - a bad tick must never kill the loop
                 try:
                     with app.app_context():

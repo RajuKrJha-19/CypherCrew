@@ -266,6 +266,11 @@ class Config:
     # Much slower than the publish tick; de-duped across workers. Default 30 min.
     SOCIAL_ANALYTICS_INTERVAL = int(
         os.getenv("SOCIAL_ANALYTICS_INTERVAL", "1800"))
+    # How often the in-process worker discovers ad/boosted posts (seconds).
+    # Ads change slowly, so this stays well below the publish tick. Only runs
+    # when SOCIAL_ADS_COMMENTS_ENABLED is on. Default 15 min.
+    SOCIAL_ADS_SYNC_INTERVAL = int(
+        os.getenv("SOCIAL_ADS_SYNC_INTERVAL", "900"))
 
     # ------------------------------------------------------------------
     # Cypher-Teams (chat)
