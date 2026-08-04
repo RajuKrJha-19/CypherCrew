@@ -17714,6 +17714,17 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
 .analytic-card .ac-name{ font-size:12px; font-weight:600; color:var(--color-text-muted); }
 .analytic-card .ac-value{ font-size:26px; font-weight:750; letter-spacing:-.02em;
     color:var(--color-text-subtle); }
+.analytic-card .ac-sub{ margin-top:4px; font-size:11px; color:var(--color-text-subtle); }
+/* Engagement-rate tile — the headline KPI, given a little prominence. */
+.analytic-card.ac-rate{ border-color:var(--color-primary); background:var(--color-primary-soft); }
+.analytic-card.ac-rate .ac-ic{ background:var(--color-primary); color:#fff; }
+.analytic-card.ac-rate .ac-value{ color:var(--color-primary); }
+/* Top-performing-post highlight. */
+.perf-top{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.perf-top-main{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-width:0; }
+.perf-top-stats{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.perf-top-stat{ font-size:12.5px; color:var(--color-text-muted); }
+.perf-top-stat b{ color:var(--color-text); font-weight:700; }
 .analytic-card .ac-spark{ margin-top:10px; height:34px; border-radius:var(--radius-sm);
     background:linear-gradient(180deg,var(--color-surface-sunken),transparent);
     position:relative; overflow:hidden; }

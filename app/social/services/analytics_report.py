@@ -36,6 +36,36 @@ METRICS = [
 ]
 
 
+def _engagement(metrics):
+    """A single engagement number for a post: the platform's own 'engagement'
+    figure when given (Facebook: post_engaged_users), else the sum of the
+    interaction metrics (Instagram/YouTube: likes+comments+shares+saved)."""
+    if metrics.get("engagement") is not None:
+        try:
+            return int(metrics["engagement"])
+        except (TypeError, ValueError):
+            return 0
+    return sum(int(metrics.get(k) or 0)
+               for k in ("likes", "comments", "shares", "saved"))
+
+
+def _reach_base(metrics):
+    """Denominator for engagement RATE: reach if reported, else impressions."""
+    base = metrics.get("reach")
+    if base is None:
+        base = metrics.get("impressions")
+    try:
+        return int(base) if base else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _eng_rate(engagement, base):
+    """Engagement as a % of reach/impressions, or None when we can't measure it
+    (no reach reported) - the #1 comparable KPI Buffer/Hootsuite lead with."""
+    return round(engagement / base * 100, 1) if base else None
+
+
 def _latest_snapshot_ids():
     """One snapshot id per target - the most recent."""
     return (
@@ -126,6 +156,9 @@ def build_report(period, client_id=None, campaign=None):
             present.add(key)
             row["metrics"][key] = value
 
+        # Engagement + engagement-rate per post (the headline KPI).
+        row["engagement"] = _engagement(row["metrics"])
+        row["eng_rate"] = _eng_rate(row["engagement"], _reach_base(row["metrics"]))
         posts.append(row)
 
         account = target.account
@@ -163,12 +196,20 @@ def build_report(period, client_id=None, campaign=None):
             "impressions", kv[1]["metrics"].get("reach", 0)),
         reverse=True)
 
+    # Headline engagement rate for the whole window + the standout post.
+    total_engagement = sum(p["engagement"] for p in posts)
+    eng_rate = _eng_rate(total_engagement, _reach_base(totals))
+    top_post = max(posts, key=lambda p: p["engagement"]) if posts else None
+
     return {
         "totals": totals,
         # Only tile what the platforms actually reported. A column of
         # zeroes for a metric nobody returns reads as "we got zero reach",
         # which is a different and much worse claim than "not reported".
         "present": present,
+        "total_engagement": total_engagement,
+        "eng_rate": eng_rate,
+        "top_post": top_post,
         "channels": sorted(channels.items(),
                            key=lambda kv: kv[1]["posts"], reverse=True),
         "campaigns": campaign_rows,
@@ -182,6 +223,9 @@ def _empty():
     return {
         "totals": {key: 0 for key, _, _ in METRICS},
         "present": set(),
+        "total_engagement": 0,
+        "eng_rate": None,
+        "top_post": None,
         "channels": [],
         "campaigns": [],
         "posts": [],

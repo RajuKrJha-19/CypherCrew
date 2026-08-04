@@ -309,3 +309,42 @@ def test_campaign_rollup_sums_across_a_campaign(session):
     scoped = analytics_report.build_report(_period(), campaign="Diwali")
     assert scoped["totals"]["reach"] == 350
     assert scoped["post_count"] == 2
+
+
+# --------------------------------------------------------------------------
+# Engagement rate + top post (the headline KPI)
+# --------------------------------------------------------------------------
+
+def test_engagement_rate_is_interactions_over_reach(session):
+    # engagement = 10 + 3 + 2 = 15 (no explicit 'engagement' key); reach 300.
+    _publish(session, metrics={"reach": 300, "likes": 10, "comments": 3, "saved": 2})
+    report = analytics_report.build_report(_period())
+    assert report["total_engagement"] == 15
+    assert report["eng_rate"] == 5.0
+
+
+def test_explicit_engagement_metric_wins_over_summing(session):
+    # Facebook reports 'engagement' directly; it must not be double-counted.
+    _publish(session, metrics={"reach": 200, "engagement": 50, "likes": 5})
+    report = analytics_report.build_report(_period())
+    assert report["total_engagement"] == 50            # not 55
+    assert report["eng_rate"] == 25.0
+
+
+def test_engagement_rate_is_none_without_a_reach_base(session):
+    _publish(session, metrics={"likes": 5})
+    report = analytics_report.build_report(_period())
+    assert report["eng_rate"] is None
+
+
+def test_top_post_is_the_highest_engagement_not_reach(session):
+    _publish(session, metrics={"reach": 1000, "likes": 2})       # big reach, tiny eng
+    high = _publish(session, metrics={"reach": 100, "likes": 50})  # small reach, big eng
+    report = analytics_report.build_report(_period())
+    assert report["top_post"]["target"].id == high.id
+
+
+def test_empty_report_has_no_rate_or_top_post(session):
+    report = analytics_report.build_report(_period())
+    assert report["eng_rate"] is None
+    assert report["top_post"] is None

@@ -107,7 +107,39 @@
         <div class="ac-value">{{ "{:,}".format(report.totals[key]) }}</div>
     </div>
     {% endfor %}
+    {% if report.eng_rate is not none %}
+    <div class="analytic-card ac-rate">
+        <div class="ac-head">
+            <div class="ac-ic"><i class="fa-solid fa-fire"></i></div>
+            <span class="ac-name">Engagement rate</span>
+        </div>
+        <div class="ac-value">{{ report.eng_rate }}%</div>
+        <div class="ac-sub">{{ "{:,}".format(report.total_engagement) }} interactions ÷ reach</div>
+    </div>
+    {% endif %}
 </div>
+
+{% if report.top_post %}
+{% set tp = report.top_post %}
+<div class="social-card studio-section">
+    <div class="social-card-head"><h2><i class="fa-solid fa-trophy"></i> Top performing post</h2></div>
+    <div class="social-card-body perf-top">
+        <div class="perf-top-main">
+            <span class="pf-chip {{ tp.target.platform }}"><i class="{{ PF_ICON.get(tp.target.platform,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(tp.target.platform, tp.target.platform|capitalize) }}</span>
+            <strong>{{ (tp.target.post.title if tp.target.post else none) or 'Untitled post' }}</strong>
+            {% if tp.target.account %}<span class="t-subtle t-sm">{{ tp.target.account.display_name }}</span>{% endif %}
+        </div>
+        <div class="perf-top-stats">
+            {% if tp.eng_rate is not none %}<span class="perf-top-stat"><b>{{ tp.eng_rate }}%</b> eng. rate</span>{% endif %}
+            <span class="perf-top-stat"><b>{{ "{:,}".format(tp.engagement) }}</b> interactions</span>
+            {% for key, label, icon in METRICS if key in tp.metrics %}
+            <span class="perf-top-stat"><b>{{ "{:,}".format(tp.metrics[key]) }}</b> {{ label|lower }}</span>
+            {% endfor %}
+            {% if tp.target.permalink %}<a class="row-action" href="{{ tp.target.permalink }}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> View live</a>{% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% if report.channels %}
 <div class="social-card studio-section">
