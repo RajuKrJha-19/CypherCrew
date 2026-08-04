@@ -3163,10 +3163,14 @@ def _reorder_scheduled_targets(order_ids, client_id):
 @login_required
 def grid():
     """A visual Instagram feed planner - see the client's grid come together
-    (published + scheduled) so the aesthetic stays consistent."""
+    (published + scheduled) so the aesthetic stays consistent. A feed is
+    inherently per-client, so this needs a client selected; an "All clients"
+    grid would mix different accounts into one meaningless wall."""
     _guard()
     cid = _client_arg()
-    return render_template("social/grid.html", cells=_grid_cells(cid))
+    return render_template("social/grid.html",
+                           cells=_grid_cells(cid) if cid else [],
+                           needs_client=(cid is None))
 
 
 @social_bp.route("/grid/reorder", methods=["POST"])

@@ -21,7 +21,13 @@
 {% endfor %}
 {% endwith %}
 
-{% if cells %}
+{% if needs_client %}
+<div class="social-card empty-state">
+    <i class="fa-solid fa-table-cells-large"></i>
+    <h3>Pick a client to plan their feed</h3>
+    <p>The grid planner shows <strong>one client's</strong> Instagram feed at a time — an all-clients grid would mix different accounts together. Choose a client from the switcher at the top.</p>
+</div>
+{% elif cells %}
 <div class="grid-legend">
     <span><i class="fa-solid fa-circle" style="color:var(--color-success)"></i> Published</span>
     <span><i class="fa-solid fa-circle" style="color:var(--color-warning)"></i> Scheduled / upcoming</span>

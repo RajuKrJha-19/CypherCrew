@@ -1,37 +1,58 @@
 """Grid planner (Instagram feed view) + the inline best-time hint endpoint.
 Both are read-only composer/planner helpers gated by the social permission.
+
+The grid is inherently per-client, so it needs a ?client= selected; the render
+tests link an IG target's post to a client and pass that client.
 """
+from app.extensions import db
+from app.models import Client
+from tests.conftest import PYTEST_EMAIL_PREFIX
+
+
+def _client(session):
+    c = Client(client_name=f"{PYTEST_EMAIL_PREFIX}grid", status="active")
+    session.add(c)
+    session.commit()
+    return c
 
 
 # -- Grid planner -----------------------------------------------------------
 
-def test_grid_renders_for_a_permitted_user(client, login, make_user):
+def test_grid_needs_a_client_selected(client, login, make_user):
     login(make_user("employee", permissions=["manage_social"]))
-    r = client.get("/social/grid")
+    r = client.get("/social/grid")               # no ?client
     assert r.status_code == 200
+    assert b"Pick a client" in r.data            # per-client, not a mixed wall
 
 
-def test_grid_empty_state_when_no_instagram_posts(client, login, make_user):
+def test_grid_empty_state_when_no_instagram_posts(client, login, make_user, session):
+    c = _client(session)
     login(make_user("employee", permissions=["manage_social"]))
-    r = client.get("/social/grid")
+    r = client.get(f"/social/grid?client={c.id}")
     assert r.status_code == 200
     assert b"No Instagram posts yet" in r.data
 
 
-def test_grid_lists_instagram_targets(client, login, make_user, make_target):
-    make_target(platform="instagram")           # scheduled IG target + asset
+def test_grid_lists_instagram_targets(client, login, make_user, make_target, session):
+    c = _client(session)
+    _, post, _ = make_target(platform="instagram")
+    post.client_id = c.id
+    db.session.commit()
     login(make_user("employee", permissions=["manage_social"]))
-    r = client.get("/social/grid")
+    r = client.get(f"/social/grid?client={c.id}")
     assert r.status_code == 200
-    assert b"ig-grid" in r.data                  # grid rendered, not empty state
+    assert b"ig-grid" in r.data                   # grid rendered, not empty state
 
 
-def test_grid_ignores_non_instagram(client, login, make_user, make_target):
-    make_target(platform="fake")                 # a non-IG channel
+def test_grid_ignores_non_instagram(client, login, make_user, make_target, session):
+    c = _client(session)
+    _, post, _ = make_target(platform="fake")     # a non-IG channel
+    post.client_id = c.id
+    db.session.commit()
     login(make_user("employee", permissions=["manage_social"]))
-    r = client.get("/social/grid")
+    r = client.get(f"/social/grid?client={c.id}")
     assert r.status_code == 200
-    assert b"No Instagram posts yet" in r.data   # nothing on the IG grid
+    assert b"No Instagram posts yet" in r.data     # nothing on the IG grid
 
 
 def test_grid_forbidden_without_permission(client, login, make_user):
@@ -74,10 +95,13 @@ def test_best_time_forbidden_without_permission(client, login, make_user):
 
 # -- Grid drag-reorder ------------------------------------------------------
 
-def test_grid_marks_scheduled_cells_movable(client, login, make_user, make_target):
-    make_target(platform="instagram")            # scheduled -> movable
+def test_grid_marks_scheduled_cells_movable(client, login, make_user, make_target, session):
+    c = _client(session)
+    _, post, _ = make_target(platform="instagram")   # scheduled -> movable
+    post.client_id = c.id
+    db.session.commit()
     login(make_user("employee", permissions=["manage_social"]))
-    r = client.get("/social/grid")
+    r = client.get(f"/social/grid?client={c.id}")
     assert b"is-movable" in r.data and b'draggable="true"' in r.data
 
 
