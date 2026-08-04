@@ -3369,26 +3369,40 @@ def engage_sync():
 @social_bp.route("/engage/auto-reply", methods=["POST"])
 @login_required
 def engage_autoreply_now():
-    """On-demand: sweep the comments already in the inbox and auto-reply the
-    safe, recent (last ENGAGE_AUTO_MAX_AGE_DAYS days) ones now — so a backlog
-    isn't left waiting for the next new comment or a cron. Scan-only (no
-    re-sync), and self-gated: a no-op unless the four-layer gate + the client's
-    opt-in are on. Questions/complaints/anything unsure always stay for a human."""
+    """On-demand backlog sweep: auto-reply the safe, recent (last
+    ENGAGE_AUTO_MAX_AGE_DAYS days) comments already in the inbox.
+
+    auto_reply_scan makes an AI call + a Graph POST PER eligible comment, so
+    running it inline would block the request for tens of seconds and drop the
+    connection. Kick it off in a background thread and return immediately; the
+    replies show on the next inbox refresh. Scan-only (no re-sync), self-gated,
+    and questions/complaints/anything unsure always stay for a human."""
     _guard()
-    out = engage_svc.auto_reply_scan(_client_arg())
-    if out.get("skipped") == "over budget":
-        flash("AI monthly budget reached — auto-reply is paused until it resets "
-              "or the cap is raised.", "warning")
-    elif out.get("skipped"):
+    from app.ai import settings as ai_settings
+    client_id = _client_arg()
+    # Cheap gate check up front so an off/misconfigured state answers instantly
+    # instead of spawning a worker that does nothing.
+    if not ai_settings.comment_config()["enabled"]:
         flash("Auto-reply is off — turn it on in AI Settings and opt this client "
               "in on their profile first.", "info")
-    elif out.get("auto_replied"):
-        flash(f"Auto-replied {out['auto_replied']} safe comment(s). Questions and "
-              "anything unsure stayed in the queue.", "success")
-    else:
-        flash("No comments were eligible to auto-reply right now (only recent, "
-              "short, non-question, opted-in comments qualify).", "info")
-    return redirect(url_for("social.engage", client=_client_arg()))
+        return redirect(url_for("social.engage", client=client_id))
+
+    import threading
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                engage_svc.auto_reply_scan(client_id)
+            except Exception:  # noqa: BLE001 - best-effort background job
+                app.logger.exception("[engage] run-auto-reply-now failed")
+
+    threading.Thread(target=_run, name="engage-autoreply-now",
+                     daemon=True).start()
+    flash("Auto-reply is running in the background — refresh in a moment to see "
+          "the replies. Only safe, recent comments qualify; questions and "
+          "anything unsure stay for a human.", "info")
+    return redirect(url_for("social.engage", client=client_id))
 
 
 def _engage_back(comment_id=None):

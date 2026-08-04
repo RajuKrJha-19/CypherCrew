@@ -151,21 +151,49 @@ def test_answer_questions_switch_and_facts_requirement(session, make_target):
         _mk(session, target, q), _cfg(answer_questions=True)) is False
 
 
-def test_run_autoreply_now_route_invokes_scan(client, login, make_user, monkeypatch):
-    """The 'Run auto-reply now' button POSTs to a route that scans the inbox
-    (no re-sync) and redirects back."""
+def test_run_autoreply_now_route_invokes_scan(client, login, make_user, app, monkeypatch):
+    """The 'Run auto-reply now' button POSTs, redirects immediately, and runs
+    auto_reply_scan in the BACKGROUND (never inline — that would time out)."""
+    import threading
     from app.routes import social as social_routes
+
+    # Enable the global gate so the route spawns the worker (not the 'off' path).
+    with app.app_context():
+        db.session.add(AISettings(enabled=True, comment_enabled=True,
+                                  comment_autoreply_enabled=True,
+                                  gbp_blocklist="refund"))
+        db.session.commit()
+
+    done = threading.Event()
     seen = {}
 
     def fake_scan(client_id=None):
         seen["called"] = True
+        done.set()
         return {"auto_replied": 2}
 
     monkeypatch.setattr(social_routes.engage_svc, "auto_reply_scan", fake_scan)
     login(make_user("employee", permissions=["manage_social"]))
+    app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+    try:
+        r = client.post("/social/engage/auto-reply", data={"client": ""})
+    finally:
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+    assert r.status_code in (302, 303)
+    assert done.wait(timeout=5)                 # the background worker ran
+    assert seen.get("called") is True
+
+
+def test_run_autoreply_now_off_path(client, login, make_user, app, monkeypatch):
+    """When auto-reply is off, the route says so and never spawns a worker."""
+    from app.routes import social as social_routes
+    called = {"n": 0}
+    monkeypatch.setattr(social_routes.engage_svc, "auto_reply_scan",
+                        lambda client_id=None: called.__setitem__("n", called["n"] + 1))
+    login(make_user("employee", permissions=["manage_social"]))
     r = client.post("/social/engage/auto-reply", data={"client": ""})
     assert r.status_code in (302, 303)
-    assert seen.get("called") is True
+    assert called["n"] == 0                      # disabled -> no scan spawned
 
 
 def test_comment_config_exposes_answer_questions(app):
