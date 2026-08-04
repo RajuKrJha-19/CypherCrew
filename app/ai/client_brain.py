@@ -22,6 +22,10 @@ SECTIONS = [
      "Current offers, prices, campaign names and their validity dates.", True),
     ("products_services", "Products / services / courses",
      "What this client actually sells — so a wrong course/product is caught.", True),
+    ("aliases_synonyms", "Aliases / synonyms / abbreviations",
+     "One mapping per line, e.g. \"CSE = Computer Science & Engineering\" or "
+     "\"UGC = University Grants Commission\". Lets the AI expand short forms "
+     "correctly and recognise the same thing written more than one way.", True),
     ("visual_identity", "Visual identity / logo",
      "Which logo is current (colour, tagline, version) and what's outdated — so the "
      "checker can flag a wrong or old logo. Also upload the correct file under the "
