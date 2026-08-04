@@ -98,39 +98,50 @@ def index():
                                     1568, 512, 4096, allow_zero=True)
         row.media_max_mb = _int_in(request.form.get("media_max_mb"), 10, 1, 50)
 
-        # -- Review auto-reply guardrails (hard safety floors enforced) --
-        block = (request.form.get("gbp_blocklist") or "").strip()
-        row.gbp_min_rating = _int_in(request.form.get("gbp_min_rating"), 4, 3, 5)
-        row.gbp_max_len = _int_in(request.form.get("gbp_max_len"), 200, 20, 1000)
-        row.gbp_max_per_run = _int_in(request.form.get("gbp_max_per_run"), 10, 1, 100)
-        row.gbp_blocklist = block or None
-        want_auto = bool(request.form.get("gbp_autoreply_enabled"))
-        # Never enable unattended public auto-send without a blocklist net.
-        eff_block = block or (current_app.config.get("GBP_AUTOREPLY_BLOCKLIST") or "")
-        if want_auto and not eff_block.strip():
-            want_auto = False
-            flash("Auto-reply needs a blocklist first (safety) — add words, "
-                  "then turn it on.", "warning")
-        row.gbp_autoreply_enabled = want_auto
+        # -- Review auto-reply guardrails -- ONLY when this section was rendered
+        #    (its inputs aren't in the POST otherwise, so writing them would
+        #    silently reset the stored config to shipped defaults).
+        if current_app.config.get("GBP_REVIEWS_ENABLED"):
+            block = (request.form.get("gbp_blocklist") or "").strip()
+            row.gbp_min_rating = _int_in(request.form.get("gbp_min_rating"), 4, 3, 5)
+            row.gbp_max_len = _int_in(request.form.get("gbp_max_len"), 200, 20, 1000)
+            row.gbp_max_per_run = _int_in(request.form.get("gbp_max_per_run"), 10, 1, 100)
+            row.gbp_blocklist = block or None
+            want_auto = bool(request.form.get("gbp_autoreply_enabled"))
+            # Never enable unattended public auto-send without a blocklist net.
+            eff = block or (current_app.config.get("GBP_AUTOREPLY_BLOCKLIST") or "")
+            if want_auto and not eff.strip():
+                want_auto = False
+                flash("Auto-reply needs a blocklist first (safety) — add words, "
+                      "then turn it on.", "warning")
+            row.gbp_autoreply_enabled = want_auto
 
-        # -- Engage comment auto-reply guardrails (shares the blocklist net) --
-        row.comment_max_len = _int_in(request.form.get("comment_max_len"), 120, 20, 500)
-        row.comment_max_per_post = _int_in(request.form.get("comment_max_per_post"), 5, 1, 50)
-        c_want = bool(request.form.get("comment_autoreply_enabled"))
-        if c_want and not eff_block.strip():
-            c_want = False
-            flash("Comment auto-reply needs a blocklist too — add words, then "
-                  "turn it on.", "warning")
-        row.comment_autoreply_enabled = c_want
-        # Answering questions unattended is only meaningful when auto-reply is
-        # on; store the intent regardless (it's guarded again at send time by a
-        # facts check), but never let it stand alone.
-        row.comment_answer_questions_enabled = (
-            c_want and bool(request.form.get("comment_answer_questions_enabled")))
-        # Ceiling on question auto-answers per post (0 = no limit; leads exempt
-        # from the acknowledgment cap).
-        row.comment_question_max_per_post = _int_in(
-            request.form.get("comment_question_max_per_post"), 0, 0, 500)
+        # The blocklist net shared by comment auto-reply = the STORED review
+        # blocklist (or the env fallback) — read off the row so it's correct
+        # even when the review section wasn't rendered on this save.
+        eff_block = (row.gbp_blocklist
+                     or current_app.config.get("GBP_AUTOREPLY_BLOCKLIST") or "")
+
+        # -- Engage comment auto-reply guardrails -- ONLY when its section was
+        #    rendered (same reset-avoidance as the review block above).
+        if current_app.config.get("ENGAGE_AUTOREPLY_ENABLED"):
+            row.comment_max_len = _int_in(request.form.get("comment_max_len"), 120, 20, 500)
+            row.comment_max_per_post = _int_in(request.form.get("comment_max_per_post"), 5, 1, 50)
+            c_want = bool(request.form.get("comment_autoreply_enabled"))
+            if c_want and not eff_block.strip():
+                c_want = False
+                flash("Comment auto-reply needs a blocklist too — add words, then "
+                      "turn it on.", "warning")
+            row.comment_autoreply_enabled = c_want
+            # Answering questions unattended is only meaningful when auto-reply is
+            # on; store the intent regardless (guarded again at send time by a
+            # facts check), but never let it stand alone.
+            row.comment_answer_questions_enabled = (
+                c_want and bool(request.form.get("comment_answer_questions_enabled")))
+            # Ceiling on question auto-answers per post (0 = no limit; leads
+            # exempt from the acknowledgment cap).
+            row.comment_question_max_per_post = _int_in(
+                request.form.get("comment_question_max_per_post"), 0, 0, 500)
 
         # -- Spam auto-moderation (auto-HIDE). Its OWN blocklist; won't enable
         #    without one (same safety as auto-reply). --------------------------

@@ -254,7 +254,10 @@ def automod_config():
                   else True)
     return {
         # blocklist-mandatory: never auto-hide with no explicit spam config.
-        "enabled": bool(cfg.get("ENGAGE_AUTOMOD_ENABLED")) and admin_on and bool(blocklist),
+        # ANDs the AI master switch too: "Enable AI assist" off must stop this
+        # unattended public action like every other feature in the Suite.
+        "enabled": (is_enabled() and bool(cfg.get("ENGAGE_AUTOMOD_ENABLED"))
+                    and admin_on and bool(blocklist)),
         "blocklist": blocklist,
         "hide_links": hide_links,
         "max_per_run": int(getattr(row, "automod_max_per_run", None) or 20),

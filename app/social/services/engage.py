@@ -337,11 +337,19 @@ def _recent_enough(comment):
     cutoff = datetime.utcnow() - timedelta(days=days)
     raw = (comment.created_time or "").strip()
     if raw:
-        try:                                    # "2026-08-05T12:00:00+0000"
-            return datetime.strptime(raw[:19], "%Y-%m-%dT%H:%M:%S") >= cutoff
-        except ValueError:
+        try:
+            # Facebook FEED webhooks deliver created_time as a Unix epoch int;
+            # the Graph API (and IG) return ISO 8601 ("2026-08-05T12:00:00+0000").
+            when = (datetime.utcfromtimestamp(int(raw)) if raw.isdigit()
+                    else datetime.strptime(raw[:19], "%Y-%m-%dT%H:%M:%S"))
+            return when >= cutoff
+        except (ValueError, OverflowError, OSError):
             pass
-    return (comment.fetched_at or datetime.utcnow()) >= cutoff
+    # Fallback when the platform time is missing/unparseable: the row's own
+    # insert time (created_at is stable; fetched_at is refreshed on every
+    # re-sync, which would keep resetting a comment's apparent age).
+    stamp = getattr(comment, "created_at", None) or comment.fetched_at
+    return (stamp or datetime.utcnow()) >= cutoff
 
 
 def comment_is_auto_safe(comment, cfg):
@@ -675,15 +683,16 @@ def hide(comment, actor_id=None):
         return False, _NEEDS_RECONNECT
     try:
         provider.set_comment_hidden(comment.external_id, token, hidden=True)
-    except Exception as exc:  # noqa: BLE001
+        _record_removal(comment, actor_id, "hidden", "manual")
+        audit.record("comment_hidden", target_id=comment.target_id,
+                     post_id=(comment.target.social_post_id if comment.target else None),
+                     actor_id=actor_id,
+                     detail={"comment_id": comment.external_id, "auto": False})
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001 - a manual hide must never 500
+        db.session.rollback()
         current_app.logger.exception("[engage] hide failed for %s", comment.id)
         return False, _moderation_reason(provider, exc)
-    _record_removal(comment, actor_id, "hidden", "manual")
-    audit.record("comment_hidden", target_id=comment.target_id,
-                 post_id=(comment.target.social_post_id if comment.target else None),
-                 actor_id=actor_id,
-                 detail={"comment_id": comment.external_id, "auto": False})
-    db.session.commit()
     return True, None
 
 
@@ -695,14 +704,15 @@ def delete(comment, actor_id=None):
         return False, _NEEDS_RECONNECT
     try:
         provider.delete_comment(comment.external_id, token)
-    except Exception as exc:  # noqa: BLE001
+        _record_removal(comment, actor_id, "deleted", "manual")
+        audit.record("comment_deleted", target_id=comment.target_id,
+                     post_id=(comment.target.social_post_id if comment.target else None),
+                     actor_id=actor_id, detail={"comment_id": comment.external_id})
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001 - a manual delete must never 500
+        db.session.rollback()
         current_app.logger.exception("[engage] delete failed for %s", comment.id)
         return False, _moderation_reason(provider, exc)
-    _record_removal(comment, actor_id, "deleted", "manual")
-    audit.record("comment_deleted", target_id=comment.target_id,
-                 post_id=(comment.target.social_post_id if comment.target else None),
-                 actor_id=actor_id, detail={"comment_id": comment.external_id})
-    db.session.commit()
     return True, None
 
 
@@ -716,17 +726,18 @@ def restore(comment, actor_id=None):
         return False, _NEEDS_RECONNECT
     try:
         provider.set_comment_hidden(comment.external_id, token, hidden=False)
-    except Exception as exc:  # noqa: BLE001
+        comment.status = "open"
+        comment.removal_kind = None
+        comment.removal_action = None
+        comment.removal_reason = None
+        comment.removed_by_id = None
+        comment.removed_at = None
+        audit.record("comment_restored", target_id=comment.target_id,
+                     post_id=(comment.target.social_post_id if comment.target else None),
+                     actor_id=actor_id, detail={"comment_id": comment.external_id})
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001 - a manual restore must never 500
+        db.session.rollback()
         current_app.logger.exception("[engage] restore failed for %s", comment.id)
         return False, _moderation_reason(provider, exc)
-    comment.status = "open"
-    comment.removal_kind = None
-    comment.removal_action = None
-    comment.removal_reason = None
-    comment.removed_by_id = None
-    comment.removed_at = None
-    audit.record("comment_restored", target_id=comment.target_id,
-                 post_id=(comment.target.social_post_id if comment.target else None),
-                 actor_id=actor_id, detail={"comment_id": comment.external_id})
-    db.session.commit()
     return True, None

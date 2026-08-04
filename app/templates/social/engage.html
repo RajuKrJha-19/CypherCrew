@@ -291,6 +291,7 @@
                 <form method="POST" data-turbo="false"
                       action="{{ url_for('social.engage_hide', comment_id=selected.id) }}">
                     <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
+                    <input type="hidden" name="status" value="{{ status_f }}"><input type="hidden" name="platform" value="{{ platform_f }}"><input type="hidden" name="q" value="{{ search }}">
                     <button type="submit" class="btn btn-secondary"
                             title="Hide this comment from the public (you can restore it)">
                         <i class="fa-solid fa-eye-slash"></i> Hide</button>
@@ -299,6 +300,7 @@
                       action="{{ url_for('social.engage_delete', comment_id=selected.id) }}"
                       onsubmit="return confirm('Permanently delete this comment on the platform? This cannot be undone.');">
                     <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
+                    <input type="hidden" name="status" value="{{ status_f }}"><input type="hidden" name="platform" value="{{ platform_f }}"><input type="hidden" name="q" value="{{ search }}">
                     <button type="submit" class="btn btn-danger"
                             title="Permanently delete this comment on the platform">
                         <i class="fa-solid fa-trash"></i> Delete</button>

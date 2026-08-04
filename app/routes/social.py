@@ -196,6 +196,19 @@ def _client_arg():
     return sel_id if exists else None
 
 
+def _engage_client():
+    """The active client for an Engage POST. Its forms submit `client` in the
+    BODY (there's no ?client= on the action URL), so read that first and fall
+    back to ?client= for GETs. Without this, POST handlers (Fetch, Run
+    auto-reply, the redirect) would see None and run/return UNSCOPED — syncing
+    or auto-replying across every client instead of the one on screen."""
+    cid = request.form.get("client", type=int)
+    if cid is None:
+        return _client_arg()
+    exists = Client.query.filter_by(id=cid, status="active").first()
+    return cid if exists else None
+
+
 def _scope_posts(query, client_id):
     """Filter a SocialPost query to one client (no-op when None)."""
     return query.filter(SocialPost.client_id == client_id) if client_id else query
@@ -3322,12 +3335,13 @@ def engage():
 @login_required
 def engage_sync():
     _guard()
+    cid = _engage_client()   # from the POST body (the switcher's hidden field)
     # Ad/boosted-post DISCOVERY (the slow Marketing-API listing) runs in the
     # background autoworker, not here — doing it inline made this request hang
     # 30-40s and drop the connection. By the time a human clicks Fetch the ad
     # targets already exist, so the sync below reads their comments alongside
     # the organic ones with no extra latency.
-    report = engage_svc.sync_comments(_client_arg())
+    report = engage_svc.sync_comments(cid)
 
     # "All caught up" is only honest when we actually managed to look.
     # A run where every request was refused used to say exactly that.
@@ -3358,12 +3372,12 @@ def engage_sync():
 
     # Auto-hide spam among the just-fetched comments (no re-sync). Inert unless
     # the four-layer gate is on; anything hidden lands in the Removed tab.
-    mod = engage_svc.automod_scan(_client_arg())
+    mod = engage_svc.automod_scan(cid)
     if mod.get("hidden"):
         flash(f"Auto-hid {mod['hidden']} spam comment(s) — see the Removed tab.",
               "info")
 
-    return redirect(url_for("social.engage", client=_client_arg()))
+    return redirect(url_for("social.engage", client=cid))
 
 
 @social_bp.route("/engage/auto-reply", methods=["POST"])
@@ -3379,7 +3393,7 @@ def engage_autoreply_now():
     and questions/complaints/anything unsure always stay for a human."""
     _guard()
     from app.ai import settings as ai_settings
-    client_id = _client_arg()
+    client_id = _engage_client()   # from the POST body, not the (absent) query
     # Cheap gate check up front so an off/misconfigured state answers instantly
     # instead of spawning a worker that does nothing.
     if not ai_settings.comment_config()["enabled"]:
@@ -3412,7 +3426,7 @@ def _engage_back(comment_id=None):
     src = request.form.get("source")
     return url_for(
         "social.engage",
-        client=_client_arg(),
+        client=_engage_client(),
         source=(src if src in ("post", "ad") and src != "post" else None),
         status=request.form.get("status") or None,
         platform=request.form.get("platform") or None,

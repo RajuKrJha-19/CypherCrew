@@ -151,6 +151,28 @@ def test_answer_questions_switch_and_facts_requirement(session, make_target):
         _mk(session, target, q), _cfg(answer_questions=True)) is False
 
 
+def test_engage_sync_scopes_to_the_posted_client(client, login, make_user, session, monkeypatch):
+    """The switcher submits the active client in the POST BODY; the Fetch handler
+    must scope to it (not run unscoped across every client)."""
+    from app.routes import social as social_routes
+    from app.models import Client
+    c = Client(client_name=f"{PYTEST_EMAIL_PREFIX}scope", status="active")
+    session.add(c)
+    session.commit()
+    seen = {}
+
+    def fake_sync(cid=None):
+        seen["cid"] = cid
+        return {"checked": 0, "new": 0, "failed": 0, "by_reason": {}, "errors": []}
+
+    monkeypatch.setattr(social_routes.engage_svc, "sync_comments", fake_sync)
+    monkeypatch.setattr(social_routes.engage_svc, "automod_scan",
+                        lambda cid=None: {"hidden": 0})
+    login(make_user("employee", permissions=["manage_social"]))
+    client.post("/social/engage/sync", data={"client": str(c.id)})
+    assert seen["cid"] == c.id          # scoped to the body client, not None
+
+
 def test_manual_reply_failure_does_not_500(client, login, make_user, session, make_target, monkeypatch):
     """A manual reply that raises (e.g. disconnected channel) is caught and
     flashed gracefully — never a 500."""

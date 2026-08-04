@@ -73,6 +73,21 @@ def test_is_spam_matrix(session, make_target):
     assert engage.is_spam(_mk(session, target, "visit bit.ly/x"), _cfg(hide_links=False)) is None
 
 
+def test_automod_off_when_ai_master_switch_off(app):
+    """Spam auto-hide is an unattended public action — the AI master switch must
+    kill it too, not just the per-feature toggles."""
+    with app.app_context():
+        db.session.add(AISettings(enabled=False, comment_automod_enabled=True,
+                                  spam_blocklist="followers"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOMOD_ENABLED"] = True
+        try:
+            assert ai_settings.automod_config()["enabled"] is False   # master off
+        finally:
+            app.config["ENGAGE_AUTOMOD_ENABLED"] = False
+
+
 def test_ad_comment_is_exempt_from_the_link_heuristic(session, make_target):
     """On an ad/boosted post a link alone must NOT auto-hide (it would bury a
     lead), but the explicit blocklist still applies."""
@@ -201,3 +216,19 @@ def test_manual_delete_is_permanent(session, make_target, make_user):
     assert c.status == "removed" and c.removal_action == "deleted"
     ok, reason = engage.restore(c, actor_id=user.id)          # can't restore a delete
     assert ok is False and "can't be restored" in reason
+
+
+def test_delete_survives_a_failure_after_the_platform_call(session, make_target, make_user, monkeypatch):
+    """A failure in the audit/commit step (after the platform delete) is caught
+    and returned as (False, reason) — never a 500."""
+    from app.social.services import audit as audit_mod
+    _, _, target = make_target(platform="instagram")
+    user = make_user("employee", permissions=["manage_social"])
+    c = _mk(session, target, "whatever")
+
+    def _boom(*a, **k):
+        raise RuntimeError("audit boom")
+
+    monkeypatch.setattr(audit_mod, "record", _boom)
+    ok, reason = engage.delete(c, actor_id=user.id)
+    assert ok is False and reason          # graceful, no exception propagated
