@@ -17,6 +17,8 @@ import time
 
 _started = False
 _lock = threading.Lock()
+#: Wall-clock of the last analytics refresh this process attempted (throttle).
+_last_analytics = 0.0
 
 
 def start_background_worker(app):
@@ -28,8 +30,15 @@ def start_background_worker(app):
         _started = True
 
     interval = max(5, int(app.config.get("SOCIAL_WORKER_INTERVAL", 20)))
+    # Insights refresh on a much slower cadence than publishing (default 30 min)
+    # so the Analytics tab stays current WITHOUT an external cron. Best-effort +
+    # cross-process de-duped in analytics.auto_sync_recent, so all gunicorn
+    # workers running this is safe.
+    analytics_interval = max(300, int(
+        app.config.get("SOCIAL_ANALYTICS_INTERVAL", 1800)))
 
     def _loop():
+        global _last_analytics
         # Let boot + auto-migrations settle before the first tick.
         time.sleep(8)
         while True:
@@ -39,6 +48,11 @@ def start_background_worker(app):
                     from app.social.queue import worker
                     scheduling.enqueue_due()
                     worker.drain()
+                    now = time.time()
+                    if now - _last_analytics >= analytics_interval:
+                        _last_analytics = now
+                        from app.social.services import analytics
+                        analytics.auto_sync_recent(analytics_interval)
             except Exception:  # noqa: BLE001 - a bad tick must never kill the loop
                 try:
                     with app.app_context():

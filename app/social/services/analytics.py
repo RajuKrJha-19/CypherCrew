@@ -57,3 +57,19 @@ def sync_recent(limit=100):
     db.session.commit()
     return {"checked": len(targets), "synced": synced,
             "failed": failed, "errors": errors}
+
+
+def auto_sync_recent(min_age_seconds=1800):
+    """Refresh insights only if the newest snapshot is older than min_age.
+
+    Cross-process safe: this runs in every in-process worker, so without a guard
+    N gunicorn workers would each append a snapshot every tick and bloat the
+    table. Whichever worker syncs first writes fresh snapshots; the others see a
+    recent fetched_at and skip. Returns the sync report, or a skip marker."""
+    from datetime import datetime, timedelta
+
+    newest = db.session.query(
+        db.func.max(SocialAnalyticsSnapshot.fetched_at)).scalar()
+    if newest and (datetime.utcnow() - newest) < timedelta(seconds=min_age_seconds):
+        return {"skipped": "recent"}
+    return sync_recent()

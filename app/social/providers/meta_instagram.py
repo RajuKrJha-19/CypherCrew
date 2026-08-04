@@ -360,14 +360,17 @@ class MetaInstagramProvider(MetaBaseProvider):
         if not target.external_post_id:
             return {}
         page_token = self._page_token(target)
-        try:
-            resp = self.graph().get(
-                f"{target.external_post_id}/insights", token=page_token,
-                params={"metric": "impressions,reach,likes,comments,saved"})
-        except Exception:
-            return {}
+        # NOT swallowed (see the Facebook note): a missing instagram_manage_
+        # insights grant must surface, not silently blank the screen. The media
+        # `impressions` metric was DEPRECATED on newer Graph versions and made
+        # the whole call fail - dropped here for reach/likes/comments/saved,
+        # which map straight to the canonical report keys.
+        resp = self.graph().get(
+            f"{target.external_post_id}/insights", token=page_token,
+            params={"metric": "reach,likes,comments,saved"})
         metrics = {}
         for row in resp.get("data", []):
-            values = row.get("values") or [{}]
-            metrics[row.get("name")] = values[0].get("value")
+            value = (row.get("values") or [{}])[0].get("value")
+            if value is not None:
+                metrics[row.get("name")] = value
         return metrics

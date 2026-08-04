@@ -262,6 +262,10 @@ class Config:
     )
     # Seconds between background worker ticks.
     SOCIAL_WORKER_INTERVAL = int(os.getenv("SOCIAL_WORKER_INTERVAL", "20"))
+    # How often the in-process worker refreshes analytics insights (seconds).
+    # Much slower than the publish tick; de-duped across workers. Default 30 min.
+    SOCIAL_ANALYTICS_INTERVAL = int(
+        os.getenv("SOCIAL_ANALYTICS_INTERVAL", "1800"))
 
     # ------------------------------------------------------------------
     # Cypher-Teams (chat)

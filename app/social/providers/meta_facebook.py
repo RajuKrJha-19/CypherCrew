@@ -341,15 +341,30 @@ class MetaFacebookProvider(MetaBaseProvider):
         if not target.external_post_id:
             return {}
         page_token = self._page_token(target)
-        try:
-            resp = self.graph().get(f"{target.external_post_id}/insights",
-                                    token=page_token, params={
-                "metric": "post_impressions,post_engaged_users,post_reactions_by_type_total",
-            })
-        except Exception:
-            return {}
-        metrics = {}
+        # NOT swallowed: a failure (missing read_insights, rate limit) must
+        # surface via sync_recent's error report, not vanish into an empty
+        # screen. Reads reach via post_impressions_unique.
+        resp = self.graph().get(f"{target.external_post_id}/insights",
+                                token=page_token, params={
+            "metric": "post_impressions,post_impressions_unique,"
+                      "post_engaged_users,post_reactions_by_type_total",
+        })
+        raw = {}
         for row in resp.get("data", []):
-            values = row.get("values") or [{}]
-            metrics[row.get("name")] = values[0].get("value")
-        return metrics
+            raw[row.get("name")] = (row.get("values") or [{}])[0].get("value")
+
+        # Normalise Facebook's metric names to the canonical keys the Analytics
+        # report reads (reach/impressions/engagement/likes) - previously stored
+        # under post_* names the report never looked at, so FB always showed
+        # blank even on a successful pull. Reactions arrive as a {type: count}
+        # dict; sum them into one likes/reactions figure.
+        reactions = raw.get("post_reactions_by_type_total")
+        likes = (sum(v for v in reactions.values() if isinstance(v, (int, float)))
+                 if isinstance(reactions, dict) else reactions)
+        out = {
+            "impressions": raw.get("post_impressions"),
+            "reach": raw.get("post_impressions_unique"),
+            "engagement": raw.get("post_engaged_users"),
+            "likes": likes,
+        }
+        return {k: v for k, v in out.items() if v is not None}
