@@ -132,6 +132,40 @@ def test_auto_reply_run_only_touches_safe_comments(session, app, make_target, mo
     assert SocialComment.query.get(safe.id).auto_sent is True
 
 
+def test_answer_questions_switch_and_facts_requirement(session, make_target):
+    """Questions only auto-answer when the switch is on AND the client has a
+    Client Brain to ground the answer in."""
+    client, target = _client_and_target(session, make_target)
+    q = "price kitna hai?"
+    # Default: questions go to a human.
+    assert engage.comment_is_auto_safe(_mk(session, target, q), _cfg()) is False
+    # Switch on + client HAS a Client Brain -> answerable.
+    client.brand_brain = {"products_services": "Course A - 90000"}
+    session.commit()
+    assert engage.comment_is_auto_safe(
+        _mk(session, target, q), _cfg(answer_questions=True)) is True
+    # Switch on but NO Client Brain -> still a human (no facts to ground on).
+    client.brand_brain = None
+    session.commit()
+    assert engage.comment_is_auto_safe(
+        _mk(session, target, q), _cfg(answer_questions=True)) is False
+
+
+def test_comment_config_exposes_answer_questions(app):
+    with app.app_context():
+        db.session.add(AISettings(enabled=True, comment_enabled=True,
+                                  comment_autoreply_enabled=True,
+                                  comment_answer_questions_enabled=True,
+                                  gbp_blocklist="refund"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        try:
+            assert ai_settings.comment_config()["answer_questions"] is True
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+
+
 def test_auto_reply_skips_when_generated_reply_has_link(session, app, make_target, monkeypatch):
     """A steered/injected reply containing a link must NOT auto-post (H1)."""
     client, target = _client_and_target(session, make_target)

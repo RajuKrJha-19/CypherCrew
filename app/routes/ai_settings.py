@@ -122,6 +122,11 @@ def index():
             flash("Comment auto-reply needs a blocklist too — add words, then "
                   "turn it on.", "warning")
         row.comment_autoreply_enabled = c_want
+        # Answering questions unattended is only meaningful when auto-reply is
+        # on; store the intent regardless (it's guarded again at send time by a
+        # facts check), but never let it stand alone.
+        row.comment_answer_questions_enabled = (
+            c_want and bool(request.form.get("comment_answer_questions_enabled")))
 
         # -- Spam auto-moderation (auto-HIDE). Its OWN blocklist; won't enable
         #    without one (same safety as auto-reply). --------------------------

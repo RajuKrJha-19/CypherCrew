@@ -93,6 +93,13 @@ class AISettings(db.Model):
     #: Cap on auto-replies per post, so a viral thread can't be flooded.
     comment_max_per_post = db.Column(db.Integer, nullable=False, default=5,
                                      server_default="5")
+    #: Off by default, questions go to a human. When ON, auto-reply may also
+    #: answer QUESTIONS - but only when that comment's client has a Client Brain
+    #: to ground the answer in (no facts -> still a human), and the generated
+    #: reply passes the same output guards. Its own switch so answering
+    #: questions unattended is always a deliberate opt-in.
+    comment_answer_questions_enabled = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false())
 
     # -- Spam auto-moderation (hides matching comments). ANDed with the
     #: ENGAGE_AUTOMOD_ENABLED env gate + a per-client opt-in + a non-empty

@@ -358,8 +358,9 @@ def comment_is_auto_safe(comment, cfg):
     text = (comment.message or "").strip()
     if not text or len(text) > cfg["max_len"]:
         return False
-    if _looks_like_question(text):       # a question needs a real answer -> human
-        return False
+    is_question = _looks_like_question(text)
+    if is_question and not cfg.get("answer_questions"):
+        return False                     # answering questions is off -> human
     if _has_link(text):                  # link/spam comment -> human
         return False
     low = text.lower()
@@ -367,6 +368,10 @@ def comment_is_auto_safe(comment, cfg):
         return False
     client = _comment_client(comment)
     if client is None or not getattr(client, "comment_autoreply", False):
+        return False
+    # A question may only be auto-answered when there are facts to ground it in
+    # (the client's Client Brain). No facts -> we'd be guessing -> human.
+    if is_question and not getattr(client, "brand_brain", None):
         return False
     return True
 
