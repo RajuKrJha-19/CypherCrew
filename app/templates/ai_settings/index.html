@@ -47,11 +47,15 @@
             <div class="ai-map-grid">
                 <div class="ai-map-item">
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    <div><strong>Captions, alt-text &amp; comment replies</strong><span>Drafts captions and image alt-text in Social Studio, and on-brand replies to comments in Engage. You edit before posting.</span></div>
+                    <div><strong>Captions, alt-text &amp; comment replies</strong><span>Drafts captions and image alt-text in Social Studio, and on-brand replies to Engage comments (organic &amp; ad). Send them yourself — or enable guarded auto-reply for safe comments below.</span></div>
                 </div>
                 <div class="ai-map-item">
                     <i class="fa-solid fa-magnifying-glass-chart"></i>
                     <div><strong>Media QA</strong><span>Checks submitted deliverables for typos, off-brand, wrong specs — advisory, never blocks.</span></div>
+                </div>
+                <div class="ai-map-item">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div><strong>Spam auto-moderation</strong><span>Optionally hides spam comments (links / blocklist) as they arrive — reversible any time from Engage → Removed.</span></div>
                 </div>
                 {% if reviews_on %}
                 <div class="ai-map-item">
@@ -60,7 +64,7 @@
                 </div>
                 {% endif %}
             </div>
-            <p class="form-hint">Every AI output is a <strong>draft a person can edit</strong>; nothing publishes on its own except guarded auto-replies (below).</p>
+            <p class="form-hint">Every AI output is a <strong>draft a person can edit</strong>. The only unattended actions are <strong>guarded auto-replies</strong> and reversible <strong>spam-hiding</strong> — both opt-in and configured below.</p>
         </div>
 
         {# --- Provider key status --- #}
@@ -244,7 +248,7 @@
                 {# --- Engage comment auto-reply guardrails (editable) --- #}
                 <div class="ai-task ai-autoreply">
                     <h3>Social comment auto-reply <span class="ai-task-tag">unattended · public</span></h3>
-                    <p class="form-hint">Auto-replies only <strong>short, non-question</strong> comments that pass the blocklist, on opted-in clients — a simple on-brand acknowledgment. Questions, complaints and anything unsure wait for a human in Engage. Shares the blocklist above.</p>
+                    <p class="form-hint">Auto-replies <strong>short</strong> comments that pass the blocklist, on opted-in clients — a simple on-brand acknowledgment, in real time (via webhooks) or on the next sync. Questions wait for a human <em>unless</em> you enable “auto-answer questions” below (grounded in the client's Client Brain). Complaints and anything unsure always wait for a human. Shares the blocklist above.</p>
                     <label class="ai-toggle" style="margin-top:4px;">
                         <input type="checkbox" name="comment_autoreply_enabled" {{ 'checked' if row.comment_autoreply_enabled }}>
                         <span><strong>Enable guarded comment auto-send</strong> — requires the blocklist above.</span>

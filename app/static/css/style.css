@@ -18211,7 +18211,7 @@ body.studio-nav-collapsed .studio-nav-section::after{
     border-radius:var(--radius-md); background:var(--color-surface-muted); }
 .ai-map-title{ font-size:12px; font-weight:650; color:var(--color-text-subtle);
     text-transform:uppercase; letter-spacing:.04em; }
-.ai-map-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:10px 0 4px; }
+.ai-map-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:10px 0 4px; }
 .ai-map-item{ display:flex; align-items:flex-start; gap:10px; }
 .ai-map-item i{ margin-top:2px; color:var(--color-primary); font-size:15px; width:18px; text-align:center; }
 .ai-map-item strong{ display:block; font-size:13.5px; }
