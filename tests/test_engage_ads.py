@@ -52,6 +52,18 @@ def _comment(session, target, msg):
     return c
 
 
+def test_target_live_url():
+    """View-live link: stored permalink wins; a Facebook ad target builds one
+    from its page_id_post_id; an Instagram ad media has none."""
+    fb = SocialPostTarget(platform="facebook", external_post_id="PAGE1_99")
+    assert fb.live_url == "https://www.facebook.com/PAGE1/posts/99"
+    stored = SocialPostTarget(platform="facebook", external_post_id="X_1",
+                              permalink="https://real/perma")
+    assert stored.live_url == "https://real/perma"
+    ig = SocialPostTarget(platform="instagram", external_post_id="MEDIA123")
+    assert ig.live_url is None
+
+
 # -- discovery / materialisation --------------------------------------------
 
 def test_sync_ad_targets_disabled_by_default(app, session):

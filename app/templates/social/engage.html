@@ -178,12 +178,12 @@
                 </div>
             </div>
             <div class="engage-context-actions">
-                {% if selected.target and selected.target.permalink %}
-                <a class="row-action" href="{{ selected.target.permalink }}"
+                {% if selected.target and selected.target.live_url %}
+                <a class="row-action" href="{{ selected.target.live_url }}"
                    target="_blank" rel="noopener">
                     <i class="fa-solid fa-arrow-up-right-from-square"></i> View live</a>
                 {% endif %}
-                {% if selected.target %}
+                {% if selected.target and selected.target.post and selected.target.post.source != 'ad' %}
                 <a class="row-action" href="{{ url_for('social.post_detail', post_id=selected.target.social_post_id) }}">
                     <i class="fa-solid fa-layer-group"></i> Open post</a>
                 {% endif %}

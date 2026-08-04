@@ -3542,7 +3542,13 @@ def engage_done(comment_id):
     _guard()
     from app.models import SocialComment
     comment = SocialComment.query.get_or_404(comment_id)
-    engage_svc.mark_done(comment, done=(comment.status != "done"))
+    reopening = comment.status == "done"
+    engage_svc.mark_done(comment, done=not reopening)
+    # Reopening moves it OUT of the Done tab (back to Open), so from the Done
+    # view it looks like it vanished — say where it went.
+    flash("Reopened — it's back in the Open tab now." if reopening
+          else "Marked done — it's in the Done tab.",
+          "info" if reopening else "success")
     # Not back to this comment: it has just left the list you were working
     # through, so returning to it would show an empty pane. The next one
     # is what you want.

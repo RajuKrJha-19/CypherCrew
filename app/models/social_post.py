@@ -234,6 +234,22 @@ class SocialPostTarget(db.Model):
         linked = self.story_link_target
         return linked.permalink if linked else None
 
+    @property
+    def live_url(self):
+        """Best-effort link to view this post on the platform. The stored
+        permalink when we have one (Studio-published posts); otherwise, for a
+        Facebook ad/boosted target the page-post URL built from its
+        page_id_post_id external id. None when there's nothing to link to (e.g.
+        an Instagram ad media, whose public URL isn't derivable from the id)."""
+        if self.permalink:
+            return self.permalink
+        ext = self.external_post_id or ""
+        if self.platform == "facebook" and "_" in ext:
+            page_id, _, post_id = ext.partition("_")
+            if page_id and post_id:
+                return f"https://www.facebook.com/{page_id}/posts/{post_id}"
+        return None
+
     def __repr__(self):
         return f"<SocialPostTarget {self.id} {self.platform} {self.status}>"
 
