@@ -1,0 +1,152 @@
+"""Ad/boosted-post comment ingestion: discovery materialises source="ad"
+records (idempotent), the Engage inbox splits Post vs Ad comments, and ad posts
+never leak into Studio's own lists/reports. Provider calls are monkeypatched;
+nothing hits Meta.
+"""
+from app.models import (
+    Client, SocialAccount, SocialAnalyticsSnapshot, SocialComment, SocialPost,
+    SocialPostTarget,
+)
+from app.social.providers.simulation import SimulationProvider
+from app.social.services import engage_ads
+from app.social.tokens.vault import get_vault
+from tests.conftest import PYTEST_EMAIL_PREFIX
+
+
+def _client(session):
+    c = Client(client_name=f"{PYTEST_EMAIL_PREFIX}ads", status="active")
+    session.add(c)
+    session.commit()
+    return c
+
+
+def _account(session, platform, ext, client_id, account_type="page"):
+    a = SocialAccount(
+        platform=platform, external_id=ext, display_name=ext,
+        account_type=account_type, status="active", client_id=client_id,
+        token_ciphertext=get_vault().encrypt("AT"), token_key_version=1)
+    session.add(a)
+    session.commit()
+    return a
+
+
+def _post_target(session, client_id, account, source, ext, platform="facebook"):
+    post = SocialPost(title=source, status="published", source=source,
+                      client_id=client_id, published_externally=(source == "ad"))
+    session.add(post)
+    session.flush()
+    target = SocialPostTarget(
+        social_post_id=post.id, social_account_id=account.id, platform=platform,
+        post_type="image", external_post_id=ext, status="published")
+    session.add(target)
+    session.flush()
+    return target
+
+
+def _comment(session, target, msg):
+    c = SocialComment(target_id=target.id, platform=target.platform,
+                      external_id=f"c-{target.id}", message=msg,
+                      is_ours=False, status="open")
+    session.add(c)
+    session.commit()
+    return c
+
+
+# -- discovery / materialisation --------------------------------------------
+
+def test_sync_ad_targets_disabled_by_default(app, session):
+    with app.test_request_context():
+        assert engage_ads.sync_ad_targets()["skipped"] == "disabled"
+
+
+def test_sync_ad_targets_materialises_and_is_idempotent(app, session, monkeypatch):
+    c = _client(session)
+    page = _account(session, "facebook", "PAGE1", c.id)
+    _account(session, "facebook", "act_1", c.id, account_type="ad_account")
+    monkeypatch.setattr(
+        SimulationProvider, "list_ad_posts",
+        lambda self, aid, token, limit=100: [
+            {"platform": "facebook", "external_post_id": "PAGE1_9"}],
+        raising=False)
+
+    with app.test_request_context():
+        app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = True
+        try:
+            first = engage_ads.sync_ad_targets(c.id)
+            again = engage_ads.sync_ad_targets(c.id)
+        finally:
+            app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = False
+
+    assert first["discovered"] == 1
+    assert again["discovered"] == 0                 # dedup by external_post_id
+    t = SocialPostTarget.query.filter_by(external_post_id="PAGE1_9").first()
+    assert t is not None and t.social_account_id == page.id  # resolved by prefix
+    assert t.post.source == "ad" and t.post.client_id == c.id
+
+
+def test_sync_ad_targets_skips_when_owner_page_missing(app, session, monkeypatch):
+    c = _client(session)
+    _account(session, "facebook", "act_1", c.id, account_type="ad_account")
+    # No Page account with external_id "NOPAGE" -> can't resolve -> skipped.
+    monkeypatch.setattr(
+        SimulationProvider, "list_ad_posts",
+        lambda self, aid, token, limit=100: [
+            {"platform": "facebook", "external_post_id": "NOPAGE_1"}],
+        raising=False)
+    with app.test_request_context():
+        app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = True
+        try:
+            assert engage_ads.sync_ad_targets(c.id)["discovered"] == 0
+        finally:
+            app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = False
+
+
+# -- Engage tabs split the two lanes ----------------------------------------
+
+def test_engage_tabs_split_post_and_ad(client, login, make_user, session):
+    c = _client(session)
+    page = _account(session, "facebook", "PAGE2", c.id)
+    st = _post_target(session, c.id, page, "studio", "P_1")
+    _comment(session, st, "ORGANICMARKER")
+    at = _post_target(session, c.id, page, "ad", "P_2")
+    _comment(session, at, "ADVERTMARKER")
+
+    login(make_user("employee", permissions=["manage_social"]))
+
+    r = client.get(f"/social/engage?client={c.id}")            # default = post
+    assert b"ORGANICMARKER" in r.data and b"ADVERTMARKER" not in r.data
+
+    r = client.get(f"/social/engage?client={c.id}&source=ad")   # ad lane
+    assert b"ADVERTMARKER" in r.data and b"ORGANICMARKER" not in r.data
+
+
+# -- ad posts never leak into Studio's own screens --------------------------
+
+def test_ad_post_excluded_from_analytics(session):
+    from app.social.services import analytics_report
+    from app.utils import periods
+
+    c = _client(session)
+    page = _account(session, "facebook", "PAGE3", c.id)
+    at = _post_target(session, c.id, page, "ad", "P_3")
+    session.add(SocialAnalyticsSnapshot(
+        target_id=at.id, external_post_id="P_3", metrics={"reach": 100}))
+    session.commit()
+
+    period = periods.resolve_period({"period": "all"}, allow_all=True,
+                                    default="all")
+    report = analytics_report.build_report(period, client_id=c.id)
+    assert report["post_count"] == 0        # the ad target is not Studio content
+
+
+def test_ad_post_excluded_from_history(session):
+    from app.routes.social import _published_post_rows
+
+    c = _client(session)
+    page = _account(session, "facebook", "PAGE4", c.id)
+    _post_target(session, c.id, page, "ad", "P_4")
+    _post_target(session, c.id, page, "studio", "P_5")
+
+    rows = _published_post_rows(c.id)
+    sources = {row["post"].source for row in rows}
+    assert "ad" not in sources and "studio" in sources

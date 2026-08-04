@@ -489,3 +489,10 @@ class Config:
         os.getenv("ENGAGE_AUTOMOD_ENABLED", "False").lower() == "true")
     #: Optional env fallback for the spam blocklist (the DB value wins).
     ENGAGE_SPAM_BLOCKLIST = os.getenv("ENGAGE_SPAM_BLOCKLIST", "")
+
+    # Ad / boosted-post comment ingestion into Engage. Off by default; also
+    # needs the ads_read grant on the connected account and an ad account mapped
+    # to a client. Discovers ad posts and materialises source="ad" records so
+    # their comments surface in the Engage "Ad comments" tab.
+    SOCIAL_ADS_COMMENTS_ENABLED = (
+        os.getenv("SOCIAL_ADS_COMMENTS_ENABLED", "False").lower() == "true")

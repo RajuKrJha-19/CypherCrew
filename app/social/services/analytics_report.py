@@ -77,16 +77,17 @@ def _latest_snapshot_ids():
 def _published_targets(period, client_id=None, campaign=None):
     q = (
         SocialPostTarget.query
+        # Always join the post so ad-sourced synthetic records (which carry
+        # comments in Engage, not real Studio analytics) are excluded.
+        .join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
         .filter(SocialPostTarget.status.in_(["published", "removed"]),
-                SocialPostTarget.external_post_id.isnot(None))
+                SocialPostTarget.external_post_id.isnot(None),
+                SocialPost.source != "ad")
     )
-    if client_id or campaign:
-        q = q.join(SocialPost,
-                   SocialPost.id == SocialPostTarget.social_post_id)
-        if client_id:
-            q = q.filter(SocialPost.client_id == client_id)
-        if campaign:
-            q = q.filter(SocialPost.campaign == campaign)
+    if client_id:
+        q = q.filter(SocialPost.client_id == client_id)
+    if campaign:
+        q = q.filter(SocialPost.campaign == campaign)
     if period and not period.get("is_all_time"):
         # Attribute a post to the window by when it was PUBLISHED - not by
         # updated_at, which an analytics re-sync or a permalink/status edit

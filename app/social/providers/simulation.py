@@ -219,6 +219,10 @@ class SimulationProvider(SocialProvider):
             raise PermanentError("Simulated delete failure (#simfail)")
         return True
 
+    def list_ad_posts(self, ad_account_id, token, limit=100):
+        # No canned ads by default; tests monkeypatch this to drive discovery.
+        return []
+
     # -- Analytics (deterministic fakes) ----------------------------------
 
     def fetch_analytics(self, target, token):

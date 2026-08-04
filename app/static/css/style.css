@@ -17412,6 +17412,19 @@ a.pf-icon:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); }
     flex-wrap:wrap;
     margin:0 0 16px;
 }
+/* Source lanes: Post comments vs Ad comments — a segmented control above the
+   state (Open/Done/Removed) tabs. */
+.engage-source-tabs{ display:inline-flex; gap:4px; margin:0 0 14px; padding:4px;
+    background:var(--color-surface-sunken); border:1px solid var(--color-border);
+    border-radius:999px; }
+.engage-source-tab{ display:inline-flex; align-items:center; gap:7px; height:32px;
+    padding:0 16px; font-size:13px; font-weight:650; text-decoration:none;
+    border-radius:999px; color:var(--color-text-muted); }
+.engage-source-tab:hover{ color:var(--color-text); }
+.engage-source-tab.is-active{ background:var(--color-surface); color:var(--color-text);
+    box-shadow:var(--shadow-xs); }
+.engage-source-tab.is-active .engage-count{ background:var(--color-primary-soft); color:var(--color-primary); }
+
 .engage-tabs{ display:flex; flex-direction:row; gap:6px; }
 .engage-tab{
     display:inline-flex; align-items:center; gap:7px;

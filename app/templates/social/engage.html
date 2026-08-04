@@ -18,9 +18,10 @@
     which is what the Clear link needs and a plain default could not
     express.
 #}
-{% macro inbox_url(status=none, platform=none, q=none, c=none) -%}
+{% macro inbox_url(status=none, platform=none, q=none, c=none, source=none) -%}
     {{ url_for('social.engage',
                client=selected_client_id,
+               source=((source_f if source is none else source) if ((source_f if source is none else source) != 'post') else none),
                status=(status_f if status is none else status),
                platform=((platform_f if platform is none else platform) or none),
                q=((search if q is none else q) or none),
@@ -35,7 +36,7 @@
     </div>
     <div class="top-actions">
         <form method="POST" action="{{ url_for('social.engage_sync') }}" data-turbo="false">
-            <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+            <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
             <button type="submit" class="btn"><i class="fa-solid fa-arrows-rotate"></i> Fetch comments</button>
         </form>
     </div>
@@ -46,6 +47,21 @@
 <div class="alert {{ category }}">{{ message }}</div>
 {% endfor %}
 {% endwith %}
+
+{% if ads_enabled or source_counts.ad %}
+<div class="engage-source-tabs" role="group" aria-label="Comment source">
+    <a href="{{ inbox_url(source='post', status='open', c=None) }}"
+       class="engage-source-tab {{ 'is-active' if source_f == 'post' }}">
+        <i class="fa-solid fa-comments"></i> Post comments
+        {% if source_counts.post %}<span class="engage-count">{{ source_counts.post }}</span>{% endif %}
+    </a>
+    <a href="{{ inbox_url(source='ad', status='open', c=None) }}"
+       class="engage-source-tab {{ 'is-active' if source_f == 'ad' }}">
+        <i class="fa-solid fa-bullhorn"></i> Ad comments
+        {% if source_counts.ad %}<span class="engage-count">{{ source_counts.ad }}</span>{% endif %}
+    </a>
+</div>
+{% endif %}
 
 <div class="engage-toolbar">
     <div class="engage-tabs" role="group" aria-label="Filter by state">
@@ -64,7 +80,7 @@
     </div>
 
     <form method="GET" class="engage-filters" role="search">
-        <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+        <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
         <input type="hidden" name="status" value="{{ status_f }}">
 
         {% if platforms|length > 1 %}
@@ -215,7 +231,7 @@
                 {% if selected.removal_action == 'hidden' %}
                 <form method="POST" data-turbo="false"
                       action="{{ url_for('social.engage_restore', comment_id=selected.id) }}">
-                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
                     <input type="hidden" name="status" value="{{ status_f }}">
                     <input type="hidden" name="platform" value="{{ platform_f }}">
                     <input type="hidden" name="q" value="{{ search }}">
@@ -229,7 +245,7 @@
             {% else %}
             <form method="POST" data-turbo="false"
                   action="{{ url_for('social.engage_reply', comment_id=selected.id) }}">
-                <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
                 <input type="hidden" name="status" value="{{ status_f }}">
                 <input type="hidden" name="platform" value="{{ platform_f }}">
                 <input type="hidden" name="q" value="{{ search }}">
@@ -257,7 +273,7 @@
             <div class="engage-mod-row">
                 <form method="POST" data-turbo="false"
                       action="{{ url_for('social.engage_done', comment_id=selected.id) }}">
-                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
                     <input type="hidden" name="status" value="{{ status_f }}">
                     <input type="hidden" name="platform" value="{{ platform_f }}">
                     <input type="hidden" name="q" value="{{ search }}">
@@ -268,7 +284,7 @@
                 {# Moderation: Hide (reversible) and Delete (permanent). #}
                 <form method="POST" data-turbo="false"
                       action="{{ url_for('social.engage_hide', comment_id=selected.id) }}">
-                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
                     <button type="submit" class="btn btn-secondary"
                             title="Hide this comment from the public (you can restore it)">
                         <i class="fa-solid fa-eye-slash"></i> Hide</button>
@@ -276,7 +292,7 @@
                 <form method="POST" data-turbo="false"
                       action="{{ url_for('social.engage_delete', comment_id=selected.id) }}"
                       onsubmit="return confirm('Permanently delete this comment on the platform? This cannot be undone.');">
-                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}">
+                    <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">
                     <button type="submit" class="btn btn-danger"
                             title="Permanently delete this comment on the platform">
                         <i class="fa-solid fa-trash"></i> Delete</button>

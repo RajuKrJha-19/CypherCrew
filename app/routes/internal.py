@@ -208,6 +208,24 @@ def run_engage_automod():
     return jsonify(success=True, **out)
 
 
+@internal_bp.route("/engage/ads-sync/run", methods=["POST"])
+@csrf.exempt
+def run_engage_ads_sync():
+    """Cron entry point: discover ad/boosted posts and pull their comments into
+    Engage. No-op unless SOCIAL_ADS_COMMENTS_ENABLED is on. Reuses the social
+    worker token + engine gate."""
+    _social_guard()
+    if not current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED"):
+        return jsonify(success=True, skipped="ad comments disabled")
+    from app.social.services import engage_ads
+    try:
+        out = engage_ads.sync_ad_comments()
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[engage-ads] sync failed")
+        return jsonify(success=False, discovered=0)
+    return jsonify(success=True, **out)
+
+
 @internal_bp.route("/social/tokens/refresh", methods=["POST"])
 @csrf.exempt
 def run_social_token_refresh():

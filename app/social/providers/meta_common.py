@@ -88,6 +88,12 @@ META_UNIFIED_SCOPES = [
     "instagram_content_publish",
     "instagram_manage_comments",
     "instagram_manage_insights",
+    # Enumerating a client's ADS (act_<id>/ads) to pull comments on ad/boosted
+    # posts into Engage. Read-only. Like business_management, it is granted to
+    # app admins/devs/testers in Development/Testing mode without public App
+    # Review; for public/live use it must be in the App Review submission. The
+    # feature stays dormant behind SOCIAL_ADS_COMMENTS_ENABLED regardless.
+    "ads_read",
 ]
 
 
@@ -499,6 +505,32 @@ class MetaBaseProvider(SocialProvider):
             return False
         self.graph().delete(comment_external_id, token=token)
         return True
+
+    # -- Ads (comment ingestion for ad/boosted posts) ---------------------
+
+    def list_ad_posts(self, ad_account_id, token, limit=100):
+        """Distinct ad/boosted POST ids under an ad account, as a list of
+        {"platform", "external_post_id"}. A creative's
+        effective_object_story_id is the Facebook (dark) page post; its
+        effective_instagram_media_id is the Instagram media. Needs ads_read.
+        Best-effort - the caller logs failures."""
+        resp = self.graph().get(f"{ad_account_id}/ads", token=token, params={
+            "fields": "creative{effective_object_story_id,"
+                      "effective_instagram_media_id}",
+            "limit": limit,
+        })
+        out, seen = [], set()
+        for ad in (resp.get("data") or []):
+            creative = ad.get("creative") or {}
+            story = creative.get("effective_object_story_id")
+            media = creative.get("effective_instagram_media_id")
+            if story and story not in seen:
+                seen.add(story)
+                out.append({"platform": "facebook", "external_post_id": story})
+            if media and media not in seen:
+                seen.add(media)
+                out.append({"platform": "instagram", "external_post_id": media})
+        return out
 
     # -- Delete / existence -----------------------------------------------
 

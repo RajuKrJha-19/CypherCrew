@@ -90,6 +90,10 @@ APPROVED_BY_APP_REVIEW = {
     "instagram_content_publish",
     "instagram_manage_comments",
     "instagram_manage_insights",
+    # Read a client's ads to surface ad/boosted-post comments in Engage.
+    # Granted to admins/devs/testers in Development/Testing; part of the App
+    # Review submission for public/live use. Keep in step with the dashboard.
+    "ads_read",
 }
 
 

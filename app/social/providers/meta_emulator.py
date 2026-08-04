@@ -65,6 +65,12 @@ def me_accounts(ver):
     return jsonify(data=[_PAGE], paging={})
 
 
+@meta_emulator_bp.route("/<ver>/me/adaccounts")
+def me_adaccounts(ver):
+    # One demo ad account, so the ads-comments discovery flow is exercisable.
+    return jsonify(data=[{"id": "act_123", "name": "Demo Ad Account"}], paging={})
+
+
 @meta_emulator_bp.route("/<ver>/<node>/<edge>", methods=["GET", "POST"])
 def node_edge(ver, node, edge):
     n = next(_seq)
@@ -112,6 +118,12 @@ def node_edge(ver, node, edge):
         return jsonify(id=f"COMMENT_{n}")          # POST: first comment / reply
     if edge == "replies":                          # IG reply to a comment
         return jsonify(id=f"REPLY_{n}")
+    if edge == "ads":                              # act_<id>/ads discovery
+        return jsonify(data=[
+            {"id": f"AD_{n}", "creative": {
+                "effective_object_story_id": f"{_PAGE['id']}_{n}",
+                "effective_instagram_media_id": f"IGMEDIA_{n}"}},
+        ], paging={})
     if edge == "insights":
         metrics = (request.args.get("metric") or "").split(",")
         return jsonify(data=[

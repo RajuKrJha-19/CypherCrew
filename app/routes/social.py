@@ -3022,7 +3022,8 @@ def _published_post_rows(cid, limit=150):
             cid).all())
 
     posts = (SocialPost.query
-             .filter(SocialPost.id.in_(live_post_ids or {-1}))
+             .filter(SocialPost.id.in_(live_post_ids or {-1}),
+                     SocialPost.source != "ad")   # ad records live only in Engage
              .order_by(SocialPost.updated_at.desc())
              .limit(limit).all())
 
@@ -3087,13 +3088,14 @@ def _grid_cells(client_id, limit=60):
     from app.social.media import pipeline
     from app.utils.timezone import IST_OFFSET
 
-    q = SocialPostTarget.query.filter(
-        SocialPostTarget.platform == "instagram",
-        SocialPostTarget.status.in_(
-            ["published", "publishing", "scheduled", "approved"]))
+    q = (SocialPostTarget.query
+         .join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
+         .filter(SocialPostTarget.platform == "instagram",
+                 SocialPostTarget.status.in_(
+                     ["published", "publishing", "scheduled", "approved"]),
+                 SocialPost.source != "ad"))     # ad posts aren't Studio content
     if client_id:
-        q = (q.join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
-              .filter(SocialPost.client_id == client_id))
+        q = q.filter(SocialPost.client_id == client_id)
     targets = q.all()
     # Newest first by the time it went / will go live (fall back to created).
     targets.sort(key=lambda t: (t.scheduled_for or t.created_at), reverse=True)
@@ -3194,14 +3196,14 @@ def grid_reorder():
 # ======================================================================
 
 def _scope_comments(query, client_id):
-    """Filter a SocialComment query to one client, via target -> post."""
-    query = query.join(
-        SocialPostTarget,
-        SocialComment.target_id == SocialPostTarget.id)
+    """Filter a SocialComment query to one client, via target -> post. Always
+    joins SocialPost (target->post is 1:1 mandatory, so this drops nothing) so
+    callers can also filter on the post's source (studio vs ad)."""
+    query = (query.join(
+        SocialPostTarget, SocialComment.target_id == SocialPostTarget.id)
+        .join(SocialPost, SocialPostTarget.social_post_id == SocialPost.id))
     if client_id:
-        query = (query.join(
-            SocialPost, SocialPostTarget.social_post_id == SocialPost.id)
-            .filter(SocialPost.client_id == client_id))
+        query = query.filter(SocialPost.client_id == client_id)
     return query
 
 
@@ -3224,11 +3226,17 @@ def engage():
 
     status_f = request.args.get("status")
     status_f = status_f if status_f in ("open", "done", "removed") else "open"
+    # Two lanes: comments on our published posts ("post") vs comments on ads /
+    # boosted posts ("ad"). Kept apart so the team never confuses the two.
+    source_f = request.args.get("source")
+    source_f = source_f if source_f in ("post", "ad") else "post"
+    post_source = "ad" if source_f == "ad" else "studio"
     platform_f = (request.args.get("platform") or "").strip()
     search = (request.args.get("q") or "").strip()
 
-    base = _scope_comments(
+    scoped = _scope_comments(
         SocialComment.query.filter(SocialComment.is_ours.is_(False)), cid)
+    base = scoped.filter(SocialPost.source == post_source)
 
     q = base.filter(SocialComment.status == status_f)
     if platform_f:
@@ -3274,6 +3282,13 @@ def engage():
         "done": base.filter(SocialComment.status == "done").count(),
         "removed": base.filter(SocialComment.status == "removed").count(),
     }
+    # Open counts per lane, for the Post/Ad source tabs.
+    source_counts = {
+        "post": scoped.filter(SocialPost.source == "studio",
+                              SocialComment.status == "open").count(),
+        "ad": scoped.filter(SocialPost.source == "ad",
+                            SocialComment.status == "open").count(),
+    }
     # Distinct in SQL, not by loading every comment to read one column off
     # each - this list only exists to populate a filter dropdown.
     platforms = sorted(
@@ -3284,6 +3299,8 @@ def engage():
         "social/engage.html",
         comments=comments, replies=replies, selected=selected,
         status_f=status_f, platform_f=platform_f, search=search,
+        source_f=source_f, source_counts=source_counts,
+        ads_enabled=bool(current_app.config.get("SOCIAL_ADS_COMMENTS_ENABLED")),
         counts=counts, platforms=platforms,
         open_total=counts["open"],
     )
@@ -3336,9 +3353,11 @@ def _engage_back(comment_id=None):
     """Back to the inbox with the filters - and optionally the open
     conversation - the person was actually looking at. Losing those on
     every reply is what makes an inbox tiring to work through."""
+    src = request.form.get("source")
     return url_for(
         "social.engage",
         client=_client_arg(),
+        source=(src if src in ("post", "ad") and src != "post" else None),
         status=request.form.get("status") or None,
         platform=request.form.get("platform") or None,
         q=request.form.get("q") or None,

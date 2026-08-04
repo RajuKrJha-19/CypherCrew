@@ -42,6 +42,15 @@ class SocialPost(db.Model):
         db.String(30), nullable=False, default="draft", index=True
     )
 
+    # Where this post came from: "studio" (composed here) or "ad" (a synthetic
+    # record materialised for an ad/boosted post we DIDN'T publish, so its
+    # comments can surface in Engage). Ad posts are excluded from every Studio
+    # list/report - they exist only to carry Engage comments.
+    source = db.Column(
+        db.String(20), nullable=False, default="studio",
+        server_default="studio", index=True,
+    )
+
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True
     )
