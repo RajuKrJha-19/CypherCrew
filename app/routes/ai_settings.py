@@ -127,6 +127,10 @@ def index():
         # facts check), but never let it stand alone.
         row.comment_answer_questions_enabled = (
             c_want and bool(request.form.get("comment_answer_questions_enabled")))
+        # Ceiling on question auto-answers per post (0 = no limit; leads exempt
+        # from the acknowledgment cap).
+        row.comment_question_max_per_post = _int_in(
+            request.form.get("comment_question_max_per_post"), 0, 0, 500)
 
         # -- Spam auto-moderation (auto-HIDE). Its OWN blocklist; won't enable
         #    without one (same safety as auto-reply). --------------------------

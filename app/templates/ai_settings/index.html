@@ -265,6 +265,12 @@
                         <input type="checkbox" name="comment_answer_questions_enabled" {{ 'checked' if row.comment_answer_questions_enabled }}>
                         <span><strong>Also auto-answer questions</strong> — grounded in the client's Client Brain facts. A question on a client with <em>no</em> Client Brain still goes to a human (no facts = no guessing). Off = every question waits for a human.</span>
                     </label>
+                    <div class="ai-task-grid" style="margin-top:12px;">
+                        <label>Max question answers per post <small>(0 = no limit)</small>
+                            <input type="number" name="comment_question_max_per_post" min="0" max="500" value="{{ row.comment_question_max_per_post if row.comment_question_max_per_post is not none else 0 }}">
+                        </label>
+                    </div>
+                    <p class="form-hint">Questions are leads, so they're <strong>exempt from the per-post cap above</strong> — this is their own ceiling. <strong>0 = never miss a prospect</strong> (the monthly budget stays the backstop).</p>
                     <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Questions go to a human unless “auto-answer questions” is on <em>and</em> the client has a Client Brain; the generated reply is scanned too; budget cap + per-post cap always apply.</p>
                 </div>
                 {% endif %}

@@ -227,6 +227,8 @@ def comment_config():
         "max_per_post": int(getattr(row, "comment_max_per_post", None) or 5),
         "answer_questions": bool(
             getattr(row, "comment_answer_questions_enabled", False)),
+        "question_max_per_post": int(
+            getattr(row, "comment_question_max_per_post", 0) or 0),
         "blocklist": autoreply_config()["blocklist"],
     }
 

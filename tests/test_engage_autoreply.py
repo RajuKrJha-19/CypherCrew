@@ -211,6 +211,71 @@ def test_comment_config_exposes_answer_questions(app):
             app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
 
 
+def _wire_reply_stub(monkeypatch):
+    monkeypatch.setattr(engage, "sync_comments", lambda cid=None: None)
+    from app.ai import service as ai_service
+    monkeypatch.setattr(ai_service, "generate_comment_reply",
+                        lambda **k: "Thanks! Please visit our admission portal.")
+
+    def _stub_reply(comment, text, actor_id=None):
+        comment.replied = True
+        comment.status = "done"
+        db.session.commit()
+        return f"ext-{comment.id}"
+
+    monkeypatch.setattr(engage, "reply", _stub_reply)
+
+
+def test_questions_bypass_the_ack_cap(session, app, make_target, monkeypatch):
+    """Questions (leads) are answered past the acknowledgment per-post cap when
+    the question ceiling is 0 (unlimited) — so a prospect is never dropped."""
+    client, target = _client_and_target(session, make_target)
+    client.brand_brain = {"products_services": "Course A"}   # facts to ground on
+    session.commit()
+    for q in ("how to apply?", "kya fees hai?", "contact number?"):
+        _mk(session, target, q)
+    _wire_reply_stub(monkeypatch)
+    with app.app_context():
+        db.session.add(AISettings(
+            enabled=True, comment_enabled=True, comment_autoreply_enabled=True,
+            comment_answer_questions_enabled=True,
+            comment_max_per_post=1,             # acknowledgment cap tiny
+            comment_question_max_per_post=0,    # questions unlimited
+            gbp_blocklist="refund"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        try:
+            out = engage.auto_reply_scan(client.id)
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+    assert out["auto_replied"] == 3           # all 3 questions, despite ack cap=1
+
+
+def test_question_ceiling_caps_when_set(session, app, make_target, monkeypatch):
+    """A non-zero question ceiling bounds how many questions auto-answer."""
+    client, target = _client_and_target(session, make_target)
+    client.brand_brain = {"products_services": "Course A"}
+    session.commit()
+    for q in ("how to apply?", "kya fees hai?", "contact number?"):
+        _mk(session, target, q)
+    _wire_reply_stub(monkeypatch)
+    with app.app_context():
+        db.session.add(AISettings(
+            enabled=True, comment_enabled=True, comment_autoreply_enabled=True,
+            comment_answer_questions_enabled=True,
+            comment_question_max_per_post=2,    # ceiling of 2
+            gbp_blocklist="refund"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        try:
+            out = engage.auto_reply_scan(client.id)
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+    assert out["auto_replied"] == 2           # ceiling caps at 2
+
+
 def test_auto_reply_skips_when_generated_reply_has_link(session, app, make_target, monkeypatch):
     """A steered/injected reply containing a link must NOT auto-post (H1)."""
     client, target = _client_and_target(session, make_target)

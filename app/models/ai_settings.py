@@ -100,6 +100,11 @@ class AISettings(db.Model):
     #: questions unattended is always a deliberate opt-in.
     comment_answer_questions_enabled = db.Column(
         db.Boolean, nullable=False, default=False, server_default=db.false())
+    #: Ceiling on QUESTION auto-answers per post (0 = no limit). Questions are
+    #: leads, so they're exempt from comment_max_per_post; this is their own
+    #: (usually generous) cap, with the monthly budget as the hard backstop.
+    comment_question_max_per_post = db.Column(
+        db.Integer, nullable=False, default=0, server_default="0")
 
     # -- Spam auto-moderation (hides matching comments). ANDed with the
     #: ENGAGE_AUTOMOD_ENABLED env gate + a per-client opt-in + a non-empty

@@ -386,8 +386,10 @@ def auto_reply_comments_run(client_id=None):
 def auto_reply_scan(client_id=None):
     """Auto-reply the safe ALREADY-fetched comments (guarded), WITHOUT a sync.
     The webhook path calls this straight after ingesting a single comment, so a
-    real-time reply costs no extra polling. Per-post cap is a TOTAL across runs
-    (a viral thread can't be flooded), budget-capped, and the GENERATED reply is
+    real-time reply costs no extra polling. Acknowledgments are per-post
+    flood-capped; QUESTIONS (prospects/leads) are exempt from that cap and
+    bounded only by their own ceiling (0 = unlimited), so a real question is
+    never dropped. Budget-capped throughout, and the GENERATED reply is
     output-scanned. Returns counts; everything else stays in the human queue."""
     from app.ai import (client_brain, service as ai_service,
                         settings as ai_settings, usage as ai_usage)
@@ -419,12 +421,24 @@ def auto_reply_scan(client_id=None):
         .filter(SocialComment.auto_sent.is_(True),
                 SocialComment.target_id.in_(tids))
         .group_by(SocialComment.target_id).all())
+    q_per_post = {}                       # question answers sent THIS run, per post
+    qmax = cfg["question_max_per_post"]   # 0 = no limit (leads are never dropped)
 
     sent = 0
     for c in pending:
         if not comment_is_auto_safe(c, cfg):
             continue
-        if per_post.get(c.target_id, 0) >= cfg["max_per_post"]:
+        is_question = _looks_like_question((c.message or "").strip())
+        if is_question:
+            # Questions (prospects/leads) are exempt from the acknowledgment
+            # flood cap and bounded only by their own ceiling (0 = unlimited),
+            # so a real question always gets an answer. The monthly budget is
+            # the hard backstop, re-checked here because questions can be many.
+            if qmax and q_per_post.get(c.target_id, 0) >= qmax:
+                continue
+            if not ai_usage.within_budget():
+                break
+        elif per_post.get(c.target_id, 0) >= cfg["max_per_post"]:
             continue
         client = _comment_client(c)
         facts = client_brain.facts_text(client) if client else ""
@@ -486,7 +500,10 @@ def auto_reply_scan(client_id=None):
         # post it again on the next run, past the per-post cap.
         c.auto_sent = True
         db.session.commit()
-        per_post[c.target_id] = per_post.get(c.target_id, 0) + 1
+        if is_question:
+            q_per_post[c.target_id] = q_per_post.get(c.target_id, 0) + 1
+        else:
+            per_post[c.target_id] = per_post.get(c.target_id, 0) + 1
         sent += 1
     return {"auto_replied": sent}
 
