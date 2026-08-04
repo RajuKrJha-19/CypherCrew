@@ -104,7 +104,7 @@
                         value="{{ '%g'|format(row.monthly_budget_usd or 0) }}" placeholder="0">
                 </div>
 
-                <hr class="ai-sep">
+                <div class="ai-group-head"><i class="fa-solid fa-microchip"></i> AI models — which model powers each feature</div>
 
                 {# --- Captions & alt-text --- #}
                 <div class="ai-task">
@@ -204,6 +204,9 @@
                 </div>
                 {% endif %}
 
+                <div class="ai-group-head"><i class="fa-solid fa-robot"></i> Automations — these run unattended</div>
+                <p class="ai-group-sub">Each of these can post publicly on its own once every guardrail passes and the client is opted in. Anything unsure — questions, complaints, low ratings — always waits for a human in the inbox.</p>
+
                 {% if reviews_on %}
                 <hr class="ai-sep">
 
@@ -287,11 +290,10 @@
                     <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Hidden, not deleted — restore any time from Engage → Removed. Per-comment manual Hide / Delete are always available too.</p>
                 </div>
 
-                <hr class="ai-sep">
+                <div class="ai-group-head"><i class="fa-solid fa-gauge-high"></i> Performance &amp; cost</div>
 
                 {# --- Performance & cost --- #}
                 <div class="ai-task">
-                    <h3>Performance &amp; cost</h3>
                     <p class="form-hint">Big images are downscaled for the AI call only — the <strong>published creative is never touched</strong>. Smaller = cheaper + faster + fewer rate-limit hits.</p>
                     <div class="ai-task-grid">
                         <label>Image max size (px, longest edge)
