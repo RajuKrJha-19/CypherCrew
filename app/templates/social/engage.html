@@ -35,7 +35,7 @@
         <p>{% if selected_client %}Comments on {{ selected_client.client_name }}'s published posts{% else %}Comments across every published post{% endif %} — reply without leaving the Studio</p>
     </div>
     <div class="top-actions">
-        <a href="{{ url_for('social.activity') }}" class="btn btn-secondary" title="See background jobs (Fetch, Run auto-reply) and their status"><i class="fa-solid fa-list-check"></i> Activity</a>
+        <a href="{{ url_for('social.activity') }}" class="btn btn-secondary" title="Social Studio Status — scheduled posts, jobs, failures, worker health"><i class="fa-solid fa-heart-pulse"></i> Studio Status</a>
         {% if autoreply_on %}
         <form method="POST" action="{{ url_for('social.engage_autoreply_now') }}" data-turbo="false">
             <input type="hidden" name="client" value="{{ selected_client_id or '' }}"><input type="hidden" name="source" value="{{ source_f }}">

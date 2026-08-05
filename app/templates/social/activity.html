@@ -1,6 +1,6 @@
 {% extends "base_app.html" %}
 
-{% block title %}Status | CypherCrew{% endblock %}
+{% block title %}Social Studio Status | CypherCrew{% endblock %}
 {% block body_class %}ds-screen{% endblock %}
 
 {% set KIND = {
@@ -14,8 +14,8 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Status</h1>
-        <p>What's running in the background, what needs attention, and recent activity — all in one place.{% if running %} <strong>{{ running|length }} running now</strong> — this page refreshes itself.{% endif %}</p>
+        <h1>Social Studio Status</h1>
+        <p>Everything Social Studio is doing — health, scheduled posts, background jobs, and anything that needs attention.{% if running %} <strong>{{ running|length }} running now</strong> — this page refreshes itself.{% endif %}</p>
     </div>
     <div class="top-actions">
         <a href="{{ url_for('social.activity') }}" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Refresh</a>
@@ -96,6 +96,28 @@
     </ul>
 </div>
 {% endif %}
+{% endif %}
+
+{# ===== Scheduled to publish ===== #}
+<h2 class="act-h2"><i class="fa-solid fa-calendar-check"></i> Scheduled to publish</h2>
+{% if scheduled %}
+<div class="act-table-wrap">
+    <table class="act-table">
+        <thead><tr><th>Post</th><th>Channel</th><th>When (IST)</th><th>State</th></tr></thead>
+        <tbody>
+        {% for t in scheduled %}
+            <tr>
+                <td class="act-kind">{{ (t.post.title if t.post and t.post.title else "Untitled post") }}</td>
+                <td>{{ t.account.display_name if t.account else t.platform }}</td>
+                <td class="act-time">{{ (t.scheduled_for + ist_offset).strftime("%d %b, %H:%M") if t.scheduled_for else "—" }}</td>
+                <td>{% if t.status == "publishing" %}<span class="act-badge running"><i class="fa-solid fa-circle-notch fa-spin"></i> Publishing</span>{% else %}<span class="t-subtle">Scheduled</span>{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert info">Nothing scheduled right now. Compose a post and pick a time — it'll queue up here.</div>
 {% endif %}
 
 {# ===== Recent activity ===== #}

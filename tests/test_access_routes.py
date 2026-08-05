@@ -84,6 +84,22 @@ def test_management_dashboards_open_for_an_admin(
         assert client.get(path).status_code == 200
 
 
+def test_system_status_is_management_only(app, client, make_user, login):
+    """The app-wide Status screen exposes server/worker/subsystem health and
+    every failure - management only. A junior with no management role must be
+    refused even by typing the URL, exactly as the route's own gate enforces.
+    """
+    with app.app_context():
+        junior = make_user("content_writer")
+        perms.apply_role_defaults(junior, commit=True)
+        login(junior)
+        assert client.get("/status").status_code == 403
+
+        admin = make_user("admin")
+        login(admin)
+        assert client.get("/status").status_code == 200
+
+
 def test_api_overview_is_refused_for_a_junior(
         app, client, make_user, login):
     with app.app_context():

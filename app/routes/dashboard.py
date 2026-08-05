@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, date
 from app.utils.timezone import ist_now, IST_OFFSET, ist_date
-from flask import Blueprint, render_template, redirect, url_for, jsonify, request
+from flask import (Blueprint, render_template, redirect, url_for, jsonify,
+                   request, abort, current_app)
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -40,6 +41,73 @@ def index():
     login loop with no error message to explain it.
     """
     return redirect(url_for(roles.dashboard_endpoint(current_user.role)))
+
+
+def _app_status():
+    """App-wide health snapshot for the CypherCrew Status screen. Each section
+    is isolated so one failing query never blanks the page."""
+    cfg = current_app.config
+    s = {"server": {}, "social": None, "attendance": None, "ai": None,
+         "issues": 0}
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        s["server"]["db"] = True
+    except Exception:  # noqa: BLE001
+        s["server"]["db"] = False
+        s["issues"] += 1
+    s["server"]["social_worker_interval"] = cfg.get("SOCIAL_WORKER_INTERVAL", 20)
+    s["server"]["attendance_sync_interval"] = cfg.get("ATTENDANCE_SYNC_INTERVAL", 120)
+    s["server"]["social_on"] = bool(cfg.get("SOCIAL_ENGINE_ENABLED"))
+    s["server"]["attendance_on"] = bool(cfg.get("ATTENDANCE_ENABLED"))
+
+    try:
+        from app.ai import settings as ai_settings, usage as ai_usage
+        s["ai"] = {"enabled": ai_settings.is_enabled(),
+                   "spend": round(ai_usage.month_total_usd(), 2),
+                   "cap": round(ai_usage.budget_usd(), 2)}
+    except Exception:  # noqa: BLE001
+        s["ai"] = None
+
+    if cfg.get("SOCIAL_ENGINE_ENABLED"):
+        try:
+            from app.models import (SocialAccount, SocialPostTarget,
+                                    BackgroundJob)
+            ch = {st: n for st, n in db.session.query(
+                SocialAccount.status, func.count()).group_by(
+                SocialAccount.status).all()}
+            failed = SocialPostTarget.query.filter(
+                SocialPostTarget.status == "failed").count()
+            jobs_failed = BackgroundJob.query.filter_by(status="failed").count()
+            reauth = ch.get("needs_reauth", 0)
+            s["social"] = {
+                "channels_active": ch.get("active", 0),
+                "channels_reauth": reauth,
+                "scheduled": SocialPostTarget.query.filter(
+                    SocialPostTarget.status.in_(
+                        ["scheduled", "pending", "publishing"])).count(),
+                "failed": failed,
+                "jobs_running": BackgroundJob.query.filter_by(
+                    status="running").count(),
+                "jobs_failed": jobs_failed}
+            s["issues"] += (1 if reauth else 0) + (1 if failed else 0) \
+                + (1 if jobs_failed else 0)
+        except Exception:  # noqa: BLE001
+            s["social"] = None
+
+    if cfg.get("ATTENDANCE_ENABLED"):
+        s["attendance"] = {"enabled": True}
+    return s
+
+
+@dashboard_bp.route("/status")
+@login_required
+def status():
+    """CypherCrew system status — server, background workers, scheduled jobs,
+    and every subsystem's health/failures in one admin view."""
+    if not roles.is_management(current_user.role):
+        abort(403)
+    return render_template("dashboard/status.html", s=_app_status(),
+                           now=ist_now())
 
 
 def build_team():

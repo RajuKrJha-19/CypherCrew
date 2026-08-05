@@ -362,6 +362,11 @@ def create_app():
         can_view_team_performance=can_view_team_performance,
         can_manage_users=can_manage_users,
         can_manage_permissions=can_manage_permissions,
+        # "Is an owner/admin" - gates the app-wide Status screen link so it
+        # matches exactly what the dashboard.status route allows (management
+        # only), never a manage_users-permission holder who'd hit a 403.
+        is_management=lambda user: roles_module.is_management(
+            getattr(user, "role", None)),
         # "May read this client's delivery figures" - gates the client
         # dashboard tab, and is what finally gives view_client_stats a job.
         can_view_client_stats=can_view_client_stats,

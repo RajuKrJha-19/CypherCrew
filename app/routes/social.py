@@ -3400,11 +3400,22 @@ def activity():
         joinedload(SocialPostTarget.post))
         .order_by(SocialPostTarget.id.desc()).limit(12).all())
 
+    # Everything Social Studio has queued to go out — the "scheduled activity".
+    sched_q = _scope_targets(
+        SocialPostTarget.query.filter(
+            SocialPostTarget.status.in_(["scheduled", "pending", "publishing"]),
+            SocialPostTarget.scheduled_for.isnot(None)), cid)
+    scheduled = (sched_q.options(
+        joinedload(SocialPostTarget.account),
+        joinedload(SocialPostTarget.post))
+        .order_by(SocialPostTarget.scheduled_for.asc()).limit(25).all())
+
     return render_template(
         "social/activity.html",
         health=_system_health(),
-        jobs=recent, running=running,
+        jobs=recent, running=running, scheduled=scheduled,
         needs_reauth=needs_reauth, failed_targets=failed_targets,
+        ist_offset=_IST_OFFSET,
         worker_interval=current_app.config.get("SOCIAL_WORKER_INTERVAL", 20))
 
 

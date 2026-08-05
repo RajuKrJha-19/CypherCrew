@@ -112,6 +112,17 @@
     </a>
     {% endif %}
 
+    {# App-wide system health: server, background workers, scheduled jobs,
+       Social Studio and every subsystem's failures in one place. Management
+       only — matches the dashboard.status route's own gate exactly. #}
+    {% if is_management(current_user) %}
+    <a href="{{ url_for('dashboard.status') }}"
+       class="{% if endpoint == 'dashboard.status' %}active{% endif %}">
+        <i class="fa-solid fa-heart-pulse"></i>
+        <span>Status</span>
+    </a>
+    {% endif %}
+
     {#
         Open to everyone, deliberately. The client pages carry the
         brand assets (logo, fonts, guidelines) the whole team needs to

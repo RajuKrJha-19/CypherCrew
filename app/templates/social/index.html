@@ -115,6 +115,13 @@
             <span class="stat-tile-label">In publishing queue</span>
         </div>
     </a>
+    <a class="stat-tile accent" href="{{ url_for('social.activity') }}">
+        <div class="stat-tile-icon"><i class="fa-solid fa-heart-pulse"></i></div>
+        <div class="stat-tile-body">
+            <span class="stat-tile-value">Status</span>
+            <span class="stat-tile-label">Scheduled, jobs &amp; health</span>
+        </div>
+    </a>
     <a class="stat-tile danger {% if status.jobs.dead or status.jobs.failed %}hot{% endif %}"
        href="{{ url_for('social.queue', client=cq) }}">
         <div class="stat-tile-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>

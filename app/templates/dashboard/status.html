@@ -1,0 +1,117 @@
+{% extends "base_app.html" %}
+
+{% block title %}System Status | CypherCrew{% endblock %}
+{% block body_class %}ds-screen{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>System Status</h1>
+        <p>Live health of CypherCrew — server, background workers, scheduled jobs and every subsystem's failures in one place.</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('dashboard.status') }}" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Refresh</a>
+    </div>
+</div>
+
+{# ===== Overall banner ===== #}
+{% if s.issues %}
+<div class="alert warning" style="display:flex;align-items:center;gap:10px">
+    <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
+    <strong>{{ s.issues }} item{{ 's' if s.issues != 1 }} need{{ '' if s.issues != 1 else 's' }} attention</strong>
+    — see the flagged sections below.
+</div>
+{% else %}
+<div class="alert success" style="display:flex;align-items:center;gap:10px">
+    <i class="fa-solid fa-circle-check fa-lg"></i>
+    <strong>All systems operational.</strong> No failures across server, workers or any subsystem.
+</div>
+{% endif %}
+
+{# ===== Server / platform ===== #}
+<h2 class="act-h2"><i class="fa-solid fa-server"></i> Server &amp; platform</h2>
+<div class="stat-tiles">
+    <div class="stat-tile ok">
+        <span class="stat-label">Application</span>
+        <span class="stat-val">Online</span>
+        <span class="stat-sub">Serving requests</span>
+    </div>
+    <div class="stat-tile {{ 'ok' if s.server.db else 'bad' }}">
+        <span class="stat-label">Database</span>
+        <span class="stat-val">{{ 'Connected' if s.server.db else 'Unreachable' }}</span>
+        <span class="stat-sub">{{ 'PostgreSQL responding' if s.server.db else 'Cannot reach the database' }}</span>
+    </div>
+    <div class="stat-tile {{ 'ok' if s.server.social_on else '' }}">
+        <span class="stat-label">Publish worker</span>
+        <span class="stat-val">{% if s.server.social_on %}Running{% else %}Off{% endif %}</span>
+        <span class="stat-sub">{% if s.server.social_on %}Scans every {{ s.server.social_worker_interval }}s{% else %}Social engine disabled{% endif %}</span>
+    </div>
+    <div class="stat-tile {{ 'ok' if s.server.attendance_on else '' }}">
+        <span class="stat-label">Attendance sync</span>
+        <span class="stat-val">{% if s.server.attendance_on %}Running{% else %}Off{% endif %}</span>
+        <span class="stat-sub">{% if s.server.attendance_on %}Every {{ s.server.attendance_sync_interval }}s{% else %}Attendance disabled{% endif %}</span>
+    </div>
+</div>
+
+{# ===== Social Studio ===== #}
+{% if s.social %}
+<h2 class="act-h2"><i class="fa-solid fa-share-nodes"></i> Social Studio
+    <a href="{{ url_for('social.activity') }}" class="social-card-link" style="font-size:.8rem;font-weight:500;margin-left:10px">Full detail <i class="fa-solid fa-arrow-right"></i></a>
+</h2>
+<div class="stat-tiles">
+    <div class="stat-tile {{ 'warn' if s.social.channels_reauth else 'ok' }}">
+        <span class="stat-label">Channels</span>
+        <span class="stat-val">{{ s.social.channels_active }} connected</span>
+        <span class="stat-sub">{% if s.social.channels_reauth %}{{ s.social.channels_reauth }} need reconnect{% else %}all healthy{% endif %}</span>
+    </div>
+    <div class="stat-tile ok">
+        <span class="stat-label">Scheduled to publish</span>
+        <span class="stat-val">{{ s.social.scheduled }}</span>
+        <span class="stat-sub">queued &amp; upcoming posts</span>
+    </div>
+    <div class="stat-tile {{ 'bad' if s.social.failed else 'ok' }}">
+        <span class="stat-label">Publish failures</span>
+        <span class="stat-val">{{ s.social.failed }}</span>
+        <span class="stat-sub">{% if s.social.failed %}need a retry{% else %}none{% endif %}</span>
+    </div>
+    <div class="stat-tile {{ 'warn' if s.social.jobs_running else 'ok' }}">
+        <span class="stat-label">Background jobs</span>
+        <span class="stat-val">{{ s.social.jobs_running }} running</span>
+        <span class="stat-sub">{% if s.social.jobs_failed %}{{ s.social.jobs_failed }} failed recently{% else %}fetch, auto-reply &amp; more{% endif %}</span>
+    </div>
+</div>
+{% endif %}
+
+{# ===== AI Suite ===== #}
+{% if s.ai %}
+<h2 class="act-h2"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Suite</h2>
+<div class="stat-tiles">
+    <div class="stat-tile {{ 'ok' if s.ai.enabled else 'warn' }}">
+        <span class="stat-label">Status</span>
+        <span class="stat-val">{{ 'On' if s.ai.enabled else 'Paused' }}</span>
+        <span class="stat-sub">{{ 'Captions, media QA &amp; replies' if s.ai.enabled else 'AI features are switched off' }}</span>
+    </div>
+    <div class="stat-tile {{ 'bad' if (s.ai.cap and s.ai.spend >= s.ai.cap) else 'ok' }}">
+        <span class="stat-label">This month's spend</span>
+        <span class="stat-val">${{ '%.2f'|format(s.ai.spend) }}</span>
+        <span class="stat-sub">{% if s.ai.cap %}of ${{ '%.0f'|format(s.ai.cap) }} budget{% else %}no monthly cap set{% endif %}</span>
+    </div>
+</div>
+{% endif %}
+
+{# ===== Attendance ===== #}
+{% if s.attendance %}
+<h2 class="act-h2"><i class="fa-solid fa-user-clock"></i> Attendance</h2>
+<div class="stat-tiles">
+    <div class="stat-tile ok">
+        <span class="stat-label">Integration</span>
+        <span class="stat-val">Enabled</span>
+        <span class="stat-sub">Syncing every {{ s.server.attendance_sync_interval }}s</span>
+    </div>
+</div>
+{% endif %}
+
+<p class="form-hint" style="margin-top:20px">
+    <i class="fa-solid fa-circle-info"></i> Snapshot taken {{ now.strftime("%d %b %Y, %H:%M") }} IST. Reload to refresh. Scheduled posts publish automatically in the background; analytics and ad-comment discovery run on their own slower cadence.
+</p>
+{% endblock %}
