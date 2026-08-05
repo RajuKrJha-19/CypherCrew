@@ -1592,6 +1592,11 @@ def compose():
     task_id_arg = request.args.get("task", type=int)
     if task_id_arg:
         task = Task.query.get_or_404(task_id_arg)
+        # A task's deliverable files + brief are task-scoped content: don't let
+        # someone with manage_social but no view of THIS task pull them by
+        # enumerating ?task=<id>. Same gate the AI caption routes apply.
+        if not _ai_can_view_task(task):
+            abort(403)
         task_assets = [_task_file_preview(f)
                        for f in _task_deliverable_files(task)]
         selected_account_ids = _suggested_accounts_for_task(task)
@@ -2987,6 +2992,8 @@ def calendar():
         year, month = year - 1, 12
     elif month > 12:
         year, month = year + 1, 1
+    # datetime() only accepts years 1-9999; a crafted ?y=99999 would 500.
+    year = min(9999, max(1, year))
 
     first_ist = datetime(year, month, 1)
     next_ist = datetime(year + (1 if month == 12 else 0),
@@ -3331,52 +3338,73 @@ def engage():
     )
 
 
+@social_bp.route("/activity")
+@login_required
+def activity():
+    """System status: what's running right now (background jobs), what needs
+    attention (channels to reconnect, failed publishes), and recent job history —
+    so nothing runs invisibly and every problem surfaces in one place."""
+    _guard()
+    from app.social import jobs
+    from sqlalchemy.orm import joinedload
+    cid = _client_arg()
+
+    recent = jobs.recent(client_id=cid)
+    running = [j for j in recent if j.status == "running"]
+
+    # --- Needs attention: things a human should act on ---
+    reauth_q = SocialAccount.query.filter(SocialAccount.status == "needs_reauth")
+    if cid:
+        reauth_q = reauth_q.filter(SocialAccount.client_id == cid)
+    needs_reauth = reauth_q.order_by(SocialAccount.platform,
+                                     SocialAccount.display_name).all()
+
+    failed_q = _scope_targets(
+        SocialPostTarget.query.filter(SocialPostTarget.status == "failed"), cid)
+    failed_targets = (failed_q.options(
+        joinedload(SocialPostTarget.account),
+        joinedload(SocialPostTarget.post))
+        .order_by(SocialPostTarget.id.desc()).limit(12).all())
+
+    return render_template(
+        "social/activity.html",
+        jobs=recent, running=running,
+        needs_reauth=needs_reauth, failed_targets=failed_targets,
+        worker_interval=current_app.config.get("SOCIAL_WORKER_INTERVAL", 20))
+
+
 @social_bp.route("/engage/sync", methods=["POST"])
 @login_required
 def engage_sync():
     _guard()
     cid = _engage_client()   # from the POST body (the switcher's hidden field)
-    # Ad/boosted-post DISCOVERY (the slow Marketing-API listing) runs in the
-    # background autoworker, not here — doing it inline made this request hang
-    # 30-40s and drop the connection. By the time a human clicks Fetch the ad
-    # targets already exist, so the sync below reads their comments alongside
-    # the organic ones with no extra latency.
-    report = engage_svc.sync_comments(cid)
+    from app.social import jobs
 
-    # "All caught up" is only honest when we actually managed to look.
-    # A run where every request was refused used to say exactly that.
-    if report["failed"]:
-        # Compact, grouped summary — never the raw Graph errors, which leak
-        # object ids and read as a scary red wall. The full per-post detail is
-        # in the server log. A channel that needs reconnecting is actionable
-        # ("warning"); posts merely gone from the platform are expected and get
-        # a calm "info" tone. Still fully surfaced with counts + reasons, not
-        # hidden.
-        summary = engage_svc.failure_summary(report)
-        tone = "warning" if "auth" in report["by_reason"] else "info"
-        flash(
-            f"Checked {report['checked']} post(s) — {report['failed']} "
-            f"couldn't be read: {summary}.", tone)
-    if report["new"]:
-        flash(f"Fetched {report['new']} new comment(s) from the platforms.",
-              "success")
-    elif not report["failed"]:
-        if not report["checked"]:
-            flash(
-                "Nothing to check yet — comments are fetched for posts "
-                "published through the Studio, and there aren't any on a "
-                "channel that supports comments.", "info")
-        else:
-            flash(f"Checked {report['checked']} post(s) — no new comments.",
-                  "info")
+    def _fetch():
+        # Reads a comment per published post (a Graph call each) + auto-hides
+        # spam — tens of seconds on a busy account, so it runs off the request
+        # (that's what used to hang the browser). The outcome lands on the
+        # Activity screen; the inbox shows the new comments on the next refresh.
+        report = engage_svc.sync_comments(cid)
+        mod = engage_svc.automod_scan(cid)
+        parts = []
+        if report["new"]:
+            parts.append(f"{report['new']} new comment(s)")
+        if report["failed"]:
+            parts.append(f"{report['failed']} couldn't be read "
+                         f"({engage_svc.failure_summary(report)})")
+        if mod.get("hidden"):
+            parts.append(f"auto-hid {mod['hidden']} spam")
+        msg = (f"Checked {report['checked']} post(s) — " + ", ".join(parts) + "."
+               if parts else
+               f"Checked {report['checked']} post(s) — no new comments.")
+        return {"message": msg, "checked": report["checked"],
+                "new": report["new"], "failed": report["failed"],
+                "hidden": mod.get("hidden", 0)}
 
-    # Auto-hide spam among the just-fetched comments (no re-sync). Inert unless
-    # the four-layer gate is on; anything hidden lands in the Removed tab.
-    mod = engage_svc.automod_scan(cid)
-    if mod.get("hidden"):
-        flash(f"Auto-hid {mod['hidden']} spam comment(s) — see the Removed tab.",
-              "info")
-
+    jobs.start("fetch_comments", _fetch, client_id=cid, actor_id=current_user.id)
+    flash("Fetching comments in the background — new ones appear here shortly. "
+          "Track progress on the Activity screen.", "info")
     return redirect(url_for("social.engage", client=cid))
 
 
@@ -3393,29 +3421,27 @@ def engage_autoreply_now():
     and questions/complaints/anything unsure always stay for a human."""
     _guard()
     from app.ai import settings as ai_settings
+    from app.social import jobs
     client_id = _engage_client()   # from the POST body, not the (absent) query
     # Cheap gate check up front so an off/misconfigured state answers instantly
-    # instead of spawning a worker that does nothing.
+    # instead of starting a job that does nothing.
     if not ai_settings.comment_config()["enabled"]:
         flash("Auto-reply is off — turn it on in AI Settings and opt this client "
               "in on their profile first.", "info")
         return redirect(url_for("social.engage", client=client_id))
 
-    import threading
-    app = current_app._get_current_object()
-
     def _run():
-        with app.app_context():
-            try:
-                engage_svc.auto_reply_scan(client_id)
-            except Exception:  # noqa: BLE001 - best-effort background job
-                app.logger.exception("[engage] run-auto-reply-now failed")
+        out = engage_svc.auto_reply_scan(client_id)
+        n = out.get("auto_replied", 0)
+        if out.get("skipped") == "over budget":
+            return {"message": "Paused — the monthly AI budget is reached.", **out}
+        return {"message": (f"Auto-replied {n} safe comment(s)." if n else
+                            "No comments were eligible right now (only recent, "
+                            "short, opted-in ones qualify)."), **out}
 
-    threading.Thread(target=_run, name="engage-autoreply-now",
-                     daemon=True).start()
-    flash("Auto-reply is running in the background — refresh in a moment to see "
-          "the replies. Only safe, recent comments qualify; questions and "
-          "anything unsure stay for a human.", "info")
+    jobs.start("auto_reply", _run, client_id=client_id, actor_id=current_user.id)
+    flash("Running auto-reply in the background — track progress on the Activity "
+          "screen. Questions and anything unsure always stay for a human.", "info")
     return redirect(url_for("social.engage", client=client_id))
 
 

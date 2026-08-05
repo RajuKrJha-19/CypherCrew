@@ -1,0 +1,84 @@
+"""Run a user-triggered action as a tracked background job.
+
+The point is VISIBILITY: an action like "Fetch comments" or "Run auto-reply"
+can take tens of seconds (an AI call + a Graph call per item), so running it in
+the request thread hangs the browser and drops the connection. Here it runs in
+a daemon thread and writes its outcome to a BackgroundJob row, which the
+Activity screen shows - the person can see it running and what it did instead
+of staring at a spinner.
+
+Deliberately no external queue (no Celery/Redis): a thread + one DB row is
+enough for this workload, and it degrades gracefully - if the worker dies the
+row simply stays "running" and the user can retrigger.
+"""
+import threading
+from datetime import datetime
+
+from flask import current_app
+
+from app.extensions import db
+from app.models import BackgroundJob
+
+
+def start(kind, fn, *, client_id=None, actor_id=None):
+    """Create a 'running' BackgroundJob, run fn() in a background thread, and
+    write its outcome back to the row. Returns the job id immediately.
+
+    fn() runs inside a fresh app context (its own thread-local DB session) and
+    should return a dict; its optional 'message' key becomes the row's one-line
+    summary and the rest is stored as `result`. Any exception -> 'failed',
+    logged. Never raises to the caller."""
+    app = current_app._get_current_object()
+    job = BackgroundJob(kind=kind, client_id=client_id, status="running",
+                        started_by_id=actor_id, started_at=datetime.utcnow())
+    db.session.add(job)
+    db.session.commit()
+    job_id = job.id
+
+    def _run():
+        with app.app_context():
+            _finish(job_id, kind, fn)
+
+    _spawn(_run, kind, job_id)
+    return job_id
+
+
+def _finish(job_id, kind, fn):
+    row = BackgroundJob.query.get(job_id)
+    if row is None:
+        return
+    try:
+        out = fn()
+        out = out if isinstance(out, dict) else {}
+        row.message = out.pop("message", None) or "Done."
+        row.result = out or None
+        row.status = "done"
+    except Exception:  # noqa: BLE001 - captured on the row + logged
+        current_app.logger.exception("[jobs] %s (job %s) failed", kind, job_id)
+        db.session.rollback()
+        row = BackgroundJob.query.get(job_id)
+        if row is not None:
+            row.status = "failed"
+            row.message = "Failed — see the server log."
+    if row is not None:
+        row.finished_at = datetime.utcnow()
+        db.session.commit()
+
+
+def _spawn(run, kind, job_id):
+    """Start the job runner in a daemon thread. Isolated here so the test suite
+    can stub it to run synchronously — a real thread committing on a separate
+    connection races the shared test DB (see conftest._sync_jobs)."""
+    threading.Thread(target=run, name=f"job-{kind}-{job_id}", daemon=True).start()
+
+
+def recent(limit=40, client_id=None):
+    """Newest background jobs first, for the Activity screen."""
+    q = BackgroundJob.query
+    if client_id:
+        q = q.filter(BackgroundJob.client_id == client_id)
+    return q.order_by(BackgroundJob.id.desc()).limit(limit).all()
+
+
+def running_count():
+    return BackgroundJob.query.filter_by(status="running").count()

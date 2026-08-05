@@ -1,0 +1,112 @@
+{% extends "base_app.html" %}
+
+{% block title %}Status | CypherCrew{% endblock %}
+{% block body_class %}ds-screen{% endblock %}
+
+{% set KIND = {
+  "fetch_comments": ("Fetch comments", "fa-arrows-rotate"),
+  "auto_reply": ("Run auto-reply", "fa-robot"),
+  "ad_sync": ("Ad discovery", "fa-bullhorn"),
+  "publish": ("Publish", "fa-paper-plane"),
+  "analytics": ("Analytics refresh", "fa-chart-line"),
+} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Status</h1>
+        <p>What's running in the background, what needs attention, and recent activity — all in one place.{% if running %} <strong>{{ running|length }} running now</strong> — this page refreshes itself.{% endif %}</p>
+    </div>
+    <div class="top-actions">
+        <a href="{{ url_for('social.activity') }}" class="btn btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Refresh</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+{% endwith %}
+
+{# ===== Running now ===== #}
+{% if running %}
+<div class="act-live">
+    {% for job in running %}
+    {% set label, icon = KIND.get(job.kind, (job.kind, "fa-gear")) %}
+    <div class="act-live-item">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        <div><strong>{{ label }}</strong><span>{{ job.client.client_name if job.client else "All clients" }} · running {{ job.duration_seconds }}s</span></div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ===== Needs attention (errors / problems) ===== #}
+{% if needs_reauth or failed_targets %}
+<h2 class="act-h2"><i class="fa-solid fa-triangle-exclamation"></i> Needs attention</h2>
+
+{% if needs_reauth %}
+<div class="alert warning">
+    <strong>{{ needs_reauth|length }} channel(s) need reconnecting</strong> — until then their comments/insights can't be read and posts to them fail.
+    <ul class="act-attn-list">
+        {% for a in needs_reauth %}
+        <li>{{ a.display_name }} <span class="t-subtle">({{ a.platform }})</span> — <a href="{{ url_for('social.accounts') }}">reconnect in Channels</a></li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if failed_targets %}
+<div class="alert error">
+    <strong>{{ failed_targets|length }} recent publish failure(s)</strong>:
+    <ul class="act-attn-list">
+        {% for t in failed_targets %}
+        <li>{{ (t.post.title if t.post else "A post") }} <span class="t-subtle">→ {{ t.account.display_name if t.account else t.platform }}</span>{% if t.last_error %} — {{ t.last_error|truncate(120) }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endif %}
+
+{# ===== Recent activity ===== #}
+<h2 class="act-h2"><i class="fa-solid fa-clock-rotate-left"></i> Recent activity</h2>
+{% if jobs %}
+<div class="act-table-wrap">
+    <table class="act-table">
+        <thead>
+            <tr><th>Job</th><th>Client</th><th>Status</th><th>Started</th><th>Took</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+        {% for job in jobs %}
+            {% set label, icon = KIND.get(job.kind, (job.kind, "fa-gear")) %}
+            <tr>
+                <td class="act-kind"><i class="fa-solid {{ icon }}"></i> {{ label }}</td>
+                <td>{{ job.client.client_name if job.client else "All clients" }}</td>
+                <td>
+                    {% if job.status == "running" %}
+                        <span class="act-badge running"><i class="fa-solid fa-circle-notch fa-spin"></i> Running</span>
+                    {% elif job.status == "failed" %}
+                        <span class="act-badge failed"><i class="fa-solid fa-circle-xmark"></i> Failed</span>
+                    {% else %}
+                        <span class="act-badge done"><i class="fa-solid fa-circle-check"></i> Done</span>
+                    {% endif %}
+                </td>
+                <td class="act-time">{{ job.started_at.strftime("%d %b, %H:%M") }}</td>
+                <td class="act-time">{{ job.duration_seconds }}s</td>
+                <td class="act-msg">{{ job.message or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert info">No background jobs yet. When you press <strong>Fetch comments</strong> or <strong>Run auto-reply now</strong> in Engage, they show up here with progress and result.</div>
+{% endif %}
+
+<p class="form-hint" style="margin-top:16px">
+    <i class="fa-solid fa-circle-info"></i> Scheduled posts publish automatically in the background (about every {{ worker_interval }}s); analytics and ad-comment discovery refresh on their own slower cadence.
+</p>
+
+{% if running %}
+{# Something's still running — full reload (past Turbo) to pull the new state. #}
+<script>setTimeout(function () { window.location.reload(); }, 5000);</script>
+{% endif %}
+{% endblock %}

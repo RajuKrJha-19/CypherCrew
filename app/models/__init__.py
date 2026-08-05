@@ -64,6 +64,7 @@ from app.models.social_analytics import SocialAnalyticsSnapshot
 from app.models.social_audit import SocialAuditLog, ContentVersion
 from app.models.platform_rate_budget import PlatformRateBudget
 from app.models.data_deletion import DataDeletionRequest
+from app.models.background_job import BackgroundJob
 
 # --- Attendance (Zoho People bridge + idle-task alerts) ---
 from app.models.zoho_connection import ZohoConnection

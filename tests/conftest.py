@@ -218,6 +218,15 @@ def _no_publish_kick(monkeypatch):
     monkeypatch.setattr(_worker, "kick_async", lambda *a, **k: None)
 
 
+@pytest.fixture(autouse=True)
+def _sync_jobs(monkeypatch):
+    """Background jobs (jobs.start) run in a daemon thread that commits on its
+    own connection, which races the shared test DB. Run them synchronously in
+    the request thread instead — the thread body is the same, just inline."""
+    import app.social.jobs as _jobs
+    monkeypatch.setattr(_jobs, "_spawn", lambda run, kind, job_id: run())
+
+
 @pytest.fixture()
 def make_target(session):
     """Factory: build an approved, scheduled (due) target on the fake
