@@ -18254,18 +18254,38 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .act-h2 i{ color:var(--color-text-subtle); font-size:14px; }
 .act-attn-list{ margin:8px 0 0; padding-left:18px; }
 .act-attn-list li{ margin:3px 0; }
+/* Failed-job traceback, collapsed by default. Kept inside its own scroll box
+   so a wide trace never stretches the table past the screen. */
+.act-trace{ margin-top:6px; }
+.act-trace summary{ cursor:pointer; font-size:12px; color:var(--color-danger);
+    font-weight:600; }
+.act-trace pre{ margin:6px 0 0; padding:10px 12px; max-height:260px;
+    overflow:auto; background:var(--color-surface-alt,#f6f7f9);
+    border:1px solid var(--color-border); border-radius:8px;
+    font-size:11.5px; line-height:1.45; white-space:pre; }
 .stat-tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
     gap:14px; margin:0 0 22px; }
+/* min-width:0 lets a grid cell shrink below its content's intrinsic width, and
+   overflow-wrap breaks the odd long token (a URL, a $ figure, an error string)
+   so nothing ever spills past the tile's rounded edge. */
 .stat-tile{ padding:16px 18px; border:1px solid var(--color-border);
     border-radius:var(--radius-md); background:var(--color-surface);
-    border-left:3px solid var(--color-border); }
+    border-left:3px solid var(--color-border); min-width:0;
+    overflow-wrap:anywhere; }
 .stat-tile.ok{ border-left-color:#2b7a4e; }
 .stat-tile.warn{ border-left-color:#a76708; }
 .stat-tile.bad{ border-left-color:#b23b3b; }
 .stat-label{ display:block; font-size:11px; font-weight:650; letter-spacing:.05em;
-    text-transform:uppercase; color:var(--color-text-subtle); }
-.stat-val{ display:block; font-size:22px; font-weight:700; margin:4px 0 2px; }
-.stat-sub{ display:block; font-size:12.5px; color:var(--color-text-subtle); }
+    text-transform:uppercase; color:var(--color-text-subtle);
+    overflow-wrap:anywhere; }
+.stat-val{ display:block; font-size:22px; font-weight:700; margin:4px 0 2px;
+    line-height:1.15; overflow-wrap:anywhere; }
+.stat-sub{ display:block; font-size:12.5px; color:var(--color-text-subtle);
+    overflow-wrap:anywhere; }
+/* The section heading can carry an inline "Full detail →" link; let it wrap
+   under the title on a narrow width instead of pushing out of the row. */
+.act-h2{ flex-wrap:wrap; }
+.act-h2 .social-card-link{ white-space:nowrap; }
 
 /* AI Suite — Google review auto-reply safety panel (read-only). */
 .ai-autoreply{ margin-top:16px; }

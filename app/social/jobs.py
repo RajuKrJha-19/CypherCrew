@@ -12,6 +12,7 @@ enough for this workload, and it degrades gracefully - if the worker dies the
 row simply stays "running" and the user can retrigger.
 """
 import threading
+import traceback
 from datetime import datetime
 
 from flask import current_app
@@ -53,13 +54,23 @@ def _finish(job_id, kind, fn):
         row.message = out.pop("message", None) or "Done."
         row.result = out or None
         row.status = "done"
-    except Exception:  # noqa: BLE001 - captured on the row + logged
+    except Exception as exc:  # noqa: BLE001 - surfaced on the row + logged
+        # The whole point of this screen is that a failure is READABLE here,
+        # not buried in a log file the user can't open. So the real error goes
+        # ON the row: a one-line "<Type>: <message>" as the summary, and the
+        # traceback tail in `result` for tracing — never a vague "see the log".
         current_app.logger.exception("[jobs] %s (job %s) failed", kind, job_id)
         db.session.rollback()
+        summary = f"{type(exc).__name__}: {exc}".strip()
+        tb = traceback.format_exc()
         row = BackgroundJob.query.get(job_id)
         if row is not None:
             row.status = "failed"
-            row.message = "Failed — see the server log."
+            row.message = summary[:300] or "Failed (no error text)."
+            # Last frames of the traceback — enough to locate it, bounded so a
+            # giant trace never bloats the row.
+            row.result = {"error": summary[:1000],
+                          "traceback": tb[-1800:]}
     if row is not None:
         row.finished_at = datetime.utcnow()
         db.session.commit()

@@ -17,6 +17,24 @@ def test_jobs_start_creates_a_tracked_row(app):
         assert row.status in ("running", "done")
 
 
+def test_a_failed_job_records_the_real_error_not_a_vague_pointer(app):
+    """A failure must be READABLE on the Status screen, not "see the server
+    log". The row's message carries the actual exception, and result carries a
+    traceback for tracing."""
+    def boom():
+        raise ValueError("channel token is missing")
+
+    with app.test_request_context():
+        jid = jobs.start("fetch_comments", boom)
+    with app.app_context():
+        row = BackgroundJob.query.get(jid)
+        assert row.status == "failed"
+        assert "ValueError" in row.message
+        assert "channel token is missing" in row.message
+        assert "see the server log" not in row.message.lower()
+        assert row.result and "traceback" in row.result
+
+
 def test_recent_and_running_count(app):
     with app.app_context():
         from app.extensions import db

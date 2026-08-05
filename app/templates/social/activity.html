@@ -145,7 +145,15 @@
                 </td>
                 <td class="act-time">{{ job.started_at.strftime("%d %b, %H:%M") }}</td>
                 <td class="act-time">{{ job.duration_seconds }}s</td>
-                <td class="act-msg">{{ job.message or "—" }}</td>
+                <td class="act-msg">
+                    {{ job.message or "—" }}
+                    {% if job.status == "failed" and job.result and job.result.get("traceback") %}
+                    <details class="act-trace">
+                        <summary>Show technical detail</summary>
+                        <pre>{{ job.result.get("traceback") }}</pre>
+                    </details>
+                    {% endif %}
+                </td>
             </tr>
         {% endfor %}
         </tbody>
