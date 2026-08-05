@@ -177,11 +177,19 @@ def publish_target_now(target, actor_id=None):
         return target
 
     key = f"tgt-{target.id}-now-{int(datetime.utcnow().timestamp())}"
-    if not PublishJob.query.filter_by(idempotency_key=key).first():
-        db.session.add(PublishJob(
-            target_id=target.id, state="queued",
-            idempotency_key=key, next_run_at=datetime.utcnow(),
-        ))
+    # Two clicks handled by different workers in the same second both pass the
+    # SELECT above; a SAVEPOINT lets the loser's duplicate INSERT fail on the
+    # unique key without aborting the whole request (which used to 500).
+    from sqlalchemy.exc import IntegrityError
+    try:
+        with db.session.begin_nested():
+            if not PublishJob.query.filter_by(idempotency_key=key).first():
+                db.session.add(PublishJob(
+                    target_id=target.id, state="queued",
+                    idempotency_key=key, next_run_at=datetime.utcnow(),
+                ))
+    except IntegrityError:
+        pass                                  # already enqueued by the other click
     target.status = "publishing"
     audit.record("publish_now", target_id=target.id,
                  post_id=target.social_post_id, actor_id=actor_id)

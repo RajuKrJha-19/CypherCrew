@@ -279,7 +279,11 @@ def social_status():
 def run_attendance_sync():
     _attendance_guard()
     from app.attendance import service
-    return jsonify(success=True, **service.sync_attendance())
+    try:
+        return jsonify(success=True, **service.sync_attendance())
+    except Exception:  # noqa: BLE001 - log-and-report like the other cron routes
+        current_app.logger.exception("[attendance] sync cron failed")
+        return jsonify(success=False)
 
 
 @internal_bp.route("/attendance/idle-alerts", methods=["POST"])
@@ -287,7 +291,11 @@ def run_attendance_sync():
 def run_attendance_idle_alerts():
     _attendance_guard()
     from app.services.idle_alerts import run_idle_task_alerts
-    return jsonify(success=True, **run_idle_task_alerts())
+    try:
+        return jsonify(success=True, **run_idle_task_alerts())
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[attendance] idle-alerts cron failed")
+        return jsonify(success=False)
 
 
 @internal_bp.route("/attendance/webhook", methods=["POST"])

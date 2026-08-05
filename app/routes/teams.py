@@ -514,18 +514,26 @@ def api_edit_message(message_id):
     if message is None:
         abort(404)
     _readable_or_404(message.channel_id)
+    channel = db.session.get(TeamChannel, message.channel_id)
+    is_admin = bool(channel) and channels_service.can_administer(
+        channel, current_user)
+    # An archived channel is read-only (react/pin already refuse via
+    # _postable_or_403). Block edits for everyone and members' own deletes; an
+    # admin can still delete for moderation.
+    archived = bool(channel) and getattr(channel, "is_archived", False)
 
     try:
         if request.method == "DELETE":
             # A channel admin/owner can remove anyone's message (moderation),
             # not just their own - otherwise delete_message's is_admin path is
             # unreachable and an abusive post can't be taken down.
-            channel = db.session.get(TeamChannel, message.channel_id)
-            is_admin = bool(channel) and channels_service.can_administer(
-                channel, current_user)
+            if archived and not is_admin:
+                return jsonify({"error": "This channel is archived (read-only)."}), 403
             messages_service.delete_message(
                 message, current_user, is_admin=is_admin)
         else:
+            if archived:
+                return jsonify({"error": "This channel is archived (read-only)."}), 403
             data = request.get_json(silent=True) or request.form
             messages_service.edit_message(
                 message, current_user, data.get("body"))
