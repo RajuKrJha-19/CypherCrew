@@ -128,7 +128,7 @@ def autosave(note_id):
         user_id=current_user.id
     ).first_or_404()
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}   # a `null`/malformed body -> {}
 
     note.title = data.get("title", note.title)
     note.content = data.get("content", note.content)

@@ -311,8 +311,13 @@ def _process(job_id):
                 # where someone chasing a late post looks first (the post
                 # detail page lists target.last_error as the reason it is not
                 # out yet). _apply_step clears it on success.
+                # `window` is a label ("24h"), but the message builder wants
+                # seconds — passing the string made "24h" / 3600 raise TypeError,
+                # which dead-lettered the post instead of cleanly deferring it.
                 job.last_error = _rate_defer_message(
-                    target.platform, limit, window, job.next_run_at)
+                    target.platform, limit,
+                    ratelimit._window_delta(window).total_seconds(),
+                    job.next_run_at)
                 target.last_error = job.last_error
                 db.session.commit()
                 return {"job": job_id, "result": "rate_deferred"}

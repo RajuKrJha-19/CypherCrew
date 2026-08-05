@@ -173,6 +173,12 @@ def auto_reply_run(account):
         low_reply = text.lower()
         if any(word in low_reply for word in guards["blocklist"]):
             continue
+        # A link/bare-domain in an unattended public reply is the classic "make
+        # the bot post a phishing link" prompt-injection vector — same guard the
+        # Engage comment auto-reply uses. Any link -> the human queue.
+        from app.social.services.engage import _has_link
+        if _has_link(text):
+            continue
 
         # Atomically CLAIM the review before posting, so two overlapping cron
         # runs can't both reply to it - the loser's UPDATE matches 0 rows.

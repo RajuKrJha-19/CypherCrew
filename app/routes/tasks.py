@@ -4478,12 +4478,16 @@ def task_detail(task_id):
     )
 
 def _can_view_task_file(task_file):
-    """Same rule the preview and download routes apply."""
+    """Same rule the preview and download routes apply.
+
+    Every file — reference AND delivered submission — is scoped to the task's
+    audience. Submission files used to be readable by anyone (a `folder_type ==
+    "submission"` short-circuit), which let any signed-in user enumerate
+    /tasks/files/<n>/download and pull every client's delivered creative; the
+    task_files_panel listing already hid them from non-scoped users, so the
+    direct URLs contradicted it. Gated the same way now."""
 
     if can_view_all_tasks(current_user):
-        return True
-
-    if task_file.folder_type == "submission":
         return True
 
     task = task_file.task
@@ -4627,8 +4631,7 @@ def preview_task_file(file_id):
     if not can_view_all_tasks(current_user):
 
         can_view = (
-            task_file.folder_type == "submission"
-            or task.assigned_to_id == current_user.id
+            task.assigned_to_id == current_user.id
             or current_user in task.visible_to
         )
 
@@ -4742,8 +4745,7 @@ def download_task_file(file_id):
     if not can_view_all_tasks(current_user):
 
         can_view = (
-            task_file.folder_type == "submission"
-            or task.assigned_to_id == current_user.id
+            task.assigned_to_id == current_user.id
             or current_user in task.visible_to
         )
 

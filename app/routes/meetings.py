@@ -53,7 +53,10 @@ def list_meetings():
         client_id = request.form.get("client_id")
         meeting_date = request.form.get("meeting_date")
         agenda = request.form.get("agenda")
-        employee_ids = request.form.getlist("employee_ids")
+        # Coerce to ints up front — a tampered non-numeric value would blow up
+        # the `User.id.in_(...)` query (invalid integer) with an uncaught 500.
+        employee_ids = [int(x) for x in request.form.getlist("employee_ids")
+                        if x.isdigit()]
 
         if not title or not meeting_date:
             flash("Meeting title and date are required.", "error")
