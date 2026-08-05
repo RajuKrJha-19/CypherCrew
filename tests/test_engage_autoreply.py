@@ -132,6 +132,51 @@ def test_auto_reply_run_only_touches_safe_comments(session, app, make_target, mo
     assert SocialComment.query.get(safe.id).auto_sent is True
 
 
+def test_auto_reply_also_covers_ad_post_comments(session, app, make_target,
+                                                 monkeypatch):
+    """A comment on an AD / boosted post is auto-replied exactly like an organic
+    one. Ad posts reach Engage as a synthetic source="ad" target, and the
+    auto-reply scan has no source filter, so the same guarded auto-send applies
+    — which is what "auto-reply on ads too" means end to end."""
+    client, target = _client_and_target(session, make_target)
+    # Make this post an AD post — the only thing that distinguishes an ad
+    # comment from an organic one in the inbox.
+    target.post.source = "ad"
+    target.post.published_externally = True
+    session.commit()
+
+    ad_comment = _mk(session, target, "Amazing, love it!")
+
+    monkeypatch.setattr(engage, "sync_comments", lambda cid=None: None)
+    posted = []
+
+    def _stub_reply(comment, text, actor_id=None):
+        comment.replied = True
+        comment.status = "done"
+        db.session.commit()
+        posted.append(comment.id)
+        return f"ext-{comment.id}"
+
+    monkeypatch.setattr(engage, "reply", _stub_reply)
+
+    with app.app_context():
+        db.session.add(AISettings(enabled=True, comment_enabled=True,
+                                  comment_autoreply_enabled=True,
+                                  gbp_blocklist="refund"))
+        db.session.commit()
+
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        try:
+            out = engage.auto_reply_comments_run(client_id=client.id)
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+
+    assert out["auto_replied"] == 1
+    assert posted == [ad_comment.id]
+    assert SocialComment.query.get(ad_comment.id).auto_sent is True
+
+
 def test_answer_questions_switch_and_facts_requirement(session, make_target):
     """Questions only auto-answer when the switch is on AND the client has a
     Client Brain to ground the answer in."""
