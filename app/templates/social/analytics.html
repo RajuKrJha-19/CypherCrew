@@ -169,7 +169,7 @@
                     </td>
                     <td class="u-right">{{ row.posts }}</td>
                     {% for key, label, icon in METRICS if key in report.present %}
-                    <td class="u-right">{{ "{:,}".format(row.metrics[key]) }}</td>
+                    <td class="u-right">{{ "{:,}".format(row.metrics.get(key, 0)) }}</td>
                     {% endfor %}
                 </tr>
                 {% endfor %}
@@ -202,7 +202,7 @@
                     <td><a href="{{ url_for('social.analytics', period=p.key, client=request.args.get('client'), campaign=name) }}"><strong>{{ name }}</strong></a></td>
                     <td class="u-right">{{ row.posts }}</td>
                     {% for key, label, icon in METRICS if key in report.present %}
-                    <td class="u-right">{{ "{:,}".format(row.metrics[key]) }}</td>
+                    <td class="u-right">{{ "{:,}".format(row.metrics.get(key, 0)) }}</td>
                     {% endfor %}
                 </tr>
                 {% endfor %}

@@ -20,6 +20,7 @@ _PRICES = [
     ("claude-haiku", 1.00, 5.00),
     ("claude-sonnet", 3.00, 15.00),
     ("claude-opus", 5.00, 25.00),
+    ("claude", 3.00, 15.00),           # unknown claude -> sonnet-ish (never $0)
 ]
 
 

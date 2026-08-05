@@ -26,6 +26,38 @@
 {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
 {% endwith %}
 
+{# ===== Health at a glance ===== #}
+{% if health %}
+<div class="stat-tiles">
+    {% if health.ai %}
+    <div class="stat-tile {{ 'ok' if health.ai.enabled else 'warn' }}">
+        <span class="stat-label">AI Suite</span>
+        <span class="stat-val">{{ 'On' if health.ai.enabled else 'Paused' }}</span>
+        <span class="stat-sub">{% if health.ai.cap %}${{ '%.2f'|format(health.ai.spend) }} / ${{ '%.0f'|format(health.ai.cap) }} this month{% else %}${{ '%.2f'|format(health.ai.spend) }} spent · no cap{% endif %}</span>
+    </div>
+    {% endif %}
+    {% if health.channels %}
+    <div class="stat-tile {{ 'warn' if health.channels.needs_reauth else 'ok' }}">
+        <span class="stat-label">Channels</span>
+        <span class="stat-val">{{ health.channels.active }} connected</span>
+        <span class="stat-sub">{% if health.channels.needs_reauth %}{{ health.channels.needs_reauth }} need reconnect{% else %}all healthy{% endif %}</span>
+    </div>
+    {% endif %}
+    {% if health.publish %}
+    <div class="stat-tile {{ 'bad' if health.publish.failed else 'ok' }}">
+        <span class="stat-label">Publish queue</span>
+        <span class="stat-val">{{ health.publish.pending }} scheduled</span>
+        <span class="stat-sub">{% if health.publish.failed %}{{ health.publish.failed }} failed{% else %}no failures{% endif %}</span>
+    </div>
+    {% endif %}
+    <div class="stat-tile {{ 'warn' if running else 'ok' }}">
+        <span class="stat-label">Background jobs</span>
+        <span class="stat-val">{{ running|length }} running</span>
+        <span class="stat-sub">Fetch, auto-reply &amp; more</span>
+    </div>
+</div>
+{% endif %}
+
 {# ===== Running now ===== #}
 {% if running %}
 <div class="act-live">

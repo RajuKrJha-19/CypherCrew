@@ -18247,6 +18247,18 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .act-h2 i{ color:var(--color-text-subtle); font-size:14px; }
 .act-attn-list{ margin:8px 0 0; padding-left:18px; }
 .act-attn-list li{ margin:3px 0; }
+.stat-tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:14px; margin:0 0 22px; }
+.stat-tile{ padding:16px 18px; border:1px solid var(--color-border);
+    border-radius:var(--radius-md); background:var(--color-surface);
+    border-left:3px solid var(--color-border); }
+.stat-tile.ok{ border-left-color:#2b7a4e; }
+.stat-tile.warn{ border-left-color:#a76708; }
+.stat-tile.bad{ border-left-color:#b23b3b; }
+.stat-label{ display:block; font-size:11px; font-weight:650; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--color-text-subtle); }
+.stat-val{ display:block; font-size:22px; font-weight:700; margin:4px 0 2px; }
+.stat-sub{ display:block; font-size:12.5px; color:var(--color-text-subtle); }
 
 /* AI Suite — Google review auto-reply safety panel (read-only). */
 .ai-autoreply{ margin-top:16px; }

@@ -149,11 +149,13 @@ class SocialPostTarget(db.Model):
     # The feed target this story should point at. Self-referential: for
     # "Also share to Story" it is the sibling target created alongside it.
     story_link_target_id = db.Column(
-        db.Integer, db.ForeignKey("social_post_targets.id"), nullable=True
+        db.Integer,
+        db.ForeignKey("social_post_targets.id", ondelete="SET NULL"),
+        nullable=True
     )
     story_link_done_at = db.Column(db.DateTime, nullable=True)
     story_link_done_by_id = db.Column(
-        db.Integer, db.ForeignKey("users.id"), nullable=True
+        db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     ai_generated = db.Column(db.Boolean, nullable=False, default=False)

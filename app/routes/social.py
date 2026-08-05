@@ -3338,12 +3338,46 @@ def engage():
     )
 
 
+def _system_health():
+    """A system-wide health snapshot for the Status screen. Every section is
+    isolated so one failing query never blanks the whole page — a status page
+    must always render."""
+    from app.ai import settings as ai_settings, usage as ai_usage
+    health = {}
+    try:
+        health["ai"] = {"enabled": ai_settings.is_enabled(),
+                        "spend": round(ai_usage.month_total_usd(), 2),
+                        "cap": round(ai_usage.budget_usd(), 2)}
+    except Exception:  # noqa: BLE001
+        health["ai"] = None
+    try:
+        rows = (db.session.query(SocialAccount.status, db.func.count())
+                .group_by(SocialAccount.status).all())
+        c = {s: n for s, n in rows}
+        health["channels"] = {"active": c.get("active", 0),
+                              "needs_reauth": c.get("needs_reauth", 0),
+                              "revoked": c.get("revoked", 0)}
+    except Exception:  # noqa: BLE001
+        health["channels"] = None
+    try:
+        health["publish"] = {
+            "pending": SocialPostTarget.query.filter(
+                SocialPostTarget.status.in_(
+                    ["scheduled", "pending", "publishing"])).count(),
+            "failed": SocialPostTarget.query.filter(
+                SocialPostTarget.status == "failed").count()}
+    except Exception:  # noqa: BLE001
+        health["publish"] = None
+    return health
+
+
 @social_bp.route("/activity")
 @login_required
 def activity():
-    """System status: what's running right now (background jobs), what needs
-    attention (channels to reconnect, failed publishes), and recent job history —
-    so nothing runs invisibly and every problem surfaces in one place."""
+    """System status: overall health (AI, channels, publish queue), what's
+    running right now (background jobs), what needs attention (channels to
+    reconnect, failed publishes), and recent job history — so nothing runs
+    invisibly and every problem surfaces in one place."""
     _guard()
     from app.social import jobs
     from sqlalchemy.orm import joinedload
@@ -3368,6 +3402,7 @@ def activity():
 
     return render_template(
         "social/activity.html",
+        health=_system_health(),
         jobs=recent, running=running,
         needs_reauth=needs_reauth, failed_targets=failed_targets,
         worker_interval=current_app.config.get("SOCIAL_WORKER_INTERVAL", 20))
