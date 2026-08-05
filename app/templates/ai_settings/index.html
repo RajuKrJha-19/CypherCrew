@@ -110,6 +110,7 @@
 
                 <div class="ai-group-head"><i class="fa-solid fa-microchip"></i> AI models — which model powers each feature</div>
 
+                <div class="ai-card-grid">
                 {# --- Captions & alt-text --- #}
                 <div class="ai-task">
                     <h3>Captions &amp; alt-text</h3>
@@ -156,8 +157,6 @@
                     </label>
                 </div>
 
-                <hr class="ai-sep">
-
                 {# --- Media QA --- #}
                 <div class="ai-task">
                     <h3>Media QA</h3>
@@ -182,8 +181,6 @@
                 </div>
 
                 {% if reviews_on %}
-                <hr class="ai-sep">
-
                 {# --- Review replies (Google Business) --- #}
                 <div class="ai-task">
                     <h3>Review replies <span class="ai-task-tag">Google Business</span></h3>
@@ -207,6 +204,7 @@
                     <p class="ai-effective">Currently using <strong>{{ effective.reply[0] }}</strong> · <code>{{ effective.reply[1] }}</code></p>
                 </div>
                 {% endif %}
+                </div><!-- /ai-card-grid -->
 
                 <div class="ai-group-head"><i class="fa-solid fa-robot"></i> Automations — these run unattended</div>
                 <p class="ai-group-sub">Each of these can post publicly on its own once every guardrail passes and the client is opted in. Anything unsure — questions, complaints, low ratings — always waits for a human in the inbox.</p>

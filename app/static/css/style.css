@@ -18195,6 +18195,13 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .ai-group-head i{ color:var(--color-primary); font-size:13px; width:16px; text-align:center; }
 .ai-group-sub{ margin:8px 0 0; font-size:12px; color:var(--color-text-subtle); line-height:1.45; }
 .ai-group-head + .ai-task{ margin-top:14px; }
+/* Model-picker cards flow multi-column so the page uses the available width
+   instead of a single tall stack. Provider/model stack inside each card. */
+.ai-card-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+    gap:16px; margin-top:14px; }
+.ai-card-grid .ai-task{ margin:0; padding:16px; border:1px solid var(--color-border);
+    border-radius:var(--radius-md); background:var(--color-surface-muted); }
+.ai-card-grid .ai-task-grid{ grid-template-columns:1fr; }
 .ai-task h3{ margin:0 0 4px; font-size:15px; }
 .ai-task-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
 .ai-task-grid label{ display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }
