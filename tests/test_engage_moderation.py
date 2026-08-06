@@ -99,6 +99,20 @@ def test_ad_comment_is_exempt_from_the_link_heuristic(session, make_target):
     assert engage.is_spam(_mk(session, target, "buy followers now"), cfg) == "blocklist: followers"
 
 
+def test_is_spam_matches_abuse_wordlist_on_every_lane(session, make_target):
+    """Abuse/profanity is auto-hide-worthy on EVERY post, ads included (unlike
+    the link heuristic, which is ad-exempt) — abuse is never a lead."""
+    _acct, _post, target = make_target()
+    cfg = _cfg(abuse_blocklist=["moron", "slur1"])
+    assert engage.is_spam(_mk(session, target, "you moron"), cfg) == "abuse: moron"
+    assert engage.is_spam(_mk(session, target, "lovely work"), cfg) is None
+    # Ad lane: still caught (abuse is not exempt the way links are).
+    target.post.source = "ad"
+    session.commit()
+    assert engage.is_spam(
+        _mk(session, target, "total slur1 here"), cfg) == "abuse: slur1"
+
+
 # -- automod_config gating --------------------------------------------------
 
 def test_automod_config_off_by_default(app):
@@ -129,6 +143,23 @@ def test_automod_config_blocklist_is_mandatory(app):
         app.config["ENGAGE_AUTOMOD_ENABLED"] = True
         try:
             assert ai_settings.automod_config()["enabled"] is False   # no words
+        finally:
+            app.config["ENGAGE_AUTOMOD_ENABLED"] = False
+
+
+def test_automod_config_abuse_list_alone_arms_it(app):
+    """Either list is enough: an abuse list with NO spam list still enables
+    auto-moderation (blocklist-mandatory holds — one of the two)."""
+    with app.app_context():
+        db.session.add(AISettings(comment_automod_enabled=True,
+                                  spam_blocklist=None, abuse_blocklist="slur1"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOMOD_ENABLED"] = True
+        try:
+            cfg = ai_settings.automod_config()
+            assert cfg["enabled"] is True
+            assert cfg["abuse_blocklist"] == ["slur1"]
         finally:
             app.config["ENGAGE_AUTOMOD_ENABLED"] = False
 

@@ -113,6 +113,11 @@ class AISettings(db.Model):
                                         default=False, server_default=db.false())
     #: Comma-separated spam keywords/phrases; empty disables auto-hide.
     spam_blocklist = db.Column(db.Text)
+    #: Comma-separated abuse / profanity / hate keywords. Matched on EVERY
+    #: comment (including the ad lane) and auto-HIDDEN (reversible), never
+    #: deleted. Separate from spam so the two lists can be curated apart; either
+    #: list being non-empty is enough to arm auto-moderation.
+    abuse_blocklist = db.Column(db.Text)
     #: A comment carrying a link/bare-domain from a non-page author is spam.
     spam_hide_links = db.Column(db.Boolean, nullable=False,
                                 default=True, server_default=db.true())

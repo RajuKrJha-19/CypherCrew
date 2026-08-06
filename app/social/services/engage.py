@@ -663,9 +663,10 @@ def _is_ad_comment(comment):
 
 
 def is_spam(comment, cfg):
-    """A short, plain reason this comment is spam, or None. Conservative:
-    matches the admin spam blocklist, or (if enabled) a link/bare-domain from a
-    non-page commenter. Only NEW, not-ours, open comments are candidates."""
+    """A short, plain reason to auto-hide this comment, or None. Conservative:
+    matches the admin spam blocklist, the abuse/profanity blocklist, or (if
+    enabled) a link/bare-domain from a non-page commenter. Only NEW, not-ours,
+    open comments are candidates. Auto-hide is always reversible (Removed tab)."""
     if comment.is_ours or comment.replied or comment.status != "open":
         return None
     if not _recent_enough(comment):      # don't bulk-hide an old backlog either
@@ -675,6 +676,11 @@ def is_spam(comment, cfg):
     for word in cfg["blocklist"]:
         if word in low:
             return f"blocklist: {word}"
+    # Abuse / profanity applies to EVERY lane, ads included: hate and slurs are
+    # never a lead, so unlike the link heuristic below they are not ad-exempt.
+    for word in cfg.get("abuse_blocklist", []):
+        if word in low:
+            return f"abuse: {word}"
     # The link heuristic is SKIPPED for ad/boosted-post comments: ads attract
     # link comments from real prospects (sharing a number/profile/WhatsApp) as
     # well as bots, so auto-hiding every link would bury leads in Removed. The

@@ -147,15 +147,20 @@ def index():
         #    without one (same safety as auto-reply). --------------------------
         spam_block = (request.form.get("spam_blocklist") or "").strip()
         row.spam_blocklist = spam_block or None
+        abuse_block = (request.form.get("abuse_blocklist") or "").strip()
+        row.abuse_blocklist = abuse_block or None
         row.spam_hide_links = bool(request.form.get("spam_hide_links"))
         row.automod_max_per_run = _int_in(
             request.form.get("automod_max_per_run"), 20, 1, 200)
         m_want = bool(request.form.get("comment_automod_enabled"))
+        # Either list is enough to arm auto-moderation (safety: never hide with
+        # no explicit config at all).
         eff_spam = spam_block or (current_app.config.get("ENGAGE_SPAM_BLOCKLIST") or "")
-        if m_want and not eff_spam.strip():
+        eff_abuse = abuse_block or (current_app.config.get("ENGAGE_ABUSE_BLOCKLIST") or "")
+        if m_want and not (eff_spam.strip() or eff_abuse.strip()):
             m_want = False
-            flash("Spam auto-moderation needs a spam blocklist first (safety) — "
-                  "add words, then turn it on.", "warning")
+            flash("Auto-moderation needs a spam or abuse blocklist first "
+                  "(safety) — add words, then turn it on.", "warning")
         row.comment_automod_enabled = m_want
 
         row.updated_by_id = current_user.id

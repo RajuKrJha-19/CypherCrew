@@ -279,14 +279,19 @@
 
                 {# --- Spam auto-moderation (auto-hide) --- #}
                 <div class="ai-task ai-autoreply">
-                    <h3>Spam auto-moderation <span class="ai-task-tag">unattended · public</span></h3>
-                    <p class="form-hint">Automatically <strong>hides</strong> (never deletes) comments matching the spam list — reversible, so a false positive is one click to <strong>Restore</strong> from Engage → Removed. Opted-in clients only.</p>
+                    <h3>Spam &amp; abuse auto-moderation <span class="ai-task-tag">unattended · public</span></h3>
+                    <p class="form-hint">Automatically <strong>hides</strong> (never deletes) comments matching the spam or abuse list — reversible, so a false positive is one click to <strong>Restore</strong> from Engage → Removed. Opted-in clients only. <strong>Complaints are never auto-moderated</strong> — they always go to a human.</p>
                     <label class="ai-toggle" style="margin-top:4px;">
                         <input type="checkbox" name="comment_automod_enabled" {{ 'checked' if row.comment_automod_enabled }}>
-                        <span><strong>Enable spam auto-hide</strong> — requires a spam blocklist below.</span>
+                        <span><strong>Enable auto-hide</strong> — requires a spam or abuse blocklist below.</span>
                     </label>
                     <label style="display:block;margin-top:12px;">Spam blocklist <small>(comma-separated words/phrases)</small>
                         <input type="text" name="spam_blocklist" value="{{ row.spam_blocklist or '' }}" placeholder="{{ automod.env_blocklist or 'e.g. buy followers, promo code, click here' }}">
+                        <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended: promo/scam phrases you keep seeing — <b>buy followers, promo code, click here, dm me</b>. Matches on every post.</span>
+                    </label>
+                    <label style="display:block;margin-top:12px;">Abuse / profanity blocklist <small>(comma-separated words/phrases)</small>
+                        <input type="text" name="abuse_blocklist" value="{{ row.abuse_blocklist or '' }}" placeholder="e.g. slurs, hate terms, the words you never want on a client's page">
+                        <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended: slurs &amp; hate terms you never want public. Hidden (reversible) on <b>every</b> post, ads included — abuse is never a lead. Keep it to unambiguous words to avoid false hides.</span>
                     </label>
                     <label class="ai-toggle" style="margin-top:10px;">
                         <input type="checkbox" name="spam_hide_links" {{ 'checked' if automod.hide_links }}>

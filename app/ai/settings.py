@@ -252,18 +252,27 @@ def automod_config():
         raw_block = cfg.get("ENGAGE_SPAM_BLOCKLIST", "") or ""
     blocklist = [w.strip().lower() for w in raw_block.split(",") if w.strip()]
 
+    # Abuse / profanity list: matched on EVERY comment (ad lane included) and
+    # auto-hidden. Separate from spam so the two can be curated apart.
+    raw_abuse = getattr(row, "abuse_blocklist", None) if row is not None else None
+    if not raw_abuse:
+        raw_abuse = cfg.get("ENGAGE_ABUSE_BLOCKLIST", "") or ""
+    abuse_blocklist = [w.strip().lower() for w in raw_abuse.split(",") if w.strip()]
+
     admin_on = (bool(getattr(row, "comment_automod_enabled", False))
                 if row is not None else False)
     hide_links = (bool(getattr(row, "spam_hide_links", True))
                   if row is not None and getattr(row, "spam_hide_links", None) is not None
                   else True)
     return {
-        # blocklist-mandatory: never auto-hide with no explicit spam config.
-        # ANDs the AI master switch too: "Enable AI assist" off must stop this
-        # unattended public action like every other feature in the Suite.
+        # blocklist-mandatory: never auto-hide with no explicit config. EITHER
+        # the spam OR the abuse list being non-empty arms it. ANDs the AI master
+        # switch too: "Enable AI assist" off must stop this unattended public
+        # action like every other feature in the Suite.
         "enabled": (is_enabled() and bool(cfg.get("ENGAGE_AUTOMOD_ENABLED"))
-                    and admin_on and bool(blocklist)),
+                    and admin_on and bool(blocklist or abuse_blocklist)),
         "blocklist": blocklist,
+        "abuse_blocklist": abuse_blocklist,
         "hide_links": hide_links,
         "max_per_run": int(getattr(row, "automod_max_per_run", None) or 20),
     }
