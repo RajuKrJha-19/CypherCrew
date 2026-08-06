@@ -1421,7 +1421,15 @@ def build_my_counts(user):
             Task.status == task_status.PUBLISHED
         ).count(),
         "due_today": base.filter(
-            db.func.date(Task.deadline) == today
+            db.func.date(Task.deadline) == today,
+            # Only still-actionable work is "due today" — a task already in
+            # review/published with today's deadline isn't owed anything, and
+            # counting it (unlike overdue, which filters) overstated the number.
+            Task.status.in_([
+                task_status.ASSIGNED,
+                task_status.IN_PROGRESS,
+                task_status.PAUSED,
+            ])
         ).count(),
         "overdue": base.filter(
             Task.deadline.isnot(None),

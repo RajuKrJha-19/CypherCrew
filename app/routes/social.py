@@ -3516,7 +3516,7 @@ def _engage_back(comment_id=None):
     return url_for(
         "social.engage",
         client=_engage_client(),
-        source=(src if src in ("post", "ad") and src != "post" else None),
+        source=(src if src in ("post", "ad") else None),
         status=request.form.get("status") or None,
         platform=request.form.get("platform") or None,
         q=request.form.get("q") or None,

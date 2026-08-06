@@ -130,8 +130,13 @@ def autosave(note_id):
 
     data = request.get_json(silent=True) or {}   # a `null`/malformed body -> {}
 
-    note.title = data.get("title", note.title)
-    note.content = data.get("content", note.content)
+    # Only overwrite a field that was actually sent with a value. A body of
+    # {"title": null} would otherwise blank the title (or 500 if the column is
+    # NOT NULL); an explicit "" is still honoured (clearing the field).
+    if data.get("title") is not None:
+        note.title = data["title"]
+    if data.get("content") is not None:
+        note.content = data["content"]
 
     db.session.commit()
 

@@ -40,7 +40,7 @@ def _secret_ok(expected, header):
 
 
 def _authorised():
-    return _secret_ok(os.getenv("REMINDER_TOKEN"), "X-Reminder-Token")
+    return _secret_ok(current_app.config.get("REMINDER_TOKEN"), "X-Reminder-Token")
 
 
 def _social_authorised():
@@ -311,4 +311,11 @@ def attendance_webhook():
                       "X-Zoho-Webhook-Secret"):
         abort(403)
     from app.attendance import service
-    return jsonify(success=True, **service.sync_attendance())
+    # Ack gracefully on a transient Zoho/DB error instead of 500ing — a 500
+    # makes Zoho retry the webhook; the poll is the guaranteed fallback anyway.
+    # Mirrors run_attendance_sync's guard.
+    try:
+        return jsonify(success=True, **service.sync_attendance())
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[attendance] webhook sync failed")
+        return jsonify(success=False)

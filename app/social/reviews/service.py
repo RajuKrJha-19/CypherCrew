@@ -7,6 +7,7 @@ on - everything else stays in the human queue.
 """
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from flask import current_app
 
 from app.ai import service as ai_service
@@ -31,13 +32,23 @@ def sync_reviews(account):
         row = GoogleReview.query.filter_by(
             account_id=account.id, external_id=ext).first()
         if row is None:
-            db.session.add(GoogleReview(
-                account_id=account.id, external_id=ext,
-                reviewer_name=r.get("reviewer_name"),
-                rating=r.get("rating"), comment=r.get("comment") or "",
-                review_created_at=r.get("created_at"),
-                fetched_at=datetime.utcnow(), reply_status="pending"))
-            new += 1
+            # Two overlapping syncs (cron overrun, or cron + a manual sync) can
+            # both miss the SELECT and both insert the same (account_id,
+            # external_id), whose unique constraint would then abort the WHOLE
+            # batch. Insert in a SAVEPOINT and treat the collision as
+            # already-fetched — the same guard sync_comments uses.
+            try:
+                with db.session.begin_nested():
+                    db.session.add(GoogleReview(
+                        account_id=account.id, external_id=ext,
+                        reviewer_name=r.get("reviewer_name"),
+                        rating=r.get("rating"), comment=r.get("comment") or "",
+                        review_created_at=r.get("created_at"),
+                        fetched_at=datetime.utcnow(), reply_status="pending"))
+                    db.session.flush()
+                new += 1
+            except IntegrityError:
+                continue
         else:
             row.rating = r.get("rating")
             row.comment = r.get("comment") or ""

@@ -470,13 +470,14 @@ def _apply_step(job, target, step, provider_state, provider=None, token=None):
         # with the post pinned at "publishing" and never flagged. Past the
         # ceiling, settle the target as failed so it rolls up + surfaces.
         if polls >= _MAX_PENDING_POLLS:
-            job.state = "dead"
-            job.last_error = ("The platform did not finish processing this "
-                              "media in time - try republishing.")
-            target.status = "failed"
-            target.last_error = job.last_error
-            _maybe_finalize_post(target)
-            return "poll_timeout"
+            # Give up — but via the NORMAL failure path (raise), so the creator
+            # is notified, a publish_failed audit is written, and the reserved
+            # rate slot is released, exactly like every other failure. Settling
+            # inline here did none of those three: the post read "failed" on the
+            # detail page but nobody was ever told and there was no audit trail.
+            raise PermanentError(
+                "The platform did not finish processing this media in time - "
+                "try republishing.")
         job.state = "queued"
         job.next_run_at = datetime.utcnow() + timedelta(seconds=30)
         return "pending"

@@ -136,8 +136,12 @@ def add_client():
     if not can_manage_clients(current_user):
         return redirect(url_for("dashboard.index"))
 
+    # Only client-manager-tier users may OWN a client (mirrors edit_client and
+    # the list filter) - "who may own a client" is one visible policy call, and
+    # Add must not silently widen it to every active user.
     managers = User.query.filter(
-        User.status == "active"
+        User.status == "active",
+        User.role.in_(roles.CLIENT_MANAGER_ROLES),
     ).order_by(User.name.asc()).all()
 
     # Only top-level clients are offered as a parent - a sub-client
@@ -183,6 +187,22 @@ def add_client():
                 )
                 return redirect(url_for("clients.add_client"))
 
+        # Validate status + manager id the same way edit_client does, so a
+        # tampered/junk value can't 500 on commit (non-numeric FK) or persist a
+        # client with a status that hides it from every non-manager.
+        status = request.form.get("status")
+        if status not in ("active", "inactive"):
+            status = "active"
+
+        manager_id = (request.form.get("assigned_manager_id") or "").strip()
+        if manager_id:
+            try:
+                manager_id = int(manager_id)
+            except (TypeError, ValueError):
+                manager_id = None
+        else:
+            manager_id = None
+
         client = Client(
             client_name=client_name,
             short_code=(request.form.get("short_code") or "").strip() or None,
@@ -190,8 +210,8 @@ def add_client():
             phone=request.form.get("phone"),
             email=request.form.get("email"),
             industry=request.form.get("industry"),
-            assigned_manager_id=request.form.get("assigned_manager_id") or None,
-            status=request.form.get("status"),
+            assigned_manager_id=manager_id,
+            status=status,
             parent_client_id=parent_client_id,
         )
 

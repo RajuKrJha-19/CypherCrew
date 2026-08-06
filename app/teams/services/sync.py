@@ -89,7 +89,11 @@ def build_sync_payload(user, channel=None, after_id=0, since=None,
         return payload
 
     # ---- the open conversation --------------------------------------
-    if typing:
+    # Only broadcast "typing" for someone who can actually POST here — not a
+    # non-member browsing a public channel, nor anyone in an archived (read-
+    # only) channel, both of which pass the caller's read check but can't type.
+    from app.teams.services import channels as channels_service
+    if typing and channels_service.can_post(channel, user):
         presence_service.set_typing(user, channel.id)
 
     new_messages, has_more = messages_service.messages_after(
@@ -117,7 +121,16 @@ def build_sync_payload(user, channel=None, after_id=0, since=None,
     # delivered twice - once as new and once as changed.
     changed = messages_service.messages_changed(
         channel.id, _parse(since), after_id)
-    payload["changed"] = [render_message(m, user) for m in changed]
+    # Seed each changed message with the row before it, same as the new-message
+    # loop and the POST path (_rendered): without `previous`, is_continuation()
+    # is always False and an edited/reacted message mid-run re-sprouts an
+    # avatar + name and stays de-grouped until the channel is reloaded.
+    payload["changed"] = [
+        render_message(
+            m, user,
+            previous=messages_service.previous_message(channel.id, m.id))
+        for m in changed
+    ]
 
     if thread_root_id:
         payload["thread"] = [

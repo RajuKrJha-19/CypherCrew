@@ -187,12 +187,22 @@ def forgot_password():
                 ),
             )
 
-            # Dev convenience: with no SMTP configured, surface the link in
-            # the server log so the flow can still be exercised.
+            # Dev convenience: with no SMTP configured, surface the link in the
+            # server log so the flow can still be exercised — but ONLY in debug.
+            # The URL embeds a live single-use reset token; logging it on a
+            # production instance that never finished SMTP setup would spill
+            # account-takeover tokens to anyone with log access.
             if not email_enabled():
-                current_app.logger.info(
-                    "Password reset link for %s: %s", user.email, reset_url
-                )
+                if current_app.debug:
+                    current_app.logger.info(
+                        "Password reset link for %s: %s", user.email, reset_url
+                    )
+                else:
+                    current_app.logger.warning(
+                        "Password reset requested for %s but email is not "
+                        "configured; the link was NOT logged. Configure SMTP.",
+                        user.email,
+                    )
 
         # Same response whether or not the email exists - don't leak which
         # addresses are registered.

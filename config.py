@@ -238,6 +238,12 @@ class Config:
         and not os.getenv("META_APP_ID")
     )
 
+    # Secret for the cron that fires task-reminder emails. On the Config
+    # surface (not read from os.getenv at request time) like the sibling cron
+    # tokens below, so it's visible/overridable and read once at boot. Fails
+    # closed when unset.
+    REMINDER_TOKEN = os.getenv("REMINDER_TOKEN")
+
     # Shared secrets for the cron-triggered internal endpoints that drain
     # the publish queue / run the scheduler / sync analytics / refresh
     # tokens. Same pattern as REMINDER_TOKEN: fail closed when unset.

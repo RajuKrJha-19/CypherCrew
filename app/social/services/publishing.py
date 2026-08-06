@@ -164,6 +164,15 @@ def schedule_post(post, actor_id=None):
 def publish_target_now(target, actor_id=None):
     """Enqueue an immediate publish for one target (idempotent for this
     instant)."""
+    # Serialize concurrent "publish now" clicks on the SAME target by locking
+    # its row FOR UPDATE: a second request (even on another gunicorn worker)
+    # blocks here until the first commits, then sees the live job below and
+    # returns instead of enqueuing a duplicate. Without this the live-job SELECT
+    # is a TOCTOU race and the per-second idempotency key misses two clicks that
+    # straddle a second boundary — two jobs, one double publish.
+    from app.models import SocialPostTarget
+    db.session.query(SocialPostTarget).filter_by(
+        id=target.id).with_for_update().first()
     # Refuse a second live job for a target that already has one in flight -
     # two jobs would both dispatch and double-publish. The per-second key only
     # dedupes clicks landing in the same second; this covers the rest.

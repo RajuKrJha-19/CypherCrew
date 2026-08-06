@@ -149,7 +149,10 @@ def timesheet():
     rows = _timesheet_rows(month, year, scope)
 
     months = [(i, calendar.month_name[i]) for i in range(1, 13)]
-    years = list(range(datetime.utcnow().year, datetime.utcnow().year - 5, -1))
+    # IST year, not UTC — between IST 00:00–05:30 on Jan 1 the UTC year is still
+    # last year, which would drop the current year from the dropdown.
+    this_year = ist_now().year
+    years = list(range(this_year, this_year - 5, -1))
     if year not in years:
         years.append(year)
         years.sort(reverse=True)

@@ -1162,8 +1162,11 @@ def filtered_tasks(filter_type):
         page_title = "Completed Tasks"
         page_subtitle = "Tasks submitted by employees for review"
 
+        # Exclude voided tasks, like every other metric surface does — a
+        # completed-then-voided task must not linger here contradicting the KPIs.
         query = query.filter(
-            Task.employee_completed.is_(True)
+            Task.employee_completed.is_(True),
+            Task.status.notin_(task_status.EXCLUDED_FROM_METRICS),
         )
 
     elif filter_type == "overdue":
@@ -2664,6 +2667,21 @@ def start_task(task_id):
         )
         return redirect(url_for("tasks.list_tasks"))
 
+    # Bail BEFORE touching any timer if this task can't actually be started.
+    # The auto-pause of the assignee's other running task below commits
+    # regardless of the outcome, so a Start on a non-startable task (a stale
+    # button, a second tab, a task now in Review/On-Hold) used to silently bank
+    # and stop that other task's timer and then just show an error — real work
+    # clocked off for nothing.
+    if task.status not in ("Assigned", "Paused", "In Progress"):
+        flash(
+            "Only Assigned, Paused or in-progress tasks can be started.",
+            "error"
+        )
+        return redirect(
+            request.referrer or url_for("tasks.task_detail", task_id=task.id)
+        )
+
     # A given assignee may only have one task running at a time - starting
     # another pauses whichever was already going, keeping that employee's
     # timer state consistent. This holds whoever clicks Start (the assignee
@@ -3211,6 +3229,13 @@ def kanban_update_status():
     new_status = data.get("status")
     reason = (data.get("reason") or "").strip()
 
+    # A non-numeric task_id would DataError (500) inside get_or_404; reject it
+    # as a clean 400 first.
+    try:
+        task_id = int(task_id)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid request."}), 400
+
     task = Task.query.get_or_404(task_id)
         # -------------------------------------------------
     # Employee can pull back their own task from
@@ -3593,6 +3618,12 @@ def quick_update_task(task_id):
         if not can_assign_tasks(current_user):
             return jsonify({"success": False, "message": "You don't have permission to reassign tasks."}), 403
 
+        # Coerce first: a non-numeric `value` fed straight to filter_by(id=...)
+        # raises a DB DataError (500) instead of a clean rejection.
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "Invalid employee."}), 400
         assigned_user = User.query.filter_by(id=value, status="active").first()
 
         if not assigned_user:
@@ -3694,6 +3725,10 @@ def bulk_update_tasks():
             return jsonify({"success": False, "message": "Invalid priority."}), 400
 
     elif field == "assignee":
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "Invalid employee."}), 400
         assigned_user = User.query.filter_by(id=value, status="active").first()
         if not assigned_user:
             return jsonify({"success": False, "message": "Invalid employee."}), 400

@@ -14,6 +14,7 @@ from flask import (
     redirect,
     url_for,
     flash,
+    current_app,
 )
 from flask_login import login_required, current_user
 
@@ -130,8 +131,10 @@ def upload_avatar():
     if previous_key:
         try:
             storage.delete(object_key=previous_key)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - best-effort, but leave a trace
+            current_app.logger.warning(
+                "[profile] could not delete old avatar %s", previous_key,
+                exc_info=True)
 
     flash("Profile picture updated.", "success")
     return redirect(url_for("profile.my_profile"))
@@ -149,8 +152,10 @@ def remove_avatar():
     if previous_key:
         try:
             StorageService().delete(object_key=previous_key)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - best-effort, but leave a trace
+            current_app.logger.warning(
+                "[profile] could not delete removed avatar %s", previous_key,
+                exc_info=True)
 
     flash("Profile picture removed.", "success")
     return redirect(url_for("profile.my_profile"))
