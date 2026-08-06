@@ -29,14 +29,56 @@ _FETCHED_AT_REFRESH = timedelta(hours=6)
 
 
 def _published_targets(client_id=None):
-    q = (SocialPostTarget.query
-         .filter(SocialPostTarget.status.in_(["published", "removed"]),
-                 SocialPostTarget.external_post_id.isnot(None)))
-    if client_id:
-        q = q.join(SocialPost,
-                   SocialPost.id == SocialPostTarget.social_post_id) \
-             .filter(SocialPost.client_id == client_id)
-    return q.all()
+    """Posts the periodic sweep should re-read comments for.
+
+    Bounded on purpose. This used to return EVERY post ever published, and the
+    sweep makes one Graph call per post - so on an account with 22 channels and
+    months of history a single "Fetch comments" ran for 43 minutes and got
+    slower with every post published. Two of them overlapping is what produced
+    the statement timeouts.
+
+    A window is safe because it is not the only way a comment arrives: the Meta
+    webhook delivers new ones in real time (ingest_comment_event), whatever the
+    post's age. This sweep is the backstop for anything the webhook missed, and
+    a comment on a months-old post is vanishingly rare. Both bounds are
+    env-tunable, and 0 restores the old unbounded behaviour.
+    """
+    went_out = db.func.coalesce(SocialPostTarget.scheduled_for,
+                                SocialPostTarget.created_at)
+
+    def _base():
+        q = (SocialPostTarget.query
+             .join(SocialPost, SocialPost.id == SocialPostTarget.social_post_id)
+             .filter(SocialPostTarget.status.in_(["published", "removed"]),
+                     SocialPostTarget.external_post_id.isnot(None)))
+        if client_id:
+            q = q.filter(SocialPost.client_id == client_id)
+        return q.order_by(went_out.desc())
+
+    days = int(current_app.config.get("ENGAGE_SYNC_MAX_AGE_DAYS", 45) or 0)
+    cap = int(current_app.config.get("ENGAGE_SYNC_MAX_POSTS", 300) or 0)
+
+    # ADS ARE NEVER AGED OUT. An ad target carries no scheduled_for, so the
+    # date above is when WE discovered it - not when the ad started - and an
+    # ad routinely runs for months. Applying the window to them would quietly
+    # stop reading comments on a campaign that is still live and still
+    # collecting them, which is the one place a stale post genuinely keeps
+    # earning replies. They are also far fewer than organic posts, so carrying
+    # all of them costs little.
+    ads = _base().filter(SocialPost.source == "ad")
+    if cap > 0:
+        ads = ads.limit(cap)
+
+    organic = _base().filter(SocialPost.source != "ad")
+    if days > 0:
+        organic = organic.filter(
+            went_out >= datetime.utcnow() - timedelta(days=days))
+    if cap > 0:
+        organic = organic.limit(cap)
+
+    # The cap is per lane, so a long tail of ads can never crowd out recent
+    # organic posts (or the other way round).
+    return ads.all() + organic.all()
 
 
 def sync_comments(client_id=None):

@@ -311,6 +311,21 @@ class Config:
     ENGAGE_COMMENT_RETENTION_DAYS = int(
         os.getenv("ENGAGE_COMMENT_RETENTION_DAYS", "180"))
 
+    # How far back the periodic comment sweep re-reads posts, and the hard
+    # ceiling on how many it touches in one run. The sweep costs one Graph call
+    # per post, so unbounded it grew with the archive - a single Fetch ran for
+    # 43 minutes on a busy account, and overlapping runs then timed each other
+    # out. New comments still arrive on ANY post in real time via the Meta
+    # webhook; this is the backstop for whatever that missed. Set either to 0
+    # to remove that bound.
+    #
+    # Note this bounds what is FETCHED. ENGAGE_AUTO_MAX_PER_RUN above bounds
+    # what is REPLIED TO in one sweep - different ceilings, different reasons.
+    ENGAGE_SYNC_MAX_AGE_DAYS = int(
+        os.getenv("ENGAGE_SYNC_MAX_AGE_DAYS", "45"))
+    ENGAGE_SYNC_MAX_POSTS = int(
+        os.getenv("ENGAGE_SYNC_MAX_POSTS", "300"))
+
     # ------------------------------------------------------------------
     # Cypher-Teams (chat)
     # ------------------------------------------------------------------
