@@ -18227,6 +18227,22 @@ body.studio-nav-collapsed .studio-nav-section::after{
     border:1px solid var(--color-border); }
 @media (max-width:640px){ .ai-task-grid{ grid-template-columns:1fr; } }
 
+/* Unattended-automation cards (Google-review / social / spam auto-reply) are
+   taller and field-dense, so they get a wider min column than the model cards
+   and keep their inner two-up field rows instead of collapsing to one. */
+.ai-automation-grid{ grid-template-columns:repeat(auto-fit,minmax(400px,1fr));
+    align-items:start; }
+.ai-automation-grid .ai-task-grid{ grid-template-columns:1fr 1fr; }
+@media (max-width:640px){ .ai-automation-grid{ grid-template-columns:1fr; }
+    .ai-automation-grid .ai-task-grid{ grid-template-columns:1fr; } }
+
+/* Per-field recommendation: a compact, muted line under a control saying the
+   sensible value and WHY, so every field is self-explanatory at a glance. */
+.ai-rec{ display:block; margin-top:5px; font-size:11.5px; line-height:1.5;
+    font-weight:500; color:var(--color-text-subtle); }
+.ai-rec i{ color:var(--color-accent); margin-right:3px; }
+.ai-rec b{ color:var(--color-text); font-weight:700; }
+
 /* AI Suite — plain-language feature map. */
 .ai-map{ margin:0 0 16px; padding:14px 16px; border:1px solid var(--color-border);
     border-radius:var(--radius-md); background:var(--color-surface-muted); }

@@ -106,6 +106,7 @@
                     <p class="form-hint">A soft cap on estimated AI spend per month. <strong>0 = no cap.</strong> AI pauses with a clear message when reached.</p>
                     <input type="number" name="monthly_budget_usd" min="0" step="1"
                         value="{{ '%g'|format(row.monthly_budget_usd or 0) }}" placeholder="0">
+                    <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>a real cap</b> (e.g. $50) — a safety net against a runaway loop or a pricing surprise. Use 0 only if you watch spend yourself.</span>
                 </div>
 
                 <div class="ai-group-head"><i class="fa-solid fa-microchip"></i> AI models — which model powers each feature</div>
@@ -209,9 +210,8 @@
                 <div class="ai-group-head"><i class="fa-solid fa-robot"></i> Automations — these run unattended</div>
                 <p class="ai-group-sub">Each of these can post publicly on its own once every guardrail passes and the client is opted in. Anything unsure — questions, complaints, low ratings — always waits for a human in the inbox.</p>
 
+                <div class="ai-card-grid ai-automation-grid">
                 {% if reviews_on %}
-                <hr class="ai-sep">
-
                 {# --- Review auto-reply guardrails (editable) --- #}
                 <div class="ai-task ai-autoreply">
                     <h3>Google review auto-reply <span class="ai-task-tag">unattended · public</span></h3>
@@ -223,12 +223,15 @@
                     <div class="ai-task-grid" style="margin-top:12px;">
                         <label>Minimum rating (★)
                             <input type="number" name="gbp_min_rating" min="3" max="5" value="{{ autoreply.min_rating }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>4</b> — only auto-reply clearly-happy reviews; 3★ and below carry nuance a human should read.</span>
                         </label>
                         <label>Max review length (chars)
                             <input type="number" name="gbp_max_len" min="20" max="1000" value="{{ autoreply.max_len }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>300</b> — a long review is usually detailed feedback worth a personal reply.</span>
                         </label>
                         <label>Max per run
                             <input type="number" name="gbp_max_per_run" min="1" max="100" value="{{ autoreply.max_per_run }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>20</b> — steady pace that clears a backlog without a burst of near-simultaneous public replies.</span>
                         </label>
                     </div>
                     <div class="form-group" style="margin-top:10px;">
@@ -241,8 +244,6 @@
                 {% endif %}
 
                 {% if engage_on %}
-                <hr class="ai-sep">
-
                 {# --- Engage comment auto-reply guardrails (editable) --- #}
                 <div class="ai-task ai-autoreply">
                     <h3>Social comment auto-reply <span class="ai-task-tag">unattended · public</span></h3>
@@ -254,9 +255,11 @@
                     <div class="ai-task-grid" style="margin-top:12px;">
                         <label>Max comment length (chars)
                             <input type="number" name="comment_max_len" min="20" max="500" value="{{ row.comment_max_len if row.comment_max_len is not none else 120 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>120</b> — short comments are safe to auto-acknowledge; longer ones are usually a real conversation, better for a human.</span>
                         </label>
                         <label>Max auto-replies per post
                             <input type="number" name="comment_max_per_post" min="1" max="50" value="{{ row.comment_max_per_post if row.comment_max_per_post is not none else 5 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>5</b> — enough to acknowledge a lively post without every comment getting an identical bot reply.</span>
                         </label>
                     </div>
                     <label class="ai-toggle" style="margin-top:12px;">
@@ -264,16 +267,15 @@
                         <span><strong>Also auto-answer questions</strong> — grounded in the client's Client Brain facts. A question on a client with <em>no</em> Client Brain still goes to a human (no facts = no guessing). Off = every question waits for a human.</span>
                     </label>
                     <div class="ai-task-grid" style="margin-top:12px;">
-                        <label>Max question answers per post <small>(0 = no limit)</small>
-                            <input type="number" name="comment_question_max_per_post" min="0" max="500" value="{{ row.comment_question_max_per_post if row.comment_question_max_per_post is not none else 0 }}">
+                        <label>Max question answers per <strong>organic</strong> post <small>(0 = no limit)</small>
+                            <input type="number" name="comment_question_max_per_post" min="0" max="500" value="{{ row.comment_question_max_per_post if row.comment_question_max_per_post is not none else 15 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>15</b> — answers the real leads on an organic post without looking automated. <b>Ad posts are exempt</b> — an ad runs for months and every new question on it is a fresh lead, so those are always answered.</span>
                         </label>
                     </div>
-                    <p class="form-hint">Questions are leads, so they're <strong>exempt from the per-post cap above</strong> — this is their own ceiling. <strong>0 = never miss a prospect</strong> (the monthly budget stays the backstop).</p>
+                    <p class="form-hint">Questions are leads, so they're <strong>exempt from the acknowledgment cap above</strong> — this ceiling is their own, and applies to <strong>organic</strong> posts only. A built-in <strong>per-sweep ceiling</strong> also flattens any burst, so even a viral post or a busy ad can never fire hundreds of replies at once — the rest are answered on the next sweep.</p>
                     <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Questions go to a human unless “auto-answer questions” is on <em>and</em> the client has a Client Brain; the generated reply is scanned too; budget cap + per-post cap always apply.</p>
                 </div>
                 {% endif %}
-
-                <hr class="ai-sep">
 
                 {# --- Spam auto-moderation (auto-hide) --- #}
                 <div class="ai-task ai-autoreply">
@@ -293,10 +295,12 @@
                     <div class="ai-task-grid" style="margin-top:12px;">
                         <label>Max hides per run
                             <input type="number" name="automod_max_per_run" min="1" max="200" value="{{ row.automod_max_per_run if row.automod_max_per_run is not none else 20 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>20</b> — clears a spam wave each sweep while capping how much one run can hide (all reversible).</span>
                         </label>
                     </div>
                     <p class="form-hint"><i class="fa-solid fa-shield-halved"></i> Hidden, not deleted — restore any time from Engage → Removed. Per-comment manual Hide / Delete are always available too.</p>
                 </div>
+                </div><!-- /ai-automation-grid -->
 
                 <div class="ai-group-head"><i class="fa-solid fa-gauge-high"></i> Performance &amp; cost</div>
 
@@ -306,12 +310,13 @@
                     <div class="ai-task-grid">
                         <label>Image max size (px, longest edge)
                             <input type="number" name="image_max_dim" min="0" max="4096" step="1" value="{{ row.image_max_dim if row.image_max_dim is not none else 1568 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>1568</b> — keeps text/logos legible for QA while cutting cost; 0 = never downscale.</span>
                         </label>
                         <label>Max media file (MB)
                             <input type="number" name="media_max_mb" min="1" max="50" step="1" value="{{ row.media_max_mb if row.media_max_mb is not none else 10 }}">
+                            <span class="ai-rec"><i class="fa-solid fa-wand-magic-sparkles"></i> Recommended <b>10</b> — covers virtually every creative; larger files rarely add anything for QA.</span>
                         </label>
                     </div>
-                    <p class="form-hint">1568px is a good default (keeps text/logos legible for QA). 0 = never downscale.</p>
                 </div>
 
                 <button type="submit">Save AI settings</button>
