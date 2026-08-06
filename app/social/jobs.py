@@ -112,8 +112,37 @@ def _spawn(run, kind, job_id):
     threading.Thread(target=run, name=f"job-{kind}-{job_id}", daemon=True).start()
 
 
+def reap_stale():
+    """Settle rows left at "running" by a worker that never came back.
+
+    The thread is unsupervised, so a restart (or a killed process) mid-job
+    leaves its row running forever - the Activity screen then shows a job
+    "running 2879s" that finished, or died, long ago. Anything past
+    STALE_AFTER is marked failed with a plain reason. Best-effort: this is
+    cosmetic bookkeeping and must never break the screen that calls it.
+    """
+    try:
+        cutoff = datetime.utcnow() - STALE_AFTER
+        stale = BackgroundJob.query.filter(
+            BackgroundJob.status == "running",
+            BackgroundJob.started_at < cutoff).all()
+        for row in stale:
+            row.status = "failed"
+            row.message = ("Interrupted — the worker stopped before it "
+                           "finished (usually a restart). Safe to run again.")
+            row.finished_at = datetime.utcnow()
+        if stale:
+            db.session.commit()
+        return len(stale)
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.warning("[jobs] could not reap stale jobs")
+        return 0
+
+
 def recent(limit=40, client_id=None):
     """Newest background jobs first, for the Activity screen."""
+    reap_stale()
     q = BackgroundJob.query
     if client_id:
         q = q.filter(BackgroundJob.client_id == client_id)
