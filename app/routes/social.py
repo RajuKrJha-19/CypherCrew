@@ -3448,6 +3448,15 @@ def engage_sync():
                 "new": report["new"], "failed": report["failed"],
                 "hidden": mod.get("hidden", 0)}
 
+    # A second Fetch while one is still running walks the same rows and just
+    # queues behind the first one's locks until Postgres cancels it, which is
+    # what surfaced as a statement-timeout error on an ordinary click. One at
+    # a time; the button is harmless to press again once it finishes.
+    if jobs.is_running("fetch_comments", cid):
+        flash("A fetch is already running — give it a moment. Progress is on "
+              "the Activity screen.", "info")
+        return redirect(url_for("social.engage", client=cid))
+
     jobs.start("fetch_comments", _fetch, client_id=cid, actor_id=current_user.id)
     flash("Fetching comments in the background — new ones appear here shortly. "
           "Track progress on the Activity screen.", "info")
@@ -3484,6 +3493,14 @@ def engage_autoreply_now():
         return {"message": (f"Auto-replied {n} safe comment(s)." if n else
                             "No comments were eligible right now (only recent, "
                             "short, opted-in ones qualify)."), **out}
+
+    # One sweep at a time. The claim in auto_reply_scan already stops two runs
+    # double-posting, but a second run would still spend an AI call per comment
+    # only to lose every race - paid-for work thrown away.
+    if jobs.is_running("auto_reply", client_id):
+        flash("Auto-reply is already running — give it a moment. Progress is "
+              "on the Activity screen.", "info")
+        return redirect(url_for("social.engage", client=client_id))
 
     jobs.start("auto_reply", _run, client_id=client_id, actor_id=current_user.id)
     flash("Running auto-reply in the background — track progress on the Activity "

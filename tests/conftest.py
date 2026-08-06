@@ -143,18 +143,23 @@ def _social_models():
     Anything a Studio test can create belongs here - including
     DataDeletionRequest, which the deletion-callback tests write and which
     would otherwise pile up in the shared dev database run after run.
+
+    BackgroundJob is here for the same reason and one worse consequence: its
+    rows are what jobs.is_running() reads, so a "running" row left behind by an
+    earlier test makes a LATER test's Fetch/auto-reply refuse to start. That
+    isn't slow accumulation, it's cross-test failure.
     """
     from app.models import (
         PublishResult, PublishJob, SocialMediaAsset, SocialAnalyticsSnapshot,
         PlatformRateBudget, SocialAuditLog, ContentVersion, SocialPostTarget,
         SocialPost, SocialOAuthState, SocialAccount, SocialComment,
-        SocialPostingSlot, DataDeletionRequest, GoogleReview,
+        SocialPostingSlot, DataDeletionRequest, GoogleReview, BackgroundJob,
     )
     return [
         PublishResult, PublishJob, SocialComment, GoogleReview, SocialMediaAsset,
         SocialAnalyticsSnapshot, PlatformRateBudget, SocialAuditLog,
         ContentVersion, SocialPostTarget, SocialPost, SocialOAuthState,
-        SocialPostingSlot, SocialAccount, DataDeletionRequest,
+        SocialPostingSlot, SocialAccount, DataDeletionRequest, BackgroundJob,
     ]
 
 

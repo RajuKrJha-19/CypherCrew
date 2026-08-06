@@ -13,12 +13,39 @@ row simply stays "running" and the user can retrigger.
 """
 import threading
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import current_app
 
 from app.extensions import db
 from app.models import BackgroundJob
+
+
+#: A row that has sat at "running" for longer than this is treated as dead
+#: rather than in-flight. The worker is an unsupervised daemon thread, so a
+#: restart mid-job leaves its row "running" forever (see the module docstring);
+#: without a cutoff a single crash would block that action permanently.
+STALE_AFTER = timedelta(minutes=15)
+
+
+def is_running(kind, client_id=None):
+    """Is a job of this kind already in flight for this scope?
+
+    Used to refuse a duplicate trigger. Two concurrent comment syncs walk the
+    same rows, and the second one queues behind the first's locks until
+    Postgres cancels its statement - which surfaced as a "canceling statement
+    due to statement timeout" on an ordinary Fetch.
+    """
+    q = BackgroundJob.query.filter(
+        BackgroundJob.kind == kind,
+        BackgroundJob.status == "running",
+        BackgroundJob.started_at >= datetime.utcnow() - STALE_AFTER)
+    if client_id is not None:
+        # A global run (client_id NULL) covers every client, so it conflicts
+        # with a per-client trigger as well.
+        q = q.filter(db.or_(BackgroundJob.client_id == client_id,
+                            BackgroundJob.client_id.is_(None)))
+    return db.session.query(q.exists()).scalar()
 
 
 def start(kind, fn, *, client_id=None, actor_id=None):
