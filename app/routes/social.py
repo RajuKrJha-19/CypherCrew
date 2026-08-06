@@ -3600,10 +3600,11 @@ def engage_ai_draft(comment_id):
         facts = client_brain.facts_text(client) or None
 
     # What the post is about, so the reply is on-topic. The caption/title is
-    # already visible to any social user, so no extra exposure here.
-    post_context = "\n".join(p for p in (
-        (post.title if post else None),
-        (target.caption if target else None)) if p) or None
+    # already visible to any social user, so no extra exposure here. Shared
+    # with the auto-reply path so a manual draft and an automatic one are
+    # given exactly the same context - and so neither sends the "Ad post"
+    # placeholder as if it were a caption.
+    post_context = engage_svc.post_context_for(comment)
 
     try:
         reply = ai_service.generate_comment_reply(

@@ -352,6 +352,51 @@ def _recent_enough(comment):
     return (stamp or datetime.utcnow()) >= cutoff
 
 
+#: Titles that describe nothing. An ad post is materialised with the literal
+#: placeholder "Ad post" (engage_ads.sync_ad_targets), so feeding the title to
+#: the model told it only that an ad existed - which is how ad comments got
+#: generic replies while Studio posts got specific ones.
+_EMPTY_TITLES = {"ad post", "untitled post", "untitled"}
+
+
+def post_context_for(comment):
+    """Public: what the post is about, for the AI drafting a reply to
+    `comment`. Shared by the auto-reply path and the manual "AI draft" button
+    so the two are never given different context.
+
+    The post's own CAPTION is the real context - it is the text the commenter
+    was reacting to. The title is only worth sending when it says something a
+    placeholder does not.
+    """
+    target = comment.target
+    if target is None:
+        return None
+    post = target.post
+    title = (getattr(post, "title", None) or "").strip()
+    if title.lower() in _EMPTY_TITLES:
+        title = ""
+    caption = (target.caption or "").strip()
+    return "\n".join(p for p in (title, caption) if p) or None
+
+
+def _is_reply_to_a_comment(comment):
+    """True when this is a reply on a comment thread rather than a comment on
+    the post itself.
+
+    Deliberately not a bare `parent_external_id is not None`: Facebook omits
+    `parent` on a top-level comment today, but if it ever answered with the
+    POST id there instead, a bare check would silently stop every auto-reply.
+    Comparing against the post's own id makes that failure impossible - the
+    worst case becomes "we auto-reply as before", not "auto-reply dies".
+    """
+    parent = comment.parent_external_id
+    if not parent:
+        return False
+    target = comment.target
+    post_id = getattr(target, "external_post_id", None)
+    return parent != post_id
+
+
 def comment_is_auto_safe(comment, cfg):
     """May this comment be auto-replied without a human? Conservative by design:
     global+feature+admin switch on (in `cfg`), client opted in, the comment is
@@ -360,6 +405,13 @@ def comment_is_auto_safe(comment, cfg):
     if not cfg["enabled"]:
         return False
     if comment.is_ours or comment.replied or comment.status != "open":
+        return False
+    # Only comments ON the post, never replies within a comment thread. A
+    # thread is a conversation someone is already having - often with a reply
+    # WE posted - and a bot answering into it reads as talking to itself.
+    # Replies stay in the inbox for a human; they are only exempt from the
+    # unattended path.
+    if _is_reply_to_a_comment(comment):
         return False
     if not _recent_enough(comment):      # never auto-reply an old backlog comment
         return False
@@ -450,10 +502,7 @@ def auto_reply_scan(client_id=None):
             continue
         client = _comment_client(c)
         facts = client_brain.facts_text(client) if client else ""
-        post = c.target.post if c.target else None
-        post_context = "\n".join(p for p in (
-            (post.title if post else None),
-            (c.target.caption if c.target else None)) if p) or None
+        post_context = post_context_for(c)
         try:
             text = (ai_service.generate_comment_reply(
                 comment_text=c.message, author=c.author_name,
