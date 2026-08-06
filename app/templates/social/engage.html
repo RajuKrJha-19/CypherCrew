@@ -165,17 +165,32 @@
     <div class="engage-detail">
 
         {# Which post this is about - the context that was three grey
-           words before, and the first thing you need to reply well. #}
+           words before, and the first thing you need to reply well.
+
+           The picture and caption come from the platform itself, so an ad
+           post - whose stored title is only the placeholder "Ad post" - shows
+           what it actually said. The thumbnail is a Meta CDN URL and those
+           expire; onerror removes it, so a stale link degrades to no picture
+           rather than a broken one. #}
+        {% set tgt = selected.target %}
         <div class="engage-context">
             <div class="engage-context-main">
+                {% if tgt and tgt.thumbnail_url %}
+                <img class="engage-context-thumb" src="{{ tgt.thumbnail_url }}"
+                     alt="" loading="lazy" onerror="this.remove()">
+                {% else %}
                 <span class="pf-chip {{ selected.platform }}">
                     <i class="{{ PF_ICON.get(selected.platform,'fa-solid fa-share-nodes') }}"></i>
                     {{ PF_LABEL.get(selected.platform, selected.platform|capitalize) }}</span>
-                <div>
-                    <strong>{{ (selected.target.post.title if selected.target and selected.target.post else none) or 'A post' }}</strong>
+                {% endif %}
+                <div class="engage-context-text">
+                    <strong>{{ (tgt.post.title if tgt and tgt.post else none) or 'A post' }}</strong>
                     <span class="engage-context-sub">
-                        {{ selected.target.account.display_name if selected.target and selected.target.account else 'Disconnected channel' }}
+                        {{ tgt.account.display_name if tgt and tgt.account else 'Disconnected channel' }}
                     </span>
+                    {% if tgt and tgt.caption %}
+                    <span class="engage-context-caption" title="{{ tgt.caption }}">{{ tgt.caption }}</span>
+                    {% endif %}
                 </div>
             </div>
             <div class="engage-context-actions">
