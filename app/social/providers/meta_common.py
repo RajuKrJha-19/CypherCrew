@@ -330,11 +330,30 @@ class MetaBaseProvider(SocialProvider):
 
     # -- OAuth -------------------------------------------------------------
 
+    #: Scopes we only ask for once the feature that needs them is switched on.
+    #: Least-privilege: requesting a permission whose feature is dormant is both
+    #: an unnecessary data-access surface and the classic App-Review rejection
+    #: ("we couldn't see this permission used"). Keyed scope -> the config flag
+    #: that turns its feature on.
+    _FLAG_GATED_SCOPES = {
+        "ads_read": "SOCIAL_ADS_COMMENTS_ENABLED",
+        "pages_manage_metadata": "META_WEBHOOK_ENABLED",
+    }
+
     def connect_scopes(self):
         """Scopes to request at connect time. One Meta consent grants the
         whole family, so we request the union - connecting Facebook then
-        also connects the Instagram Business account linked to each Page."""
-        return META_UNIFIED_SCOPES
+        also connects the Instagram Business account linked to each Page.
+
+        Feature-gated scopes are dropped while their feature is off, so we ask
+        only for what the running configuration actually uses. Meta remembers a
+        granted scope, so enabling a feature later just needs a one-time
+        reconnect of that channel to pick the new permission up.
+        """
+        cfg = current_app.config
+        return [s for s in META_UNIFIED_SCOPES
+                if s not in self._FLAG_GATED_SCOPES
+                or cfg.get(self._FLAG_GATED_SCOPES[s])]
 
     def build_oauth_url(self, state, redirect_uri, scopes=None):
         return build_login_url(scopes or self.SCOPES, state, redirect_uri)

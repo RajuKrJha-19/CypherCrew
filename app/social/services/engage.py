@@ -6,6 +6,8 @@ are posted back to the platform and stored (is_ours=True) so a thread reads
 end-to-end. Best-effort throughout: one unreachable post never aborts a sync.
 """
 
+import random
+import time
 from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
@@ -154,6 +156,38 @@ def sync_comments(client_id=None):
         db.session.commit()
 
     return report
+
+
+def purge_expired_comment_pii():
+    """Anonymise commenter PII on third-party comments past the retention window.
+
+    Data-retention hygiene (Meta Platform Terms: don't keep platform data longer
+    than needed). Past ENGAGE_COMMENT_RETENTION_DAYS we NULL a commenter's
+    name / id / picture and the comment body IN PLACE, keeping the row (id,
+    timestamps, status, replied/removal bookkeeping) so counts, audit trails and
+    thread continuity are unaffected - only the personal data is dropped.
+
+    Scoped to is_ours=False: our own posted replies are our business records, not
+    third-party PII, and keeping them preserves the reply audit. Idempotent - a
+    row already purged (author_id IS NULL) is skipped. 0 days disables it.
+    """
+    days = int(current_app.config.get("ENGAGE_COMMENT_RETENTION_DAYS", 0) or 0)
+    if days <= 0:
+        return {"purged": 0, "skipped": "disabled"}
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    purged = (SocialComment.query
+              .filter(SocialComment.is_ours.is_(False),
+                      SocialComment.created_at < cutoff,
+                      SocialComment.author_id.isnot(None))
+              .update({"author_name": None, "author_id": None,
+                       "author_pic": None, "message": None},
+                      synchronize_session=False))
+    db.session.commit()
+    if purged:
+        current_app.logger.info(
+            "[engage] retention: anonymised %s comment(s) older than %s days",
+            purged, days)
+    return {"purged": purged}
 
 
 def ingest_comment_event(platform, external_post_id, *, external_id,
@@ -508,19 +542,34 @@ def auto_reply_scan(client_id=None):
                 SocialComment.target_id.in_(tids))
         .group_by(SocialComment.target_id).all())
     q_per_post = {}                       # question answers sent THIS run, per post
-    qmax = cfg["question_max_per_post"]   # 0 = no limit (leads are never dropped)
+    qmax = cfg["question_max_per_post"]   # 0 = no limit; AD posts are exempt below
+
+    # Anti-burst ceiling: the most auto-replies ONE sweep may send across all
+    # posts. A comment surge (a viral post, or a running ad drawing many
+    # questions) can't machine-gun a Page with hundreds of near-instant public
+    # replies - which reads to Meta as bulk/automated spam. The remainder is
+    # answered on the NEXT sweep, so nothing is dropped; only the burst flattens.
+    run_max = int(current_app.config.get("ENGAGE_AUTO_MAX_PER_RUN", 25) or 0)
+    interval_ms = int(
+        current_app.config.get("ENGAGE_AUTO_REPLY_MIN_INTERVAL_MS", 0) or 0)
+    testing = bool(current_app.config.get("TESTING"))
 
     sent = 0
     for c in pending:
+        if run_max and sent >= run_max:
+            break                            # per-run anti-burst ceiling reached
         if not comment_is_auto_safe(c, cfg):
             continue
         is_question = _looks_like_question((c.message or "").strip())
         if is_question:
             # Questions (prospects/leads) are exempt from the acknowledgment
-            # flood cap and bounded only by their own ceiling (0 = unlimited),
-            # so a real question always gets an answer. The monthly budget is
-            # the hard backstop, re-checked here because questions can be many.
-            if qmax and q_per_post.get(c.target_id, 0) >= qmax:
+            # flood cap. On an AD post they are also exempt from the per-post
+            # question cap: an ad runs for months and every new question on it
+            # is a fresh lead, so we never stop answering them - the per-run
+            # ceiling + monthly budget still bound the pace. On an ORGANIC post
+            # the per-post question cap still applies.
+            if (qmax and not _is_ad_comment(c)
+                    and q_per_post.get(c.target_id, 0) >= qmax):
                 continue
             if not ai_usage.within_budget():
                 break
@@ -596,6 +645,12 @@ def auto_reply_scan(client_id=None):
         else:
             per_post[c.target_id] = per_post.get(c.target_id, 0) + 1
         sent += 1
+        # Pace the sweep so replies don't post machine-gun fast even within the
+        # ceiling. AFTER the commit above, so no DB transaction is ever held
+        # open across the pause. Jittered (0.5x-1.5x) so the cadence isn't a
+        # tell-tale fixed interval. Skipped under TESTING.
+        if interval_ms and not testing:
+            time.sleep((interval_ms / 1000.0) * (0.5 + random.random()))
     return {"auto_replied": sent}
 
 

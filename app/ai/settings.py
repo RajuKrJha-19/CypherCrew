@@ -227,8 +227,13 @@ def comment_config():
         "max_per_post": int(getattr(row, "comment_max_per_post", None) or 5),
         "answer_questions": bool(
             getattr(row, "comment_answer_questions_enabled", False)),
-        "question_max_per_post": int(
-            getattr(row, "comment_question_max_per_post", 0) or 0),
+        # Per-post question cap for ORGANIC posts (ad posts are exempt in the
+        # scan - an evergreen ad's questions are always answered). Unset -> a
+        # safe default of 15 rather than unlimited, so a fresh client isn't
+        # wide open; an admin who deliberately sets 0 still gets unlimited.
+        "question_max_per_post": (
+            15 if getattr(row, "comment_question_max_per_post", None) is None
+            else int(getattr(row, "comment_question_max_per_post") or 0)),
         "blocklist": autoreply_config()["blocklist"],
     }
 

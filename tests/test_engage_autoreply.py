@@ -359,6 +359,60 @@ def test_question_ceiling_caps_when_set(session, app, make_target, monkeypatch):
     assert out["auto_replied"] == 2           # ceiling caps at 2
 
 
+def test_per_run_ceiling_flattens_a_burst(session, app, make_target, monkeypatch):
+    """No single sweep sends more than ENGAGE_AUTO_MAX_PER_RUN replies, so a
+    comment surge can't machine-gun a Page (the Meta anti-bulk guard). The rest
+    simply waits for the next sweep."""
+    client, target = _client_and_target(session, make_target)
+    for i in range(4):
+        _mk(session, target, f"Love it {i}")          # 4 safe acknowledgments
+    _wire_reply_stub(monkeypatch)
+    with app.app_context():
+        db.session.add(AISettings(
+            enabled=True, comment_enabled=True, comment_autoreply_enabled=True,
+            comment_max_per_post=10,                  # per-post cap is not the limiter
+            gbp_blocklist="refund"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        app.config["ENGAGE_AUTO_MAX_PER_RUN"] = 2     # the anti-burst ceiling
+        try:
+            out = engage.auto_reply_scan(client.id)
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+            app.config["ENGAGE_AUTO_MAX_PER_RUN"] = 25
+    assert out["auto_replied"] == 2                    # ceiling, not all 4
+
+
+def test_ad_post_questions_bypass_the_organic_question_ceiling(
+        session, app, make_target, monkeypatch):
+    """On an AD post every question is a fresh lead and is answered even past the
+    per-post question ceiling that bounds ORGANIC posts - an ad runs for months
+    and we never stop answering its questions (the per-run ceiling still paces
+    the burst)."""
+    client, target = _client_and_target(session, make_target)
+    target.post.source = "ad"                          # evergreen ad post
+    client.brand_brain = {"products_services": "Course A"}
+    session.commit()
+    for q in ("how to apply?", "kya fees hai?", "contact number?"):
+        _mk(session, target, q)
+    _wire_reply_stub(monkeypatch)
+    with app.app_context():
+        db.session.add(AISettings(
+            enabled=True, comment_enabled=True, comment_autoreply_enabled=True,
+            comment_answer_questions_enabled=True,
+            comment_question_max_per_post=1,           # would cap an organic post at 1
+            gbp_blocklist="refund"))
+        db.session.commit()
+    with app.test_request_context():
+        app.config["ENGAGE_AUTOREPLY_ENABLED"] = True
+        try:
+            out = engage.auto_reply_scan(client.id)
+        finally:
+            app.config["ENGAGE_AUTOREPLY_ENABLED"] = False
+    assert out["auto_replied"] == 3                    # all 3, ad posts are exempt
+
+
 def test_auto_reply_skips_when_generated_reply_has_link(session, app, make_target, monkeypatch):
     """A steered/injected reply containing a link must NOT auto-post (H1)."""
     client, target = _client_and_target(session, make_target)

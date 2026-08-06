@@ -285,6 +285,26 @@ class Config:
     ENGAGE_AUTO_MAX_AGE_DAYS = int(
         os.getenv("ENGAGE_AUTO_MAX_AGE_DAYS", "3"))
 
+    # Anti-burst guard for auto-reply: the hard ceiling on how many auto-replies
+    # ONE sweep may send across all posts, so a comment surge (a viral post, a
+    # running ad drawing many questions) can never fire hundreds of near-instant
+    # public replies from a Page - which reads to Meta as automated/bulk spam.
+    # The remainder is simply answered on the next sweep, so nothing is dropped;
+    # only the burst is flattened. 0 = no ceiling. Default 25.
+    ENGAGE_AUTO_MAX_PER_RUN = int(
+        os.getenv("ENGAGE_AUTO_MAX_PER_RUN", "25"))
+    # A small pause (with jitter) between two auto-replies in a sweep, so even
+    # within the per-run ceiling the posts are paced out rather than machine-gun
+    # fast. Milliseconds; 0 disables. Skipped entirely under TESTING.
+    ENGAGE_AUTO_REPLY_MIN_INTERVAL_MS = int(
+        os.getenv("ENGAGE_AUTO_REPLY_MIN_INTERVAL_MS", "1200"))
+    # Data-retention: after this many days, a comment's commenter PII
+    # (name / id / picture / message body) is anonymised in place - the row is
+    # kept for continuity/counts but the personal data is not retained forever.
+    # 0 disables the purge. Default 180 days (~6 months).
+    ENGAGE_COMMENT_RETENTION_DAYS = int(
+        os.getenv("ENGAGE_COMMENT_RETENTION_DAYS", "180"))
+
     # ------------------------------------------------------------------
     # Cypher-Teams (chat)
     # ------------------------------------------------------------------

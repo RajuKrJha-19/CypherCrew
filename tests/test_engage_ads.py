@@ -218,3 +218,31 @@ def test_discovery_skips_ad_accounts_when_disabled(app, monkeypatch):
     with app.app_context():                    # flag off by default
         accts = p.list_publishable_accounts("usertoken")
     assert not any(a.account_type == "ad_account" for a in accts)
+
+
+# -- ad token expiry surfaces a reconnect prompt ----------------------------
+
+def test_ad_token_expiry_flags_the_account_needs_reauth(app, session, monkeypatch):
+    """The ad account carries the ~60-day user token; when it expires,
+    list_ad_posts fails with an auth error and the account is flagged
+    needs_reauth so Channels shows a reconnect prompt (not a silent stall)."""
+    from app.social.errors import AuthError
+
+    c = _client(session)
+    ad = _account(session, "facebook", "act_5", c.id, account_type="ad_account")
+
+    def _boom(self, aid, token, limit=100):
+        raise RuntimeError("token expired")
+
+    monkeypatch.setattr(SimulationProvider, "list_ad_posts", _boom, raising=False)
+    monkeypatch.setattr(SimulationProvider, "map_error",
+                        lambda self, exc: AuthError("expired"), raising=False)
+
+    with app.test_request_context():
+        app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = True
+        try:
+            engage_ads.sync_ad_targets(c.id)
+        finally:
+            app.config["SOCIAL_ADS_COMMENTS_ENABLED"] = False
+
+    assert SocialAccount.query.get(ad.id).status == "needs_reauth"

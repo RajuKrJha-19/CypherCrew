@@ -67,7 +67,21 @@ def sync_ad_targets(client_id=None):
         try:
             token = AccountManager.access_token(ad_account)
             items = provider.list_ad_posts(ad_account.external_id, token)
-        except Exception:  # noqa: BLE001 - one ad account never aborts the rest
+        except Exception as exc:  # noqa: BLE001 - one ad account never aborts the rest
+            # The ad account carries the ~60-day USER token (it's what holds
+            # ads_read). When it expires, list_ad_posts fails with an auth
+            # error and discovery would silently stop. Flag the account
+            # needs_reauth so it surfaces on the Channels screen with a
+            # reconnect prompt, exactly like a Page whose token lapsed - rather
+            # than failing quietly forever.
+            from app.social.errors import AuthError
+            try:
+                mapped = provider.map_error(exc)
+            except Exception:  # noqa: BLE001
+                mapped = exc
+            if isinstance(mapped, AuthError) and ad_account.status != "needs_reauth":
+                ad_account.status = "needs_reauth"
+                db.session.commit()
             current_app.logger.exception(
                 "[engage-ads] listing ads failed for %s", ad_account.external_id)
             continue

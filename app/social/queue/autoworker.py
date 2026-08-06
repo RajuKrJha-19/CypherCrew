@@ -21,6 +21,8 @@ _lock = threading.Lock()
 _last_analytics = 0.0
 #: Wall-clock of the last ad-post discovery this process attempted (throttle).
 _last_ads = 0.0
+#: Wall-clock of the last comment-PII retention purge this process ran (throttle).
+_last_purge = 0.0
 
 
 def start_background_worker(app):
@@ -47,7 +49,7 @@ def start_background_worker(app):
         app.config.get("SOCIAL_ADS_SYNC_INTERVAL", 900)))
 
     def _loop():
-        global _last_analytics, _last_ads
+        global _last_analytics, _last_ads, _last_purge
         # Let boot + auto-migrations settle before the first tick.
         time.sleep(8)
         while True:
@@ -67,6 +69,13 @@ def start_background_worker(app):
                         _last_ads = now
                         from app.social.services import engage_ads
                         engage_ads.sync_ad_targets()
+                    # Data-retention: anonymise commenter PII past the window.
+                    # Daily is ample; the service self-skips when the retention
+                    # setting is 0. No external cron needed.
+                    if now - _last_purge >= 86400:
+                        _last_purge = now
+                        from app.social.services import engage
+                        engage.purge_expired_comment_pii()
             except Exception:  # noqa: BLE001 - a bad tick must never kill the loop
                 try:
                     with app.app_context():

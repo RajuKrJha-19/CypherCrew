@@ -156,10 +156,25 @@ def test_no_messaging_scope_is_requested():
 
 
 @pytest.mark.parametrize("provider_class", PROVIDERS)
-def test_connect_scopes_is_what_the_oauth_manager_will_use(provider_class):
-    """OAuthManager.start() calls connect_scopes() when a provider has it -
-    pin that it returns the unified list rather than the adapter's own."""
-    assert provider_class().connect_scopes() == META_UNIFIED_SCOPES
+def test_connect_scopes_are_flag_gated_least_privilege(app, provider_class):
+    """OAuthManager.start() calls connect_scopes(). It returns the unified list
+    with every feature ON, but drops a feature-gated scope while its feature is
+    off (least-privilege) - never the adapter's own SCOPES.
+    """
+    gated = {"ads_read": "SOCIAL_ADS_COMMENTS_ENABLED",
+             "pages_manage_metadata": "META_WEBHOOK_ENABLED"}
+    with app.app_context():
+        for flag in gated.values():
+            app.config[flag] = True
+        try:
+            assert provider_class().connect_scopes() == META_UNIFIED_SCOPES
+        finally:
+            for flag in gated.values():
+                app.config[flag] = False
+        # Features off (the default) -> gated scopes dropped, everything else kept.
+        off = provider_class().connect_scopes()
+        assert "ads_read" not in off and "pages_manage_metadata" not in off
+        assert set(off) == set(META_UNIFIED_SCOPES) - set(gated)
 
 
 # --- The grant itself, not just the request -----------------------------------
