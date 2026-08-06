@@ -18,6 +18,14 @@ from app.social.services import audit
 from app.social.services.accounts import AccountManager
 
 
+#: How stale `fetched_at` has to be before a re-sync bothers rewriting it.
+#: The column records "when we last saw this comment on the platform" and no
+#: per-row reader needs it fresher than this; the recency guard reads
+#: created_at first and only falls back here. Refreshing it on every pass was
+#: pure write amplification.
+_FETCHED_AT_REFRESH = timedelta(hours=6)
+
+
 def _published_targets(client_id=None):
     q = (SocialPostTarget.query
          .filter(SocialPostTarget.status.in_(["published", "removed"]),
@@ -45,6 +53,7 @@ def sync_comments(client_id=None):
     """
     report = {"checked": 0, "new": 0, "skipped": 0, "failed": 0,
               "errors": [], "by_reason": {}}
+    now = datetime.utcnow()
 
     def fail(target, category, reason):
         # Name the channel and the post, not just the raw platform id. A
@@ -100,7 +109,15 @@ def sync_comments(client_id=None):
             exists = SocialComment.query.filter_by(
                 platform=target.platform, external_id=ext).first()
             if exists:
-                exists.fetched_at = datetime.utcnow()
+                # Only stamp it when it has actually gone stale. Rewriting
+                # this on EVERY sync meant an UPDATE - and a row lock - for
+                # every comment we already had: thousands per run, forever,
+                # for a bookkeeping timestamp nothing reads per row. Those
+                # locks are what a second, overlapping sync then queued
+                # behind until statement_timeout cancelled it.
+                if (exists.fetched_at is None
+                        or (now - exists.fetched_at) > _FETCHED_AT_REFRESH):
+                    exists.fetched_at = now
                 continue
             # Two overlapping syncs (cron overrun, or cron + a manual trigger)
             # can both miss the SELECT above and both insert the same
@@ -126,7 +143,16 @@ def sync_comments(client_id=None):
             except IntegrityError:
                 continue
 
-    db.session.commit()
+        # Commit THIS post's comments before fetching the next one. The loop
+        # body makes a Graph call per post, and a single commit at the end
+        # held every row lock it had taken across all of them - tens of
+        # seconds on a busy account. A second sync (the cron, or a second
+        # click of Fetch) then blocked on those locks until Postgres
+        # cancelled its statement. Never hold a write transaction open across
+        # network I/O; a per-post commit also means a failure halfway through
+        # keeps the comments already read instead of discarding them.
+        db.session.commit()
+
     return report
 
 
