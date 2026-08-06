@@ -26,6 +26,20 @@ class MetaInstagramProvider(MetaBaseProvider):
     comment_reply_edge = "replies"
     # Instagram hides a comment with hide=true (Facebook uses is_hidden).
     comment_hide_field = "hide"
+    # Instagram media names all three of these differently from a Page post,
+    # and asking for Facebook's names errors the whole call. media_url is the
+    # image for a photo but the FILE for a video, so thumbnail_url (present
+    # only on video) is preferred when it is there.
+    _DETAIL_FIELDS = "caption,media_url,thumbnail_url,permalink,media_type"
+
+    @staticmethod
+    def _map_post_details(resp):
+        return {
+            "caption": resp.get("caption") or None,
+            "thumbnail_url": (resp.get("thumbnail_url")
+                              or resp.get("media_url") or None),
+            "permalink": resp.get("permalink") or None,
+        }
     SCOPES = [
         "instagram_basic",
         "instagram_content_publish",

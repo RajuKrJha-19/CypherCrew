@@ -128,6 +128,11 @@ class SocialPostTarget(db.Model):
 
     external_post_id = db.Column(db.String(255), nullable=True)
     permalink = db.Column(db.String(500), nullable=True)
+    #: The post's own picture on the platform, for the Engage preview. Meta's
+    #: CDN URLs expire, so this is refreshed on each ad sync and the template
+    #: hides an image that fails to load - a stale value degrades to "no
+    #: picture", never to a broken one.
+    thumbnail_url = db.Column(db.String(1000), nullable=True)
     last_error = db.Column(db.Text, nullable=True)
 
     # -- Story style ------------------------------------------------------

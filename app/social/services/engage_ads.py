@@ -76,12 +76,18 @@ def sync_ad_targets(client_id=None):
             ext = item.get("external_post_id")
             if not ext:
                 continue
-            # Already tracked (a Studio post, or a prior ad sync)? Skip - the
-            # unique-ish external_post_id keeps this idempotent across runs.
-            if SocialPostTarget.query.filter_by(external_post_id=ext).first():
-                continue
             owner = _resolve_owner(item, ad_account)
             if owner is None:
+                continue
+            existing = SocialPostTarget.query.filter_by(
+                external_post_id=ext).first()
+            if existing is not None:
+                # Already tracked (a Studio post, or a prior ad sync). Still
+                # refresh the preview: Meta's picture URLs expire, and ad posts
+                # discovered before this existed have no caption at all - which
+                # is what left the AI writing replies with no idea what the
+                # post said.
+                _refresh_details(existing, owner)
                 continue
             post = SocialPost(
                 source="ad", published_externally=True,
@@ -89,14 +95,48 @@ def sync_ad_targets(client_id=None):
                 status="published", title="Ad post")
             db.session.add(post)
             db.session.flush()
-            db.session.add(SocialPostTarget(
+            target = SocialPostTarget(
                 social_post_id=post.id, social_account_id=owner.id,
                 platform=item["platform"], post_type="image",
-                external_post_id=ext, status="published"))
+                external_post_id=ext, status="published")
+            db.session.add(target)
+            db.session.flush()
+            _refresh_details(target, owner)
             discovered += 1
 
     db.session.commit()
     return {"discovered": discovered}
+
+
+def _refresh_details(target, owner):
+    """Pull the post's own caption / picture / permalink onto `target`.
+
+    Best-effort and non-destructive: a failed or empty read leaves whatever is
+    already stored, so a Meta hiccup never blanks a caption we had.
+    """
+    from app.social.services.accounts import AccountManager
+
+    provider = get_provider(target.platform)
+    if provider is None or not hasattr(provider, "fetch_post_details"):
+        return
+    try:
+        token = AccountManager.access_token(owner)
+        details = provider.fetch_post_details(target.external_post_id, token)
+    except Exception:  # noqa: BLE001 - a preview is never worth a failed sync
+        current_app.logger.warning(
+            "[engage-ads] could not read post details for %s",
+            target.external_post_id)
+        return
+    if not details:
+        return
+    if details.get("caption"):
+        target.caption = details["caption"]
+    if details.get("permalink"):
+        target.permalink = details["permalink"]
+    # The picture URL is refreshed even when it was already set - Meta's CDN
+    # links expire, so the newest one is always the most likely to render.
+    if details.get("thumbnail_url"):
+        target.thumbnail_url = details["thumbnail_url"]
 
 
 def sync_ad_comments(client_id=None):

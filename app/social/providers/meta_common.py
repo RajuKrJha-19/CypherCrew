@@ -553,6 +553,42 @@ class MetaBaseProvider(SocialProvider):
                 out.append({"platform": "instagram", "external_post_id": media})
         return out
 
+    #: Fields describing the post itself, per platform. Facebook Page posts and
+    #: Instagram media have different names for the same three things, and
+    #: asking one for the other's fields errors the whole call.
+    _DETAIL_FIELDS = "message,full_picture,permalink_url"
+
+    def fetch_post_details(self, external_post_id, token):
+        """The post's own caption, picture and permalink, as
+        {"caption", "thumbnail_url", "permalink"}.
+
+        Used to give the Engage inbox something real to show above a comment,
+        and to give the AI the post's caption as context. An ad post arrives
+        from the ads endpoint as nothing but an id, so without this the whole
+        context is the placeholder title "Ad post".
+
+        Reads only what the app is already permitted to read
+        (pages_read_engagement / instagram_basic) - no ads permission.
+        Best-effort: any failure returns empty, and the caller keeps whatever
+        it had.
+        """
+        if not external_post_id:
+            return {}
+        try:
+            resp = self.graph().get(external_post_id, token=token,
+                                    params={"fields": self._DETAIL_FIELDS})
+        except Exception:  # noqa: BLE001 - a preview is never worth a failure
+            return {}
+        return self._map_post_details(resp)
+
+    @staticmethod
+    def _map_post_details(resp):
+        return {
+            "caption": resp.get("message") or None,
+            "thumbnail_url": resp.get("full_picture") or None,
+            "permalink": resp.get("permalink_url") or None,
+        }
+
     # -- Delete / existence -----------------------------------------------
 
     def delete_post(self, external_post_id, token):
