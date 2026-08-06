@@ -178,11 +178,14 @@
                 {% if tgt and tgt.thumbnail_url %}
                 <img class="engage-context-thumb" src="{{ tgt.thumbnail_url }}"
                      alt="" loading="lazy" onerror="this.remove()">
-                {% else %}
+                {% endif %}
+                {# The platform chip always renders, never only in the no-thumbnail
+                   branch: an expired thumbnail URL is removed by onerror, and if
+                   the chip lived in an {% else %} the header would then show no
+                   platform badge at all. #}
                 <span class="pf-chip {{ selected.platform }}">
                     <i class="{{ PF_ICON.get(selected.platform,'fa-solid fa-share-nodes') }}"></i>
                     {{ PF_LABEL.get(selected.platform, selected.platform|capitalize) }}</span>
-                {% endif %}
                 <div class="engage-context-text">
                     <strong>{{ (tgt.post.title if tgt and tgt.post else none) or 'A post' }}</strong>
                     <span class="engage-context-sub">

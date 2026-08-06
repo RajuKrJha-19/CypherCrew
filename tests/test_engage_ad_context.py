@@ -280,3 +280,64 @@ def test_refresh_details_never_blanks_what_we_already_had(session, make_target,
     engage_ads._refresh_details(target, target.account)
     assert target.caption == "kept"
     assert target.thumbnail_url == "https://cdn/old.jpg"
+
+
+def test_refresh_details_keeps_a_studio_edited_caption(session, make_target,
+                                                       monkeypatch):
+    """A boosted STUDIO post that surfaces in the ads endpoint must KEEP the
+    caption a human edited in Studio - the platform copy never overwrites an
+    existing non-ad caption (only the thumbnail, which expires, is refreshed).
+    """
+    from app.social.services import engage_ads
+
+    _acct, _post, target = make_target()          # post.source defaults to studio
+    target.external_post_id = "BOOSTED_1"
+    target.caption = "human-edited Studio caption"
+    target.thumbnail_url = "https://cdn/old.jpg"
+    session.commit()
+
+    class _P:
+        @staticmethod
+        def fetch_post_details(ext, token):
+            return {"caption": "platform copy",
+                    "thumbnail_url": "https://cdn/new.jpg",
+                    "permalink": "https://fb/p/1"}
+
+    monkeypatch.setattr(engage_ads, "get_provider", lambda p: _P)
+    monkeypatch.setattr(
+        "app.social.services.accounts.AccountManager.access_token",
+        staticmethod(lambda acct: "tok"))
+
+    engage_ads._refresh_details(target, target.account)
+    assert target.caption == "human-edited Studio caption"   # NOT overwritten
+    assert target.thumbnail_url == "https://cdn/new.jpg"     # thumbnail refreshed
+
+
+def test_refresh_details_skips_an_over_length_thumbnail(session, make_target,
+                                                        monkeypatch):
+    """Meta's signed CDN URLs can exceed the column limit; an over-length one is
+    skipped (degrades to no picture) rather than raising on commit and dropping
+    the whole discovery batch."""
+    from app.social.services import engage_ads
+
+    _acct, post, target = make_target()
+    post.source = "ad"
+    target.thumbnail_url = None
+    target.permalink = None
+    session.commit()
+
+    class _P:
+        @staticmethod
+        def fetch_post_details(ext, token):
+            return {"caption": "c",
+                    "thumbnail_url": "https://cdn/" + "a" * 1200,   # > 1000
+                    "permalink": "https://fb/" + "b" * 600}         # > 500
+
+    monkeypatch.setattr(engage_ads, "get_provider", lambda p: _P)
+    monkeypatch.setattr(
+        "app.social.services.accounts.AccountManager.access_token",
+        staticmethod(lambda acct: "tok"))
+
+    engage_ads._refresh_details(target, target.account)
+    assert target.thumbnail_url is None      # over-length skipped, no crash
+    assert target.permalink is None

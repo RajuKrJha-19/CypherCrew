@@ -88,23 +88,29 @@ def sync_ad_targets(client_id=None):
                 # is what left the AI writing replies with no idea what the
                 # post said.
                 _refresh_details(existing, owner)
-                continue
-            post = SocialPost(
-                source="ad", published_externally=True,
-                client_id=(owner.client_id or ad_account.client_id),
-                status="published", title="Ad post")
-            db.session.add(post)
-            db.session.flush()
-            target = SocialPostTarget(
-                social_post_id=post.id, social_account_id=owner.id,
-                platform=item["platform"], post_type="image",
-                external_post_id=ext, status="published")
-            db.session.add(target)
-            db.session.flush()
-            _refresh_details(target, owner)
-            discovered += 1
+            else:
+                post = SocialPost(
+                    source="ad", published_externally=True,
+                    client_id=(owner.client_id or ad_account.client_id),
+                    status="published", title="Ad post")
+                db.session.add(post)
+                db.session.flush()
+                target = SocialPostTarget(
+                    social_post_id=post.id, social_account_id=owner.id,
+                    platform=item["platform"], post_type="image",
+                    external_post_id=ext, status="published")
+                db.session.add(target)
+                db.session.flush()
+                _refresh_details(target, owner)
+                discovered += 1
+            # Commit THIS post before the next item's Graph call. _refresh_details
+            # makes a Graph request per item; a single commit at the end would
+            # hold this post's INSERT/UPDATE row locks on social_post_targets
+            # open across every following network call - the exact contention
+            # that sync_comments was just fixed to avoid. A per-item commit also
+            # means one bad post can't roll back the whole discovery run.
+            db.session.commit()
 
-    db.session.commit()
     return {"discovered": discovered}
 
 
@@ -129,13 +135,27 @@ def _refresh_details(target, owner):
         return
     if not details:
         return
-    if details.get("caption"):
-        target.caption = details["caption"]
-    if details.get("permalink"):
-        target.permalink = details["permalink"]
+    # Caption/permalink describe the post itself. Fill them for an AD post, or
+    # to BACKFILL any target that has none yet - but never REPLACE a value a
+    # human edited in Studio on a boosted post. The same dark post can be a
+    # boosted Studio post whose caption was edited after publishing; refreshing
+    # it from the platform every ad sync would silently undo that edit. Only the
+    # thumbnail (which expires) is refreshed unconditionally.
+    is_ad = getattr(getattr(target, "post", None), "source", None) == "ad"
+    if details.get("caption") and (is_ad or not (target.caption or "").strip()):
+        target.caption = details["caption"]          # caption col is Text - no cap
+    if details.get("permalink") and (is_ad or not target.permalink):
+        # permalink is String(500); a longer value would raise on commit and,
+        # with the per-item commit below, drop just this post. Skip an
+        # over-length one rather than store a truncated (broken) link.
+        if len(details["permalink"]) <= 500:
+            target.permalink = details["permalink"]
     # The picture URL is refreshed even when it was already set - Meta's CDN
-    # links expire, so the newest one is always the most likely to render.
-    if details.get("thumbnail_url"):
+    # links expire, so the newest one is always the most likely to render. It's
+    # String(1000); Meta's signed URLs can exceed that, so guard the length and
+    # degrade to "no picture" (the template already hides a broken image)
+    # instead of raising on commit.
+    if details.get("thumbnail_url") and len(details["thumbnail_url"]) <= 1000:
         target.thumbnail_url = details["thumbnail_url"]
 
 

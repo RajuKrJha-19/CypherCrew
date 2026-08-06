@@ -9,7 +9,9 @@ of staring at a spinner.
 
 Deliberately no external queue (no Celery/Redis): a thread + one DB row is
 enough for this workload, and it degrades gracefully - if the worker dies the
-row simply stays "running" and the user can retrigger.
+row stays "running", and the duplicate guard (is_running) refuses a retrigger
+only until that row ages past STALE_AFTER (15 min), after which the button
+works again on its own.
 """
 import threading
 import traceback

@@ -568,6 +568,14 @@ def auto_reply_scan(client_id=None):
         try:
             reply(c, text, actor_id=None)       # posts + records via the poster
         except Exception:  # noqa: BLE001 - one bad post never aborts the run
+            # reply() commits internally; if that commit (or its audit write)
+            # failed mid-flush the session is left in a rolled-back-pending
+            # state, and the NEXT iteration's very first query would raise
+            # PendingRollbackError and abort the whole sweep. Clear it here.
+            # Safe: the claim was committed in its own prior transaction
+            # (above), so this rollback cannot un-claim or re-open the comment -
+            # it only discards the poisoned pending state so the loop continues.
+            db.session.rollback()
             # The claim is deliberately NOT released. The platform may already
             # have taken the reply - the failure can just as easily come from
             # reading the response or writing our own record after the POST -
