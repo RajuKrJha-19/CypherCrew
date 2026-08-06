@@ -113,6 +113,19 @@ def test_is_spam_matches_abuse_wordlist_on_every_lane(session, make_target):
         _mk(session, target, "total slur1 here"), cfg) == "abuse: slur1"
 
 
+def test_blocklist_matches_whole_words_not_substrings(session, make_target):
+    """A term matches a WHOLE word only — 'ass' must not hide 'assessment' and
+    'hell' must not hide 'hello', or the auto-hide list becomes untrustworthy."""
+    _acct, _post, target = make_target()
+    cfg = _cfg(blocklist=["ass"], abuse_blocklist=["hell"])
+    # innocent words that merely CONTAIN the term -> not flagged
+    assert engage.is_spam(_mk(session, target, "great assessment!"), cfg) is None
+    assert engage.is_spam(_mk(session, target, "hello there team"), cfg) is None
+    # the term as a whole word -> flagged
+    assert engage.is_spam(_mk(session, target, "what an ass"), cfg) == "blocklist: ass"
+    assert engage.is_spam(_mk(session, target, "go to hell"), cfg) == "abuse: hell"
+
+
 # -- automod_config gating --------------------------------------------------
 
 def test_automod_config_off_by_default(app):

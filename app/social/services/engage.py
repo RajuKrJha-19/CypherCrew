@@ -335,6 +335,28 @@ def mark_done(comment, done=True):
 
 import re
 
+
+def _blocklist_hit(text_low, terms):
+    """The first blocklist term appearing in `text_low` as a WHOLE word/phrase,
+    or None.
+
+    Word-boundary matching, NOT naive substring: a term like "ass" must never
+    flag "assessment" and "hell" must never flag "hello" — that classic false
+    positive is what makes an auto-hide list untrustworthy and hides innocent
+    comments. Terms may be phrases ("buy followers") and are matched
+    case-insensitively (callers pass already-lowercased text and terms).
+    """
+    for term in terms:
+        term = (term or "").strip()
+        if not term:
+            continue
+        # (?<!\w) / (?!\w) behave like \b but also work when a term starts or
+        # ends with a non-word char, so an entry like "f***" still matches.
+        if re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text_low):
+            return term
+    return None
+
+
 #: A generated auto-reply longer than this is treated as suspect (steered by
 #: the comment, or a runaway) and dropped to the human queue.
 _AUTO_COMMENT_MAX_CHARS = 300
@@ -484,7 +506,7 @@ def comment_is_auto_safe(comment, cfg):
     if _has_link(text):                  # link/spam comment -> human
         return False
     low = text.lower()
-    if any(w in low for w in cfg["blocklist"]):
+    if _blocklist_hit(low, cfg["blocklist"]):
         return False
     client = _comment_client(comment)
     if client is None or not getattr(client, "comment_autoreply", False):
@@ -594,7 +616,7 @@ def auto_reply_scan(client_id=None):
         if not text or len(text) > _AUTO_COMMENT_MAX_CHARS:
             continue
         low_reply = text.lower()
-        if any(w in low_reply for w in cfg["blocklist"]) or _has_link(text):
+        if _blocklist_hit(low_reply, cfg["blocklist"]) or _has_link(text):
             continue
 
         # Nothing to post WITH (channel disconnected, platform unsupported) ->
@@ -673,14 +695,14 @@ def is_spam(comment, cfg):
         return None
     text = comment.message or ""
     low = text.lower()
-    for word in cfg["blocklist"]:
-        if word in low:
-            return f"blocklist: {word}"
+    hit = _blocklist_hit(low, cfg["blocklist"])
+    if hit:
+        return f"blocklist: {hit}"
     # Abuse / profanity applies to EVERY lane, ads included: hate and slurs are
     # never a lead, so unlike the link heuristic below they are not ad-exempt.
-    for word in cfg.get("abuse_blocklist", []):
-        if word in low:
-            return f"abuse: {word}"
+    hit = _blocklist_hit(low, cfg.get("abuse_blocklist", []))
+    if hit:
+        return f"abuse: {hit}"
     # The link heuristic is SKIPPED for ad/boosted-post comments: ads attract
     # link comments from real prospects (sharing a number/profile/WhatsApp) as
     # well as bots, so auto-hiding every link would bury leads in Removed. The

@@ -138,7 +138,7 @@
                 <span class="engage-row-msg">{{ (c.message or '')[:90] }}</span>
                 {% if c.status == 'removed' %}
                 <span class="engage-removed-tag {{ 'is-auto' if c.removal_kind == 'auto' }}">
-                    {% if c.removal_kind == 'auto' %}<i class="fa-solid fa-robot"></i> Auto · spam{% else %}<i class="fa-solid fa-user-slash"></i> Removed by {{ c.removed_by.name if c.removed_by else 'a teammate' }}{% endif %}
+                    {% if c.removal_kind == 'auto' %}<i class="fa-solid fa-robot"></i> Auto · {{ 'abuse' if c.removal_reason and c.removal_reason.startswith('abuse') else 'spam' }}{% else %}<i class="fa-solid fa-user-slash"></i> Removed by {{ c.removed_by.name if c.removed_by else 'a teammate' }}{% endif %}
                     {%- if c.removal_action == 'deleted' %} · deleted{% endif %}
                 </span>
                 {% endif %}
@@ -243,7 +243,7 @@
             <div class="engage-removed-panel">
                 <span class="engage-removed-tag lg {{ 'is-auto' if selected.removal_kind == 'auto' }}">
                     {% if selected.removal_kind == 'auto' %}
-                        <i class="fa-solid fa-robot"></i> Auto-hidden by the spam filter
+                        <i class="fa-solid fa-robot"></i> Auto-hidden by the {{ 'abuse' if selected.removal_reason and selected.removal_reason.startswith('abuse') else 'spam' }} filter
                     {% else %}
                         <i class="fa-solid fa-user-slash"></i>
                         {{ 'Deleted' if selected.removal_action == 'deleted' else 'Hidden' }}
