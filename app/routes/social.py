@@ -2170,6 +2170,115 @@ def update_post(post_id):
     return redirect(url_for("social.post_detail", post_id=post.id))
 
 
+@social_bp.route("/media/<int:media_id>/replace", methods=["POST"])
+@login_required
+def replace_target_media(media_id):
+    """Swap one media item for a re-cut version, in place.
+
+    The repair for "this post is live on Facebook so it can't be edited as a
+    whole, and Instagram refused the image's shape". Editing the post is
+    correctly refused once a sibling has published; this touches ONE asset on
+    ONE target that has published nothing, so the live platform is untouched
+    and neither delete-and-redo nor Duplicate is needed.
+
+    The measurements are cleared so the next validation re-measures the new
+    file rather than judging it by the old one's numbers.
+    """
+    _guard()
+    import mimetypes
+
+    from app.models import SocialMediaAsset
+
+    asset = SocialMediaAsset.query.get_or_404(media_id)
+    target = asset.target
+    if target is None:
+        return jsonify(error="That file isn't attached to a channel."), 400
+    if target.status in ("published", "removed"):
+        # Never rewrite what is already on the platform.
+        return jsonify(error="That channel has already published."), 409
+
+    new_key = (request.form.get("object_key") or "").strip()
+    if not new_key or not _media_visible(new_key):
+        return jsonify(error="You can't use that item."), 403
+
+    asset.object_key = new_key
+    asset.mime_type = (mimetypes.guess_type(new_key)[0]
+                       or asset.mime_type or "image/jpeg")
+    meta = dict(asset.meta or {})
+    meta.pop("measurements", None)
+    asset.meta = meta or None
+    target.last_error = None
+    audit.record("target_media_replaced", post_id=target.social_post_id,
+                 target_id=target.id, actor_id=current_user.id,
+                 detail={"media_id": asset.id})
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+def _target_repairs(target):
+    """Which one-click repairs can actually help this target.
+
+    {"remap": bool, "crop": [ {media_id, url, aspect} ]}
+
+    remap  - re-deciding the post type would genuinely change it. False when
+             choose_post_type returns the type it already has, or None (the
+             file itself is wrong): in both cases the button previously
+             appeared, did nothing, and said so only after the click.
+    crop   - the target has not published, and carries an IMAGE the platform
+             refused on shape/size. Re-cutting that image is the repair, and
+             it can be done in place because nothing is live for this target.
+    """
+    from app.social.media import fit as media_fit, pipeline
+
+    out = {"remap": False, "crop": [], "reauth": False}
+    if target.status in ("published", "removed"):
+        return out
+
+    # The worker flips an account to needs_reauth exactly when the platform
+    # answered with an AuthError, so this is a reliable read of "the token is
+    # the problem" without re-parsing the stored message. It is what lets the
+    # page say "reconnect this channel" instead of quoting Google's
+    # "Request had invalid authentication credentials... See
+    # https://developers.google.com/identity/..." at a social manager.
+    account = target.account
+    out["reauth"] = bool(account is not None
+                         and account.status == "needs_reauth")
+
+    provider = registry.get(target.platform)
+    caps = provider.capabilities if provider else None
+    measurements = {}
+    if target.media:
+        measurements = (target.media[0].meta or {}).get("measurements") or {}
+    new_type, _notes = media_fit.choose_post_type(
+        target.post_type, caps, measurements)
+    out["remap"] = bool(new_type and new_type != target.post_type)
+
+    if target.status not in ("failed", "blocked"):
+        return out
+    spec = caps.spec_for(target.post_type) if caps else None
+    for m in (target.media or []):
+        if not (m.mime_type or "").startswith("image") or not m.object_key:
+            continue          # a video is re-cut in an editor, not here
+        meta = (m.meta or {}).get("measurements") or {}
+        if not meta or not media_fit.check_spec(spec, meta):
+            continue          # this one is fine; only offer the broken ones
+        try:
+            url = pipeline.presigned_url(m.object_key)
+        except Exception:  # noqa: BLE001 - no preview, no crop offer
+            continue
+        out["crop"].append({
+            "media_id": m.id,
+            "url": url,
+            # The cropper POSTs this back to crop_media_api, which reads the
+            # ORIGINAL pixels from it - a preview URL alone is not enough.
+            "object_key": m.object_key,
+            # Start the selection at the shape this platform actually wants,
+            # so the default crop is already publishable.
+            "aspect": getattr(spec, "aspect_max", None),
+        })
+    return out
+
+
 @social_bp.route("/posts/<int:post_id>")
 @login_required
 def post_detail(post_id):
@@ -2223,10 +2332,17 @@ def post_detail(post_id):
         [(platform_label(t.platform), t.scheduled_for) for t in post.targets]
         if per_channel_schedule else [])
 
+    # "Fix automatically" only re-decides the POST TYPE. Offering it on a
+    # target whose file is simply the wrong shape sent people in a circle: they
+    # clicked it, were told the file has to change, and clicked it again.
+    # `repairs` says, per target, which of the two repairs can actually help.
+    repairs = {t.id: _target_repairs(t) for t in post.targets}
+
     return render_template(
         "social/post_detail.html",
         post=post,
         problems=problems,
+        repairs=repairs,
         first_comment_events=first_comment_events,
         media_previews=media_previews,
         can_approve=can_publish(current_user),

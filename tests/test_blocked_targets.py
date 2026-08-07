@@ -350,7 +350,16 @@ def test_the_post_page_offers_a_working_action_not_a_dead_end(
 
     body = client.get(f"/social/posts/{post.id}").get_data(as_text=True)
 
-    assert "Fix automatically" in body
+    # A working action is offered. This target is already set to a type its
+    # platform supports, so re-deciding the type would change nothing - and
+    # "Fix automatically" is now hidden exactly there, which is this test's
+    # own rule ("only offer what will actually work") applied to that button.
+    # It used to appear on every target, do nothing, and say so only after
+    # the click.
+    assert "Fix automatically" not in body
+    assert "Retry" in body
+    assert "Remove platform" in body
+
     assert f"/posts/{post.id}/edit" not in body, (
         "editing a scheduled post is refused, so the link must not be there")
     # And it says why the whole post cannot be edited.

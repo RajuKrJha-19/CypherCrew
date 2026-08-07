@@ -58,8 +58,27 @@
                     <i class="{{ PF_ICON.get(t.platform,'fa-solid fa-share-nodes') }}"></i>
                     {{ PF_LABEL.get(t.platform, t.platform|capitalize) }}</span>
                 <span class="post-stuck-why">
+                    {#
+                        An expired token is not a content problem, and the
+                        platform's own words for it are useless here - Google
+                        answers "Request had invalid authentication
+                        credentials... See https://developers.google.com/...",
+                        which tells a social manager nothing they can act on.
+                        The account is already flagged needs_reauth by the
+                        worker, so say the one thing that fixes it.
+                    #}
+                    {% if repairs[t.id].reauth %}
+                    This channel's connection has expired — reconnect it and
+                    retry. Nothing is wrong with the post.
+                    {% else %}
                     {{ why|join(' ') or 'This platform did not publish.' }}
+                    {% endif %}
                 </span>
+                {% if repairs[t.id].reauth %}
+                <a class="btn btn-sm" data-turbo="false"
+                   href="{{ url_for('social.accounts') }}">
+                    <i class="fa-solid fa-rotate"></i> Reconnect</a>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
@@ -354,7 +373,14 @@
                            here and again in the Result column. #}
                         {% set reasons = [] if t.status in ['published', 'removed']
                            else (problems[t.id] or ([t.last_error] if t.last_error else [])) %}
-                        {% if reasons %}
+                        {% if repairs[t.id].reauth %}
+                        {# Same reason as the panel above: an expired token is
+                           not a content fault, and the platform's own wording
+                           for it is not actionable. #}
+                        <div class="field-hint warn is-stacked">
+                            <div>⚠ This channel's connection has expired — reconnect it and retry.</div>
+                        </div>
+                        {% elif reasons %}
                         <div class="field-hint warn is-stacked">
                             {% for p in reasons %}<div>⚠ {{ p }}</div>{% endfor %}
                         </div>
@@ -403,11 +429,34 @@
                             {# Re-decides what this platform should publish -
                                the one-click repair for a target still set to
                                a type the platform has no concept of, such as
-                               "video" on Instagram. #}
+                               "video" on Instagram.
+
+                               Only shown when it would actually change
+                               something. It used to appear on every target: on
+                               a file that is simply the wrong shape it did
+                               nothing and said so only after the click, which
+                               left people pressing it in a circle. #}
+                            {% if repairs[t.id].remap %}
                             <form method="POST" action="{{ url_for('social.remap_target', target_id=t.id) }}">
                                 <button type="submit" class="row-action">
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> Fix automatically</button>
                             </form>
+                            {% endif %}
+                            {# The real repair when the FILE is wrong: re-cut it
+                               here. Editing the post is refused once a sibling
+                               platform has published, but this touches one
+                               asset on a channel that has published nothing -
+                               so a partially-published post can be fixed
+                               without deleting or duplicating it. #}
+                            {% for c in repairs[t.id].crop %}
+                            <button type="button" class="row-action"
+                                    data-crop-media="{{ c.media_id }}"
+                                    data-crop-url="{{ c.url }}"
+                                    data-crop-key="{{ c.object_key }}"
+                                    data-crop-aspect="{{ c.aspect or '' }}">
+                                <i class="fa-solid fa-crop-simple"></i>
+                                Crop image{% if repairs[t.id].crop|length > 1 %} {{ loop.index }}{% endif %}</button>
+                            {% endfor %}
                             <form method="POST" action="{{ url_for('social.drop_target', target_id=t.id) }}"
                                   data-confirm="Remove {{ PF_LABEL.get(t.platform, t.platform) }} from this post? Nothing was published there.">
                                 <button type="submit" class="row-action danger">
@@ -484,6 +533,50 @@
                 flash(button, "Press Ctrl+C");
             }
             scratch.remove();
+        });
+    })();
+</script>
+
+{# Re-cut a failed channel's image in place. Reuses the composer's cropper,
+   which is deliberately composer-agnostic (window.MediaCropper.open). #}
+<script>window.MEDIA_CROP_URL = "{{ url_for('social.crop_media_api') }}";</script>
+<script src="{{ asset_url('js/media-cropper.js') }}" defer></script>
+<script>
+    (function () {
+        "use strict";
+        // Same one-bind guard as above: this page re-runs its script on every
+        // Turbo visit, and a stacked handler would open N croppers per click.
+        if (window.__postCropBound) return;
+        window.__postCropBound = true;
+
+        document.addEventListener("click", function (ev) {
+            var btn = ev.target.closest && ev.target.closest("[data-crop-media]");
+            if (!btn) return;
+            ev.preventDefault();
+            if (!window.MediaCropper || !window.MEDIA_CROP_URL) return;
+
+            var aspect = parseFloat(btn.dataset.cropAspect);
+            window.MediaCropper.open({
+                imageUrl: btn.dataset.cropUrl,
+                objectKey: btn.dataset.cropKey,
+                aspect: isNaN(aspect) ? null : aspect,
+                onApplied: function (d) {
+                    // The crop API stored a NEW object; point this channel's
+                    // asset at it. Nothing is live for a failed target, so the
+                    // published sibling is untouched.
+                    var fd = new FormData();
+                    fd.append("object_key", d.object_key);
+                    fetch("/social/media/" + btn.dataset.cropMedia + "/replace",
+                          { method: "POST", body: fd })
+                        .then(function (r) { return r.json(); })
+                        .then(function (out) {
+                            if (out && out.ok) { window.location.reload(); }
+                            else { alert((out && out.error) || "Couldn't replace the image."); }
+                        })
+                        .catch(function () { alert("Couldn't replace the image."); });
+                },
+                onError: function (msg) { alert(msg || "Crop failed."); }
+            });
         });
     })();
 </script>
