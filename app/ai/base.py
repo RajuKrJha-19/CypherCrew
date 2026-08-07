@@ -40,6 +40,7 @@ class CaptionResult:
     caption: str = ""                   # the primary caption
     per_platform: dict = field(default_factory=dict)     # platform -> caption
     hashtags: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)    # SEO discovery keywords
     first_comment: str = ""
     variations: list[str] = field(default_factory=list)  # alternative captions
 

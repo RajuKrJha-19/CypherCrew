@@ -44,12 +44,14 @@
                         required
                     >
 
-                    <label>Description</label>
+                    <label>Description <span class="req-hint">(required — at least 50 characters)</span></label>
                     <textarea
                         name="description"
                         rows="4"
                         data-emoji-field
-                        placeholder="What needs to be done? Add any specifics the assignee should know."
+                        required
+                        minlength="50"
+                        placeholder="What needs to be done? Add the specifics the assignee needs to start — brief, references, tone, deadline context (min 50 characters)."
                     ></textarea>
 
                     <div class="form-group task-reference-upload"
@@ -211,6 +213,7 @@
                                         name="is_social_media"
                                         value="1"
                                         id="isSocialMedia"
+                                        required
                                     >
                                     Yes
                                 </label>
@@ -220,7 +223,7 @@
                                         name="is_social_media"
                                         value="0"
                                         id="isNotSocialMedia"
-                                        checked
+                                        required
                                     >
                                     No
                                 </label>

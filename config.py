@@ -466,6 +466,12 @@ class Config:
     # Headroom so a "thinking" model (Gemini 3.x etc.) doesn't spend the whole
     # budget reasoning and truncate the JSON body -> "unreadable" responses.
     AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "2048"))
+    # Caption drafting returns a much bigger JSON object than QA/alt-text (a
+    # caption + a per-platform caption for EVERY channel + hashtags + keywords +
+    # a first comment + variations). On a long post that overran AI_MAX_TOKENS
+    # and the cut-off JSON dumped raw into the caption box, so caption gets its
+    # own, larger ceiling.
+    AI_CAPTION_MAX_TOKENS = int(os.getenv("AI_CAPTION_MAX_TOKENS", "4096"))
     # Vision calls (caption/QA with an image) can take longer than plain text,
     # so give the provider room; still well under the gunicorn worker timeout.
     AI_TIMEOUT_S = int(os.getenv("AI_TIMEOUT_S", "60"))

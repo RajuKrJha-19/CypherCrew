@@ -10838,6 +10838,12 @@ body.panel-mode .main-panel{
     font-size:12.5px;
     line-height:1.5;
 }
+/* Inline "(required …)" note next to a field label. */
+.req-hint{
+    font-weight:500;
+    font-size:11.5px;
+    color:var(--color-text-subtle);
+}
 
 /* Wider note about the form as a whole. */
 .form-note{
@@ -18182,7 +18188,8 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-ai-variations{ margin:8px 0 0; display:flex; flex-direction:column; gap:6px; }
 .cmp-ai-var-head{ font-size:11.5px; font-weight:650; color:var(--color-text-subtle); }
 .cmp-ai-var{ text-align:left; width:100%; padding:8px 10px; font-size:12.5px; line-height:1.5;
-    white-space:pre-wrap; border:1px solid var(--color-border); border-radius:var(--radius-md);
+    white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;
+    border:1px solid var(--color-border); border-radius:var(--radius-md);
     background:var(--color-surface); color:var(--color-text); cursor:pointer; }
 .cmp-ai-var:hover{ border-color:var(--color-primary); background:var(--color-primary-soft); }
 .cmp-ai-var.sel{ border-color:var(--color-primary); box-shadow:0 0 0 1px var(--color-primary) inset; }

@@ -37,8 +37,8 @@
                 <label>Task Title</label>
                 <input type="text" name="title" placeholder="e.g. Instagram Reel Editing - July Batch" required>
 
-                <label>Description</label>
-                <textarea name="description" rows="4" data-emoji-field placeholder="What needs to be done? Add any specifics that will help later."></textarea>
+                <label>Description <span class="req-hint">(required — at least 50 characters)</span></label>
+                <textarea name="description" rows="4" data-emoji-field required minlength="50" placeholder="What needs to be done? Add the specifics you'll need to start — brief, references, tone, deadline context (min 50 characters)."></textarea>
 
                 <label>Client</label>
                 <select name="client_id" id="clientSelect" required>
@@ -103,6 +103,44 @@
                     task is measured against.
                 </p>
 
+                {# Is this a social media post? MANDATORY and nothing is
+                   pre-selected, so a task can't be filed without a deliberate
+                   choice; answering Yes reveals the (also mandatory) platform
+                   picker. Mirrors the assign-to-someone form. #}
+                <div class="form-group social-ask" id="socialAsk">
+                    <div class="social-ask-q">
+                        <span class="social-ask-label">Is this a social media post?</span>
+                        <div class="social-ask-choices" role="radiogroup"
+                             aria-label="Is this a social media post?">
+                            <label class="social-ask-choice">
+                                <input type="radio" name="is_social_media" value="1"
+                                       id="isSocialMedia" required>
+                                Yes
+                            </label>
+                            <label class="social-ask-choice">
+                                <input type="radio" name="is_social_media" value="0"
+                                       id="isNotSocialMedia" required>
+                                No
+                            </label>
+                        </div>
+                    </div>
+                    <div class="social-platform-list" id="socialPlatformList" hidden>
+                        <p class="form-hint">
+                            Target platform(s). At Client Review the approver can
+                            “Approve &amp; Send to Social Studio” to publish or
+                            schedule the post — the task then tracks its publish
+                            status automatically.
+                        </p>
+                        {% for key, plabel, picon in social_platform_options %}
+                        <label class="social-platform-option">
+                            <input type="checkbox" name="social_platforms" value="{{ key }}">
+                            <i class="{{ picon }}"></i>
+                            {{ plabel }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
                 <label>Priority</label>
                 <select name="priority">
                     <option>Low</option>
@@ -161,6 +199,22 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/upload-popup.js') }}"></script>
 <script>
+// Reveal the platform picker only when "Yes" is chosen; hide + it again on No.
+(function () {
+    const socialAsk = document.getElementById("socialAsk");
+    const isSocialMedia = document.getElementById("isSocialMedia");
+    const socialPlatformList = document.getElementById("socialPlatformList");
+    if (socialAsk && isSocialMedia && socialPlatformList) {
+        socialAsk.querySelectorAll('input[name="is_social_media"]').forEach(
+            function (radio) {
+                radio.addEventListener("change", function () {
+                    socialPlatformList.hidden = !isSocialMedia.checked;
+                    socialAsk.classList.toggle("is-social", isSocialMedia.checked);
+                });
+            });
+    }
+})();
+
 const clientSelect = document.getElementById("clientSelect");
 const deliverableSelect = document.getElementById("deliverableSelect");
 

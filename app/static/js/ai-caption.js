@@ -19,6 +19,27 @@
     window.__aiCaptionInit = true;
 
     var lastVariations = [];
+    // Hashtags + SEO keywords from the latest generation, so a variation the
+    // user clicks gets the SAME tags/keywords block appended as the main draft.
+    var lastHashtags = [];
+    var lastKeywords = [];
+
+    // Compose the caption box's text: the caption, then a blank line and up to
+    // five #hashtags, then a blank line and the SEO keywords in [a, b, c] form.
+    function composeCaption(text, hashtags, keywords) {
+        var out = text || "";
+        if (hashtags && hashtags.length) {
+            var tagline = hashtags.map(function (h) {
+                return "#" + String(h).replace(/^#/, "");
+            }).join(" ");
+            out = out ? out + "\n\n" + tagline : tagline;
+        }
+        if (keywords && keywords.length) {
+            var kw = "[" + keywords.join(", ") + "]";
+            out = out ? out + "\n\n" + kw : kw;
+        }
+        return out;
+    }
     // The AIUsage row for the latest generation that hasn't yet been resolved
     // (saved => "used", or superseded by a re-generate => "discarded"). This is
     // the keep-rate ROI signal; it is best-effort and never blocks the user.
@@ -57,11 +78,9 @@
 
     function applyCaption(data) {
         var cap = document.getElementById("captionInput");
-        var text = data.caption || "";
-        if (data.hashtags && data.hashtags.length) {
-            var tagline = data.hashtags.map(function (h) { return "#" + h; }).join(" ");
-            text = text ? text + "\n\n" + tagline : tagline;
-        }
+        lastHashtags = data.hashtags || [];
+        lastKeywords = data.keywords || [];
+        var text = composeCaption(data.caption || "", lastHashtags, lastKeywords);
         if (cap) { cap.value = text; fire(cap); }
 
         // Per-platform overrides are optional hand-tuning; only fill the empty
@@ -276,7 +295,10 @@
             var idx = parseInt(vary.getAttribute("data-ai-variation"), 10);
             var cap = document.getElementById("captionInput");
             if (cap && lastVariations[idx] != null) {
-                cap.value = lastVariations[idx];
+                // A variation carries the same hashtags + keywords as the main
+                // draft, so switching to it keeps the full block, not bare text.
+                cap.value = composeCaption(
+                    lastVariations[idx], lastHashtags, lastKeywords);
                 fire(cap);
             }
             var flag = document.getElementById("aiAssisted");

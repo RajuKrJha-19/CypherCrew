@@ -10,7 +10,7 @@ import base64
 from app.ai import prompts
 from app.ai.base import AIProvider, CaptionResult, Finding
 from app.ai.errors import AIAuth, AIPermanent, AITransient
-from app.ai.parsing import extract_json, strip_fences
+from app.ai.parsing import extract_json, strip_fences, salvage_caption
 
 
 def _sdk():
@@ -91,14 +91,21 @@ class ClaudeProvider(AIProvider):
         raw = self._generate(system, user, ctx.media, as_json=True)
         data = extract_json(raw)
         if data is None:
+            # Truncated/malformed JSON: salvage a clean caption, never dump the
+            # raw JSON blob into the box.
+            salvaged = salvage_caption(raw)
+            if salvaged:
+                return CaptionResult(caption=salvaged)
             text = strip_fences(raw)
-            if text:
+            if text and not text.lstrip().startswith("{"):
                 return CaptionResult(caption=text)
             raise AIPermanent(
-                "Claude returned an empty caption — try again or a different "
-                "model.")
+                "Claude returned an unparseable caption (it may have hit the "
+                "token limit) — try again or a different model.")
         hashtags = [h.lstrip("#") for h in (data.get("hashtags") or [])
                     if isinstance(h, str)]
+        keywords = [k.strip() for k in (data.get("keywords") or [])
+                    if isinstance(k, str) and k.strip()]
         per = {k: v for k, v in (data.get("per_platform") or {}).items()
                if isinstance(v, str)}
         variations = [v for v in (data.get("variations") or [])
@@ -107,6 +114,7 @@ class ClaudeProvider(AIProvider):
             caption=str(data.get("caption") or ""),
             per_platform=per,
             hashtags=hashtags,
+            keywords=keywords,
             first_comment=str(data.get("first_comment") or ""),
             variations=variations,
         )

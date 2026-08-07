@@ -1411,6 +1411,7 @@
         cb.addEventListener("change", function(){ mediaChanged(this); });
         wireAlt(lab.querySelector(".cmp-alt"));
         mediaChanged(cb);
+        return lab;
     }
     function uploadFiles(files){
         [...files].forEach(function(file){
@@ -1488,14 +1489,22 @@
             objectKey: cb.dataset.key,
             aspect: composerTargetAspect(),
             onApplied: function(d){
-                addUploaded(d);                          // appends a checked upload
-                var lab = uploadGrid.lastElementChild;
+                // Replace the original IN PLACE when it's an uploaded image:
+                // the reframed copy takes the same slot, so the composer shows
+                // one image (the crop), not the original plus a separate copy.
+                // A task-file (a client deliverable) can't be mutated, so there
+                // we fall back to adding the copy and deselecting the original.
+                var isUpload = (cb.name === "upload_media"
+                                && asset.parentNode === uploadGrid);
+                var lab = addUploaded(d, isUpload ? asset : null);
                 if(lab && altEl && altEl.value){
                     var na = lab.querySelector(".cmp-alt"); if(na) na.value = altEl.value;
                 }
-                // Deselect the original so the reframed copy is what publishes.
-                if(cb.checked){ cb.checked = false; mediaChanged(cb); }
-                if(window.showToast) window.showToast("Reframed image added — original deselected.", "success");
+                if(!isUpload && cb.checked){ cb.checked = false; mediaChanged(cb); }
+                if(window.showToast) window.showToast(
+                    isUpload ? "Image reframed."
+                             : "Reframed image added — original deselected.",
+                    "success");
             },
             onError: function(msg){ if(window.showToast) window.showToast(msg, "error"); else alert(msg); }
         });

@@ -7,7 +7,7 @@ google-genai is not installed. Vision is inline image/PDF bytes.
 from app.ai import prompts
 from app.ai.base import AIProvider, CaptionResult, Finding
 from app.ai.errors import AIAuth, AIPermanent, AITransient
-from app.ai.parsing import extract_json, strip_fences
+from app.ai.parsing import extract_json, strip_fences, salvage_caption
 
 
 def _genai():
@@ -88,17 +88,24 @@ class GeminiProvider(AIProvider):
                              as_json=True)
         data = extract_json(raw)
         if data is None:
-            # Not JSON. If the model still gave us caption text, use it as-is
-            # (a valid caption, just unwrapped); only a truly empty reply is an
-            # error - and that stays VISIBLE, not silently swallowed.
+            # JSON didn't parse (usually a token-limit truncation mid-object).
+            # Salvage just the caption field so the box shows a CLEAN caption,
+            # never the raw JSON blob. If there's no caption to salvage and the
+            # reply is plain text, use that; a bare broken-JSON reply is a
+            # visible error, not something dumped into the caption.
+            salvaged = salvage_caption(raw)
+            if salvaged:
+                return CaptionResult(caption=salvaged)
             text = strip_fences(raw)
-            if text:
+            if text and not text.lstrip().startswith("{"):
                 return CaptionResult(caption=text)
             raise AIPermanent(
-                "Gemini returned an empty caption (it may have hit the token "
-                "limit) - try again or a different model.")
+                "Gemini returned an unparseable caption (it may have hit the "
+                "token limit) - try again or a different model.")
         hashtags = [h.lstrip("#") for h in (data.get("hashtags") or [])
                     if isinstance(h, str)]
+        keywords = [k.strip() for k in (data.get("keywords") or [])
+                    if isinstance(k, str) and k.strip()]
         per = {k: v for k, v in (data.get("per_platform") or {}).items()
                if isinstance(v, str)}
         variations = [v for v in (data.get("variations") or [])
@@ -107,6 +114,7 @@ class GeminiProvider(AIProvider):
             caption=str(data.get("caption") or ""),
             per_platform=per,
             hashtags=hashtags,
+            keywords=keywords,
             first_comment=str(data.get("first_comment") or ""),
             variations=variations,
         )

@@ -77,13 +77,12 @@ def test_the_error_names_the_question_that_is_on_screen(app):
 # Still tolerant of the checkbox spelling
 # ------------------------------------------------------------------
 
-def test_an_absent_field_is_not_social_media(app):
-    """An unticked checkbox sends nothing at all."""
+def test_an_absent_answer_is_refused(app):
+    """The question is now MANDATORY with nothing pre-selected, so an absent
+    (or blank) answer is refused rather than silently defaulting to No."""
     is_social, platforms, error = _parse(app, {})
-
-    assert is_social is False
-    assert platforms == ""
-    assert error is None
+    assert is_social is None and platforms is None
+    assert "yes" in error.lower() and "no" in error.lower()
 
 
 @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "On", "YES"])
@@ -93,12 +92,19 @@ def test_the_yes_spellings_all_count(app, value):
     assert is_social is True
 
 
-@pytest.mark.parametrize("value", ["0", "", "  ", "false", "no", "off"])
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "Off", "NO"])
 def test_the_no_spellings_all_count(app, value):
     is_social, platforms, error = _parse(app, {"is_social_media": value})
     assert is_social is False
     assert platforms == ""
     assert error is None
+
+
+@pytest.mark.parametrize("value", ["", "  ", "maybe", "xyz"])
+def test_a_blank_or_unrecognised_answer_is_refused(app, value):
+    """Only an explicit Yes/No counts; a blank or junk value is refused."""
+    is_social, platforms, error = _parse(app, {"is_social_media": value})
+    assert is_social is None and platforms is None and error
 
 
 # ------------------------------------------------------------------
@@ -113,7 +119,8 @@ def test_the_create_form_asks_the_question(app, make_user, login, client):
     assert "Is this a social media post?" in html
     assert 'type="radio"' in html
     assert 'name="is_social_media"' in html
-    # And the No option is the default, so a task is never social by
-    # accident just because nobody touched the question.
-    assert 'value="0"' in html
+    assert 'value="0"' in html and 'value="1"' in html
+    # NOTHING is pre-selected any more — the question is mandatory, so the
+    # person has to make a deliberate choice rather than accept a default.
+    assert "checked" not in html.split('name="is_social_media"')[1][:400]
     assert "This task is for social media" not in html

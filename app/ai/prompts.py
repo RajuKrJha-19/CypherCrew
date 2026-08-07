@@ -42,10 +42,14 @@ def caption_prompt(ctx):
         "supported by the brief, the media, or those facts. "
         "Return ONLY minified JSON of the form "
         '{"caption": str, "per_platform": {"<platform>": str}, '
-        '"hashtags": [str], "first_comment": str, "variations": [str]}. '
+        '"hashtags": [str], "keywords": [str], "first_comment": str, '
+        '"variations": [str]}. '
         "'caption' is your best version; " + var_line + " Keep every "
         "per_platform caption within its character limit. " + tag_line
-        + " Hashtags belong in the caption, NOT the first comment. first_comment "
+        + " 'keywords' are 3-6 SEO/discovery keyword PHRASES for social search "
+        "(e.g. \"BBA admissions\", \"study in Bihar\") - plain text, NO leading "
+        "#, no duplicates of the hashtags. "
+        "Hashtags belong in the caption, NOT the first comment. first_comment "
         "may be empty and must contain NO hashtags."
     )
     brand = _brand_block(ctx)

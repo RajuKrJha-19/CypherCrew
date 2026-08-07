@@ -40,6 +40,10 @@ class SimulationProvider(AIProvider):
         caption = f"{headline}{voice}{tone}".strip()
 
         tags = _keywords(f"{brief} {ctx.industry or ''}")
+        # SEO keywords are the human-readable cousins of the hashtags, so a
+        # tester (and the tests) can see the field flow through distinctly.
+        keywords = [t.replace("-", " ").replace("_", " ").title()
+                    for t in tags][:5]
         per_platform = {}
         for p in (ctx.platforms or []):
             limit = ctx.caption_limits.get(p)
@@ -51,6 +55,7 @@ class SimulationProvider(AIProvider):
             caption=caption,
             per_platform=per_platform,
             hashtags=tags,
+            keywords=keywords,
             first_comment="",
             variations=variations,
         )

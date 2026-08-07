@@ -384,6 +384,11 @@ def active_user_names():
     ]
 
 
+#: A task description must carry enough for the assignee to actually start —
+#: a title alone ("Diwali post") leaves them guessing. Enforced on create.
+MIN_DESCRIPTION_CHARS = 50
+
+
 def parse_social_media_fields():
     """Read is_social_media / social_platforms from the task form.
 
@@ -393,13 +398,18 @@ def parse_social_media_fields():
     explains what to fix and the other two values are None.
     """
 
-    # The VALUE decides, not merely whether the field was sent. The form
-    # asks "Is this a social media post?" as Yes/No, and No posts "0" -
-    # which a plain bool() would read as true, quietly marking every task
-    # social. Kept tolerant of the checkbox spelling ("1"/absent) so any
-    # older form or no-JS path still behaves.
+    # The VALUE decides, not merely whether the field was sent. The form asks
+    # "Is this a social media post?" as Yes/No and the answer is MANDATORY -
+    # neither option is pre-selected, so a task can't be filed without a
+    # deliberate choice (a plain bool() would read "0" as true and silently
+    # mark everything social). Tolerant of the older checkbox spelling.
     raw = (request.form.get("is_social_media") or "").strip().lower()
-    is_social_media = raw in {"1", "true", "yes", "on"}
+    yes, no = {"1", "true", "yes", "on"}, {"0", "false", "no", "off"}
+    if raw not in yes and raw not in no:
+        return None, None, (
+            'Choose whether this is a social media post — answer "Yes" or "No".'
+        )
+    is_social_media = raw in yes
 
     if not is_social_media:
         return False, "", None
@@ -1488,6 +1498,15 @@ def add_task():
                 form_url
             )
 
+        description = request.form.get("description", "").strip()
+        if len(description) < MIN_DESCRIPTION_CHARS:
+            flash(
+                f"Add a task description of at least {MIN_DESCRIPTION_CHARS} "
+                "characters so the assignee has enough to work from.",
+                "error",
+            )
+            return redirect(form_url)
+
         deliverable = db.session.get(
             ClientDeliverable,
             deliverable_id,
@@ -1590,10 +1609,7 @@ def add_task():
 
         task = Task(
             title=title,
-            description=request.form.get(
-                "description",
-                "",
-            ).strip(),
+            description=description,
             client_id=client_id,
             deliverable_id=deliverable_id,
             assigned_to_id=assigned_to_id,
@@ -1917,6 +1933,24 @@ def self_assign_task():
             flash("Task title is required.", "error")
             return redirect(form_url)
 
+        description = request.form.get("description", "").strip()
+        if len(description) < MIN_DESCRIPTION_CHARS:
+            flash(
+                f"Add a task description of at least {MIN_DESCRIPTION_CHARS} "
+                "characters so you have enough to work from.",
+                "error",
+            )
+            return redirect(form_url)
+
+        # Same mandatory social question as assigning to someone else: an
+        # explicit Yes/No, and at least one platform when Yes.
+        is_social_media, social_platforms_csv, social_error = (
+            parse_social_media_fields()
+        )
+        if social_error:
+            flash(social_error, "error")
+            return redirect(form_url)
+
         reference_files = [
             uploaded_file
             for uploaded_file
@@ -1929,7 +1963,7 @@ def self_assign_task():
 
         task = Task(
             title=title,
-            description=request.form.get("description", "").strip(),
+            description=description,
             client_id=client_id,
             deliverable_id=deliverable_id,
             assigned_to_id=current_user.id,
@@ -1938,6 +1972,8 @@ def self_assign_task():
             status="Assigned",
             quantity=quantity,
             estimated_time=estimated_time,
+            is_social_media=is_social_media,
+            social_platforms=social_platforms_csv or None,
             status_started_at=datetime.utcnow(),
             created_by_id=current_user.id,
             task_code=generate_task_code()
@@ -2045,7 +2081,8 @@ def self_assign_task():
         panel_mode=in_panel(),
         clients=clients,
         deliverables=deliverables,
-        deadline_default=deadline_default
+        deadline_default=deadline_default,
+        social_platform_options=social.PLATFORMS,
     )
 
 @tasks_bp.route("/<int:task_id>/edit", methods=["GET", "POST"])

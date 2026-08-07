@@ -21,8 +21,17 @@ def get_provider(task_kind="caption"):
     if not cfg.get("AI_ENABLED"):
         raise AIDisabled("AI assist is disabled.")
 
+    # Caption drafting returns a RICH JSON object - a caption, a per-platform
+    # caption for every channel, hashtags, SEO keywords, a first comment AND
+    # alternative variations. On a long post that easily blows past a small
+    # ceiling, and when the JSON is cut off mid-object it fails to parse and the
+    # raw (truncated) JSON used to leak straight into the caption box. Give
+    # caption a generous budget; QA / alt-text stay lean on the default.
+    max_tokens = (cfg.get("AI_CAPTION_MAX_TOKENS", 4096)
+                  if task_kind == "caption"
+                  else cfg.get("AI_MAX_TOKENS", 1024))
     common = dict(
-        max_tokens=cfg.get("AI_MAX_TOKENS", 1024),
+        max_tokens=max_tokens,
         timeout_s=cfg.get("AI_TIMEOUT_S", 30),
     )
 
