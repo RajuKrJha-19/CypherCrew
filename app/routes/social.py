@@ -224,11 +224,23 @@ def _scope_targets(query, client_id):
 
 def _channel_client_ok(account_client_id, post_client_id):
     """Client-safety rule: a channel bound to a client may only be used for
-    THAT client's posts. Agency-wide channels (no binding) and posts with no
-    client are always allowed. This is the single source of truth used by
-    both the server guard and (mirrored) the composer's channel filter."""
-    return not (account_client_id and post_client_id
-                and account_client_id != post_client_id)
+    that client's FAMILY. Agency-wide channels (no binding) and posts with no
+    client are always allowed. This is the single source of truth used by both
+    the server guard and (mirrored) the composer's channel filter.
+
+    "Family" rather than the one exact id, because a holding company with no
+    page of its own can own the personal-brand page that carries what its
+    institutions publish - and that page has to be postable to while writing
+    for any of them. The rule still never reaches an unrelated client: the
+    hierarchy is one level deep, so a family is a parent and its children and
+    stops there.
+    """
+    if not (account_client_id and post_client_id):
+        return True
+    if account_client_id == post_client_id:
+        return True
+    post_client = db.session.get(Client, post_client_id)
+    return bool(post_client and account_client_id in post_client.group_ids)
 
 
 def _measure_key(source, obj):
@@ -707,8 +719,47 @@ def set_account_client(account_id):
     audit.record("account_client_set", account_id=account.id,
                  actor_id=current_user.id,
                  detail={"client_id": account.client_id})
+    # "Always include" means "on every post for its client". Once the channel
+    # is agency-wide that sentence has no subject, so the flag goes with the
+    # binding rather than lingering as a rule about nothing.
+    if account.client_id is None:
+        account.auto_include = False
     db.session.commit()
     flash("Channel assignment updated.", "success")
+    return redirect(url_for("social.accounts"))
+
+
+@social_bp.route("/accounts/<int:account_id>/auto-include", methods=["POST"])
+@login_required
+def set_account_auto_include(account_id):
+    """Make a channel ride along on every post for its client group.
+
+    The case this exists for: a personal-brand page that is meant to carry
+    everything an institution publishes. Ticking it by hand on every post is
+    the kind of step that gets forgotten silently, and the omission is only
+    visible later as a gap on that page.
+
+    It pre-selects, it does not force: the composer's checkbox is ordinary, so
+    a post that should not go there can still leave it out.
+    """
+    if not can_connect_social_accounts(current_user):
+        abort(403)
+    account = SocialAccount.query.get_or_404(account_id)
+    if account.client_id is None:
+        flash("Assign this channel to a client first — 'always include' means "
+              "'on every post for that client'.", "error")
+        return redirect(url_for("social.accounts"))
+
+    account.auto_include = bool(request.form.get("auto_include"))
+    audit.record("account_auto_include_set", account_id=account.id,
+                 actor_id=current_user.id,
+                 detail={"auto_include": account.auto_include})
+    db.session.commit()
+    flash(
+        f"{account.display_name} will now be pre-selected on every post for "
+        f"its client." if account.auto_include else
+        f"{account.display_name} is no longer pre-selected automatically.",
+        "success")
     return redirect(url_for("social.accounts"))
 
 
@@ -1610,6 +1661,7 @@ def compose():
         uploaded_media=[],
         selected_task_file_ids=[a["id"] for a in task_assets],
         accounts=AccountManager.list_accounts(),
+        account_groups=_account_client_groups(),
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
         capabilities=_capabilities_map(),
@@ -1715,6 +1767,7 @@ def edit_post(post_id):
         uploaded_media=uploaded_media,
         selected_task_file_ids=task_file_ids,
         accounts=AccountManager.list_accounts(),
+        account_groups=_account_client_groups(),
         clients=Client.query.filter_by(status="active").order_by(
             Client.client_name).all(),
         capabilities=_capabilities_map(),
@@ -3338,6 +3391,30 @@ def grid_reorder():
 # ======================================================================
 # Engage - comments inbox
 # ======================================================================
+
+def _account_client_groups():
+    """{account_id: [client ids this channel may be used for]}.
+
+    A channel bound to a client is also legitimately available to the rest of
+    that client's family - a holding company with no page of its own can own
+    the personal-brand page that carries what its institutions publish, and
+    the composer has to offer it while writing for any of them.
+
+    Computed here rather than in the template so the group rule lives in one
+    place (Client.group_ids) and the page does a fixed number of queries
+    instead of one per channel.
+    """
+    from app.models import SocialAccount
+
+    accounts = SocialAccount.query.filter(
+        SocialAccount.client_id.isnot(None)).all()
+    wanted = {a.client_id for a in accounts}
+    if not wanted:
+        return {}
+    by_id = {c.id: c for c in Client.query.filter(Client.id.in_(wanted)).all()}
+    groups = {cid: sorted(c.group_ids) for cid, c in by_id.items()}
+    return {a.id: groups.get(a.client_id, [a.client_id]) for a in accounts}
+
 
 def _scope_comments(query, client_id):
     """Filter a SocialComment query to one client, via target -> post. Always

@@ -28,6 +28,14 @@ class SocialAccount(db.Model):
         db.Integer, db.ForeignKey("clients.id"), nullable=True, index=True
     )
 
+    #: Ride along on every post for this channel's client group - the
+    #: personal-brand page that is meant to carry everything the institution
+    #: publishes. The composer pre-ticks it; it stays an ordinary checkbox, so
+    #: a single post can still opt out. Off by default.
+    auto_include = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     scopes = db.Column(db.Text, nullable=True)
 
     # Encrypted secrets + key version used to encrypt them (rotation).

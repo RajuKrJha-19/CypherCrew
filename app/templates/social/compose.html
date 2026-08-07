@@ -381,7 +381,13 @@
                     <div class="cmp-accounts">
                         {% for a in accounts %}
                         <label class="cmp-account {% if a.id in selected_account_ids %}on{% endif %}">
-                            <input type="checkbox" name="account_ids" value="{{ a.id }}" data-platform="{{ a.platform }}" data-name="{{ a.display_name }}" data-client="{{ a.client_id or '' }}" {% if a.id in selected_account_ids %}checked{% endif %}>
+                            {# data-group: every client id this channel may be
+                               used for. A channel owned by a holding company
+                               is legitimately available to its institutions,
+                               so the filter compares against the family, not
+                               one id - while still never crossing into an
+                               unrelated client. #}
+                            <input type="checkbox" name="account_ids" value="{{ a.id }}" data-platform="{{ a.platform }}" data-name="{{ a.display_name }}" data-client="{{ a.client_id or '' }}" data-group="{{ account_groups.get(a.id, [])|join(',') }}" {% if a.auto_include %}data-auto-include="1"{% endif %} {% if a.id in selected_account_ids %}checked{% endif %}>
                             <span class="ava pf-{{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i></span>
                             <span class="nm">{{ a.display_name }}</span>
                         </label>
@@ -1278,13 +1284,32 @@
     // Client safety: only show channels bound to the selected client (or
     // agency-wide, unbound). Mismatched channels are hidden + unchecked so
     // you can't publish one client's post to another client's page.
+    // Ride-along channels this composer has already auto-ticked once. Without
+    // it, every client change would re-tick a channel the person had just
+    // deliberately unticked.
+    const autoIncludeSettled = new Set();
+
     function filterAccountsByClient(){
         const cid = clientSelect.value; let hidden = 0;
         document.querySelectorAll('.cmp-account').forEach(l=>{
             const inp = l.querySelector('input'); const ac = inp.dataset.client || '';
-            const show = !ac || !cid || ac === cid;
+            // A channel is offered when it is agency-wide (no client), when no
+            // client is chosen yet, or when the chosen client is anywhere in
+            // that channel's family. The last case is what lets a holding
+            // company's page be posted to alongside its institutions; an
+            // unrelated client is still hidden and unticked.
+            const group = (inp.dataset.group || "").split(",").filter(Boolean);
+            const show = !ac || !cid || ac === cid || group.indexOf(cid) !== -1;
             l.style.display = show ? '' : 'none';
             if(!show && inp.checked){ inp.checked = false; }
+            // A ride-along channel ticks itself the moment it becomes
+            // relevant, so it cannot be forgotten. Only when the person has
+            // not already made a choice on this composer - re-ticking one
+            // they just cleared would be a fight, not a convenience.
+            if(show && inp.dataset.autoInclude && !autoIncludeSettled.has(inp.value)){
+                autoIncludeSettled.add(inp.value);
+                inp.checked = true;
+            }
             if(!show) hidden++;
         });
         const hint = $("accountsHint");

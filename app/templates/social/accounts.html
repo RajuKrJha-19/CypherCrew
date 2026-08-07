@@ -164,6 +164,20 @@
                             {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if a.client_id == c.id }}>{{ c.client_name }}</option>{% endfor %}
                         </select>
                     </form>
+                    {# Only meaningful once the channel belongs to a client -
+                       "every post for its client group" has no meaning for an
+                       agency-wide channel. #}
+                    {% if a.client_id %}
+                    <form method="POST" action="{{ url_for('social.set_account_auto_include', account_id=a.id) }}"
+                          data-turbo="false" class="acct-auto-include">
+                        <label title="Pre-select this channel on every post for its client (and that client's sub-clients). It stays a checkbox, so any one post can still leave it out.">
+                            <input type="checkbox" name="auto_include" value="1"
+                                   {{ 'checked' if a.auto_include }}
+                                   onchange="this.form.requestSubmit()">
+                            Always include
+                        </label>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
