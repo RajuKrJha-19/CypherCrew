@@ -161,6 +161,28 @@ class Client(db.Model):
 
         return initials or "CLIENT"
 
+    @property
+    def group_ids(self):
+        """Every client id in this one's family: itself, its parent, and its
+        parent's other children - or itself and its own children.
+
+        A "client group" is the unit a shared channel belongs to. A holding
+        company with no page of its own can own the personal-brand page that
+        carries what its institutions publish, and the Studio has to let that
+        page be selected while composing for any of them - without ever
+        widening past the family into an unrelated client.
+
+        One level deep, so this is either {me, my parent, my siblings} or
+        {me, my children}; it can never walk further.
+        """
+        if self.parent_client_id and self.parent is not None:
+            root = self.parent
+        else:
+            root = self
+        ids = {root.id, self.id}
+        ids.update(c.id for c in root.sub_clients)
+        return ids
+
     @classmethod
     def ordered_with_sub_clients(cls, status="active"):
         """Clients in the order a form dropdown should show them:

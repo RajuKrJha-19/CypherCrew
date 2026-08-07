@@ -23,6 +23,16 @@
                         {% if client.parent %}
                         <span class="sub-client-tag">sub-client of {{ client.parent.client_name }}</span>
                         {% endif %}
+                        {# The mirror of the tag above. Which side of the
+                           relationship a client is on was only visible from
+                           one direction: a child said whose it was, a parent
+                           said nothing until you scrolled to its list. #}
+                        {% if client.sub_clients %}
+                        {% set n_subs = client.sub_clients|length %}
+                        <span class="parent-client-tag" title="Other clients are grouped under this one">
+                            <i class="fa-solid fa-sitemap"></i>{{
+                            'parent client · %d sub-client%s'|format(n_subs, '' if n_subs == 1 else 's') }}</span>
+                        {% endif %}
                     </h1>
                     <p>
                         {{ client.company_name or client.client_name }}
@@ -43,6 +53,24 @@
                 <a href="{{ url_for('clients.add_client', parent_id=client.id) }}" class="btn">
                     <i class="fa-solid fa-plus"></i> Add Sub-client
                 </a>
+                {# "Add" only ever made a NEW client, so one that already
+                   existed on its own had to be rebuilt to sit under its
+                   group. The list is pre-filtered to what may legally move
+                   (main clients with no sub-clients of their own); the route
+                   re-checks every one of those conditions. #}
+                {% if attachable %}
+                <form method="POST" action="{{ url_for('clients.attach_client', client_id=client.id) }}"
+                      class="attach-sub-form">
+                    <select name="child_id" aria-label="Existing client to move under this one" required>
+                        <option value="">Move an existing client here…</option>
+                        {% for c in attachable %}
+                        <option value="{{ c.id }}">{{ c.client_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="fa-solid fa-sitemap"></i> Attach</button>
+                </form>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

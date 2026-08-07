@@ -240,6 +240,182 @@ def add_client():
     )
 
 
+# ===========================================================================
+# Client hierarchy
+#
+# One level, no cycles: a client is either a top-level client or a sub-client
+# of one, never both. Every move goes through set_parent() - three screens
+# offer it, and duplicating the rules per screen is exactly how one of them
+# ends up a level behind the others.
+# ===========================================================================
+
+def can_move_under(child, parent):
+    """(ok, reason) for making `child` a sub-client of `parent`.
+
+    `parent` None means "make it a main client", which is always allowed:
+    clearing a parent cannot add a level or a cycle whatever the tree looks
+    like. Everything else is a shape the structure must never reach.
+    """
+    if child is None:
+        return False, "That client no longer exists."
+    if parent is None:
+        return True, ""
+    if parent.id == child.id:
+        return False, "A client can't be its own sub-client."
+    if parent.parent_client_id:
+        return False, (f"{parent.client_name} is itself a sub-client, so "
+                       "nothing can be placed under it.")
+    if child.sub_clients:
+        return False, (f"{child.client_name} has its own sub-clients, so "
+                       "moving it would create a second level. Lift those "
+                       "out first.")
+    if child.parent_client_id == parent.id:
+        return False, (f"{child.client_name} is already a sub-client of "
+                       f"{parent.client_name}.")
+    return True, ""
+
+
+def set_parent(child, parent):
+    """Move `child` under `parent` (or to the top when parent is None).
+
+    Returns (ok, category, message) for the caller to flash. Commits only on
+    success, so a refused move leaves the session exactly as it found it.
+    """
+    ok, why = can_move_under(child, parent)
+    if not ok:
+        return False, "error", why
+
+    was = child.parent.client_name if child.parent else None
+    child.parent_client_id = parent.id if parent else None
+    db.session.commit()
+
+    tail = " Its tasks, deliverables and channels are unchanged."
+    if parent is None:
+        return True, "success", (
+            f"{child.client_name} is now a main client"
+            + (f" — moved out from under {was}." if was else ".") + tail)
+    if was:
+        return True, "success", (
+            f"{child.client_name} moved from {was} to {parent.client_name}."
+            + tail)
+    return True, "success", (
+        f"{child.client_name} is now a sub-client of {parent.client_name}."
+        + tail)
+
+
+def eligible_parents(child):
+    """Clients `child` could be moved under, for a "move under..." picker.
+
+    Empty when the child has sub-clients of its own - it cannot move anywhere
+    until those are lifted out, and offering a list it may not use is how a
+    picker becomes a dead end.
+    """
+    if child is None or child.sub_clients:
+        return []
+    return (
+        Client.query
+        .filter(Client.id != child.id,
+                Client.parent_client_id.is_(None),
+                Client.status == "active")
+        .order_by(Client.client_name.asc())
+        .all()
+    )
+
+
+def attachable_clients(parent):
+    """Clients that may be moved UNDER `parent`, for the parent's own page.
+
+    The mirror of eligible_parents. Both are conveniences: set_parent
+    re-checks every condition, so a stale page or a hand-made POST cannot
+    reach a shape this list would have hidden.
+    """
+    if parent is None or parent.parent_client_id:
+        return []
+    return [
+        c for c in (
+            Client.query
+            .filter(Client.id != parent.id,
+                    Client.status == "active",
+                    ~Client.sub_clients.any())
+            .order_by(Client.client_name.asc())
+            .all()
+        )
+        # Already here - offering it would be a no-op the route then refuses.
+        if c.parent_client_id != parent.id
+    ]
+
+
+@clients_bp.route("/<int:client_id>/attach", methods=["POST"])
+@login_required
+def attach_client(client_id):
+    """Move an existing client under `client_id`, from the PARENT's page.
+
+    The counterpart to "Add Sub-client", which could only ever create a brand
+    new one - so a client already set up on its own had to be rebuilt to sit
+    under the group it belonged to. The rules live in set_parent; this route
+    only resolves the two clients and reports back.
+    """
+    if not can_manage_clients(current_user):
+        return redirect(url_for("dashboard.index"))
+
+    parent = Client.query.get_or_404(client_id)
+    back = redirect(url_for("clients.client_detail", client_id=parent.id))
+
+    child = _client_from_form("child_id")
+    if child is None:
+        flash("Pick a client to move under this one.", "error")
+        return back
+
+    _ok, category, message = set_parent(child, parent)
+    flash(message, category)
+    return back
+
+
+@clients_bp.route("/<int:client_id>/move", methods=["POST"])
+@login_required
+def move_client(client_id):
+    """Move a client under a parent, from the CLIENT's own page.
+
+    The direction the big SaaS tools put it in - you change a record's parent
+    from that record, not by going to the other one and pulling it in - and
+    the one that makes re-parenting possible at all: an empty value means "no
+    parent", so main -> sub, sub -> different sub, and sub -> main are all the
+    same action here.
+    """
+    if not can_manage_clients(current_user):
+        return redirect(url_for("dashboard.index"))
+
+    client = Client.query.get_or_404(client_id)
+    back = redirect(url_for("clients.edit_client", client_id=client.id))
+
+    raw = (request.form.get("parent_client_id") or "").strip()
+    if raw == "":
+        parent = None                      # deliberate "make it a main client"
+    else:
+        parent = _client_from_form("parent_client_id")
+        if parent is None:
+            flash("That client no longer exists — reload and try again.",
+                  "error")
+            return back
+
+    _ok, category, message = set_parent(client, parent)
+    flash(message, category)
+    return back
+
+
+def _client_from_form(field):
+    """A Client from a form field, or None - never an exception.
+
+    The id arrives as text from a <select> that may be stale (the client was
+    deleted or renamed in another tab) or hand-made, so a non-numeric value
+    and a missing row both have to end as a flash, not a 500 or a 404 page.
+    """
+    raw = (request.form.get(field) or "").strip()
+    if not raw.isdigit():
+        return None
+    return db.session.get(Client, int(raw))
+
+
 @clients_bp.route("/<int:client_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_client(client_id):
@@ -247,8 +423,9 @@ def edit_client(client_id):
 
     This is what makes the active/inactive filter and the inactive-asset read
     guard mean something: a client could previously only be made inactive AT
-    creation. Parent re-parenting is deliberately excluded so the one-level,
-    no-cycles sub-client invariant can't be broken from here.
+    creation. Pointing a client at a DIFFERENT parent is still excluded here,
+    so the one-level, no-cycles sub-client invariant can't be broken - but
+    detaching one (promote_client above) is safe in a way re-parenting is not.
     """
     if not can_manage_clients(current_user):
         return redirect(url_for("dashboard.index"))
@@ -311,6 +488,7 @@ def edit_client(client_id):
     from app.ai import client_brain
     return render_template(
         "clients/edit.html", client=client, managers=managers,
+        parent_options=eligible_parents(client),
         brain_sections=client_brain.SECTIONS,
         brain=client.brand_brain or {},
         offers=client_brain.offers_display(client),
@@ -399,6 +577,9 @@ def client_detail(client_id):
         "clients/detail.html",
         client_logo_url=client_logo_url,
         client=client,
+        # Only computed for someone who could act on it, and only on a page
+        # where attaching is even possible.
+        attachable=(attachable_clients(client) if can_manage else []),
         monthly_target=monthly_target,
         grouped_stats=grouped_stats,
         selected_month=selected_month,

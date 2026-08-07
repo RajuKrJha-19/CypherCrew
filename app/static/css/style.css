@@ -11449,6 +11449,35 @@ body.panel-mode .main-panel{
     vertical-align:middle;
 }
 
+/* The mirror of .sub-client-tag, on the other side of the relationship.
+   Tinted rather than muted so "this one has clients under it" reads as a
+   property of the client, not as the same neutral note as its parent's name. */
+.parent-client-tag{
+    display:inline-block;
+    margin-left:8px;
+    padding:3px 10px;
+    border-radius:999px;
+    background:var(--color-primary-soft);
+    border:1px solid var(--color-primary-border);
+    color:var(--color-primary);
+    font-size:12px;
+    font-weight:600;
+    vertical-align:middle;
+}
+.parent-client-tag i{ margin-right:5px; }
+
+/* Sits in the header's action row beside "Add Sub-client". */
+.attach-sub-form{ display:inline-flex; align-items:center; gap:6px; margin:0; }
+.attach-sub-form select{ max-width:230px; }
+
+/* The parent picker on the client's own edit page. Its own block under the
+   form, because where a client sits is a separate action from saving its
+   details - not another field in that form. */
+.client-move{ margin-top:18px; padding-top:16px; border-top:1px solid var(--color-border); }
+.client-move label{ display:block; margin-bottom:6px; }
+.client-move select{ max-width:320px; }
+.client-move .field-hint{ display:block; margin-top:8px; }
+
 .sub-clients-list{
     display:flex;
     flex-direction:column;

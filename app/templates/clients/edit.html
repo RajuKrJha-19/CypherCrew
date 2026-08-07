@@ -148,11 +148,14 @@
                 </div>
                 {% endif %}
 
-                {% if client.parent_client_id and client.parent %}
+                {% if client.sub_clients %}
                 <p class="form-hint" style="margin-top:12px">
-                    Sub-client of <strong>{{ client.parent.client_name }}</strong>.
-                    Re-parenting is done by recreating the client, to keep the
-                    one-level structure intact.
+                    <i class="fa-solid fa-sitemap"></i>
+                    This is a <strong>parent client</strong> —
+                    {{ client.sub_clients|length }} sub-client{{ '' if client.sub_clients|length == 1 else 's' }}
+                    sit{{ 's' if client.sub_clients|length == 1 else '' }} under it.
+                    It can't be moved under another client until those are
+                    lifted out, because the structure is one level deep.
                 </p>
                 {% endif %}
 
@@ -168,5 +171,40 @@
                 <button type="submit">Save changes</button>
 
             </form>
+
+            {# Outside the edit form on purpose: nesting a second form is
+               invalid HTML, and where a client sits is a distinct action, not
+               one of the fields saved above.
+
+               On the client's OWN page, the way the big SaaS tools do it -
+               you change a record's parent from that record. An empty value
+               means "no parent", so main -> sub, sub -> a different sub, and
+               sub -> main are all this one control. #}
+            {% if not client.sub_clients %}
+            <form method="POST"
+                  action="{{ url_for('clients.move_client', client_id=client.id) }}"
+                  class="client-move">
+                <label for="moveParent">Parent client</label>
+                <select name="parent_client_id" id="moveParent">
+                    <option value="">— No parent (main client) —</option>
+                    {% for p in parent_options %}
+                    <option value="{{ p.id }}"
+                        {% if client.parent_client_id == p.id %}selected{% endif %}>
+                        {{ p.client_name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary">
+                    <i class="fa-solid fa-sitemap"></i> Move</button>
+                <small class="field-hint">
+                    {% if client.parent %}
+                    Currently under <strong>{{ client.parent.client_name }}</strong>.
+                    {% else %}
+                    Currently a main client.
+                    {% endif %}
+                    Moving changes only where it appears in client lists — its
+                    tasks, deliverables and channels stay exactly as they are.
+                </small>
+            </form>
+            {% endif %}
         </div>
 {% endblock %}
