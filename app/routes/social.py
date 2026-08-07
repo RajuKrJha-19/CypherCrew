@@ -223,24 +223,27 @@ def _scope_targets(query, client_id):
 
 
 def _channel_client_ok(account_client_id, post_client_id):
-    """Client-safety rule: a channel bound to a client may only be used for
-    that client's FAMILY. Agency-wide channels (no binding) and posts with no
-    client are always allowed. This is the single source of truth used by both
-    the server guard and (mirrored) the composer's channel filter.
+    """Client-safety rule — the single source of truth for both the server
+    guard and (mirrored) the composer's channel filter.
 
-    "Family" rather than the one exact id, because a holding company with no
-    page of its own can own the personal-brand page that carries what its
-    institutions publish - and that page has to be postable to while writing
-    for any of them. The rule still never reaches an unrelated client: the
-    hierarchy is one level deep, so a family is a parent and its children and
-    stops there.
+    A channel may be used for a post when:
+      - the post has NO client (a genuine agency-wide post) — any channel; or
+      - the channel belongs to the post's client, or to an ANCESTOR of it (a
+        parent/holding page carrying what its institutions publish).
+
+    Deliberately strict in two ways that prevent publish-to-the-wrong-page
+    mistakes: an UNASSIGNED channel (no client) is NOT offered for a client's
+    post — it must be assigned first — and a channel is NEVER shared sideways
+    to a sibling client. See Client.scope_ids.
     """
-    if not (account_client_id and post_client_id):
-        return True
+    if not post_client_id:
+        return True                     # a client-less post may use any channel
+    if not account_client_id:
+        return False                    # an unassigned channel needs a client first
     if account_client_id == post_client_id:
         return True
-    post_client = db.session.get(Client, post_client_id)
-    return bool(post_client and account_client_id in post_client.group_ids)
+    account_client = db.session.get(Client, account_client_id)
+    return bool(account_client and post_client_id in account_client.scope_ids)
 
 
 def _measure_key(source, obj):
@@ -3395,14 +3398,11 @@ def grid_reorder():
 def _account_client_groups():
     """{account_id: [client ids this channel may be used for]}.
 
-    A channel bound to a client is also legitimately available to the rest of
-    that client's family - a holding company with no page of its own can own
-    the personal-brand page that carries what its institutions publish, and
-    the composer has to offer it while writing for any of them.
-
-    Computed here rather than in the template so the group rule lives in one
-    place (Client.group_ids) and the page does a fixed number of queries
-    instead of one per channel.
+    A channel bound to a client is available for that client AND its
+    sub-clients (a parent/holding page carries what its institutions publish) -
+    but never sideways to a sibling. Computed here rather than in the template
+    so the rule lives in one place (Client.scope_ids) and the page does a fixed
+    number of queries instead of one per channel.
     """
     from app.models import SocialAccount
 
@@ -3412,7 +3412,7 @@ def _account_client_groups():
     if not wanted:
         return {}
     by_id = {c.id: c for c in Client.query.filter(Client.id.in_(wanted)).all()}
-    groups = {cid: sorted(c.group_ids) for cid, c in by_id.items()}
+    groups = {cid: sorted(c.scope_ids) for cid, c in by_id.items()}
     return {a.id: groups.get(a.client_id, [a.client_id]) for a in accounts}
 
 

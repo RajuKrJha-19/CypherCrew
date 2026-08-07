@@ -395,19 +395,19 @@ def test_task_link_marks_published(session):
 
 
 def test_channel_client_safety_rule(app):
-    """A client-bound channel is only usable for that client's FAMILY;
-    agency-wide channels and client-less posts are always allowed.
+    """A channel serves its own client + its sub-clients (downward only). A
+    client-less post may use any channel, but an UNASSIGNED channel may NOT be
+    used for a client's post — it must be assigned first.
 
-    Needs an app context now: "family" is a question about the client
-    hierarchy, so the cross-client case reads the database. Ids 5 and 9 do not
-    exist here, so the family is empty and the answer is the same refusal it
-    always was - the widened rule cannot accidentally allow a stranger.
-    See test_channel_auto_include for the family cases with real rows.
+    Needs an app context: the cross-client case reads the client hierarchy. Ids
+    5 and 9 do not exist here, so there are no sub-clients and the answer is a
+    plain refusal — the rule can never accidentally allow a stranger.
+    See test_channel_auto_include for the hierarchy cases with real rows.
     """
     from app.routes.social import _channel_client_ok
     with app.app_context():
         assert _channel_client_ok(None, None) is True   # agency post, agency chan
-        assert _channel_client_ok(None, 5) is True      # agency channel, any post
+        assert _channel_client_ok(None, 5) is False     # unassigned chan on a client post -> blocked
         assert _channel_client_ok(5, None) is True      # bound channel, agency post
         assert _channel_client_ok(5, 5) is True         # same client
         assert _channel_client_ok(5, 9) is False        # unrelated -> blocked

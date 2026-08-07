@@ -1293,13 +1293,14 @@
         const cid = clientSelect.value; let hidden = 0;
         document.querySelectorAll('.cmp-account').forEach(l=>{
             const inp = l.querySelector('input'); const ac = inp.dataset.client || '';
-            // A channel is offered when it is agency-wide (no client), when no
-            // client is chosen yet, or when the chosen client is anywhere in
-            // that channel's family. The last case is what lets a holding
-            // company's page be posted to alongside its institutions; an
-            // unrelated client is still hidden and unticked.
+            // With a client chosen, a channel is offered ONLY when it belongs
+            // to that client or to an ancestor of it (a parent/holding page
+            // that carries its institutions' posts). A sibling's page, and an
+            // UNASSIGNED page (no client), are deliberately NOT offered — both
+            // were real ways to publish to the wrong page by mistake. When no
+            // client is chosen yet, everything shows.
             const group = (inp.dataset.group || "").split(",").filter(Boolean);
-            const show = !ac || !cid || ac === cid || group.indexOf(cid) !== -1;
+            const show = !cid || ac === cid || group.indexOf(cid) !== -1;
             l.style.display = show ? '' : 'none';
             if(!show && inp.checked){ inp.checked = false; }
             // A ride-along channel ticks itself the moment it becomes

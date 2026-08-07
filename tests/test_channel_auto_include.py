@@ -68,12 +68,15 @@ def _wipe():
 
 
 # ======================================================================
-# The client-safety rule, widened to the family and no further
+# The client-safety rule: a channel serves its client + sub-clients (DOWNWARD
+# only) — never a sibling, never an unassigned channel on a client's post.
 # ======================================================================
 
-def test_an_unbound_channel_is_allowed_anywhere(app, session):
+def test_an_unassigned_channel_is_not_allowed_for_a_client_post(app, session):
+    """An unassigned (no-client) channel must be assigned first; it is NOT
+    silently offered for every client's post - that was a wrong-page hazard."""
     with app.app_context():
-        assert _channel_client_ok(None, 123) is True
+        assert _channel_client_ok(None, 123) is False
 
 
 def test_a_post_with_no_client_allows_any_channel(app, session):
@@ -102,24 +105,28 @@ def test_a_parents_channel_is_allowed_for_its_sub_client(app, session):
         _wipe()
 
 
-def test_a_sub_clients_channel_is_allowed_for_its_parent(app, session):
+def test_a_sub_clients_channel_is_not_used_for_its_parent(app, session):
+    """Scoping is downward only: an institution's own page is NOT pulled in when
+    composing for the parent/holding client."""
     try:
         holding = _client(session, "holding")
         inst = _client(session, "institution", parent=holding)
         with app.app_context():
-            assert _channel_client_ok(inst.id, holding.id) is True
+            assert _channel_client_ok(inst.id, holding.id) is False
     finally:
         _wipe()
 
 
-def test_two_sub_clients_of_one_parent_share(app, session):
-    """Siblings are family - Polytechnic's post may use the group's page."""
+def test_two_sub_clients_of_one_parent_do_not_share(app, session):
+    """Siblings do NOT share pages - composing for Polytechnic never offers
+    the University's page. This sideways bleed caused wrong-page publishes."""
     try:
         holding = _client(session, "holding")
         a = _client(session, "instA", parent=holding)
         b = _client(session, "instB", parent=holding)
         with app.app_context():
-            assert _channel_client_ok(a.id, b.id) is True
+            assert _channel_client_ok(a.id, b.id) is False
+            assert _channel_client_ok(b.id, a.id) is False
     finally:
         _wipe()
 
