@@ -18447,6 +18447,17 @@ body.studio-nav-collapsed .studio-nav-section::after{
 .cmp-asset:hover .cmp-crop-btn, .cmp-crop-btn:focus-visible{ opacity:1; transform:scale(1); }
 .cmp-crop-btn:hover{ background:var(--color-primary); }
 
+/* Remove a wrongly-picked file from the composer. Bottom-right because the
+   other three corners are taken: .ord and the crop button sit top-left, the
+   selected tick top-right. Hidden until hover/focus like the crop button, so
+   the grid stays calm - but always reachable by keyboard. */
+.cmp-asset-rm{ position:absolute; bottom:6px; right:6px; width:22px; height:22px; z-index:2;
+    border:0; border-radius:50%; background:rgba(15,23,42,.72); color:#fff; cursor:pointer;
+    display:grid; place-items:center; font-size:11px; opacity:0; transform:scale(.85);
+    transition:opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.cmp-asset:hover .cmp-asset-rm, .cmp-asset-rm:focus-visible{ opacity:1; transform:scale(1); }
+.cmp-asset-rm:hover{ background:var(--color-danger); }
+
 /* ---- Image crop / reframe overlay (media-cropper.js) ---- */
 .mc-overlay{ position:fixed; inset:0; z-index:1200; background:rgba(2,6,23,.6);
     display:grid; place-items:center; padding:16px; }

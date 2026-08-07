@@ -204,6 +204,7 @@
                         <span class="cmp-asset-name">uploaded</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
                         {% if u.is_image %}<button type="button" class="cmp-crop-btn" data-crop title="Crop / reframe for platforms"><i class="fa-solid fa-crop-simple"></i></button>{% endif %}
+                        <button type="button" class="cmp-asset-rm" data-remove title="Remove this file"><i class="fa-solid fa-xmark"></i></button>
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|{{ u.object_key }}::{{ u.mime }}">
                     </label>
                     {% endfor %}
@@ -1251,9 +1252,25 @@
         renderPreview();
     }
     function mediaChanged(inp){
-        // single-media post types keep at most one selection, across both grids
-        if(postType()!=="carousel" && inp.checked){
-            document.querySelectorAll(MEDIA_SEL).forEach(o=>{ if(o!==inp)o.checked=false; });
+        if(inp.checked && postType()!=="carousel"){
+            const others=[...document.querySelectorAll(MEDIA_SEL)].filter(o=>o!==inp && o.checked);
+            const carousel=document.querySelector('input[name="post_type"][value="carousel"]');
+            const anyVideo=isVideoInput(inp)||others.some(isVideoInput);
+            if(others.length && carousel && !anyVideo){
+                // A SECOND image is the user asking for a carousel, so switch
+                // instead of silently dropping the first. Uploading five images
+                // used to leave only the last one ticked - and with one item the
+                // sequence strip (which needs two) never appeared, so "multi-
+                // select doesn't work" and "I can't set the order" were the same
+                // bug. Composing from a task already does exactly this
+                // server-side (routes/social.py: >1 file -> carousel).
+                carousel.checked=true;
+                carousel.dispatchEvent(new Event("change",{bubbles:true}));
+            } else {
+                // Genuinely single-media - a video, or a channel that offers no
+                // carousel. Keep at most one selection, across every grid.
+                others.forEach(o=>{ o.checked=false; });
+            }
         }
         refreshMediaSelection();
         refreshChecklist();
@@ -1346,7 +1363,7 @@
 
     // ---- Direct media upload ----
     const uploadZone=$("uploadZone"), uploadInput=$("uploadInput"), uploadGrid=$("uploadGrid");
-    function addUploaded(d){
+    function addUploaded(d, slot){
         const lab=document.createElement("label"); lab.className="cmp-asset selected"; lab.title=d.filename||"uploaded";
         const isVid=/^video/i.test(d.mime||"");
         const poster=(isVid&&d.object_key)?('/social/media/poster?key='+encodeURIComponent(d.object_key)):null;
@@ -1358,8 +1375,13 @@
             +'<span class="ord"></span><span class="cmp-asset-thumb">'+thumb+'</span>'
             +'<span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
             +cropBtn
+            +'<button type="button" class="cmp-asset-rm" data-remove title="Remove this file"><i class="fa-solid fa-xmark"></i></button>'
             +'<input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|'+d.object_key+'::'+d.mime+'">';
-        uploadGrid.appendChild(lab);
+        // Take the placeholder's PLACE. Appending instead meant the grid ended
+        // up in upload-completion order - so picking five files gave a random
+        // slide sequence, because a small image finishes before a big one.
+        if(slot && slot.parentNode===uploadGrid) uploadGrid.replaceChild(lab, slot);
+        else uploadGrid.appendChild(lab);
         const cb=lab.querySelector('input[type="checkbox"]');
         cb.addEventListener("change", function(){ mediaChanged(this); });
         wireAlt(lab.querySelector(".cmp-alt"));
@@ -1372,8 +1394,11 @@
             uploadGrid.appendChild(ph);
             const fd=new FormData(); fd.append("file", file);
             fetch("/social/api/upload", {method:"POST", body:fd})
-              .then(r=>r.json()).then(d=>{ ph.remove(); if(d.object_key){ addUploaded(d); } else { alert(d.error||"Upload failed."); } })
-              .catch(()=>{ ph.remove(); alert("Upload failed."); });
+              .then(r=>r.json()).then(d=>{
+                  if(d.object_key){ addUploaded(d, ph); }
+                  else { ph.remove(); alert((d.error||"Upload failed.")+"\n"+file.name); }
+              })
+              .catch(()=>{ ph.remove(); alert("Upload failed.\n"+file.name); });
         });
     }
     if(uploadInput) uploadInput.addEventListener("change", function(){ uploadFiles(this.files); this.value=""; });
@@ -1384,6 +1409,30 @@
     }
     // wire server-rendered uploaded items (edit mode)
     if(uploadGrid) uploadGrid.querySelectorAll('input[name="upload_media"]').forEach(c=>c.addEventListener("change", function(){ mediaChanged(this); }));
+
+    // Remove a file from the composer. Delegated, so it works for tiles added
+    // after load as well as the server-rendered ones.
+    //
+    // The tile is a <label> wrapping the checkbox, so a plain click anywhere
+    // inside it toggles selection - the X has to stop both the default label
+    // behaviour and the bubble, or removing would also tick/untick something.
+    //
+    // Nothing is deleted server-side: the R2 object is only referenced once the
+    // post is SAVED, and media/gc.py already sweeps uploads that were never
+    // saved ("the file removed before saving" is one of the cases it names).
+    if(uploadGrid) uploadGrid.addEventListener("click", function(ev){
+        const btn = ev.target.closest ? ev.target.closest("[data-remove]") : null;
+        if(!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const lab = btn.closest(".cmp-asset");
+        if(!lab) return;
+        const cb = lab.querySelector('input[name="upload_media"]');
+        if(cb) cb.checked = false;      // drop it from the sequence first
+        lab.remove();
+        refreshMediaSelection();        // re-numbers .ord and the slide strip
+        refreshChecklist();
+    });
 
     // ---- Image crop / reframe ----
     // The initial crop aspect = what the first selected platform displays this
