@@ -719,6 +719,12 @@ def set_account_client(account_id):
         for ig in SocialAccount.query.filter_by(platform="instagram").all():
             if (ig.meta or {}).get("page_id") == page_id:
                 ig.client_id = account.client_id
+                # A ride-along flag has no meaning once the channel is
+                # agency-wide; clear it on the swept IG children too, so a
+                # child can't be left auto_include=True with no client (a state
+                # the toggle route itself refuses to create).
+                if account.client_id is None:
+                    ig.auto_include = False
     audit.record("account_client_set", account_id=account.id,
                  actor_id=current_user.id,
                  detail={"client_id": account.client_id})
@@ -1832,6 +1838,11 @@ def _apply_composer_form(post):
     by both create and edit (edit only runs for editable statuses)."""
     post.title = (request.form.get("title") or "").strip() or None
     client_id = request.form.get("client_id", type=int)
+    # Validate against an active client (the dropdown only lists those); a
+    # tampered/non-existent id would otherwise 500 on the FK at commit.
+    if client_id and not Client.query.filter_by(
+            id=client_id, status="active").first():
+        client_id = None
     post.client_id = client_id
     # Link the post back to the originating task (compose-from-task), so a
     # real publish can move that task to Published.
@@ -2320,7 +2331,10 @@ def _target_repairs(target):
             continue          # this one is fine; only offer the broken ones
         try:
             url = pipeline.presigned_url(m.object_key)
-        except Exception:  # noqa: BLE001 - no preview, no crop offer
+        except Exception:  # noqa: BLE001 - no preview, no crop offer, but log it
+            current_app.logger.warning(
+                "[social] could not presign %s for crop-repair", m.object_key,
+                exc_info=True)
             continue
         out["crop"].append({
             "media_id": m.id,

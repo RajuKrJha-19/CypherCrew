@@ -39,7 +39,7 @@
             <input type="text" name="title" value="{{ task.title }}" required>
 
             <label>Description</label>
-            <textarea name="description" rows="5" data-emoji-field>{{ task.description or "" }}</textarea>
+            <textarea name="description" rows="5" data-emoji-field required minlength="50">{{ task.description or "" }}</textarea>
 
             <label>Client</label>
             <select name="client_id" id="clientSelect" required>

@@ -212,6 +212,22 @@
                     socialAsk.classList.toggle("is-social", isSocialMedia.checked);
                 });
             });
+        // Catch "Yes with no platform" here so the server's redirect can't wipe
+        // the title + 50-char description the user just filled.
+        const taskForm = socialAsk.closest("form");
+        if (taskForm) {
+            taskForm.addEventListener("submit", function (ev) {
+                if (isSocialMedia.checked &&
+                    !socialPlatformList.querySelector(
+                        'input[name="social_platforms"]:checked')) {
+                    ev.preventDefault();
+                    (window.showToast || alert)(
+                        "Pick at least one platform for a social media post.",
+                        "error");
+                    socialPlatformList.hidden = false;
+                }
+            });
+        }
     }
 })();
 

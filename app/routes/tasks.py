@@ -2337,6 +2337,14 @@ def edit_task(task_id):
                 )
             )
 
+        if len(new_description) < MIN_DESCRIPTION_CHARS:
+            flash(
+                f"A task description of at least {MIN_DESCRIPTION_CHARS} "
+                "characters is required.",
+                "error"
+            )
+            return redirect(url_for("tasks.edit_task", task_id=task.id))
+
         task.title = new_title
         task.description = new_description
         task.priority = new_priority

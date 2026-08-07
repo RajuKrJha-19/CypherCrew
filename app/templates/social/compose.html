@@ -150,7 +150,7 @@
                         <button type="button" class="btn btn-secondary cmp-tailor-btn" id="tailorPerPlatform">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Tailor each platform with AI
                         </button>
-                        <span class="form-hint" style="margin:0">Rewrites the caption above to fit each platform, into the boxes below — always from the caption that's there now, so nothing goes out of sync.</span>
+                        <span class="form-hint" style="margin:0">Rewrites the caption above to fit each platform, into the boxes below — it tailors from the caption as it is when you click, so edit the caption and click again to refresh.</span>
                     </div>
                     {% endif %}
                     {% for pf in platforms_present %}
@@ -212,7 +212,7 @@
                         <span class="cmp-asset-name">uploaded</span>
                         <span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>
                         {% if u.is_image %}<button type="button" class="cmp-crop-btn" data-crop title="Crop / reframe for platforms"><i class="fa-solid fa-crop-simple"></i></button>{% endif %}
-                        <button type="button" class="cmp-asset-rm" data-remove title="Remove this file"><i class="fa-solid fa-xmark"></i></button>
+                        <button type="button" class="cmp-asset-rm" data-remove title="Remove this file" aria-label="Remove this file"><i class="fa-solid fa-xmark"></i></button>
                         <input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|{{ u.object_key }}::{{ u.mime }}">
                     </label>
                     {% endfor %}
@@ -1296,6 +1296,14 @@
     // it, every client change would re-tick a channel the person had just
     // deliberately unticked.
     const autoIncludeSettled = new Set();
+    {% if post %}
+    // EDIT mode: the SAVED selection is authoritative. Seed every ride-along
+    // channel as already-settled so filterAccountsByClient() can never re-tick
+    // one the user had removed from this post — that silent re-add would
+    // republish to a page they deliberately dropped.
+    document.querySelectorAll('input[name="account_ids"][data-auto-include]')
+        .forEach(function (i) { autoIncludeSettled.add(i.value); });
+    {% endif %}
 
     function filterAccountsByClient(){
         const cid = clientSelect.value; let hidden = 0;
@@ -1409,7 +1417,7 @@
             +'<span class="ord"></span><span class="cmp-asset-thumb">'+thumb+'</span>'
             +'<span class="cmp-asset-name">'+(d.filename||"uploaded")+'</span><span class="cmp-asset-check"><i class="fa-solid fa-check"></i></span>'
             +cropBtn
-            +'<button type="button" class="cmp-asset-rm" data-remove title="Remove this file"><i class="fa-solid fa-xmark"></i></button>'
+            +'<button type="button" class="cmp-asset-rm" data-remove title="Remove this file" aria-label="Remove this file"><i class="fa-solid fa-xmark"></i></button>'
             +'<input type="text" class="cmp-alt" placeholder="Alt text — describe the image" aria-label="Alt text" data-altkey="upload_media|'+d.object_key+'::'+d.mime+'">';
         // Take the placeholder's PLACE. Appending instead meant the grid ended
         // up in upload-completion order - so picking five files gave a random
@@ -1550,10 +1558,11 @@
             const clientEl = document.getElementById("clientSelect");
             const taskEl = document.querySelector('input[name="task_id"]');
             const orig = tailorBtn.innerHTML; tailorBtn.disabled = true;
-            tailorBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Tailoring…';
-            let done = 0;
-            for(const box of boxes){
+            let done = 0, lastErr = "";
+            for(let i=0;i<boxes.length;i++){
+                const box = boxes[i];
                 const pf = box.name.replace(/^caption_/, "");
+                tailorBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Tailoring '+(i+1)+'/'+boxes.length+'…';
                 try{
                     const body = new URLSearchParams();
                     body.set("text", text); body.set("action", "platform"); body.set("platforms", pf);
@@ -1562,10 +1571,12 @@
                     const r = await fetch(window.AI_REWRITE_URL, {method:"POST",credentials:"same-origin",headers:{"X-Requested-With":"fetch"},body:body});
                     const d = await r.json().catch(()=>({}));
                     if(r.ok && d.caption){ box.value = d.caption; box.dispatchEvent(new Event("input",{bubbles:true})); done++; }
-                }catch(e){ /* skip this platform, keep going */ }
+                    else if(d && d.error){ lastErr = d.error; }   // surface budget/rate reason
+                }catch(e){ lastErr = lastErr || "Network error — please try again."; }
             }
             tailorBtn.disabled = false; tailorBtn.innerHTML = orig;
-            (window.showToast||function(){})(done?("Tailored "+done+" platform"+(done>1?"s":"")+" — review the boxes."):"Couldn't tailor — please try again.", done?"success":"error");
+            if(done){ (window.showToast||function(){})("Tailored "+done+" platform"+(done>1?"s":"")+" — review the boxes.", "success"); }
+            else { (window.showToast||alert)(lastErr || "Couldn't tailor — please try again.", "error"); }
         });
     }
 

@@ -397,6 +397,24 @@
                         socialAsk.classList.toggle("is-social", isSocialMedia.checked);
                     });
                 });
+            // "Yes with no platform" is the one social check HTML5 can't do, so
+            // catch it here — otherwise the server rejects it with a redirect
+            // that wipes every field the user just filled (title, the 50-char
+            // description, everything).
+            const taskForm = socialAsk.closest("form");
+            if (taskForm) {
+                taskForm.addEventListener("submit", function (ev) {
+                    if (isSocialMedia.checked &&
+                        !socialPlatformList.querySelector(
+                            'input[name="social_platforms"]:checked')) {
+                        ev.preventDefault();
+                        (window.showToast || alert)(
+                            "Pick at least one platform for a social media post.",
+                            "error");
+                        socialPlatformList.hidden = false;
+                    }
+                });
+            }
         }
 
         const clientSelect = document.getElementById(
