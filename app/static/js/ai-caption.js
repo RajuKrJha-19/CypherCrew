@@ -83,13 +83,14 @@
         var text = composeCaption(data.caption || "", lastHashtags, lastKeywords);
         if (cap) { cap.value = text; fire(cap); }
 
-        // Per-platform overrides are optional hand-tuning; only fill the empty
-        // ones so a user's customised text is never silently clobbered.
-        var per = data.per_platform || {};
-        Object.keys(per).forEach(function (pf) {
-            var el = document.querySelector('textarea[name="caption_' + pf + '"]');
-            if (el && !el.value.trim()) { el.value = per[pf]; fire(el); }
-        });
+        // Per-platform overrides are OPT-IN — deliberately not auto-filled.
+        // Auto-filling them made a hidden override that silently won over the
+        // shared caption at publish time: pick a variation and the box changed
+        // but the override didn't, so one channel published the original and
+        // another the variation. The shared caption above is now the single
+        // source of truth; a platform is customised only when the user types in
+        // its box (the composer still warns if the shared caption is over that
+        // platform's limit).
 
         var fc = document.getElementById("firstComment");
         if (fc && !fc.value.trim() && data.first_comment) {
