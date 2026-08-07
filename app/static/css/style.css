@@ -18434,6 +18434,9 @@ body.studio-nav-collapsed .studio-nav-section::after{
     border-radius:var(--radius-full); padding:2px 8px; }
 @media (max-width:560px){ .cb-offer-row{ flex-wrap:wrap; } .cb-offer-row input[type="date"]{ width:100%; } }
 
+.cmp-tailor-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:10px 12px 0; }
+.cmp-tailor-row .form-hint{ flex:1; min-width:200px; }
 .cmp-overrides{ margin-top:12px; border:1px dashed var(--color-border); border-radius:var(--radius-md);
     overflow:hidden; }
 .cmp-overrides > summary{ list-style:none; cursor:pointer; padding:10px 12px; font-size:12.5px; font-weight:650;

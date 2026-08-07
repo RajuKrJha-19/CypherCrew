@@ -91,13 +91,34 @@ _REWRITE_ACTIONS = {
                 "discoverability (e.g. Instagram/LinkedIn/YouTube search). "
                 "Example: 'Sandip University, B.Tech admission, Bihar, "
                 "placements, NAAC A+'.",
+    # Adapt the caption to ONE target platform. The real instruction is built
+    # dynamically in rewrite_prompt() from the platform + its char limit; this
+    # entry just makes the action a recognised one.
+    "platform": "Adapt the caption for the target platform.",
 }
+
+
+def _platform_fit_instruction(ctx):
+    """Instruction to adapt a caption to ONE target platform, built from the
+    platform + its limit so the tailoring always tracks the CURRENT caption
+    (there is no stored per-platform copy that can silently go out of sync)."""
+    pf = (ctx.platforms or ["this platform"])[0]
+    limit = ctx.caption_limits.get(pf) if getattr(ctx, "caption_limits", None) else None
+    limit_line = (f" It MUST fit within {limit} characters." if limit else "")
+    return (
+        f"Adapt this caption specifically for {pf}: match that platform's "
+        f"native length and style.{limit_line} Keep the core message and any "
+        "offer/CTA, and keep any #hashtags and [keywords] block that is already "
+        "in the caption.")
 
 
 def rewrite_prompt(ctx):
     """(system, user) for a one-click transform of an existing caption. Plain
     text in, plain text out - the model returns ONLY the rewritten caption."""
-    instruction = _REWRITE_ACTIONS.get(ctx.action, _REWRITE_ACTIONS["rephrase"])
+    if ctx.action == "platform":
+        instruction = _platform_fit_instruction(ctx)
+    else:
+        instruction = _REWRITE_ACTIONS.get(ctx.action, _REWRITE_ACTIONS["rephrase"])
     tone = (ctx.tone or "").strip()
     tone_line = (f" Keep a {tone} tone." if tone else "")
     system = (

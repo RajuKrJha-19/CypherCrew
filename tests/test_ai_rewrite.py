@@ -60,7 +60,18 @@ def test_rewrite_prompt_carries_action_facts_and_asks_text_only():
 def test_rewrite_actions_are_the_expected_set():
     assert set(_REWRITE_ACTIONS) == {
         "shorten", "expand", "rephrase", "formal",
-        "casual", "emojis", "grammar", "keywords"}
+        "casual", "emojis", "grammar", "keywords", "platform"}
+
+
+def test_platform_action_builds_a_platform_fit_instruction():
+    """The 'platform' action tailors the caption to ONE platform, with its
+    char limit baked into the instruction (from the current caption, so no
+    stored per-platform copy can drift out of sync)."""
+    system, _ = rewrite_prompt(RewriteContext(
+        text="Admissions open now.", action="platform",
+        platforms=["instagram"], caption_limits={"instagram": 2200}))
+    assert "instagram" in system.lower()
+    assert "2200" in system
 
 
 def test_keywords_action_appends_a_line_not_replaces(app):

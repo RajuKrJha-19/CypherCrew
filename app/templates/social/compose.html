@@ -145,6 +145,14 @@
                 {% if platforms_present %}
                 <details class="cmp-overrides" id="overrides" {{ 'open' if platform_captions or platform_first_comments }}>
                     <summary><i class="fa-solid fa-sliders"></i> Customise caption &amp; first comment per platform</summary>
+                    {% if config.AI_ENABLED %}
+                    <div class="cmp-tailor-row">
+                        <button type="button" class="btn btn-secondary cmp-tailor-btn" id="tailorPerPlatform">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Tailor each platform with AI
+                        </button>
+                        <span class="form-hint" style="margin:0">Rewrites the caption above to fit each platform, into the boxes below — always from the caption that's there now, so nothing goes out of sync.</span>
+                    </div>
+                    {% endif %}
                     {% for pf in platforms_present %}
                     <div class="cmp-override" data-platform="{{ pf }}">
                         <div class="cmp-override-head"><span class="pf-chip {{ pf }}"><i class="{{ PF_ICON.get(pf,'fa-solid fa-share-nodes') }}"></i> {{ PF_LABEL.get(pf, pf|capitalize) }}</span><span class="cmp-count" data-count-for="{{ pf }}"></span></div>
@@ -1526,6 +1534,40 @@
         const qh=$("queueHint"); if(qh) qh.hidden = !queue;
     }
     document.querySelectorAll('input[name="publish_mode"]').forEach(r=>r.addEventListener("change", function(){ refreshScheduleMode(); refreshBestTime(); }));
+
+    // On-demand per-platform tailoring: adapt the CURRENT caption to each
+    // platform (AI) and fill its override box. Derived from whatever is in the
+    // caption box right now — a chosen variation or an edit — so the tailored
+    // per-platform text can never silently diverge from what you see.
+    const tailorBtn = document.getElementById("tailorPerPlatform");
+    if(tailorBtn){
+        tailorBtn.addEventListener("click", async function(){
+            const text = (caption.value || "").trim();
+            if(!text){ (window.showToast||alert)("Write or generate a caption first.","error"); return; }
+            const boxes = Array.from(document.querySelectorAll('#overrides textarea[name^="caption_"]'));
+            if(!boxes.length){ return; }
+            const ov = document.getElementById("overrides"); if(ov) ov.open = true;
+            const clientEl = document.getElementById("clientSelect");
+            const taskEl = document.querySelector('input[name="task_id"]');
+            const orig = tailorBtn.innerHTML; tailorBtn.disabled = true;
+            tailorBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Tailoring…';
+            let done = 0;
+            for(const box of boxes){
+                const pf = box.name.replace(/^caption_/, "");
+                try{
+                    const body = new URLSearchParams();
+                    body.set("text", text); body.set("action", "platform"); body.set("platforms", pf);
+                    if(clientEl && clientEl.value) body.set("client_id", clientEl.value);
+                    if(taskEl && taskEl.value) body.set("task_id", taskEl.value);
+                    const r = await fetch(window.AI_REWRITE_URL, {method:"POST",credentials:"same-origin",headers:{"X-Requested-With":"fetch"},body:body});
+                    const d = await r.json().catch(()=>({}));
+                    if(r.ok && d.caption){ box.value = d.caption; box.dispatchEvent(new Event("input",{bubbles:true})); done++; }
+                }catch(e){ /* skip this platform, keep going */ }
+            }
+            tailorBtn.disabled = false; tailorBtn.innerHTML = orig;
+            (window.showToast||function(){})(done?("Tailored "+done+" platform"+(done>1?"s":"")+" — review the boxes."):"Couldn't tailor — please try again.", done?"success":"error");
+        });
+    }
 
     // init
     filterAccountsByClient();
