@@ -188,9 +188,15 @@ class MetaInstagramProvider(MetaBaseProvider):
                     continue
                 is_video = (media.mime_type or "").startswith("video")
                 spec = video_spec if is_video else image_spec
-                for reason in fit.check_spec(spec, meta):
+                reasons = fit.check_spec(spec, meta)
+                if reasons:
+                    # One sentence per ITEM, not per rule. A single wide image
+                    # breaks the aspect AND the width limit, and repeating
+                    # "Carousel item 1 can't publish here:" for each read as
+                    # two separate faults on two separate files.
                     problems.append(
-                        f"Carousel item {i} can't publish here: {reason}.")
+                        f"Carousel item {i} can't publish here: "
+                        + fit.join_reasons(reasons) + ".")
         return problems
 
     # -- Publishing (async: create container -> poll -> publish) ----------

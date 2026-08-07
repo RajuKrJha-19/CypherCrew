@@ -53,6 +53,24 @@ def _fmt_seconds(value):
     return f"{value:g}s"
 
 
+def join_reasons(reasons):
+    """Several reasons about ONE file as a single readable clause.
+
+    Every reason from check_spec starts "it is ...", so concatenating them
+    verbatim repeats the subject: "it is 1516x689 and this needs ... it is
+    1516px wide and the maximum is 1440px". The first keeps its subject and
+    the rest are folded in behind it.
+    """
+    reasons = [r for r in (reasons or []) if r]
+    if not reasons:
+        return ""
+    # Semicolons rather than clever "and"-folding: every reason keeps its own
+    # subject, so the sentence stays correct at one reason or five. Stripping
+    # the repeated "it is" read well for exactly two and produced "and 40s and
+    # the maximum is 30s" for three.
+    return "; ".join(reasons)
+
+
 def check_spec(spec, meta):
     """Reasons `meta` does not meet `spec`. Empty list = it fits.
 
