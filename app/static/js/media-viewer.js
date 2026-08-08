@@ -520,7 +520,10 @@ window.CypherMediaViewer = (function () {
             media.src = currentFile.url;
             media.controls = true;
             media.playsInline = true;
-            media.preload = "auto";
+            // "metadata", not "auto": with the faststart preview the browser can
+            // start playing after a small header fetch and then stream the rest,
+            // instead of eagerly pulling the whole (possibly huge) file up front.
+            media.preload = "metadata";
             stage.appendChild(media);
 
             // open() is always called from a click/dblclick, so this runs

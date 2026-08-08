@@ -32,6 +32,71 @@ _DERIVED_PREFIX = "social_uploads/derived/"
 # A long reel re-encode - this runs in the worker, never in a web request.
 _TIMEOUT_S = 15 * 60
 
+# Web-preview renditions: small, faststart, persistent (referenced on the file
+# record, so the media GC never reclaims them - unlike the publish-time derived
+# downscale under social_uploads/derived/).
+_PREVIEW_PREFIX = "previews/"
+_PREVIEW_MAX_HEIGHT = 720
+
+
+def make_preview(object_key):
+    """A small, web-optimised 720p MP4 of a source video for SMOOTH in-browser
+    playback, or None.
+
+    Two things make a big source (a 4K/200 MB deliverable) buffer: its bitrate
+    outruns the viewer's connection, and - the real killer - its moov atom is at
+    the END, so nothing plays until the whole file downloads. This rendition
+    fixes both: capped to 720p at a light bitrate, and `-movflags +faststart`
+    puts the moov atom at the front so playback starts almost immediately.
+
+    Returns a NEW persistent R2 key (under previews/), or None when ffmpeg is
+    absent or anything fails - the caller then serves the ORIGINAL, unchanged,
+    so preview generation can never break playback.
+    """
+    if not available():
+        return None
+    try:
+        src_url = presigned_url(object_key, expires_in=3600)
+    except Exception:  # noqa: BLE001
+        src_url = None
+    if not src_url:
+        return None
+
+    tmp_dir = tempfile.mkdtemp(prefix="preview_")
+    out_path = os.path.join(tmp_dir, "preview.mp4")
+    command = [
+        _resolve() or _binary(), "-y",
+        "-i", src_url,
+        # Cap the HEIGHT at 720 (portrait reels included), keep the aspect,
+        # even dims for h264, never upscale a smaller clip.
+        "-vf", f"scale=-2:'min({_PREVIEW_MAX_HEIGHT},ih)'",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        out_path,
+    ]
+    try:
+        result = subprocess.run(
+            command, capture_output=True, timeout=_TIMEOUT_S, check=False)
+        if result.returncode != 0 or not os.path.exists(out_path) \
+                or os.path.getsize(out_path) == 0:
+            current_app.logger.warning(
+                "[preview] ffmpeg failed key=%s rc=%s", object_key,
+                getattr(result, "returncode", "?"))
+            return None
+        preview_key = f"{_PREVIEW_PREFIX}{uuid4().hex}.mp4"
+        with open(out_path, "rb") as fh:
+            StorageService().upload(
+                file_obj=fh, object_key=preview_key, content_type="video/mp4")
+        current_app.logger.info("[preview] %s -> %s", object_key, preview_key)
+        return preview_key
+    except (subprocess.SubprocessError, OSError) as exc:
+        current_app.logger.warning("[preview] error key=%s: %s", object_key, exc)
+        return None
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 #: Where ffmpeg lands on the common Linux installs, tried when it is not on
 #: PATH - a hardened systemd unit often runs gunicorn with a minimal PATH that

@@ -4725,11 +4725,25 @@ def preview_task_file(file_id):
                 url_for("tasks.list_tasks")
             )
 
+    # Serve the small faststart 720p preview when it's ready (playback starts
+    # fast instead of buffering the full-resolution source); otherwise serve the
+    # ORIGINAL, unchanged, and kick off generation so the next view is quick.
+    # Backstops the upload hook for pre-existing videos and boxes that only got
+    # ffmpeg later.
+    from app.services import video_preview
+    if (task_file.preview_state == video_preview.STATE_READY
+            and task_file.preview_key):
+        serve_key = task_file.preview_key
+    else:
+        serve_key = task_file.object_key
+        if video_preview.is_video(task_file):
+            video_preview.schedule(task_file.id)
+
     try:
         storage = StorageService()
 
         preview_url = storage.preview_url(
-            object_key=task_file.object_key,
+            object_key=serve_key,
             expires_in=600,
         )
 

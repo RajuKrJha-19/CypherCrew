@@ -134,6 +134,12 @@ def create_app():
     thumbnails.register_events(db.session)
     thumbnails.register_cli(app)
 
+    # Newly uploaded VIDEOS get a small, faststart 720p preview generated in the
+    # background (inert without ffmpeg), so playback starts fast instead of
+    # buffering the full-resolution source. Same session-hook contract.
+    from app.services import video_preview
+    video_preview.register_events(db.session)
+
     from app.routes.auth import auth_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.users import users_bp

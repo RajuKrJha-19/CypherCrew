@@ -108,6 +108,16 @@ class TaskFile(db.Model):
         index=True
     )
 
+    #: R2 key of a small, faststart 720p preview of a VIDEO, for smooth
+    #: playback (the original can be 4K/200 MB and buffers). None until made;
+    #: the player falls back to the original whenever this is absent.
+    preview_key = db.Column(db.String(1000))
+
+    #: pending | ready | skipped | failed. "skipped" = not a video, or no
+    #: ffmpeg — nothing to transcode, marked once and never retried.
+    preview_state = db.Column(
+        db.String(16), default="pending", nullable=False, index=True)
+
     task = db.relationship(
         "Task",
         backref=db.backref(
