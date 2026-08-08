@@ -35,6 +35,13 @@ def file_preview_url(file):
     if not key:
         return None
 
+    # Prefer the small faststart 720p preview when it is ready: the poster
+    # frame paints faster off the lighter rendition (fewer bytes to range-seek),
+    # and it is the very asset the overlay streams. Falls back to the original.
+    if getattr(file, "preview_state", None) == "ready" \
+            and getattr(file, "preview_key", None):
+        key = file.preview_key
+
     try:
         return StorageService().preview_url(object_key=key, expires_in=3600)
     except Exception:
