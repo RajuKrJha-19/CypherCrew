@@ -33,6 +33,18 @@ def build_content(target) -> PostContent:
         elif post.reel_thumb_offset is not None:
             extra["reel_thumb_offset"] = post.reel_thumb_offset
 
+    # Instagram co-authors invited onto this post (companion channels), stored
+    # as a JSON list on the target. The IG provider adds them to the media
+    # container; a bad value never blocks a publish.
+    if target.collaborators:
+        try:
+            import json
+            names = json.loads(target.collaborators)
+            if isinstance(names, list) and names:
+                extra["collaborators"] = [str(n) for n in names if n]
+        except (ValueError, TypeError):
+            pass
+
     return PostContent(
         platform=target.platform,
         post_type=target.post_type,

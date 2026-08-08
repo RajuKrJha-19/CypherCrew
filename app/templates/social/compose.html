@@ -397,7 +397,7 @@
                                unrelated client. #}
                             <input type="checkbox" name="account_ids" value="{{ a.id }}" data-platform="{{ a.platform }}" data-name="{{ a.display_name }}" data-client="{{ a.client_id or '' }}" data-group="{{ account_groups.get(a.id, [])|join(',') }}" {% if a.auto_include %}data-auto-include="1"{% endif %} {% if a.id in selected_account_ids %}checked{% endif %}>
                             <span class="ava pf-{{ a.platform }}"><i class="{{ PF_ICON.get(a.platform,'fa-solid fa-share-nodes') }}"></i></span>
-                            <span class="nm">{{ a.display_name }}</span>
+                            <span class="nm">{{ a.display_name }}{% if a.auto_include and a.platform == 'instagram' %} <span class="cmp-collab-tag" title="Added as a co-author (Collab) on this Instagram post — not a separate post. Untick to skip.">Co-author</span>{% endif %}</span>
                         </label>
                         {% endfor %}
                     </div>

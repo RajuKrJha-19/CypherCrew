@@ -18434,6 +18434,10 @@ body.studio-nav-collapsed .studio-nav-section::after{
     border-radius:var(--radius-full); padding:2px 8px; }
 @media (max-width:560px){ .cb-offer-row{ flex-wrap:wrap; } .cb-offer-row input[type="date"]{ width:100%; } }
 
+.cmp-collab-tag{ display:inline-block; margin-left:4px; padding:1px 6px;
+    font-size:10px; font-weight:700; letter-spacing:.02em; vertical-align:middle;
+    border-radius:var(--radius-full); color:var(--color-accent);
+    background:var(--color-accent-soft); border:1px solid var(--color-border); }
 .cmp-tailor-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
     padding:10px 12px 0; }
 .cmp-tailor-row .form-hint{ flex:1; min-width:200px; }

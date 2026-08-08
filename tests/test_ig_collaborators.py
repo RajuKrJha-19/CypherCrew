@@ -80,3 +80,27 @@ def test_ig_no_collaborators_key_when_absent(monkeypatch):
     _ig(monkeypatch, g).start_publish(_target(), _content("image", None), "tok")
     _, data = g.posts[-1]
     assert "collaborators" not in data
+
+
+# -- build_content carries the target's stored collaborators into extra -------
+
+def test_build_content_carries_target_collaborators(monkeypatch):
+    from app.social.services import publishing
+    monkeypatch.setattr(publishing.pipeline, "resolve_media", lambda m: [])
+    target = SimpleNamespace(
+        post=None, platform="instagram", post_type="image", caption="hi",
+        hashtags="", media=[], scheduled_for=None,
+        collaborators='["dr_sunil", "other"]')
+    content = publishing.build_content(target)
+    assert content.extra.get("collaborators") == ["dr_sunil", "other"]
+
+
+def test_build_content_ignores_empty_or_bad_collaborators(monkeypatch):
+    from app.social.services import publishing
+    monkeypatch.setattr(publishing.pipeline, "resolve_media", lambda m: [])
+    for bad in (None, "", "[]", "not json"):
+        target = SimpleNamespace(
+            post=None, platform="instagram", post_type="image", caption="hi",
+            hashtags="", media=[], scheduled_for=None, collaborators=bad)
+        content = publishing.build_content(target)
+        assert "collaborators" not in content.extra

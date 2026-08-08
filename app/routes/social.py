@@ -764,11 +764,16 @@ def set_account_auto_include(account_id):
                  actor_id=current_user.id,
                  detail={"auto_include": account.auto_include})
     db.session.commit()
-    flash(
-        f"{account.display_name} will now be pre-selected on every post for "
-        f"its client." if account.auto_include else
-        f"{account.display_name} is no longer pre-selected automatically.",
-        "success")
+    if account.auto_include:
+        # Instagram rides along as a CO-AUTHOR (one shared post); every other
+        # platform as its own cross-post. Say which, so the effect is no surprise.
+        how = ("as a co-author (Collab) on every Instagram post"
+               if account.platform == "instagram"
+               else "on every post as its own cross-post")
+        msg = f"{account.display_name} will now ride along {how} for its client."
+    else:
+        msg = f"{account.display_name} is no longer pre-selected automatically."
+    flash(msg, "success")
     return redirect(url_for("social.accounts"))
 
 
@@ -2068,12 +2073,34 @@ def _apply_composer_form(post):
         measurements_by_key.get(_measure_key(*media_items[0]))
         if media_items else None) or {}
 
+    # Instagram co-author companions: a ticked IG channel marked "auto-include"
+    # rides along as a COLLABORATOR on the OTHER IG posts (ONE shared post),
+    # never as its own duplicate post. Collect their usernames now and keep them
+    # OUT of the target loop below; unticking one in the composer opts this
+    # particular post out. (Facebook auto-include stays a normal cross-post
+    # target — collaborators are an Instagram-only feature.)
+    import json as _json
+    ig_collab_ids, ig_collab_names = set(), []
+    for _aid in account_ids:
+        _a = db.session.get(SocialAccount, _aid)
+        if (_a is not None and _a.platform == "instagram" and _a.auto_include
+                and _channel_client_ok(_a.client_id, post.client_id)):
+            ig_collab_ids.add(_a.id)
+            _u = (_a.display_name or "").strip().lstrip("@")
+            if _u:
+                ig_collab_names.append(_u)
+    collab_json = _json.dumps(ig_collab_names) if ig_collab_names else None
+
     skipped = []
     remapped = []
     n_created = 0
     for account_id in account_ids:
         account = db.session.get(SocialAccount, account_id)
         if account is None:
+            continue
+        # A companion IG channel is a co-author on the other IG posts, not its
+        # own separate post — skip creating a target for it.
+        if account.id in ig_collab_ids:
             continue
         # Client safety: stop publishing Client A's post to Client B's Page,
         # even if the form is tampered with.
@@ -2137,6 +2164,11 @@ def _apply_composer_form(post):
                            story_style=story_style,
                            story_link_target_id=standalone_link_id,
                            when=target_when)
+        # Invite the companion IG co-authors onto this Instagram feed post
+        # (not a Story — Meta doesn't allow collaborators there).
+        if (collab_json and account.platform == "instagram"
+                and target_type != "story"):
+            feed.collaborators = collab_json
         n_created += 1
         # Optional companion Story (no caption - stories don't use one). It
         # ships at the same time as the feed post it accompanies.

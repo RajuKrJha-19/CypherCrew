@@ -133,6 +133,11 @@ class SocialPostTarget(db.Model):
     #: hides an image that fails to load - a stale value degrades to "no
     #: picture", never to a broken one.
     thumbnail_url = db.Column(db.String(1000), nullable=True)
+    #: Instagram co-authors (Collab): usernames invited onto THIS post, stored
+    #: as a JSON list of strings. Set from the companion IG channels the user
+    #: kept ticked at compose time; read by build_content into the publish
+    #: content's `collaborators`. Empty/NULL = an ordinary single-author post.
+    collaborators = db.Column(db.Text, nullable=True)
     last_error = db.Column(db.Text, nullable=True)
 
     # -- Story style ------------------------------------------------------
