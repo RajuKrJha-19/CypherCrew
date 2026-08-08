@@ -201,13 +201,25 @@ class MetaInstagramProvider(MetaBaseProvider):
 
     # -- Publishing (async: create container -> poll -> publish) ----------
 
+    @staticmethod
+    def _collaborators(content):
+        """The IG usernames to invite as co-authors on this post (a JSON array
+        string Meta expects), or None. Inert unless the composer put usernames
+        on the content. Feed + Reels only — Stories can't have collaborators."""
+        import json
+        raw = (content.extra or {}).get("collaborators") or []
+        names = [str(u).lstrip("@").strip() for u in raw if str(u).strip()]
+        return json.dumps(names) if names else None
+
     def start_publish(self, target, content, token):
         graph = self.graph()
         ig_id = target.account.external_id
         caption = self._full_caption(content)
+        collab = self._collaborators(content)
 
         if content.post_type == "carousel":
-            container_id = self._create_carousel(graph, ig_id, token, content, caption)
+            container_id = self._create_carousel(
+                graph, ig_id, token, content, caption, collab)
         elif content.post_type == "reel":
             reel_data = {
                 "media_type": "REELS",
@@ -226,6 +238,8 @@ class MetaInstagramProvider(MetaBaseProvider):
                 reel_data["cover_url"] = extra["reel_cover_url"]
             elif extra.get("reel_thumb_offset") is not None:
                 reel_data["thumb_offset"] = extra["reel_thumb_offset"]
+            if collab:
+                reel_data["collaborators"] = collab
             container_id = graph.post(
                 f"{ig_id}/media", token=token, data=reel_data)["id"]
         elif content.post_type == "story":
@@ -236,28 +250,35 @@ class MetaInstagramProvider(MetaBaseProvider):
                 key: self._media_url(media),
             })["id"]
         else:  # image
-            container_id = graph.post(f"{ig_id}/media", token=token, data={
+            img_data = {
                 "image_url": self._media_url(content.media[0]),
                 "caption": caption,
-            })["id"]
+            }
+            if collab:
+                img_data["collaborators"] = collab
+            container_id = graph.post(
+                f"{ig_id}/media", token=token, data=img_data)["id"]
 
         return PublishStep(
             status=StepStatus.PENDING.value,
             provider_state={"container_id": container_id, "ig_id": ig_id},
         )
 
-    def _create_carousel(self, graph, ig_id, token, content, caption):
+    def _create_carousel(self, graph, ig_id, token, content, caption, collab=None):
         children = []
         for media in content.media:
             is_video = (media.mime_type or "").startswith("video")
             data = {"is_carousel_item": "true"}
             data["video_url" if is_video else "image_url"] = self._media_url(media)
             children.append(graph.post(f"{ig_id}/media", token=token, data=data)["id"])
-        return graph.post(f"{ig_id}/media", token=token, data={
+        parent = {
             "media_type": "CAROUSEL",
             "children": ",".join(children),
             "caption": caption,
-        })["id"]
+        }
+        if collab:
+            parent["collaborators"] = collab
+        return graph.post(f"{ig_id}/media", token=token, data=parent)["id"]
 
     def poll_publish(self, target, provider_state, token):
         graph = self.graph()
